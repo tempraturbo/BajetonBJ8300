@@ -5,26 +5,97 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
-## v14 — Oct 24 — highlight redone from the screen map
+## v16 — Oct 24 — window addresses fixed ✅ **highlight working**
 
-Done after mapping the whole screen ([screen-map.md](screen-map.md)), which explained both v13
-defects with addresses:
+**Tested on the radio:** the selected side's block turns green — `H` line, name, frequency, number
+and bar — and when switching sides the previous one goes back to black and the new one turns green.
+**Thin black strips** remain where no window draws (between the name and the frequency, and between
+the frequency and the bar); the photos match what the map predicted pixel for pixel — see
+[screen-map.md](screen-map.md), section 8.
+
+**v15 painted nothing because of an address conversion mistake**, not a logic one. `llvm-objdump`
+prints immediates in decimal: `janela()` stores y0 at `b[83466]`, y1 at `b[83470]` and the bytes per
+row at `h[83472]` — which are **`0x1460A`, `0x1460E` and `0x14610`**. They had been converted as
+`0x145CA`, `0x145CE` and `0x145D0` (0x40 short; the mistake came from the previous session's map), so
+the hook read three unrelated variables. When "checking" the generated code I compared the hex label
+with what I believed, instead of comparing 83402 with 83466.
+
+How it was found: with v15 confirmed on the radio (no `ZONE` in the menu), every link was proven
+again — the 13 sites in **all six** images of the shipped file, the guard (the stock bar only shows
+because `layout()` returns 2 there), 16-bit access to video RAM (`0x01E6C18E` writes 32 bits inside
+it), the DMA (`0x01E38540` reads from `0x10190` and waits for completion). What was left was the
+address, and in decimal the mistake was obvious.
+
+Changes:
+
+- `JAN_Y0`, `JAN_Y1` and `JAN_LINHA` with the right addresses, annotated with the decimal.
+- **New check (`4f`)**: the build reads the addresses from `janela()`'s own instructions in the stock
+  firmware (`0x01E3AD3E`, `0x01E3AD5E`, `0x01E3AD6E`, `0x01E3AD86`) and compares them with the
+  `#define`s. Tested with v15's wrong value: it fails.
+- **14th site**: the highlighted side's info line (`0x01E3B2C4`, the one with the `H`), y 18 with A
+  and 57 with B. It is only drawn for the expanded side, so it always comes out green.
+
+Same size (1776 B), reproducible build, no jump into a patch, 14/14 sites in all six images.
+
+## v15 — Oct 24 — highlight at the LCD send ⚠️ **painted nothing**
+
+**Tested on the radio:** all black, the bar included when changing channel. Cause in v16, above:
+three addresses converted wrongly from decimal. The design below (hook at the send, guard through
+`layout()`) still stands in v16.
+
+
+Done after mapping the entire drawing path, which explained with addresses both symptoms the user
+reported on v14 (details in [screen-map.md](screen-map.md)):
+
+1. **"the green only shows in the signal bar background, and only when changing channel with the
+   arrow"** — v14's three hooks were all on **partial updates**. The full redraw, which is what runs
+   when switching A to B, goes through `0x01E3C132` (the three bar rows) and the block drawer
+   `0x01E3BD04`, which **had no hook at all**.
+2. **"the whole box is still black"** — text backgrounds do not come from `janela()`: each text
+   routine fills every character cell with its own hard-coded black (the `r8 = 0` at `0x01E3BAD8`,
+   passed to the glyph drawer `0x01E388F4` and the gap fill `0x01E38978`). Swapping the window
+   colour was never going to paint the block.
+
+The hook now goes into **the send** (`envia()`, `0x01E3ADBC`) and replaces every black pixel of the
+window with green before it reaches the LCD: window background, character cells and gaps all turn
+green at once, while anything with a colour of its own (white text, bar segments) passes untouched.
+There are **13 sites**: every `envia()` call inside the six functions that draw the two-VFO screen —
+a 4-byte `call` replaced in place, so the code does not grow.
+
+Which block is highlighted comes from **the firmware's own routine** (`0x01E3B1A2`), the same one it
+uses to place every row: it returns 2 with A highlighted, 1 with B, and **0 when this is not the
+two-VFO screen** (the single-VFO one writes 4 into `b[0x1533D]`). That is what keeps the green off
+the other screens, which use these same functions. The `y` thresholds (89 and 57) come from three
+firmware tables and have wide margins: 74 against 91 with A highlighted, 41 against 69 with B.
+
+The hook **draws nothing** — it only reads the bounds `janela()` already stored and writes inside the
+buffer, clamped to its size; v13's overflow is impossible by construction. Verified in the generated
+machine code at `0x01E963FA`, instruction by instruction.
+
+New code: 1776 B of the 1782 available. The build ends in `RESULTADO: tudo certo`, is reproducible
+(same sha256 after deleting `build/`) and no jump lands inside a patch.
+
+## v14 — Oct 24 — highlight redone from the screen map ⚠️ **did not work**
+
+It fixed both v13 defects, each found in the disassembly:
 
 1. **The reset** was a video-buffer overflow. v13 painted the whole block in a single call — 71
    full-width rows = **22,720 bytes** — and the buffer at 0x10190 holds **10,240** (one 160×32
    band). `janela()` has no size guard (loop at `0x01E3AD8E`), so the excess landed on the text
    buffer, the global base and the redraw flags.
-2. **The highlight not showing** was the wrong variable: I used `tx_ab` (`0x14B84`, the setting
-   stored in data flash) instead of **`b[0x15E04]`**, the screen state the firmware itself consults
-   to place every row.
+2. **The highlight not showing** was the wrong variable: `tx_ab` (`0x14B84`, the setting stored in
+   data flash) instead of **`b[0x15E04]`**, the screen state the firmware itself consults.
 
-The hook now goes into the **three windows that make up a block** (name+frequency at `0x01E4B270`,
-signal bar at `0x01E41468`, channel number at `0x01E4B314`) and **never touches the geometry**: it
-only swaps the colour the firmware was going to fill that window with. Verified in the generated
-machine code — r0 to r3 are never written — so v13's overflow is impossible by construction.
+The hook moved into **three windows** (name+frequency at `0x01E4B270`, signal bar at `0x01E41468`,
+channel number at `0x01E4B314`), without touching the geometry.
 
-**Not yet tested on the radio.** What is proven is static: the map, the truth table of the seven
-window/side combinations, and that the build ends in `RESULTADO: tudo certo`.
+**Tested on the radio:** it boots, switches A to B and **no longer resets** — the overflow really was
+fixed, and that part is settled. But the highlight was still wrong: green only in the signal bar
+background and only when changing channel with the arrow.
+
+**A method mistake worth recording:** those three sites were picked from a *partial* survey of the
+screen, which stopped at the partial updates and never reached the full redraw or the text routines.
+Both causes are in v15, above.
 
 ## v13 — Oct 24 — selected-VFO highlight ⚠️ **known problem**
 

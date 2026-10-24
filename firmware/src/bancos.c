@@ -45,8 +45,6 @@ typedef unsigned int u32;
  * REVALIDA     0x01E3A700  se o canal atual nao vale mais, pula para o proximo que vale
  */
 #define SPRINTF      ((int (*)(char *, const char *, ...))0x01E19DCC)
-/* JANELA 0x01E3AD34: define a area de desenho e, com limpar != 0, enche ela com cor (RGB565). */
-#define JANELA       ((void (*)(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned))0x01E3AD34)
 #define LE_FLASH     ((void (*)(u32, void *, u32))0x01E390AC)
 #define APAGA_SETOR  ((void (*)(u32))0x01E3A126)
 #define GRAVA_FLASH  ((void (*)(u32, const void *, u32))0x01E3A25A)
@@ -427,33 +425,72 @@ void gancho_cabo(unsigned grava)
     ((void (*)(unsigned))0x01E43970)(grava);
 }
 
-/* ---------- gancho do realce: fundo do bloco do VFO selecionado ----------
- * A tela principal e desenhada em JANELAS: para cada pedaco o firmware chama
- * janela(x0, x1, y0, y1, limpar, cor), desenha dentro e manda para o LCD (0x01E3ADBC).
+/* ---------- gancho do realce: fundo do bloco do VFO em evidencia ----------
+ * A tela e desenhada uma janela por vez: janela(x0,x1,y0,y1,limpar,cor) em 0x01E3AD34 guarda os
+ * limites em b[0x14608..0x1460E] e h[0x14610] (bytes por linha) e, com limpar != 0, enche o buffer
+ * de video (0x10190) com a cor; o desenho entra ali; envia() em 0x01E3ADBC le os mesmos globais e
+ * manda o pedaco para o LCD.
  *
- * REGRA DURA, PAGA CARO (v13): o buffer de video em 0x10190 tem **10240 bytes**, uma banda de
- * 160x32, e janela() enche (x1-x0)*(y1-y0)*2 bytes **sem nenhuma trava** (o laco em 0x01E3AD8E so
- * compara com o tamanho pedido). Pedir uma janela maior que isso atropela a RAM logo depois do
- * video - o buffer de texto fica em 0x129B0, a base global em 0x14680 - e o radio reinicia. A v13
- * tentava pintar o bloco inteiro de uma vez (71 linhas = 22720 bytes) e foi exatamente isso que
- * aconteceu. Por isso aqui **a geometria nunca muda**: o gancho so troca a cor com que o firmware
- * ja ia encher aquela janela.
+ * O gancho entra NO ENVIO, nao no preenchimento, e troca por verde todo pixel preto do pedaco.
+ * E a unica forma de pintar o bloco inteiro, porque o fundo do texto NAO vem de janela(): as
+ * rotinas de texto enchem a celula de cada caractere com uma cor propria, preta fixa (em
+ * 0x01E3BACE e o "r8 = 0" de 0x01E3BAD8, que vai como fundo para o desenhador de glifo em
+ * 0x01E388F4 e para o enchimento do vao em 0x01E38978). Trocar so a cor da janela, como a v14
+ * fazia, deixava o nome e a frequencia em caixas pretas sobre o verde.
  *
- * Sao tres janelas por bloco, todas lidas no desmontado:
- *   nome + frequencia  sitio 0x01E4B270   (7, 160, y, y+24)    y = 30 (A) ou 69 (B)
- *   barra de sinal     sitio 0x01E41468   (0, 160, y, y+14)    y = 41/74 (A) ou 114 (B)
- *   numero do canal    sitio 0x01E4B314   (127, 159, y, y+9)   y = 62 (A) ou 101 (B)
+ * O buffer guarda cada pixel com o byte ALTO primeiro (0x01E3AD90: b[p] = cor>>8, b[p+1] = cor),
+ * e a CPU e little-endian - por isso COR_BUF entra com os bytes trocados. Preto e 0 dos dois
+ * lados, entao a comparacao nao depende disso.
  *
- * A altura diz qual das tres e (24 so a do nome), e dai sai o limite de y que separa os lados.
+ * Qual bloco esta em evidencia sai da PROPRIA rotina do firmware (0x01E3B1A2), a mesma que ele usa
+ * para decidir a posicao de cada linha e que o desenhador de bloco (0x01E3BD04) e o complemento
+ * (0x01E3C06E) consultam. Chamada com o lado selecionado ela devolve 2 com o VFO A em evidencia,
+ * 1 com o B e **0 quando a tela nao e a de dois VFOs** - so vale para b[0x1533D] em {0,3,5}, e a
+ * tela de um VFO so poe 4 ali (0x01E4CDC4). E o que mantem o verde fora das outras telas, que
+ * passam por estas mesmas funcoes.
+ *
+ * As faixas de y de cada lado, lidas no desmontado (tabelas em 0x01E3BD40/0x01E3BD4A e
+ * 0x01E3C0BE), com o lado em evidencia expandido e o outro compacto:
+ *   A em evidencia   A: 18, 30, 56, 58, 62, 74    B: 91, 93, 114
+ *   B em evidencia   A: 19, 21, 41                B: 57, 69, 95, 97, 101, 114
+ * (18/57 e a linha de informacoes, a do "H", que so existe para o lado em evidencia.) Um unico
+ * limite separa os dois em cada caso: y < 89 com o A em evidencia (74 contra 91) e y >= 57 com o
+ * B (41 contra 57).
+ *
+ * REGRA DURA, PAGA CARO (v13): o buffer tem 10240 bytes (uma banda de 160x32) e janela() nao tem
+ * trava de tamanho - foi pedir janela maior que isso que reiniciava o radio. Aqui o gancho nunca
+ * desenha nada: so le os limites que o firmware ja gravou e, por garantia, nao passa do buffer.
  */
-void gancho_realce(unsigned x0, unsigned x1, unsigned y0, unsigned y1, unsigned limpar,
-                   unsigned cor)
-{
-    unsigned limite = y1 - y0 > 14 ? 60 : 100;
+#define ENVIA      ((void (*)(void))0x01E3ADBC)
+#define LAYOUT     ((unsigned (*)(unsigned))0x01E3B1A2)
+#define VIDEO      ((volatile u16 *)0x00010190)
+#define PIXELS     (10240u / 2)                    /* o buffer inteiro, em pixels */
+/* Os limites que janela() grava (0x01E3AD3C..0x01E3AD74: b[83464] x0, b[83466] y0, b[83468] x1,
+ * b[83470] y1, h[83472] bytes por linha). O objdump mostra esses enderecos em DECIMAL; a v15 os
+ * converteu errado para 0x145CA/0x145CE/0x145D0 (0x40 a menos), leu tres variaveis alheias e
+ * nunca pintou nada. Conferir sempre contra o decimal do desmontado. */
+#define JAN_Y0     (*(volatile u8 *)0x0001460A)    /* 83466 */
+#define JAN_Y1     (*(volatile u8 *)0x0001460E)    /* 83470 */
+#define JAN_LINHA  (*(volatile u16 *)0x00014610)   /* 83472, bytes por linha: (x1 - x0) * 2 */
+#define COR_BUF    ((u16)(COR_REALCE >> 8 | COR_REALCE << 8))
 
-    if ((y0 >= limite) == (LADO_B != 0))
-        cor = COR_REALCE;
-    JANELA(x0, x1, y0, y1, limpar, cor);
+void gancho_envia(void)
+{
+    unsigned y0 = JAN_Y0, lado = LAYOUT(LADO_B != 0);
+
+    if (lado == 2 ? y0 < 89 : lado == 1 && y0 >= 57) {
+        unsigned n = (JAN_LINHA >> 1) * (JAN_Y1 - y0);
+        volatile u16 *p = VIDEO;
+
+        if (n > PIXELS)             /* nunca passa do buffer, mesmo com janela absurda */
+            n = PIXELS;
+        while (n--) {
+            if (*p == 0)
+                *p = COR_BUF;
+            p++;
+        }
+    }
+    ENVIA();
 }
 
 /* ---------- textos ---------- */

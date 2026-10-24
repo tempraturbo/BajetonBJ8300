@@ -191,12 +191,39 @@ if montar.SCAN_REDESENHA:
 if montar.REALCE:
     for sitio, oque in montar.REALCE_SITIOS_GANCHO:
         o = sitio - montar.BASE_APP
-        ok = bytes(app[o:o + 4]) == montar.monta_call(sitio, montar.S['gancho_realce'])
+        ok = bytes(app[o:o + 4]) == montar.monta_call(sitio, montar.S['gancho_envia'])
         print(f'4e. gancho do realce em {sitio:#x} ({oque.split(",")[0]}): '
               + ('ok' if ok else 'FALHOU'))
         if not ok:
             erros.append(f'gancho do realce errado em {sitio:#x}')
     previsto += [(e, e + 3, 'gancho do realce') for e, _ in montar.REALCE_SITIOS_GANCHO]
+
+    # 4f. os enderecos que o gancho le sao os que a janela() grava - tirados das PROPRIAS instrucoes
+    # dela no firmware de fabrica, nunca convertidos a mao. Na v15 eles foram convertidos errado do
+    # decimal do objdump (0x40 a menos) e o gancho lia tres variaveis alheias.
+    fonte = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', 'bancos.c'),
+                 encoding='utf-8').read()
+
+    def define(nome):
+        import re
+        return int(re.search(r'#define\s+%s\s+\(\*?\(volatile u\d+ \*\)(0x[0-9A-Fa-f]+)\)' % nome,
+                             fonte).group(1), 16)
+
+    def imediato(endereco):
+        """O valor de 32 bits de um "rX = imm32" (cX ff + 4 bytes) do firmware de fabrica."""
+        o = endereco - montar.BASE_APP
+        assert app_velho[o + 1] == 0xFF and app_velho[o] & 0xF0 == 0xC0, hex(endereco)
+        return struct.unpack('<I', app_velho[o + 2:o + 6])[0]
+
+    for nome, instrucao, papel in (('JAN_Y0', 0x01E3AD3E, 'y0'), ('JAN_Y1', 0x01E3AD5E, 'y1'),
+                                   ('JAN_LINHA', 0x01E3AD6E, 'bytes por linha'),
+                                   ('VIDEO', 0x01E3AD86, 'buffer de video')):
+        no_c, no_firmware = define(nome), imediato(instrucao)
+        ok = no_c == no_firmware
+        print(f'4f. {nome} = {no_c:#x}, a janela() usa {no_firmware:#x} ({papel}, '
+              f'{instrucao:#x}): ' + ('ok' if ok else 'FALHOU'))
+        if not ok:
+            erros.append(f'{nome} nao e o endereco que a janela() usa')
 
 if montar.REALCE_DIAG:
     certas = sum(bytes(app[e - montar.BASE_APP:e - montar.BASE_APP + 2])

@@ -5,26 +5,97 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
-## v14 — 24/10 — realce refeito a partir do mapa da tela
+## v16 — 24/10 — endereços da janela corrigidos ✅ **realce funcionando**
 
-Feito depois de mapear a tela inteira ([mapa-da-tela.md](mapa-da-tela.md)), que explicou os dois
-defeitos da v13 com endereço:
+**Testado no rádio:** o bloco do lado escolhido fica verde — linha do `H`, nome, frequência, número
+e barra — e, ao trocar de lado, o anterior volta a preto e o novo fica verde. Ficam **faixas finas
+pretas** onde nenhuma janela desenha (entre o nome e a frequência, e entre a frequência e a barra);
+as fotos batem pixel a pixel com o que o mapa previa — ver [mapa-da-tela.md](mapa-da-tela.md),
+seção 8.
+
+**A v15 não pintava nada por um erro de conversão de endereço**, não de lógica. O `llvm-objdump`
+mostra os imediatos em decimal: a `janela()` grava y0 em `b[83466]`, y1 em `b[83470]` e os bytes por
+linha em `h[83472]` — que são **`0x1460A`, `0x1460E` e `0x14610`**. Eles tinham sido convertidos
+como `0x145CA`, `0x145CE` e `0x145D0` (0x40 a menos; o erro veio do mapa da sessão anterior), e o
+gancho lia três variáveis alheias. Na "conferência" do código gerado comparei o rótulo hex com o que
+eu acreditava, em vez de comparar 83402 com 83466.
+
+Como foi achado: com a v15 confirmada no rádio (sem `ZONE` no menu), cada elo foi provado de novo —
+os 13 sítios nas **seis** imagens do arquivo gravado, a trava (a barra de fábrica só aparece porque
+o `layout()` devolve 2 ali), o acesso de 16 bits à RAM de vídeo (`0x01E6C18E` grava 32 bits dentro
+dela), o DMA (`0x01E38540` lê de `0x10190` e espera terminar). Sobrou o endereço, e em decimal o
+erro ficou óbvio.
+
+Mudou:
+
+- `JAN_Y0`, `JAN_Y1` e `JAN_LINHA` com os endereços certos, anotados com o decimal ao lado.
+- **Verificação nova (`4f`)**: a montagem lê os endereços das próprias instruções da `janela()` no
+  firmware de fábrica (`0x01E3AD3E`, `0x01E3AD5E`, `0x01E3AD6E`, `0x01E3AD86`) e compara com os
+  `#define`. Testada com o valor errado da v15: reprova.
+- **14º sítio**: a linha de informações do lado em evidência (`0x01E3B2C4`, a do `H`), y 18 com o
+  A e 57 com o B. Ela só é desenhada para o lado expandido, então entra sempre verde.
+
+Mesmo tamanho (1776 B), build reprodutível, zero desvios em remendo, 14/14 sítios nas seis imagens.
+
+## v15 — 24/10 — realce no envio ao LCD ⚠️ **não pintou nada**
+
+**Testado no rádio:** tudo preto, inclusive a barra ao trocar de canal. Causa na v16, acima: três
+endereços convertidos errado do decimal. O desenho abaixo (gancho no envio, trava pelo `layout()`)
+continua valendo na v16.
+
+
+Feito depois de mapear o caminho de desenho inteiro, o que explicou com endereço os dois sintomas
+que o usuário relatou na v14 (detalhes em [mapa-da-tela.md](mapa-da-tela.md)):
+
+1. **«o verde só sai no fundo da barra de sinal, e só ao mudar de canal com a seta»** — os três
+   ganchos da v14 estavam todos em **atualizações parciais**. O redesenho completo, que é o que
+   corre ao trocar de A para B, passa por `0x01E3C132` (as três faixas de barra) e pelo desenhador
+   de bloco `0x01E3BD04`, que **não tinham gancho nenhum**.
+2. **«o quadrado completo continua preto»** — o fundo do texto não vem de `janela()`: cada rotina de
+   texto enche a célula de cada caractere com uma cor própria, preta fixa (o `r8 = 0` de
+   `0x01E3BAD8`, que vai para o desenhador de glifo `0x01E388F4` e para o vão `0x01E38978`). Trocar
+   a cor da janela nunca ia pintar o bloco.
+
+Agora o gancho entra **no envio** (`envia()`, `0x01E3ADBC`) e troca por verde todo pixel preto do
+pedaço antes de ele ir para o LCD: fundo da janela, célula de caractere e vão ficam verdes de uma
+vez, e o que tem cor própria (texto branco, segmentos da barra) passa intacto. São **13 sítios**,
+todas as chamadas de `envia()` dentro das seis funções que desenham a tela de dois VFOs — `call` de
+4 bytes trocada no lugar, sem crescer o código.
+
+Qual bloco está em evidência sai da **própria rotina do firmware** (`0x01E3B1A2`), a mesma que ele
+usa para posicionar cada linha: ela devolve 2 com o A em evidência, 1 com o B e **0 quando a tela
+não é a de dois VFOs** (a de um VFO só grava 4 em `b[0x1533D]`). É isso que mantém o verde fora das
+outras telas, que usam essas mesmas funções. Os limites de `y` (89 e 57) saem de três tabelas do
+firmware e têm folga larga: 74 contra 91 com o A em evidência, 41 contra 69 com o B.
+
+O gancho **não desenha nada** — só lê os limites que `janela()` já gravou e escreve dentro do
+buffer, com trava no tamanho dele; o estouro da v13 é impossível por construção. Conferido no
+código de máquina gerado em `0x01E963FA`, instrução por instrução.
+
+Código novo: 1776 B dos 1782 disponíveis. Montagem fecha em `RESULTADO: tudo certo`, build
+reprodutível (mesmo sha256 depois de apagar `build/`) e zero desvios caindo dentro de remendo.
+
+## v14 — 24/10 — realce refeito a partir do mapa da tela ⚠️ **não funcionou**
+
+Consertou os dois defeitos da v13, cada um achado no desassemblado:
 
 1. **O reset** era estouro do buffer de vídeo. A v13 pintava o bloco inteiro numa chamada só — 71
    linhas em largura cheia = **22.720 bytes** — e o buffer em 0x10190 tem **10.240** (uma banda de
    160×32). `janela()` não tem trava de tamanho (laço em `0x01E3AD8E`), então o excedente caía em
    cima do buffer de texto, da base global e das flags de redesenho.
-2. **O realce não aparecer** era variável errada: eu usei `tx_ab` (`0x14B84`, o ajuste gravado na
-   memória de dados) em vez de **`b[0x15E04]`**, que é o estado da tela que o próprio firmware
-   consulta para decidir a posição de cada linha.
+2. **O realce não aparecer** era variável errada: `tx_ab` (`0x14B84`, o ajuste gravado na memória de
+   dados) em vez de **`b[0x15E04]`**, que é o estado da tela que o próprio firmware consulta.
 
-Agora o gancho entra nas **três janelas que formam um bloco** (nome+frequência em `0x01E4B270`,
-barra de sinal em `0x01E41468`, número do canal em `0x01E4B314`) e **não mexe na geometria**: só
-troca a cor com que o firmware já ia encher aquela janela. Conferido no código de máquina gerado —
-r0 a r3 não são tocados —, então o estouro da v13 é impossível por construção.
+O gancho passou a entrar em **três janelas** (nome+frequência em `0x01E4B270`, barra de sinal em
+`0x01E41468`, número do canal em `0x01E4B314`), sem mexer na geometria.
 
-**Ainda não testado no rádio.** O que está provado é estático: o mapa, a tabela-verdade das sete
-combinações de janela e lado, e que a montagem fecha em `RESULTADO: tudo certo`.
+**Testado no rádio:** liga, troca de A para B e **não reinicia mais** — o estouro estava mesmo
+resolvido, e essa parte é definitiva. Mas o realce continuou errado: verde só no fundo da barra de
+sinal e só ao mudar de canal com a seta.
+
+**Erro de método, e vale registrar:** os três sítios foram escolhidos a partir de um levantamento
+*parcial* da tela, que parou nas atualizações parciais e não chegou ao redesenho completo nem às
+rotinas de texto. As duas causas estão na v15, acima.
 
 ## v13 — 24/10 — realce do VFO ⚠️ **com problema conhecido**
 

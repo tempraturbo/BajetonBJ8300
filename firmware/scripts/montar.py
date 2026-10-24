@@ -43,7 +43,7 @@ PROTEGIDAS = [
 # Onde o codigo novo roda (igual nas 6 imagens; ver bancos.ld).
 ENDERECO_CODIGO = 0x01E96122
 
-PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_realce', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
+PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
            'gancho_partida', 'canal_exibe', 'canal_le', 'canal_grava',
            'titulo_bank', 'titulo_nome', 'titulo_canal')
 
@@ -167,31 +167,49 @@ SCAN_REDESENHA = True
 SCAN_EM = 0x01E46EB6
 SCAN_ERA = 0x01E458E4
 
-# Realce do VFO selecionado na tela principal. A tela pinta cada faixa chamando
-# janela(x0, x1, y0, y1, limpar, cor) em 0x01E3AD34 - sempre com cor 0 (preto). A cor chega num
-# registrador carregado por uma instrucao de 2 bytes "rX = imm8", entao trocar a cor e um remendo
-# de 2 bytes no lugar: **nao cresce o codigo**.
-# Limite da codificacao: imm8 vai de 0 a 255, o que em RGB565 cobre exatamente os verdes e azuis
-# escuros (o vermelho mora nos bits altos) - que e o tom que queremos. O proprio firmware ja usa
-# cores assim (0x00A0, 0x0082, 0x0065).
+# Realce do bloco do VFO em evidencia na tela principal. O gancho entra no ENVIO do pedaco para o
+# LCD (envia(), 0x01E3ADBC) e nao no preenchimento da janela, porque o fundo do texto nao vem de
+# janela(): as rotinas de texto enchem a celula de cada caractere com uma cor propria, preta fixa.
+# Trocar so a cor da janela - o que a v14 fazia - deixava nome e frequencia em caixas pretas.
+# Detalhes e enderecos em docs/mapa-da-tela.md; a cor fica em COR_REALCE, no bancos.c.
 #
-# REALCE_DIAG pinta de verde TODAS as faixas de largura total que o firmware enche de preto. Nao e
-# a versao final: serve para a foto do radio dizer qual chamada pinta qual pedaco da tela, que e a
-# unica forma honesta de descobrir isso sem simbolos. A lista sai de
-#   python -I scripts/retangulos.py saida/app.bin cores
-# Realce do VFO selecionado: a faixa da barra de sinal (160x14) e pintada por
-# janela(x0,x1,y0,y1,limpar,cor) sempre com cor 0. O gancho repassa os seis argumentos e so troca a
-# cor quando a faixa e a do lado selecionado - o y diz qual lado (41 ou 74 no VFO A, 114 no B,
-# conferido no radio) e o VFO ativo sai de tx_ab, que o firmware espelha em 0x14B84.
-# A cor fica em COR_REALCE, no bancos.c.
+# Os sitios abaixo sao TODAS as chamadas de envia() dentro das seis funcoes que desenham a tela de
+# dois VFOs, lidas uma por uma no desmontado. Sao call de 4 bytes trocadas no lugar: nao cresce o
+# codigo. O gancho ainda confere na rotina do firmware (0x01E3B1A2) se a tela e mesmo a de dois
+# VFOs, entao nenhuma outra tela e pintada - nem a de um VFO so, que usa estas mesmas funcoes.
+#
+# O que faltava na v14 estava aqui: ela so tinha os tres sitios de atualizacao PARCIAL (barra,
+# numero e nome), que correm quando se troca de canal. O redesenho completo - que e o que acontece
+# ao trocar de A para B - passa por 0x01E3C132 e pelo desenhador de bloco 0x01E3BD04, que nao
+# tinham gancho nenhum. Era por isso que o verde so aparecia na barra e so ao mudar de canal.
 REALCE = True
-REALCE_ERA = 0x01E3AD34
-# As tres janelas que formam o bloco de um VFO na tela principal, com a geometria lida no
-# desmontado. O gancho e o mesmo nos tres: ele so troca a cor, nunca a geometria.
-REALCE_SITIOS_GANCHO = ((0x01E4B270, 'nome e frequencia, (7,160,y,y+24), y=30 no A e 69 no B'),
-                        (0x01E41468, 'barra de sinal, (0,160,y,y+14), y=41/74 no A e 114 no B'),
-                        (0x01E4B314, 'numero do canal, (127,159,y,y+9), y=62 no A e 101 no B'))
-# Diagnostico (pinta faixas inteiras trocando so a cor, 2 bytes por sitio) fica desligado: serviu
+REALCE_ERA = 0x01E3ADBC
+REALCE_SITIOS_GANCHO = (
+    # desenhador de bloco (0x01E3BD04), um bloco por lado: frequencia, nome e o que o modo pedir
+    (0x01E3BF38, 'bloco: modo 2, linha do nome'),
+    (0x01E3BF8E, 'bloco: modos 1 e 3, linha do nome'),
+    (0x01E3C014, 'bloco: modo 4, frequencia'),
+    (0x01E3C066, 'bloco: frequencia (saida comum)'),
+    # complemento do bloco (0x01E3C06E): a faixa da direita, y = 56/95 no lado em evidencia e
+    # 19/91 no compacto - os mesmos limites, por outra tabela (0x01E3C0BE). O primeiro sitio so
+    # corre na tela de um VFO (com r0 == 0 o desvio em 0x01E3C07C pula janela e envio); fica na
+    # lista por completude, e o gancho nao pinta nada la.
+    (0x01E3C0A4, 'complemento: marca do lado, (0,18,41,55), so na tela de um VFO'),
+    (0x01E3C12A, 'complemento: faixa da direita, (132,160,y,y+22)'),
+    # linha de informacoes do lado em evidencia (0x01E3B2C4: o "H" de potencia e companhia), y = 18
+    # com o A e 57 com o B; so e desenhada para o lado expandido (layout 0 e 3 pulam janela e envio)
+    (0x01E3B4AE, 'informacoes: linha do H, (0,160,y,y+12), y=18 no A e 57 no B'),
+    # tela principal (0x01E3C132): as tres faixas de barra de sinal
+    (0x01E3C176, 'tela: barra do A compacto, (0,160,41,55)'),
+    (0x01E3C19E, 'tela: barra do A expandido, (0,160,74,88)'),
+    (0x01E3C1D0, 'tela: barra do B, (0,160,114,128)'),
+    # atualizacoes parciais, que correm ao trocar de canal
+    (0x01E41452, 'parcial: barra de sinal'),
+    (0x01E4147E, 'parcial: barra de sinal (nivel)'),
+    (0x01E4B294, 'parcial: nome e frequencia, y=30 no A e 69 no B'),
+    (0x01E4B322, 'parcial: numero do canal, y=62 no A e 101 no B'),
+)
+# Diagnostico (pintava faixas inteiras trocando so a cor, 2 bytes por sitio) fica desligado: serviu
 # para descobrir qual chamada pinta o que. Os sitios conferidos estao no historico do git.
 REALCE_DIAG = False
 REALCE_SITIOS = ()
@@ -394,8 +412,8 @@ def main():
             if antes != monta_call(sitio, REALCE_ERA):
                 raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {REALCE_ERA:#x}: '
                                  f'{antes.hex()}')
-            app[o:o + 4] = monta_call(sitio, S['gancho_realce'])
-            print(f"  gancho do realce {sitio:#x} -> {S['gancho_realce']:#x}: {oque}")
+            app[o:o + 4] = monta_call(sitio, S['gancho_envia'])
+            print(f"  gancho do realce {sitio:#x} -> {S['gancho_envia']:#x}: {oque}")
 
     # 4c. diagnostico das faixas: so a cor do preenchimento, 2 bytes por sitio
     if REALCE_DIAG:
