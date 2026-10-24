@@ -73,7 +73,7 @@ não ficar preso em modo zona, o driver do CHIRP grava **Full Channel** em todo 
    | Arquivo | Estado |
    |---|---|
    | `firmware/releases/BJ8300_BANK_v12.anc` | **recomendado** — testado e íntegro |
-   | `firmware/releases/BJ8300_BANK_v24.anc` | v23 + **scramble 2900 Hz** (o do Baofeng UV-17L no modo 3) — **testado no rádio** com o UV-17L |
+   | `firmware/releases/BJ8300_BANK_v24.anc` | v23 + **scramble 2900 Hz** (o do Baofeng UV-17L no modo 3); use com o driver do CHIRP desta versão — **testado no rádio** com o UV-17L |
    | `firmware/releases/BJ8300_BANK_v23.anc` | v21 + **roger BEEP 2** (100 ms por tom, como o mp3); use com o driver do CHIRP desta versão — **testado no rádio** |
    | `firmware/releases/BJ8300_BANK_v21.anc` | v19 + **espectro** duas vezes mais rápido, passo de 10 kHz, 320 e 640 pontos e pico seguro; verde do realce mais escuro (é a v20 sem o bootloop; a v20 foi retirada) — **testado no rádio** |
    | `firmware/releases/BJ8300_BANK_v19.anc` | v18 + **a seta continua o espectro** parado num achado, sem mexer no limite; a tabela de menus passa a ficar no lugar da original (o código ganha 1512 bytes de espaço) — **testado no rádio** |

@@ -14,14 +14,18 @@ causa, porque é isso que evita repetir.
   na gravação do dono, com um tom de 1 kHz. Os modos 1 e 2 do UV-17L não batem com o BJ-8300.
   O get e o set do item continuam os de fábrica; mudam só a quantidade de opções, os nomes e os
   2 bytes da tabela. Detalhes na [seção 13 da engenharia reversa](engenharia-reversa.md#13-scramble).
+- **Driver do CHIRP:** o scramble do canal e o dos VFO A e B mostram e gravam as três opções. No
+  VFO, a base parte o valor em dois campos, e o driver grava como o rádio grava: o nibble alto do
+  byte e mais nada.
 - **Conferência:** a `4k` confere a tabela do scramble. A `2e` é nova e vale para tudo: o app.bin
   decifrado tem de ser o mesmo nas 6 imagens. Até aqui só o código e a tabela de menus eram
   conferidos nas seis; os remendos do roger e do scramble, só na primeira. As duas foram testadas
   com o defeito que devem pegar (a v23, sem o remendo, e uma cópia com um byte trocado só na
   segunda imagem).
 
-Código: 2804 B de 3292. Build reprodutível, zero desvios em remendo, os três testes passando.
-**Testada no rádio** (24/10): com o scramble em 2900 Hz, o BJ-8300 e o UV-17L no modo 3 se entendem.
+Código: 2804 B de 3292. Build reprodutível, zero desvios em remendo, os três testes passando (6
+conferências novas do scramble no CHIRP de verdade). **Testada no rádio** (24/10): com o
+scramble em 2900 Hz, o BJ-8300 e o UV-17L no modo 3 se entendem.
 
 ## v23 — 24/10 — BEEP 2 na velocidade do mp3 ✅
 

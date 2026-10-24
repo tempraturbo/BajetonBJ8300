@@ -460,6 +460,9 @@ the BJ-8300. The TONE menu's call tone (1000/1450/1750/2100 Hz, side key, `0x01E
 option: **OFF, 3400 Hz, 2900 Hz**. Value 2 = 2900 Hz.
 - Only the option count (3) and the two name tables change. The get and set stay stock, because
   the stored value already is the menu position. The Chinese OFF is the stock one.
+- In CHIRP, the channel's scramble field takes bits 7–2 of byte 14, so the 2900 Hz option is
+  `0x08`. In the VFO, the base format splits the nibble into `unknown3` (bits 7–5) and `scramble`
+  (bits 4–2), so the driver replaces that setting with its own.
 - Check `4k` in `conferir.py` takes the table from the instruction at `0x01E40936`. It confirms the
   first entry is unchanged and computes the second entry's frequency from the first one's ratio
   (3400 Hz).

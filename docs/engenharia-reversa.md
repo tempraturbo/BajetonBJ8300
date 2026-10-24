@@ -458,5 +458,8 @@ mesmo registrador `0x71`, e por isso não serve para medir o scramble.
 terceira opção: **OFF, 3400 Hz, 2900 Hz**. Valor 2 = 2900 Hz.
 - Só mudam a quantidade de opções (3) e as duas tabelas de nomes. O get e o set continuam os de
   fábrica, porque o valor gravado já é a posição no menu. O OFF em chinês é o de fábrica.
+- No CHIRP, o campo scramble do canal pega os bits 7–2 do byte 14, então a opção 2900 Hz é o
+  `0x08`. No VFO, o formato da base parte o nibble em `unknown3` (bits 7–5) e `scramble` (bits
+  4–2), e por isso o driver troca esse ajuste pelo dele.
 - A verificação `4k` do `conferir.py` tira a tabela da instrução de `0x01E40936`. Ela confere que
   a primeira entrada não mudou e calcula a frequência da segunda pela conta da primeira (3400 Hz).

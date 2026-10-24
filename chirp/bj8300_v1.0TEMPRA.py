@@ -326,26 +326,58 @@ class _RogerBJ8300(MemSetting):
         memobj.settings.roger = _troca_roger(int(self.value))
 
 
-def _poe_roger(grupo, roger):
-    """Troca o ajuste do roger da classe base pelo nosso, no mesmo lugar da arvore."""
+# SCRAMBLE (firmware v24 em diante): OFF, 3400 Hz (o de fabrica) e 2900 Hz (o do Baofeng UV-17L).
+# O radio guarda a posicao no menu no nibble alto de um byte - o 14 do canal, o 16 do VFO - e
+# inverte em 3400 Hz com 1 e em 2900 Hz com qualquer valor maior. No canal, o campo scramble da
+# classe base pega os bits 7-2, entao vale nibble << 2 e basta o mapa com a terceira opcao. No
+# VFO o formato parte o nibble em unknown3 (bits 7-5) e scramble (bits 4-2), por isso o ajuste e
+# trocado pelo nosso.
+SCRAMBLE_OPCOES = ['Off', '3400 Hz', '2900 Hz']
+SCRAMBLE_DOC = ('Inversao de voz. 3400 Hz e a de fabrica deste radio; 2900 Hz e a do Baofeng '
+                'UV-17L (o modo 3 dele).')
+
+
+class _ScrambleVfo(MemSetting):
+    """O scramble do VFO, gravado como o set do item no radio (0x01E3D06C): o nibble alto do byte
+    16 vira a posicao no menu, e o resto do byte fica."""
+
+    def apply_to_memobj(self, memobj):
+        vfo = getattr(memobj.vfo, self._path.split('.')[1])
+        n = int(self.value)
+        vfo.unknown3 = n >> 1
+        vfo.scramble = vfo.scramble & 3 | (n & 1) << 2
+
+
+def _troca_ajuste(grupo, nome, novo):
+    """Troca o ajuste `nome` da classe base pelo que novo(antigo) devolve, no mesmo lugar da arvore."""
     # o topo (RadioSettings) e uma lista de grupos; os grupos tem nome -> elemento
     filhos = (grupo.items() if isinstance(grupo, RadioSettingGroup)
               else [(g.get_name(), g) for g in grupo])
-    for nome, elemento in filhos:
+    for chave, elemento in filhos:
         # RadioSetting e subclasse de RadioSettingGroup no CHIRP: testar o ajuste antes do grupo
         if isinstance(elemento, RadioSetting):
-            if nome != 'settings_roger':
-                continue
-            novo = _RogerBJ8300('settings.roger', elemento.get_shortname(),
-                                RadioSettingValueList(ROGER_OPCOES,
-                                                      current_index=_troca_roger(roger)))
-            novo.set_doc('Tom de fim de transmissao. BEEP 2 e o de quatro notas do firmware dos '
-                         'bancos; os outros sao os de fabrica.')
-            grupo._elements[nome] = novo       # mesmo nome e mesma posicao na lista
-            return True
-        if isinstance(elemento, RadioSettingGroup) and _poe_roger(elemento, roger):
+            if chave == nome:
+                grupo._elements[chave] = novo(elemento)    # mesmo nome e mesma posicao na lista
+                return True
+        elif isinstance(elemento, RadioSettingGroup) and _troca_ajuste(elemento, nome, novo):
             return True
     return False
+
+
+def _roger(antigo, roger):
+    rs = _RogerBJ8300('settings.roger', antigo.get_shortname(),
+                      RadioSettingValueList(ROGER_OPCOES, current_index=_troca_roger(roger)))
+    rs.set_doc('Tom de fim de transmissao. BEEP 2 e o de quatro notas do firmware dos bancos; os '
+               'outros sao os de fabrica.')
+    return rs
+
+
+def _scramble_vfo(antigo, lado, vfo):
+    nibble = int(vfo.unknown3) << 1 | int(vfo.scramble) >> 2
+    rs = _ScrambleVfo('vfo.%s.scramble' % lado, antigo.get_shortname(),
+                      RadioSettingValueList(SCRAMBLE_OPCOES, current_index=min(nibble, 2)))
+    rs.set_doc(SCRAMBLE_DOC)
+    return rs
 
 
 @directory.register
@@ -354,6 +386,9 @@ class BJ8300(_BancosPeloCabo, radtel_rt900.BJ7800):
     VENDOR = 'Baojie'
     MODEL = 'BJ8300_v1.0TEMPRA'        # nome proprio: so serve com o firmware modificado
     VARIANT = ''
+
+    # o scramble do canal com as tres opcoes do firmware (ver SCRAMBLE_OPCOES): 0x00, 0x04, 0x08
+    _scramble_map = [(nome, n << 2) for n, nome in enumerate(SCRAMBLE_OPCOES)]
 
     # Canais, ajustes, faixas e protocolo sao os mesmos do BJ7800 (960 canais de 32 bytes).
     #
@@ -466,8 +501,13 @@ class BJ8300(_BancosPeloCabo, radtel_rt900.BJ7800):
             ajustes = super().get_settings()
         finally:
             self._memobj.settings.roger = roger
-        if not _poe_roger(ajustes, roger):
+        if not _troca_ajuste(ajustes, 'settings_roger', lambda antigo: _roger(antigo, roger)):
             LOG.warning('ajuste do roger nao encontrado na classe base')
+        for lado in 'ab':
+            vfo = getattr(self._memobj.vfo, lado)
+            if not _troca_ajuste(ajustes, 'vfo_%s_scramble' % lado,
+                                 lambda antigo: _scramble_vfo(antigo, lado, vfo)):
+                LOG.warning('scramble do VFO %s nao encontrado na classe base', lado.upper())
         bancos = _Bancos(self)
         ativos = bancos.ativos()
         grupo = RadioSettingGroup('bancos', 'Bancos')
