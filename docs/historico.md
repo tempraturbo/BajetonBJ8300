@@ -16,7 +16,7 @@ sempre teve 80 ms por tom; ele não mudou.)
 
 Só muda o número da espera; código e ganchos são os da v22. **Testada no rádio** (24/10): funcionou.
 
-## v22 — 24/10 — roger BEEP 2
+## v22 — 24/10 — roger BEEP 2, e o driver do CHIRP numa sessão só
 
 - **ROGER com quatro opções: OFF, BEEP 1, BEEP 2, TONE1200.** O BEEP 1 é o BEEP de fábrica
   (1000 Hz e 850 Hz, 80 ms cada); o **BEEP 2** toca os quatro tons do mp3 que o dono mandou —
@@ -24,8 +24,17 @@ Só muda o número da espera; código e ganchos são os da v22. **Testada no rá
   receber. Os valores gravados continuam os de fábrica (BEEP 1, TONE1200 = 2) e o BEEP 2 é o 3, que
   cabe nos 2 bits do ajuste; o menu troca a ordem. Os quatro tons saem com o mesmo volume (no mp3 o
   segundo é mais baixo). Detalhes na [seção 12 da engenharia reversa](engenharia-reversa.md#12-roger).
+- **Driver do CHIRP:** a leitura falhava no rádio com "Radio returned unknown identification
+  string". O driver lia canais e ajustes numa sessão, saía com `E` e abria outra para os bancos;
+  mapeado no firmware, o `E` responde com um ACK que o CHIRP não lê, e a sessão só fecha numa volta
+  do laço sem bytes chegando — o `PROGRAM…` da segunda sessão era descartado e o CHIRP lia o ACK que
+  sobrou. Agora é **uma sessão só** para tudo, e na gravação a conferência do firmware vem antes de
+  gravar qualquer coisa (num rádio de fábrica nada é gravado). O driver também mostra e grava o
+  BEEP 2. O rádio simulado do teste passou a se comportar como o firmware no `E`, e com ele o driver
+  antigo falha exatamente com a mensagem que apareceu no rádio.
 
-Código: 2764 B de 3292. Build reprodutível, zero desvios em remendo, os três testes passando. **No rádio:** o BEEP 2
+Código: 2764 B de 3292. Build reprodutível, zero desvios em remendo, os três testes passando (6
+conferências novas do roger no CHIRP de verdade, 4 novas na clonagem). **No rádio:** o BEEP 2
 funcionou, mas com 200 ms por tom em vez de 100 (corrigido na v23).
 
 ## v21 — 24/10 — a v20 sem o bootloop ✅

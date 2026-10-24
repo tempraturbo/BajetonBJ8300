@@ -145,6 +145,32 @@ def main():
             (bj._enderecos()[0], bj._enderecos()[-1], len(bj._enderecos())),
             (0x0C1000, 0x0D1000, 17))
 
+    # 8. roger com o BEEP 2: o valor 3 (que a classe base nao conhece) abre, mostra na ordem do
+    # radio e grava o valor certo - e a lista da classe base, que outros radios usam, nao muda
+    from chirp.drivers import radtel_rt900
+    radio = bj.BJ8300(imagem())
+    radio._memobj.settings.roger = 3
+    roger = [s for s in radio.get_settings().walk() if s.get_name() == 'settings_roger']
+    confere('8. ajuste do roger presente, uma vez so', len(roger), 1)
+    roger = roger[0]
+    confere('8b. as quatro opcoes na ordem do radio', roger.value.get_options(),
+            ['OFF', 'BEEP 1', 'BEEP 2', 'TONE1200'])
+    confere('8c. valor 3 aparece como BEEP 2', str(roger.value), 'BEEP 2')
+    confere('8d. a imagem continua com o valor 3', int(radio._memobj.settings.roger), 3)
+    gravados = []
+    for nome in ('OFF', 'BEEP 1', 'BEEP 2', 'TONE1200'):
+        ajustes = radio.get_settings()
+        r = [s for s in ajustes.walk() if s.get_name() == 'settings_roger'][0]
+        r.value.set_value(nome)
+        # a parte do set_settings que aplica os MemSetting (o roger e um); o resto do set_settings
+        # roda os callbacks da classe base, e o da frequencia do VFO nao funciona com a imagem
+        # zerada deste teste
+        ajustes.apply_to(radio._memobj)
+        gravados.append(int(radio._memobj.settings.roger))
+    confere('8e. OFF/BEEP 1/BEEP 2/TONE1200 gravam 0/1/3/2', gravados, [0, 1, 3, 2])
+    confere('8f. a lista da classe base nao mudou', radtel_rt900.ROGER_LIST,
+            ['OFF', 'BEEP', 'TONE1200'])
+
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')
     return 1 if falhas else 0

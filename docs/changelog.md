@@ -16,7 +16,7 @@ per tone; it did not change.)
 
 Only the wait value changes; code and hooks are v22's. **Tested on the radio** (Oct 24): it works.
 
-## v22 — Oct 24 — BEEP 2 roger
+## v22 — Oct 24 — BEEP 2 roger, and the CHIRP driver in a single session
 
 - **ROGER with four options: OFF, BEEP 1, BEEP 2, TONE1200.** BEEP 1 is the stock BEEP (1000 Hz
   and 850 Hz, 80 ms each); **BEEP 2** plays the four tones of the owner's mp3 — **1125, 1857, 1359
@@ -24,8 +24,17 @@ Only the wait value changes; code and hooks are v22's. **Tested on the radio** (
   stored values stay the stock ones (BEEP 1, TONE1200 = 2) and BEEP 2 is 3, which fits in the
   setting's 2 bits; the menu swaps the order. The four tones play at the same volume (in the mp3 the
   second one is quieter). Details in [section 12 of the reverse-engineering notes](reverse-engineering.md#12-roger).
+- **CHIRP driver:** reading failed on the radio with "Radio returned unknown identification
+  string". The driver read channels and settings in one session, left with `E` and opened another
+  for the banks; mapped in the firmware, `E` answers with an ACK that CHIRP does not read, and the
+  session only closes on a loop turn with no byte arriving — the second session's `PROGRAM…` was
+  dropped and CHIRP read the leftover ACK. Now it is **a single session** for everything, and on
+  upload the firmware check comes before writing anything (nothing is written to a stock radio).
+  The driver also shows and writes BEEP 2. The test's simulated radio now behaves like the firmware
+  on `E`, and with it the old driver fails with exactly the message the radio showed.
 
-Code: 2764 B of 3292. Reproducible build, zero branches into patches, all three tests passing. **On the radio:** BEEP 2 worked, but with
+Code: 2764 B of 3292. Reproducible build, zero branches into patches, all three tests passing (6 new
+roger checks in real CHIRP, 4 new in the clone test). **On the radio:** BEEP 2 worked, but with
 200 ms per tone instead of 100 (fixed in v23).
 
 ## v21 — Oct 24 — v20 without the boot loop ✅

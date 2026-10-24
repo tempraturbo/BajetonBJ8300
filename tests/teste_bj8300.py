@@ -133,6 +133,11 @@ def _stub_chirp():
         def __int__(self):
             return self.indice
 
+    class MemSetting(RadioSetting):
+        def __init__(self, path, shortname, valor):
+            super().__init__(path.replace('.', '_'), shortname, valor)
+
+    settings.MemSetting = MemSetting
     settings.RadioSetting = RadioSetting
     settings.RadioSettingGroup = RadioSettingGroup
     settings.RadioSettingValueBoolean = RadioSettingValueBoolean

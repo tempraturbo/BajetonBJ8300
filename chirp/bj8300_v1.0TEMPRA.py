@@ -37,7 +37,7 @@ import struct
 
 from chirp import chirp_common, directory, errors, memmap
 from chirp.drivers import radtel_rt900
-from chirp.settings import RadioSetting, RadioSettingGroup, \
+from chirp.settings import MemSetting, RadioSetting, RadioSettingGroup, \
     RadioSettingValueBoolean, RadioSettingValueList
 
 LOG = logging.getLogger(__name__)
@@ -306,6 +306,48 @@ class _BancosPeloCabo(object):
                                       dados[bloco * TAM_BLOCO:(bloco + 1) * TAM_BLOCO])
 
 
+# --- roger: o firmware dos bancos acrescenta o BEEP 2 ---
+# O ajuste e o mesmo de fabrica (settings.roger, 2 bits em 0x9017): 0 OFF, 1 BEEP, 2 TONE1200, e o
+# firmware novo usa o 3 para o BEEP 2. O radio mostra OFF, BEEP 1, BEEP 2, TONE1200 - posicao 2
+# = valor 3 e posicao 3 = valor 2 -, e o CHIRP mostra igual. A lista da classe base tem so 3 nomes:
+# com o valor 3 ela nem monta a tela, por isso a troca abaixo vale so para este radio.
+ROGER_OPCOES = ['OFF', 'BEEP 1', 'BEEP 2', 'TONE1200']
+
+
+def _troca_roger(v):
+    """Posicao no menu <-> valor gravado: troca o 2 e o 3, o resto fica (a conta vale nos dois sentidos)."""
+    return v ^ 1 if v >= 2 else v
+
+
+class _RogerBJ8300(MemSetting):
+    """O ajuste do roger com a ordem do radio: grava o valor, nao a posicao na lista."""
+
+    def apply_to_memobj(self, memobj):
+        memobj.settings.roger = _troca_roger(int(self.value))
+
+
+def _poe_roger(grupo, roger):
+    """Troca o ajuste do roger da classe base pelo nosso, no mesmo lugar da arvore."""
+    # o topo (RadioSettings) e uma lista de grupos; os grupos tem nome -> elemento
+    filhos = (grupo.items() if isinstance(grupo, RadioSettingGroup)
+              else [(g.get_name(), g) for g in grupo])
+    for nome, elemento in filhos:
+        # RadioSetting e subclasse de RadioSettingGroup no CHIRP: testar o ajuste antes do grupo
+        if isinstance(elemento, RadioSetting):
+            if nome != 'settings_roger':
+                continue
+            novo = _RogerBJ8300('settings.roger', elemento.get_shortname(),
+                                RadioSettingValueList(ROGER_OPCOES,
+                                                      current_index=_troca_roger(roger)))
+            novo.set_doc('Tom de fim de transmissao. BEEP 2 e o de quatro notas do firmware dos '
+                         'bancos; os outros sao os de fabrica.')
+            grupo._elements[nome] = novo       # mesmo nome e mesma posicao na lista
+            return True
+        if isinstance(elemento, RadioSettingGroup) and _poe_roger(elemento, roger):
+            return True
+    return False
+
+
 @directory.register
 class BJ8300(_BancosPeloCabo, radtel_rt900.BJ7800):
     """Baojie BJ-8300 com o firmware dos bancos de canais."""
@@ -366,39 +408,66 @@ class BJ8300(_BancosPeloCabo, radtel_rt900.BJ7800):
             self._mmap = memmap.MemoryMapBytes(self._mmap.get_packed() + b'\xff' * falta)
         super().process_mmap()
 
+    # UMA SESSAO SO, para tudo (pago caro, 2026-10-24): ate aqui o driver lia canais e ajustes pelo
+    # sync_in de fabrica, que termina com 'E', e abria uma segunda sessao para os bancos. No radio
+    # isso falhava com "Radio returned unknown identification string": o firmware responde ao 'E'
+    # com um ACK (0x01E4C0D0 -> 0x01E416C4) que o CHIRP nao le, e so fecha a sessao numa volta do
+    # laco sem bytes chegando (0x01E4BA96) - o PROGRAM da segunda sessao chega antes, cai no estado
+    # 3 e e descartado, e o CHIRP le o ACK que sobrou como se fosse a resposta dele. Agora a
+    # sessao e aberta uma vez, e o 'E' so vai no fim.
     def sync_in(self):
-        super().sync_in()                      # canais e ajustes, pelo caminho de fabrica
         try:
-            radtel_rt900._enter_programming_mode(self)
+            dados = radtel_rt900.do_download(self)     # abre a sessao; canais e ajustes de fabrica
             self._confere_firmware()
             blob = self._baixa_bancos()
         except errors.RadioError:
             raise
         except Exception:
-            LOG.exception('Erro lendo a area dos bancos')
-            raise errors.RadioError('Erro lendo a area dos bancos')
+            LOG.exception('Erro inesperado lendo o radio')
+            raise errors.RadioError('Erro inesperado lendo o radio')
         finally:
             radtel_rt900._exit_programming_mode(self)
-        self._mmap = memmap.MemoryMapBytes(self._mmap.get_packed()[:BLOB_BASE] + blob)
+        self._mmap = memmap.MemoryMapBytes(dados.get_packed()[:BLOB_BASE] + blob)
         self.process_mmap()
+
+    def _grava_fabrica(self):
+        """Canais e ajustes: os mesmos blocos que o do_upload de fabrica grava, na sessao aberta."""
+        status = chirp_common.Status()
+        status.msg = 'Uploading to radio'
+        status.cur = 0
+        status.max = sum(fim - inicio + 1 for inicio, fim in self._ranges)
+        for inicio, fim in self._ranges:
+            for endereco in range(inicio, fim, self.BLOCK_SIZE_UP):
+                status.cur = endereco + self.BLOCK_SIZE_UP
+                self.status_fn(status)
+                radtel_rt900._write_block(self, endereco, self.BLOCK_SIZE_UP)
 
     def sync_out(self):
         self._memobj.settings.zone_or_channel = 1   # Full Channel: sem zonas (ver no topo da classe)
-        super().sync_out()                     # canais e ajustes, pelo caminho de fabrica
         try:
             radtel_rt900._enter_programming_mode(self)
-            self._confere_firmware()
+            self._confere_firmware()           # antes de gravar qualquer coisa
+            self._grava_fabrica()
             self._sobe_bancos()
         except errors.RadioError:
             raise
         except Exception:
-            LOG.exception('Erro gravando a area dos bancos')
-            raise errors.RadioError('Erro gravando a area dos bancos')
+            LOG.exception('Erro inesperado gravando o radio')
+            raise errors.RadioError('Erro inesperado gravando o radio')
         finally:
             radtel_rt900._exit_programming_mode(self)
 
     def get_settings(self):
-        ajustes = super().get_settings()
+        # A classe base monta o roger com a lista de 3 nomes e quebra com o valor 3 (BEEP 2): ela
+        # monta com 0 e a gente poe o valor de volta e troca o ajuste pelo nosso, de 4 opcoes.
+        roger = int(self._memobj.settings.roger)
+        self._memobj.settings.roger = 0
+        try:
+            ajustes = super().get_settings()
+        finally:
+            self._memobj.settings.roger = roger
+        if not _poe_roger(ajustes, roger):
+            LOG.warning('ajuste do roger nao encontrado na classe base')
         bancos = _Bancos(self)
         ativos = bancos.ativos()
         grupo = RadioSettingGroup('bancos', 'Bancos')

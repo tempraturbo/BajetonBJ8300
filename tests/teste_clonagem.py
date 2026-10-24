@@ -15,7 +15,12 @@ um radio que responde do jeito que o firmware responde, lido no desmontado:
     resposta sai com tam = 0x40 (o gancho do cabo troca o byte); gravacao so em 0xC1000..0xD1FFF,
     apagando o setor quando o bloco o abre;
   - FIRMWARE DE FABRICA: o mesmo comando vira endereco truncado em 16 bits, e a resposta tem
-    4 + tam bytes (mais de 128) - 64 de dados e o resto do que estiver no buffer.
+    4 + tam bytes (mais de 128) - 64 de dados e o resto do que estiver no buffer;
+  - 'E' (os dois firmwares): responde ACK (0x01E4C0D0 -> 0x01E416C4) e poe a sessao no estado 3,
+    que so fecha numa volta do laco sem bytes chegando (0x01E4BA96). O que chega antes disso cai
+    no estado 3 e e descartado - foi assim que a segunda sessao do driver antigo falhou no radio
+    ("Radio returned unknown identification string"). Aqui o "depois" e o passa_tempo(): o
+    CHIRP fecha a porta entre uma operacao e outra, e o radio fecha a sessao.
 
 O que NAO da para testar aqui: a eletrica do cabo e o tempo de resposta do radio. A conversa em si
 foi conferida a mao no radio (tools/cabo) nos dois sentidos.
@@ -52,6 +57,15 @@ class RadioSimulado(object):
         self.estado = 'magic'
         self.gravacoes_estendidas = []             # enderecos de 24 bits gravados pelo 'W' estendido
         self.comandos_estendidos = 0
+        self.gravacoes_normais = 0                 # 'W' de fabrica (canais e ajustes)
+        self.sessoes = 0                           # PROGRAM aceitos
+
+    def passa_tempo(self):
+        """O CHIRP fechou a porta (a sobra no buffer do PC vai junto) e o radio fechou a sessao."""
+        self.saida = bytearray()
+        self.entrada = bytearray()
+        if self.estado == 'depois_do_E':
+            self.estado = 'magic'
 
     # ---- interface de "serial" que o CHIRP usa ----
     def write(self, dados):
@@ -75,7 +89,11 @@ class RadioSimulado(object):
                     return
                 del e[:e.index(magic) + len(magic)]
                 self.saida += ACK
+                self.sessoes += 1
                 self.estado = 'F'
+            elif self.estado == 'depois_do_E':
+                del e[:]                           # estado 3: descartado ate a sessao fechar
+                return
             elif self.estado == 'F':
                 if not e:
                     return
@@ -97,7 +115,8 @@ class RadioSimulado(object):
                     return
                 if e[:1] == b'E':
                     del e[:1]
-                    self.estado = 'magic'
+                    self.saida += ACK
+                    self.estado = 'depois_do_E'
                     continue
                 if e[:1] == b'R':
                     if len(e) < 4:
@@ -141,6 +160,8 @@ class RadioSimulado(object):
         if end16 < 0xF000:
             dados = baofeng_uv17Pro._crypt(1, dados)
         self.espaco[end16:end16 + 64] = dados          # o de fabrica grava 64, truncado em 16 bits
+        if not tam & 0x80:
+            self.gravacoes_normais += 1
         self.saida += ACK
 
 
@@ -172,10 +193,17 @@ def espaco_de_fabrica(zona):
 
 
 def baixa(simulado):
+    simulado.passa_tempo()
     radio = bj.BJ8300(simulado)
     radio.status_fn = lambda s: None
     radio.sync_in()
     return radio
+
+
+def sobe(radio, simulado):
+    simulado.passa_tempo()
+    radio.pipe = simulado
+    radio.sync_out()
 
 
 def main():
@@ -200,10 +228,19 @@ def main():
     confere('1d. bancos ligados e escolhido', (bj._Bancos(radio).ativos(),
                                               bj._Bancos(radio).escolhido()), (0x0005, 2))
     confere('1e. download nao grava nada no chip', sim.gravacoes_estendidas, [])
+    confere('1f. download inteiro numa sessao so', sim.sessoes, 1)
+    # o que derrubou o driver antigo no radio: abrir outra sessao logo depois do 'E'
+    try:
+        radtel_rt900._enter_programming_mode(radio)
+        confere('1g. sessao logo depois do E falha como no radio', 'abriu', 'falhou')
+    except errors.RadioError as e:
+        confere('1g. sessao logo depois do E falha como no radio',
+                'identification' in str(e), True)
 
     # ---------- 2. upload sem mexer nos bancos: nada a gravar na area dos bancos ----------
-    radio.pipe = sim
-    radio.sync_out()
+    sim.sessoes = 0
+    sobe(radio, sim)
+    confere('2a. upload inteiro numa sessao so', sim.sessoes, 1)
     confere('2. upload sem mudanca nos bancos nao grava setor nenhum', sim.gravacoes_estendidas, [])
     confere('2b. upload poe o radio em Full Channel (0x9028 = 1)', sim.espaco[0x9028], 1)
 
@@ -213,7 +250,7 @@ def main():
     modelo.get_mappings()[4].set_name('BANDA 2M')
     bj._Bancos(radio).liga(4, True)
     sim.gravacoes_estendidas = []
-    radio.sync_out()
+    sobe(radio, sim)
     setor4 = 0x0C2000 + 4 * 0x1000
     confere('3. grava so o cabecalho e o banco 5, tres blocos cada',
             sim.gravacoes_estendidas,
@@ -246,16 +283,17 @@ def main():
     except errors.RadioError as e:
         confere('5. download com firmware de fabrica recusado com a mensagem certa',
                 'sem a area de bancos' in str(e), True)
-    radio.pipe = fab
     try:
-        radio.sync_out()
+        sobe(radio, fab)
         confere('5b. upload com firmware de fabrica recusado', 'aceitou', 'recusou')
     except errors.RadioError as e:
         confere('5b. upload com firmware de fabrica recusado com a mensagem certa',
                 'sem a area de bancos' in str(e), True)
     confere('5c. o firmware de fabrica nao recebeu nenhum W estendido',
             sum(1 for _ in fab.gravacoes_estendidas), 0)
-    confere('5d. e o cabo nao ficou com sobra (sem dessincronizar)', bytes(fab.saida), b'')
+    confere('5d. e o cabo so ficou com o ACK do E (sem dessincronizar)', bytes(fab.saida), ACK)
+    confere('5e. e nada foi gravado nele, nem canal (a conferencia vem antes)',
+            fab.gravacoes_normais, 0)
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')

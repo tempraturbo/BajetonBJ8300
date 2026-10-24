@@ -89,7 +89,7 @@ So there is plenty of room for **data**, while **code** space remains the 3295 b
 | Crypto setup | `SEND \x01\x01` + 18 zeros → ACK |
 | Read | `R` + **16-bit BE** address + size → 4-byte echo + data |
 | Write | `W` + address + size + **64 B** → ACK |
-| Exit | `E` |
+| Exit | `E` → ACK `0x06` |
 
 Below `0xF000` data travels **encrypted** (XOR with the key `CO 7`, skipping 0x00, 0xFF, a space in
 the key, and bytes equal to the key or its complement). The new command delivers it **plain**.
@@ -102,13 +102,18 @@ the key, and bytes equal to the key or its complement). The new command delivers
 - both call **the same routine `0x01E43970`** — 0 to read, 1 to write;
 - after answering, the counter is cleared (`0x01E4BB7C`, and `0x01E416C4` on the `'W'` path).
 
-Two traps that cost time:
+Three traps that cost time:
 
 - **There is no 5-byte packet.** The fifth byte arrives after dispatch, stays pending and swallows
   the next command — including the magic. Only a power cycle clears it.
 - **Nothing may be sent before the magic.** Matching starts at the beginning of the buffer, and the
   magic ends in `U`, which is an UPDATE-mode command: retrying against an out-of-sync radio makes
   it jump into UPDATE by itself.
+- **One session per operation.** `E` answers with an ACK (`0x01E4C0D0` → `0x01E416C4`) and only
+  puts the session in state 3; it closes on a loop turn with no byte arriving (`0x01E4BA96`). A
+  `PROGRAM…` sent right after `E` lands in state 3 and is dropped — and CHIRP, which does not
+  read the `E` ACK, takes that leftover byte as its answer. That was the driver's "Radio returned
+  unknown identification string" up to v22, which opened a second session for the banks.
 
 ### Extended command (this firmware)
 
@@ -406,7 +411,7 @@ It plays the tone while still transmitting and then switches back to receive:
 
 **BEEP 2 (v22):** the new option, with value 3 (fits in the 2 bits). The menu shows OFF, BEEP 1,
 BEEP 2, TONE1200; the entry's get and set are ours and swap position and value (2 ↔ 3), so BEEP and
-TONE1200 keep their stock values. In the end-of-TX routine,
+TONE1200 keep their stock values, and the CHIRP driver does the same swap. In the end-of-TX routine,
 the branch `0x01E4461E` "if not 1, skip" (`80 f8 c2 02`) became "if 0, skip" (`00 f8 c2 00`,
 checked with `llvm-objdump`): value 3 takes the BEEP path. And the tone loop (`0x01E44638`) became a
 call to our `gancho_roger_tons` plus a branch to its end (`0x01E44656`): with BEEP 1 it does what the

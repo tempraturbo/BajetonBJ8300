@@ -90,7 +90,7 @@ os 3295 bytes da imagem.
 | Cifra | `SEND \x01\x01` + 18 zeros → ACK |
 | Ler | `R` + endereço **16 bits BE** + tamanho → eco de 4 B + dados |
 | Gravar | `W` + endereço + tamanho + **64 B** → ACK |
-| Sair | `E` |
+| Sair | `E` → ACK `0x06` |
 
 Abaixo de `0xF000` os dados trafegam **cifrados** (XOR com a chave `CO 7`, pulando 0x00, 0xFF,
 espaço na chave e os bytes iguais à chave ou ao inverso dela). O comando novo entrega **cru**.
@@ -103,13 +103,19 @@ espaço na chave e os bytes iguais à chave ou ao inverso dela). O comando novo 
 - os dois chamam **a mesma rotina `0x01E43970`** — 0 para ler, 1 para gravar;
 - depois de responder, o contador é zerado (`0x01E4BB7C`, e `0x01E416C4` no caminho do `'W'`).
 
-Duas armadilhas que custaram tempo:
+Três armadilhas que custaram tempo:
 
 - **Não existe pacote de 5 bytes.** O quinto byte chega depois do disparo, fica pendente e engole o
   comando seguinte — inclusive o magic. O rádio só volta desligando.
 - **Nada pode ser enviado antes do magic.** A comparação é desde o início do buffer, e o magic
   termina em `U`, que é comando do modo UPDATE: insistir fora de sincronia faz o rádio entrar em
   UPDATE sozinho.
+- **Uma sessão só por operação.** O `E` responde com um ACK (`0x01E4C0D0` → `0x01E416C4`) e só
+  põe a sessão no estado 3; ela fecha numa volta do laço em que nenhum byte chegue
+  (`0x01E4BA96`). Um `PROGRAM…` mandado logo depois do `E` cai no estado 3 e é descartado — e o
+  CHIRP, que não lê o ACK do `E`, toma esse byte que sobrou como a resposta. Era o "Radio
+  returned unknown identification string" do driver até a v22, que abria uma segunda sessão
+  para os bancos.
 
 ### Comando estendido (deste firmware)
 
@@ -403,7 +409,7 @@ O roger é tocado no **fim da transmissão**, `0x01E44604`, chamada ao soltar o 
 
 **BEEP 2 (v22):** a opção nova, com o valor 3 (cabe nos 2 bits). O menu mostra OFF, BEEP 1,
 BEEP 2, TONE1200; o get e o set do item são nossos e trocam posição e valor (2 ↔ 3), então BEEP e
-TONE1200 continuam com os valores de fábrica. Na rotina de
+TONE1200 continuam com os valores de fábrica, e o driver do CHIRP faz a mesma troca. Na rotina de
 fim de TX, o desvio `0x01E4461E` "se não for 1, pula" (`80 f8 c2 02`) virou "se for 0, pula"
 (`00 f8 c2 00`, conferido no `llvm-objdump`): o valor 3 entra no caminho do BEEP. E o laço dos tons
 (`0x01E44638`) virou uma chamada para o nosso `gancho_roger_tons` e um desvio para o fim dele
