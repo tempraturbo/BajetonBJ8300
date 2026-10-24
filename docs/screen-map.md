@@ -229,8 +229,8 @@ void gancho_limpa(unsigned modo)
 ```
 
 The colour lives in `COR_REALCE`, in `firmware/src/bancos.c` — a single line. The current value is
-`0x02C0` (#005900). Video memory stores the high byte first, so the send hook uses `COR_BUF`, the
-same value byte-swapped (`0xC002`); the fill takes the plain colour, because the routine splits the
+`0x0240` (#004900, step 18 of the 64 green steps, since v20; v17 to v19 used `0x02C0`). Video memory stores the high byte first, so the send hook uses `COR_BUF`, the
+same value byte-swapped (`0x4002`); the fill takes the plain colour, because the routine splits the
 bytes itself. Both verified in the generated machine code.
 
 ## 8. Gaps no window covers

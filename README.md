@@ -51,11 +51,13 @@ original — os canais e a calibração ficam em outro chip e não são tocados.
 |---|---|
 | **Realce do VFO selecionado** | O bloco do lado ativo (nome, frequência e barra de sinal) ganha fundo verde; o outro continua preto |
 | **Setas do menu invertidas** | A seta de cima passa a subir na lista, em vez de avançar o valor |
+| **Roger BEEP 2** | O ROGER ganha uma quarta opção: OFF, BEEP 1 (o de fábrica), **BEEP 2** (quatro tons, 1125/1857/1359/931 Hz) e TONE1200 |
+| **Espectro melhorado** | Duas vezes mais rápido (160 pontos em ≈ 2,5 s); passo de **10 kHz**; **320 e 640 pontos**; pico seguro (a barra sobe na hora e desce aos poucos); e, parado num sinal achado, a seta segue a varredura sem mexer no limite |
 | **Barra de sinal no scan** | Durante a varredura a barra não fica mais congelada no último canal achado, e o número do canal não descasa do nome |
 | **Textos em inglês revisados** | 25 cadeias corrigidas/padronizadas (ex.: `VOICEPRI` → `ENCRYPT`); versão do menu agora é `V1.0T` |
 | **Editor de nome** | Sair do editor não deixa mais o `abc` do teclado preso no cabeçalho do menu |
 | **Comando estendido no cabo** | Leitura de 24 bits (chip inteiro) e gravação na área dos bancos — é o que o driver do CHIRP usa |
-| **Menus de zona removidos** | `ZONE` e `Zone Or Channel` saíram do menu, por escolha explícita: o banco faz o papel deles e os 56 bytes liberados são o que fez o realce caber |
+| **Menus de zona removidos** | `ZONE` e `Zone Or Channel` saíram do menu, por escolha explícita: o banco faz o papel deles, e sem os dois a tabela de menus nova cabe exatamente no lugar da original |
 
 A **função** de zona continua no firmware; o que saiu foram os dois itens de menu. Para o rádio
 não ficar preso em modo zona, o driver do CHIRP grava **Full Channel** em todo upload.
@@ -70,6 +72,9 @@ não ficar preso em modo zona, o driver do CHIRP grava **Full Channel** em todo 
    | Arquivo | Estado |
    |---|---|
    | `firmware/releases/BJ8300_BANK_v12.anc` | **recomendado** — testado e íntegro |
+   | `firmware/releases/BJ8300_BANK_v23.anc` | v21 + **roger BEEP 2** (100 ms por tom, como o mp3) — **testado no rádio** |
+   | `firmware/releases/BJ8300_BANK_v21.anc` | v19 + **espectro** duas vezes mais rápido, passo de 10 kHz, 320 e 640 pontos e pico seguro; verde do realce mais escuro (é a v20 sem o bootloop; a v20 foi retirada) — **testado no rádio** |
+   | `firmware/releases/BJ8300_BANK_v19.anc` | v18 + **a seta continua o espectro** parado num achado, sem mexer no limite; a tabela de menus passa a ficar no lugar da original (o código ganha 1512 bytes de espaço) — **testado no rádio** |
    | `firmware/releases/BJ8300_BANK_v18.anc` | v17 com o fundo verde também na caixinha do RX/TX; **ainda não testado no rádio** |
    | `firmware/releases/BJ8300_BANK_v17.anc` | **realce do bloco do VFO em evidência** sem as faixas pretas e com verde mais escuro ([mapa da tela](docs/mapa-da-tela.md)) — **testado no rádio**; só o RX/TX fica com fundo preto |
    | `firmware/releases/BJ8300_BANK_v16.anc` | primeiro realce testado e funcionando; sobram faixas finas pretas entre as linhas do bloco |

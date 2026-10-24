@@ -5,6 +5,106 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v23 — Oct 24 — BEEP 2 at the mp3's speed ✅
+
+In v22 BEEP 2 worked, but took 0.8 to 1 s, against ~0.4 s in the mp3. The cause is in the firmware:
+the wait routine the roger uses (`0x01E36286`) counts in **2 ms units**, not ms — the timer
+interrupts every 48000 cycles of 24 MHz (2 ms, `0x01E3E44C`) and the wait runs until the counter
+advances twice what was asked. v22's `100` gave 200 ms per tone. Each tone now waits 50 units =
+**100 ms**, and the whole BEEP 2 takes ~0.4 s. (The stock BEEP, with 40 units, has always been 80 ms
+per tone; it did not change.)
+
+Only the wait value changes; code and hooks are v22's. **Tested on the radio** (Oct 24): it works.
+
+## v22 — Oct 24 — BEEP 2 roger
+
+- **ROGER with four options: OFF, BEEP 1, BEEP 2, TONE1200.** BEEP 1 is the stock BEEP (1000 Hz
+  and 850 Hz, 80 ms each); **BEEP 2** plays the four tones of the owner's mp3 — **1125, 1857, 1359
+  and 931 Hz, 100 ms each** —, while transmitting, right before the radio goes back to receive. The
+  stored values stay the stock ones (BEEP 1, TONE1200 = 2) and BEEP 2 is 3, which fits in the
+  setting's 2 bits; the menu swaps the order. The four tones play at the same volume (in the mp3 the
+  second one is quieter). Details in [section 12 of the reverse-engineering notes](reverse-engineering.md#12-roger).
+
+Code: 2764 B of 3292. Reproducible build, zero branches into patches, all three tests passing. **On the radio:** BEEP 2 worked, but with
+200 ms per tone instead of 100 (fixed in v23).
+
+## v21 — Oct 24 — v20 without the boot loop ✅
+
+Same content as v20 (spectrum 2× faster, 10 kHz step, 320/640 points, peak hold, green `0x0240`),
+with the code written where the linker linked it. Code and hooks are byte-for-byte v20's; only the
+block's place in flash changes.
+
+**Why v20 boot-looped:** the linker aligns the code section to the largest alignment it finds
+inside it, and v20 brought the pointer tables for the new labels (alignment 4): the code came out
+linked for `0x01E96124`, but the build script wrote it at a fixed address, `0x01E96122`. Everything
+sat 2 bytes off, and the first hook to run — the end-of-startup one, right after the logo — jumped
+into the middle of an instruction. No check caught it because all of them used the same fixed
+address on both sides.
+
+**What prevents it now:** the code starts at the first multiple-of-4 address (`0x01E96124`);
+`montar.py` reads the code address from the ELF and refuses to build if it is not where it writes;
+and `conferir.py` gained `2c` (linked address = written address) and `2d`, end to end: each of the
+33 firmware branches into the new code is followed into flash, and the bytes actually there,
+decrypted, in all 6 images, must be the ELF's. Run against v20, both fail — `2d` points exactly at
+the startup hook.
+
+Code: 2558 B of 3292. Reproducible build, zero branches into patches, all three tests passing.
+**Tested on the radio** (Oct 24): "worked perfectly"; the sweep got about 1 s faster.
+
+## v20 — Oct 24 — faster spectrum, 10 kHz, 320/640 points, peak hold, darker green ❌ **boot loop, withdrawn**
+
+- **Spectrum twice as fast:** each loop turn now measures one point and already tunes the next,
+  instead of spending one turn on each. The chip still gets a whole turn between tuning and
+  measuring, as on stock firmware, so the reading is the same: 160 points in ≈ 2.5 s (was 5 s).
+- **10 kHz step:** OK goes 6.25 → 8.33 → **10** → 12.5 → 20 → 25 kHz (same chip filter as 8.33 and
+  12.5).
+- **320 and 640 points:** # goes 160 → 80 → 40 → 20 → **640** → **320**. The graph still has 160
+  columns; each column measures 2 or 4 frequencies and shows the highest, and stopping on a signal
+  happens at its exact frequency. At 25 kHz, 640 points cover 16 MHz; a sweep takes ≈ 5 s (320) and
+  ≈ 10 s (640).
+- **Peak hold:** the bar rises at once and, when the signal goes away, comes down half the way on
+  each sweep. A short signal stays marked for a few sweeps and the noise stops flickering. Changing
+  the window (typing a frequency, OK, #, entering the spectrum) clears the graph.
+- **Darker highlight green:** `0x0240` (#004900, step 18), instead of `0x02C0` (#005900, 22) from
+  v17 to v19.
+- The new indices (640, 320 and 10 kHz) go at the end of the configuration the radio saves, so the
+  stock ones keep their value. **Before going back to an earlier version**, leave # on 160/80/40/20
+  and the step off 10 kHz: earlier versions do not know the new ones and would show garbage.
+
+Two items of the plan came out differently from the proposal, for a concrete reason:
+- **"Redraw the peak text only when it changes"** had nothing to gain: once mapped, the dBm text is
+  drawn only once per sweep and when the sweep stops — not on every column, as I had said.
+- **"Average several readings per point"** did not go in as back-to-back reads: without knowing how
+  often the chip refreshes its RSSI, reading twice in a row may return the same number and clean
+  nothing, and it would cost time. The peak's halfway descent is already an average between the new
+  sweep and the previous one. "Always 160 points" is what # on 160, 320 and 640 already gives; with
+  20/40/80 the steps are what measuring fewer points means.
+
+Full map in [section 11 of the reverse-engineering notes](reverse-engineering.md#11-spectrum). Code:
+2558 B of 3294. Reproducible build, zero branches into patches, all three tests passing. **On the radio:
+boot loop** — the logo shows and the radio restarts in under 1 s, in a loop. Cause and fix in v21.
+
+## v19 — Oct 24 — the arrow continues the spectrum, and the menu table in place ✅
+
+- **Spectrum:** stopped on a found signal, the arrow (up or down) **continues the sweep** and, that
+  time, leaves the threshold alone. While sweeping, the arrow does what it always did (raises or
+  lowers the threshold). Continuing is exactly the resume the firmware itself does when the signal
+  drops (`0x01E4AEFC`: closes the audio and moves to the next point), and the build checks that
+  against the stock bytes (check `4i`). The hook goes into a 4-byte instruction of the spectrum key
+  handler (`0x01E4BFBE`); the registers the new call clobbers were checked dead there on every path.
+  Details in [section 11 of the reverse-engineering notes](reverse-engineering.md#11-spectrum).
+  That key press now beeps like the keys with no function in the spectrum (code 0), not like the
+  arrow. If the signal is strong, the sweep may stop again on the neighbouring point of the same
+  signal: just press again.
+- **Space:** the new menu table is now written **where the original was** (its 54 slots, counting
+  the zero item at the end, are exactly the new table's 54 items), instead of taking 1512 bytes of
+  the free area. Code now has 3294 bytes available, up from 1782. Proven first that nothing else
+  reads the original table; its pointer stays as it was. Code and table came out byte-for-byte
+  equal to v18's, only the table in another place.
+
+Code: 1792 B of 3294. Reproducible build, zero branches into patches, all three tests passing.
+**Tested on the radio** (Oct 24): it stops on the signal, the arrow continues without changing the threshold, and the beep is fine.
+
 ## CHIRP driver — Oct 24 — no zones, and the firmware guard redone
 
 General review of `chirp/bj8300_v1.0TEMPRA.py`, with a new test (`tests/teste_clonagem.py`) that runs

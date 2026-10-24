@@ -2,9 +2,10 @@
 
 Uso: python -I desvios.py <app.dis>   (saida do llvm-objdump; ver scripts/desmonta.sh)
 
-Trocar duas instrucoes por uma, como o remendo do ponteiro da tabela de menus faz, so e seguro se
-ninguem desviar para o meio do trecho trocado: se desviasse, o processador cairia no meio de uma
-instrucao de 6 bytes e executaria lixo. O llvm-objdump imprime o destino dos desvios como
+Trocar duas instrucoes por uma, como o remendo do ponteiro da tabela de menus fazia ate a v18, so e
+seguro se ninguem desviar para o meio do trecho trocado: se desviasse, o processador cairia no meio
+de uma instrucao e executaria lixo. Desde a v19 a tabela fica no lugar e o ponteiro nao muda, mas a
+conferencia continua valendo para os remendos que restam. O llvm-objdump imprime o destino dos desvios como
 deslocamento, entao aqui a conta e feita nas duas convencoes possiveis (relativo ao inicio e ao
 fim da instrucao) e qualquer acerto dentro de um remendo e reportado.
 """
@@ -21,10 +22,17 @@ DESVIO = re.compile(r'goto (-?\d+)')
 def remendos():
     """(inicio, fim_exclusivo, nome) de cada trecho que o montar.py reescreve."""
     fora = [(montar.GANCHO_EM, 4, 'gancho'),
-            (montar.PONTEIRO_EM, len(montar.PONTEIRO_ANTES), 'ponteiro da tabela'),
             (montar.CONTAGEM_EM, len(montar.CONTAGEM_ANTES), 'contagem de itens')]
     if montar.SETAS_INVERTIDAS:
         fora += [(s, 4, 'seta') for s, _ in montar.SETAS]
+    if montar.ESPECTRO_TECLAS:
+        fora.append((montar.ESPECTRO_EM, len(montar.ESPECTRO_ANTES), 'teclas do espectro'))
+        fora += [(s, 4, 'espectro: ' + d) for s, _, _, d in montar.ESPECTRO_CHAMADAS]
+        # nas rotinas trocadas inteiras, o corpo antigo vira codigo morto: nenhum desvio pode cair
+        # nele (so na entrada, que agora e o goto)
+        fora += [(e + 2, 2, 'espectro: entrada de ' + d) for e, _, _, d in montar.ESPECTRO_FUNCOES]
+    fora += [(montar.ROGER_DESVIO_EM, 4, 'roger: desvio do valor 3'),
+             (montar.ROGER_LACO_EM, len(montar.ROGER_LACO_ANTES), 'roger: laco dos tons')]
     return [(a, a + t, n) for a, t, n in fora]
 
 

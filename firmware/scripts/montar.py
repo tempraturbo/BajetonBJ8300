@@ -8,14 +8,15 @@ para o menu passar a apontar para o lugar errado sem ninguem perceber.
 
 O que faz:
   1. grava o codigo novo no espaco livre do fim de cada imagem de flash;
-  2. grava ali tambem uma COPIA da tabela do menu principal com dois itens novos no fim, e troca
-     o ponteiro da tabela no laco da interface para essa copia - assim **nenhum item de menu e
-     sacrificado**: so o ZONE da lugar ao BANK, porque o banco faz o papel dele;
-  3. enganxa o filtro dos bancos no fim do carregamento de configuracao;
+  2. grava a tabela do menu principal nova NO LUGAR da original - os itens de fabrica, menos o
+     ZONE e o Zone Or Channel (a pedido do usuario), com os tres dos bancos no lugar deles - e fixa
+     a quantidade de itens;
+  3. troca as chamadas (e a instrucao do espectro) em que os ganchos entram: partida, scan, cabo,
+     realce, limpeza e teclas do espectro; inverte as setas do menu e revisa os textos;
   4. recalcula todos os CRCs e escreve o .anc.
 
-Dentro do app.bin mudam **10 bytes**: a chamada do gancho (4) e as duas instrucoes que montavam o
-endereco da tabela (6). Todo o resto do firmware fica byte a byte igual ao de fabrica.
+Dentro do app.bin so muda o que esta na lista de escritas, que passa pela trava antes; o
+conferir.py prova depois que nenhum byte mudou fora dela.
 
 TRAVA DE SEGURANCA: recusa qualquer escrita que caia nas funcoes que o radio executa antes de
 checar o combo PTT2+atalho, ou que fazem o modo UPDATE funcionar. Elas sao o caminho de
@@ -40,12 +41,42 @@ PROTEGIDAS = [
     (0x01E3CFD2, 0x01E3CFD5, 'parte do modo UPDATE'),
 ]
 
-# Onde o codigo novo roda (igual nas 6 imagens; ver bancos.ld).
-ENDERECO_CODIGO = 0x01E96122
+# Onde o codigo novo roda (igual nas 6 imagens; ver bancos.ld). Tem de ser o endereco para onde o
+# linker ligou o .text - conferido no ELF por codigo_ligado(), porque na v20 o linker alinhou a
+# secao 2 bytes adiante e o radio entrou em bootloop.
+ENDERECO_CODIGO = 0x01E96124
 
-PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
+PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho_tecla_espectro',
+           'gancho_espectro', 'gancho_registra', 'gancho_avanca', 'gancho_janela',
+           'espectro_pontos', 'espectro_passo', 'espectro_rotulos',
+           'roger_le', 'roger_grava', 'roger_opcoes', 'roger_opcoes_cn', 'gancho_roger_tons', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
            'gancho_partida', 'canal_exibe', 'canal_le', 'canal_grava',
            'titulo_bank', 'titulo_nome', 'titulo_canal')
+
+
+def codigo_ligado(elf):
+    """(endereco, conteudo) da secao .text do bancos.elf, lidos do cabecalho de secoes do ELF32."""
+    e = open(elf, 'rb').read()
+    shoff = struct.unpack_from('<I', e, 0x20)[0]
+    tam, quantas, nomes = struct.unpack_from('<HHH', e, 0x2E)
+    secoes = [struct.unpack_from('<10I', e, shoff + i * tam) for i in range(quantas)]
+    base_nomes = secoes[nomes][4]
+    for nome, _, _, endereco, deslocamento, tamanho, *_ in secoes:
+        if e[base_nomes + nome:e.index(b'\0', base_nomes + nome)] == b'.text':
+            return endereco, e[deslocamento:deslocamento + tamanho]
+    raise SystemExit(f'{elf} nao tem secao .text')
+
+
+def confere_ligacao(codigo, blob):
+    """O bloco gravado em ENDERECO_CODIGO tem de ser o .text, ligado exatamente para ali."""
+    elf = os.path.splitext(codigo)[0] + '.elf'
+    endereco, conteudo = codigo_ligado(elf)
+    if endereco != ENDERECO_CODIGO:
+        raise SystemExit(f'o .text foi ligado para {endereco:#x}, mas o codigo e gravado em '
+                         f'{ENDERECO_CODIGO:#x}: todo gancho cairia fora do lugar. Recusado.')
+    if conteudo != blob:
+        raise SystemExit(f'{codigo} nao e o .text de {elf}. Recusado.')
+    return endereco
 
 
 def le_simbolos(caminho):
@@ -69,39 +100,56 @@ S = {}   # preenchido em main() a partir do arquivo de simbolos
 #   +0x13 exibe (ou lista de opcoes em ingles) | +0x17 opcoes em chines | +0x1b id do item
 # Os dois ultimos campos nao sao tocados: ficam como estavam no item aproveitado. O motor le o
 # maximo como u16 (h[0x14C0E]) e aceita 960 - e o que ele mesmo faz com o MEMCH em Full Channel.
-CAMPO = {'get': 3, 'set': 7, 'nome': 0xB, 'nome_cn': 0xF, 'exibe': 0x13}
+CAMPO = {'get': 3, 'set': 7, 'nome': 0xB, 'nome_cn': 0xF, 'exibe': 0x13, 'opcoes_cn': 0x17}
 FLAGS_NUMERO = 0x80   # +0x13 e funcao de exibicao, chamada por linha desenhada (como era a zona)
 FLAGS_EDITOR = 0x07   # abre o editor de texto (como o CH-NAME)
 
-# A tabela viva do menu principal, com 53 itens de 28 bytes (o item 0 e o SQL). Quem a carrega e o
-# laco da interface, em PONTEIRO_EM, com "r0 = 13368; r5 = r6 + r0" (r6 = 0x01E5FB60) - por ser
-# soma de registradores, procurar o endereco pronto no desmontado nao acha nada. A quantidade de
-# itens o firmware conta sozinho (FUN_01E4A81A): a tabela acaba no primeiro item com os 28 bytes
-# zerados, e por isso a copia leva um terminador no fim.
-MENU_NOVO = True          # False = nao realoca a tabela (sem os itens BANK): corte de diagnostico
+# A tabela viva do menu principal, com 53 itens de 28 bytes (o item 0 e o SQL), seguida do item
+# zerado que a encerra. Quem a carrega e o laco da interface, em PONTEIRO_EM, com "r0 = 13368;
+# r5 = r6 + r0" (r6 = 0x01E5FB60) - por ser soma de registradores, procurar o endereco pronto no
+# desmontado nao acha nada.
+#
+# A tabela nova (54 itens) e gravada NO LUGAR da original: 53 itens + o item zerado = 54 vagas,
+# exatamente. Ate a v18 ela ia para a area livre da imagem, depois do codigo, com o ponteiro trocado
+# - e ocupava 1512 dos 3294 bytes da area livre. Provado em 2026-10-24 que mais nada le a tabela
+# original: o unico acesso e este ponteiro (a unica carga de 13368 no firmware); nenhum ponteiro de
+# dados nem constante de 32 bits cai dentro dela; as outras duas contagens de itens (0x01E4B3FE,
+# 0x01E4C3C4) apontam a estrutura do menu para OUTRAS tabelas antes de contar; e as tres constantes
+# com valor na faixa de deslocamentos (13720, 13912, 14357) sao conta e registradores do chip de
+# radio, nao enderecos. O ponteiro fica como esta e so e conferido.
+MENU_NOVO = True          # False = menu de fabrica (sem os itens BANK): corte de diagnostico
 TABELA = 0x01E62F98
 ITENS_ORIGINAIS = 53
 TAM_ITEM = 0x1C
+VAGAS = ITENS_ORIGINAIS + 1                        # os itens de fabrica + o item zerado do fim
 PONTEIRO_EM = 0x01E4CBB2
 PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 
-# Como o firmware conta os itens varrendo a tabela, e a copia tem mais itens que a original, a
-# contagem e trocada por uma constante na propria chamada que a pedia (4 bytes, no lugar exato) -
-# assim a tabela nao precisa de terminador e a varredura nunca sai para a area apagada.
+# Como o firmware conta os itens varrendo a tabela ate o item zerado, e a tabela nova ocupa a vaga
+# dele, a contagem e trocada por uma constante na propria chamada que a pedia (4 bytes, no lugar
+# exato) - assim a varredura nunca passa do fim.
 CONTAGEM_EM = 0x01E4CBE8
 CONTAGEM_ANTES = bytes.fromhex('bfea17ee')         # call FUN_01E4A81A (conta itens da tabela)
 
-# Itens na COPIA da tabela. Eles entram JUNTOS, logo depois do ZONE - que continua existindo, com
-# todos os outros itens de fabrica. Cada um copia o molde de um item do mesmo tipo que funciona (o
+# Itens dos bancos na tabela nova. Eles entram JUNTOS, no lugar do Zone Or Channel e do ZONE (que
+# saem, ver ITENS_FORA), com todos os outros itens de fabrica. Cada um copia o molde de um item do
+# mesmo tipo que funciona (o
 # ZONE para numero com exibicao propria, o CH-NAME para o editor de texto), o que traz de graca os
 # campos que nao mexemos: opcoes em chines (+0x17) e numero do aviso falado (+0x1B, 0 nos dois
 # moldes = nao fala nada).
 ZONE, ZONA_OU_CANAL, CH_NAME = 11, 10, 19
 # Itens de fabrica que NAO entram na copia, a pedido do usuario: o ZONE e o "Zone Or Channel"
-# (escolher entre navegar por zona ou por canal cheio), que sem o ZONE nao tem mais serventia. Os
-# 56 bytes de tabela que eles devolvem sao o que faz o realce do VFO caber no espaco livre.
+# (escolher entre navegar por zona ou por canal cheio), que sem o ZONE nao tem mais serventia. Com
+# eles fora, os 54 itens da tabela nova cabem exatamente nas 54 vagas da original (ver VAGAS).
 ITENS_FORA = (ZONA_OU_CANAL, ZONE)
-DEPOIS_DE = ZONE
+# Itens de fabrica que ficam, mas com campos trocados na tabela nova. O ROGER (indice 20) ganha a
+# quarta opcao, BEEP 2: quantidade de opcoes 4 (o "maximo" de um item de lista e a quantidade de
+# opcoes - era 3), get e set nossos (posicao no menu <-> valor gravado) e as duas tabelas de nomes
+# das opcoes, em ingles e chines (as de fabrica moram na RAM, em 0x6E3C/0x6E30, com outros dados
+# colados depois - nao crescem no lugar). Detalhes no bancos.c.
+ROGER_ITEM = 20
+ITENS_MUDADOS = {ROGER_ITEM: dict(maximo=4, get='roger_le', set='roger_grava',
+                                  exibe='roger_opcoes', opcoes_cn='roger_opcoes_cn')}
 ITENS = [
     dict(nome='BANK', molde=ZONE, flags=FLAGS_NUMERO, maximo=16,
          get='bank_le', set='bank_grava', titulo='titulo_bank', exibe='bank_exibe'),
@@ -166,6 +214,50 @@ CABO_ERA = 0x01E43970
 SCAN_REDESENHA = True
 SCAN_EM = 0x01E46EB6
 SCAN_ERA = 0x01E458E4
+
+# Gancho das teclas do espectro: parado num sinal achado, a seta continua a varredura em vez de
+# mexer no limite. Entra no lugar do "r1 = r0 - 16" que escolhe o caso do tbh das teclas do modo
+# 20 (0x01E4BFBE, destino do caso 20 do tbh dos modos em 0x01E4B988 e de nenhum outro desvio).
+# Nao e chamada trocada: e uma instrucao de 4 bytes que vira uma chamada de 4 bytes, e o gancho
+# devolve em r0 e r1 o que a instrucao deixava. r2 e r3, que a chamada passa a sujar, estao
+# mortos dali em diante em todos os caminhos (conferido no desmontado, inclusive dentro das
+# rotinas chamadas antes de qualquer escrita deles).
+ESPECTRO_TECLAS = True
+ESPECTRO_EM = 0x01E4BFBE
+ESPECTRO_ANTES = bytes.fromhex('31e1f00f')         # r1 = r0 + -16
+
+# O resto do espectro (passo de 10 kHz, 320 e 640 pontos, um ponto por volta do laco, pico seguro):
+# chamadas trocadas pelos ganchos (sitio, para onde ia, gancho) - todas call de 4 bytes - e tres
+# rotinas trocadas inteiras por um goto de 4 bytes na entrada (a rotina nossa volta direto para
+# quem chamou, porque o goto nao mexe no rets). Ninguem desvia para o meio dessas tres rotinas:
+# todo desvio para elas cai na entrada (conferido no desmontado). Detalhes no bancos.c.
+ESPECTRO_CHAMADAS = (
+    (0x01E4D5B2, 0x01E4AEAC, 'gancho_espectro', 'varredura no laco principal: um ponto por volta'),
+    (0x01E4AEE0, 0x01E4AD7C, 'gancho_registra', 'registro do ponto, parado num achado'),
+    (0x01E4AF7A, 0x01E4AD7C, 'gancho_registra', 'registro do ponto, varrendo'),
+    (0x01E4AF86, 0x01E4AE44, 'gancho_avanca', 'proximo ponto: varredura e retomada'),
+    (0x01E4C6B8, 0x01E4AE44, 'gancho_avanca', 'proximo ponto depois da tecla 2'),
+    (0x01E4C054, 0x01E4AA3C, 'gancho_janela', 'janela pela frequencia digitada'),
+    (0x01E4CFBC, 0x01E4AA3C, 'gancho_janela', 'janela na entrada do espectro'),
+)
+# Roger BEEP 2, na rotina de fim de transmissao 0x01E44604 (sitio, bytes de fabrica, o que vira):
+#  - 0x01E4461E: "if (r0 != 1) goto 388" vira "if (r0 == 0) goto 388" (mesmo destino, 0x01E447A6):
+#    o valor 3 passa a entrar no caminho do BEEP; o 2 ja foi desviado antes, para o TONE1200.
+#    Codificacao conferida no llvm-objdump ("00 f8 c2 00" = if (r0 == 0) goto 388).
+#  - 0x01E44638: "r5 = r4 + 2051; r6 = 17; goto 18" (o comeco do laco dos dois tons) vira
+#    "call gancho_roger_tons; goto 0x01E44656" (o fim do laco). Ninguem de fora desvia para dentro
+#    do laco; r5 e r6 sao escritos antes de lidos dali em diante; r0..r3 ja chegavam ali como lixo
+#    de chamada (o laco termina numa espera).
+ROGER_DESVIO_EM = 0x01E4461E
+ROGER_DESVIO_ANTES, ROGER_DESVIO_DEPOIS = bytes.fromhex('80f8c202'), bytes.fromhex('00f8c200')
+ROGER_LACO_EM, ROGER_LACO_FIM = 0x01E44638, 0x01E44656
+ROGER_LACO_ANTES = bytes.fromhex('05e1034846310489')
+
+ESPECTRO_FUNCOES = (
+    (0x01E4A9C2, bytes.fromhex('c0ffc06e'), 'espectro_pontos', 'quantos pontos a varredura tem'),
+    (0x01E4A99C, bytes.fromhex('c0ffc06e'), 'espectro_passo', 'passo entre colunas'),
+    (0x01E4ABDC, bytes.fromhex('7904e29b'), 'espectro_rotulos', 'rotulos dos pontos e do passo'),
+)
 
 # Realce do bloco do VFO em evidencia na tela principal. O gancho entra no ENVIO do pedaco para o
 # LCD (envia(), 0x01E3ADBC) e nao no preenchimento da janela, porque o fundo do texto nao vem de
@@ -252,6 +344,12 @@ def monta_call(origem, destino):
     return bytes([0x80 | ((d >> 16) & 0x3F), 0xEA, d & 0xFF, (d >> 8) & 0xFF])
 
 
+def monta_goto(origem, destino):
+    """O desvio de 4 bytes: mesmo formato da chamada, com 0xC0 no lugar de 0x80 no primeiro byte
+    (conferido contra o llvm-objdump: "c0 ea 79 08" = goto 4338, "ff ea c7 f5" = goto -5234)."""
+    return bytes([0x40 | monta_call(origem, destino)[0]]) + monta_call(origem, destino)[1:]
+
+
 def confere_trava(escritas):
     for endereco, tamanho, descricao in escritas:
         for ini, fim, oque in PROTEGIDAS:
@@ -268,11 +366,6 @@ def monta_imm8(reg, valor):
     return bytes((0x40 | ((valor >> 5) & 7) << 3 | reg, 0x20 | (valor & 0x1F)))
 
 
-def alinha32(endereco):
-    """A tabela entra logo depois do codigo; o par e so para nao deixar endereco impar."""
-    return (endereco + 1) & ~1
-
-
 def ordem_da_copia():
     """Posicoes da copia: os itens de fabrica (menos o ZONE) com os dos bancos no lugar dele.
 
@@ -280,9 +373,9 @@ def ordem_da_copia():
 
     Saem dois itens de fabrica, a pedido do usuario: o **ZONE** (indice 11) e o **Zone Or Channel**
     (indice 10), que escolhe entre navegar por zona ou por canal cheio - sem o ZONE ele nao tem mais
-    serventia. O banco faz o papel dos dois, com muito mais liberdade. Sao 56 bytes de tabela
-    devolvidos, que e o que faz o realce do VFO caber no espaco livre da imagem. As FUNCOES
-    continuam no firmware; o que sai sao os itens de menu delas.
+    serventia. O banco faz o papel dos dois, com muito mais liberdade. Com os dois fora, a tabela
+    nova tem 54 itens e cabe exatamente nas 54 vagas da original. As FUNCOES continuam no
+    firmware; o que sai sao os itens de menu delas.
     """
     de_fabrica = [i for i in range(ITENS_ORIGINAIS) if i not in ITENS_FORA]
     return de_fabrica[:ZONA_OU_CANAL] + list(ITENS) + de_fabrica[ZONA_OU_CANAL:]
@@ -295,7 +388,13 @@ def monta_tabela(app):
     tabela = bytearray()
     for quem in ordem_da_copia():
         if isinstance(quem, int):
+            o = len(tabela)
             tabela += original[quem * TAM_ITEM:(quem + 1) * TAM_ITEM]
+            for campo, valor in ITENS_MUDADOS.get(quem, {}).items():
+                if campo == 'maximo':
+                    struct.pack_into('<H', tabela, o + 1, valor)
+                else:
+                    struct.pack_into('<I', tabela, o + CAMPO[campo], S[valor])
             continue
         o = len(tabela)
         tabela += original[quem['molde'] * TAM_ITEM:(quem['molde'] + 1) * TAM_ITEM]
@@ -305,11 +404,6 @@ def monta_tabela(app):
                              ('nome_cn', quem['titulo']), ('exibe', quem['exibe'])):
             struct.pack_into('<I', tabela, o + CAMPO[campo], S[chave])
     return bytes(tabela)
-
-
-def monta_ponteiro(endereco):
-    """Instrucao de 6 bytes que poe o endereco da tabela em r5, no lugar das duas originais."""
-    return b'\xc5\xff' + struct.pack('<I', endereco)
 
 
 def monta_contagem(itens):
@@ -335,17 +429,23 @@ def main():
                              chave, ent['offset']))
 
     blob = open(codigo, 'rb').read()
+    print(f'  .text ligado para {confere_ligacao(codigo, blob):#x} = onde o codigo e gravado: ok')
     tabela = monta_tabela(app)
-    endereco_tabela = alinha32(ENDERECO_CODIGO + len(blob))
 
     # Monta a lista de escritas no app.bin e passa pela trava antes de tocar em qualquer byte.
     escritas = [(GANCHO_EM, 4, 'gancho do filtro na partida')]
     if SCAN_REDESENHA:
         escritas.append((SCAN_EM, 4, 'gancho do redesenho no scan'))
+    if ESPECTRO_TECLAS:
+        escritas.append((ESPECTRO_EM, len(ESPECTRO_ANTES), 'gancho das teclas do espectro'))
+        escritas += [(s, 4, f'espectro: {d}') for s, _, _, d in ESPECTRO_CHAMADAS]
+        escritas += [(e, 4, f'espectro: {d}') for e, _, _, d in ESPECTRO_FUNCOES]
+    escritas += [(ROGER_DESVIO_EM, 4, 'roger: valor 3 no caminho do BEEP'),
+                 (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons')]
     if CABO_ESTENDIDO:
         escritas += [(s, 4, f'gancho do cabo ({p})') for s, p in CABO_SITIOS]
     if MENU_NOVO:
-        escritas += [(PONTEIRO_EM, len(PONTEIRO_ANTES), 'ponteiro da tabela de menus'),
+        escritas += [(TABELA, len(tabela), 'tabela de menus, no lugar da original'),
                      (CONTAGEM_EM, len(CONTAGEM_ANTES), 'quantidade de itens do menu')]
     if SETAS_INVERTIDAS:
         escritas += [(s, 4, 'sentido das setas no menu') for s, _ in SETAS]
@@ -384,22 +484,62 @@ def main():
         print(f"  gancho do scan {SCAN_EM:#x}: chamada para {SCAN_ERA:#x} -> {S['gancho_scan']:#x} "
               '(pede redesenho a cada canal da varredura)')
 
-    # 2 e 3. ponteiro da tabela de menus -> a nossa copia, e a quantidade de itens fixa.
+    if ESPECTRO_TECLAS:
+        o = ESPECTRO_EM - BASE_APP
+        antes = bytes(app[o:o + len(ESPECTRO_ANTES)])
+        if antes != ESPECTRO_ANTES:
+            raise SystemExit(f'{ESPECTRO_EM:#x} nao e o "r1 = r0 - 16" das teclas do espectro: {antes.hex()}')
+        app[o:o + 4] = monta_call(ESPECTRO_EM, S['gancho_tecla_espectro'])
+        print(f"  gancho das teclas do espectro {ESPECTRO_EM:#x} -> {S['gancho_tecla_espectro']:#x} "
+              '(setas parado num achado, OK e #)')
+        for sitio, era, gancho, oque in ESPECTRO_CHAMADAS:
+            o = sitio - BASE_APP
+            antes = bytes(app[o:o + 4])
+            if antes != monta_call(sitio, era):
+                raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {era:#x}: {antes.hex()}')
+            app[o:o + 4] = monta_call(sitio, S[gancho])
+            print(f'  espectro {sitio:#x}: chamada para {era:#x} -> {gancho} ({oque})')
+        for entrada, antes_esperado, nova, oque in ESPECTRO_FUNCOES:
+            o = entrada - BASE_APP
+            if bytes(app[o:o + 4]) != antes_esperado:
+                raise SystemExit(f'{entrada:#x} nao comeca como esperado: {bytes(app[o:o + 4]).hex()}')
+            app[o:o + 4] = monta_goto(entrada, S[nova])
+            print(f'  espectro {entrada:#x}: rotina trocada por {nova} ({oque})')
+
+    # 3c. roger BEEP 2: o valor 3 entra no caminho do BEEP, e o laco dos tons passa a ser nosso
+    o = ROGER_DESVIO_EM - BASE_APP
+    if bytes(app[o:o + 4]) != ROGER_DESVIO_ANTES:
+        raise SystemExit(f'{ROGER_DESVIO_EM:#x} nao e o desvio esperado: {bytes(app[o:o + 4]).hex()}')
+    app[o:o + 4] = ROGER_DESVIO_DEPOIS
+    o = ROGER_LACO_EM - BASE_APP
+    if bytes(app[o:o + len(ROGER_LACO_ANTES)]) != ROGER_LACO_ANTES:
+        raise SystemExit(f'{ROGER_LACO_EM:#x} nao e o laco esperado: {bytes(app[o:o + 8]).hex()}')
+    app[o:o + 8] = (monta_call(ROGER_LACO_EM, S['gancho_roger_tons'])
+                    + monta_goto(ROGER_LACO_EM + 4, ROGER_LACO_FIM))
+    print(f"  roger: valor 3 no caminho do BEEP ({ROGER_DESVIO_EM:#x}) e laco dos tons -> "
+          f"gancho_roger_tons ({ROGER_LACO_EM:#x}, depois desvia para {ROGER_LACO_FIM:#x})")
+
+    # 2 e 3. tabela de menus no lugar da original, e a quantidade de itens fixa.
     # Com MENU_NOVO desligado nada disso entra: o menu fica o de fabrica (sem os itens BANK), o
     # que serve de corte de diagnostico - o gancho, o filtro, as setas e os textos continuam.
     itens = len(tabela) // TAM_ITEM
     if MENU_NOVO:
         o = PONTEIRO_EM - BASE_APP
-        antes = bytes(app[o:o + len(PONTEIRO_ANTES)])
-        if antes != PONTEIRO_ANTES:
-            raise SystemExit(f'{PONTEIRO_EM:#x} nao e o calculo esperado do endereco da tabela: {antes.hex()}')
-        app[o:o + len(PONTEIRO_ANTES)] = monta_ponteiro(endereco_tabela)
-        print(f'  tabela de menus {PONTEIRO_EM:#x}: {TABELA:#x} -> {endereco_tabela:#x} '
-              f'({itens} itens: os {ITENS_ORIGINAIS} de fabrica, nenhum perdido, mais os dos bancos)')
+        if bytes(app[o:o + len(PONTEIRO_ANTES)]) != PONTEIRO_ANTES:
+            raise SystemExit(f'{PONTEIRO_EM:#x} nao e o calculo esperado do endereco da tabela')
+        if itens > VAGAS:
+            raise SystemExit(f'a tabela tem {itens} itens e a original so tem {VAGAS} vagas')
+        o = TABELA - BASE_APP
+        fim = o + ITENS_ORIGINAIS * TAM_ITEM
+        if any(app[fim:fim + TAM_ITEM]):
+            raise SystemExit(f'{BASE_APP + fim:#x} nao e o item zerado que encerra a tabela')
+        app[o:o + len(tabela)] = tabela
+        print(f'  tabela de menus em {TABELA:#x}, no lugar da original ({itens} itens: os '
+              f'{ITENS_ORIGINAIS - len(ITENS_FORA)} de fabrica que ficam e os {len(ITENS)} dos bancos)')
         for pos, quem in enumerate(ordem_da_copia()):
             if not isinstance(quem, int):
                 print(f"    item {pos:2d}: \"{quem['nome']}\" (max {quem['maximo']}, "
-                      f"flags {quem['flags']:#04x}, logo depois do item {DEPOIS_DE})")
+                      f"flags {quem['flags']:#04x}, no lugar dos itens {ZONA_OU_CANAL} e {ZONE} de fabrica)")
 
         o = CONTAGEM_EM - BASE_APP
         antes = bytes(app[o:o + len(CONTAGEM_ANTES)])
@@ -460,11 +600,10 @@ def main():
             app[o:o + len(velho) + 1] = texto.encode() + bytes(len(velho) + 1 - len(texto))
         print(f'  textos revisados: {len(TEXTOS)} cadeias, nenhum byte a mais')
 
-    # 6. codigo novo, copia da tabela e CRCs
-    print(f'codigo novo: {len(blob)} B em {ENDERECO_CODIGO:#x}; tabela: {len(tabela)} B em '
-          f'{endereco_tabela:#x} (ultimo byte {endereco_tabela + len(tabela) - 1:#x})')
-    blocos = [(ENDERECO_CODIGO, blob)] + ([(endereco_tabela, tabela)] if MENU_NOVO else [])
-    jlfw.repack(origem, bytes(app), destino, blob=blocos)
+    # 6. codigo novo e CRCs (a tabela ja esta dentro do app.bin)
+    print(f'codigo novo: {len(blob)} B em {ENDERECO_CODIGO:#x} (ultimo byte '
+          f'{ENDERECO_CODIGO + len(blob) - 1:#x})')
+    jlfw.repack(origem, bytes(app), destino, blob=[(ENDERECO_CODIGO, blob)])
     print(f'gerado: {destino}')
 
 

@@ -4,7 +4,8 @@
  * mais bancos ficam ligados ao mesmo tempo; o sobe/desce e a busca passam a ver so os canais
  * desses bancos. Sem banco ligado, o radio funciona exatamente como de fabrica.
  *
- * Tres itens do menu, juntos logo depois do ZONE (que continua existindo, como todo o resto):
+ * Tres itens do menu, juntos no lugar do Zone Or Channel e do ZONE (que sairam do menu; todo o
+ * resto continua):
  *   BANK       escolhe o banco (as setas passam pelos 16) e liga/desliga ele no OK
  *   BANK NAME  da nome ao banco escolhido, no editor de texto do firmware
  *   BANK CH    percorre os 960 canais e marca/desmarca no banco escolhido
@@ -68,6 +69,28 @@ FIRMWARE(LAYOUT, 0x01E3B1A2);       unsigned LAYOUT(unsigned);
 FIRMWARE(LIMPA, 0x01E3ACBA);        void LIMPA(unsigned);
 FIRMWARE(ENCHE, 0x01E3AC68);        void ENCHE(unsigned, unsigned, unsigned);
 FIRMWARE(SAI_DO_EDITOR, 0x01E3C7AA); void SAI_DO_EDITOR(void);
+/* Espectro: o que o firmware faz para voltar a varrer quando o sinal achado cai (0x01E4AEFC) -
+ * fecha a saida de audio do chip de radio (regs 0x47/0x48), solta o pedido do espectro ao
+ * amplificador (5 pede, 6 solta), desliga o outro pino do audio e passa ao proximo ponto. */
+FIRMWARE(AUDIO_DO_CHIP, 0x01E39E22);   void AUDIO_DO_CHIP(unsigned);
+FIRMWARE(PEDE_AMPLI, 0x01E39E2C);      void PEDE_AMPLI(unsigned);
+FIRMWARE(AMPLI, 0x01E39CFC);           void AMPLI(unsigned);
+FIRMWARE(ESPECTRO_AVANCA, 0x01E4AE44); void ESPECTRO_AVANCA(void);
+/* Espectro: as outras rotinas que os ganchos usam (secao 11 de docs/engenharia-reversa.md). */
+FIRMWARE(ESPECTRO, 0x01E4AEAC);        void ESPECTRO(unsigned);          /* um passo da varredura */
+FIRMWARE(ALTURA, 0x01E4ACA0);          unsigned ALTURA(unsigned);        /* leitura crua -> 0..64 */
+FIRMWARE(FILTRO, 0x01E4A980);          void FILTRO(unsigned);            /* filtro do chip (reg 0x43) */
+FIRMWARE(JANELA_ESPECTRO, 0x01E4AA3C); void JANELA_ESPECTRO(u32);        /* centra: inicio, fim, passo, limite */
+FIRMWARE(MOSTRA_FREQ, 0x01E45D96);     void MOSTRA_FREQ(u32);            /* a frequencia grande do topo */
+FIRMWARE(ROTULOS_FREQ, 0x01E4AB2A);    void ROTULOS_FREQ(u32, u32);      /* as do comeco e do fim, embaixo */
+FIRMWARE(JANELA, 0x01E3AD34);          void JANELA(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned);
+FIRMWARE(ESCREVE, 0x01E3B834);         void ESCREVE(unsigned, unsigned, const char *, unsigned, unsigned);
+/* Roger: as duas rotinas que o laco do BEEP de fabrica usa (0x01E44644 e 0x01E4464A). */
+FIRMWARE(TOM, 0x01E43B4E);             void TOM(unsigned, unsigned);     /* freq. dos 2 geradores, Hz x 10.32444 */
+/* A espera conta em unidades de 2 ms (v22 tocava cada tom do BEEP 2 por 200 ms em vez de 100): o
+ * temporizador interrompe a cada 48000 ciclos de 24 MHz = 2 ms (0x01E3E44C) e soma 2 ao contador
+ * [0x14810] (0x01E51356), que anda 1 por ms; a espera vai ate o contador andar n x 2. */
+FIRMWARE(ESPERA_2MS, 0x01E36286);      void ESPERA_2MS(unsigned);        /* espera ocupada, n x 2 ms */
 
 /* ---------- memoria do firmware que usamos ----------
  * VALOR (h[0x14BFC]) e o valor do item em edicao: o motor de menus (0x01E489E0) guarda o valor
@@ -104,6 +127,36 @@ FIRMWARE(SAI_DO_EDITOR, 0x01E3C7AA); void SAI_DO_EDITOR(void);
  * em 62 ou 101. Nao confundir com tx_ab (0x14B84, o ajuste 0x9018 gravado na memoria de dados):
  * aquele e o ajuste, este e o estado da tela, e foi usar o errado que fez a v13 nao realcar nada. */
 #define LADO_B         (*(volatile u8 *)0x00015E04)
+/* Estado da varredura do espectro (83540): 0 sintoniza o ponto, 1 mede, 2 parado num achado. */
+#define ESPECTRO_ESTADO (*(volatile u8 *)0x00014654)
+/* Resto da varredura, cada um tirado da instrucao do firmware que o usa (conferir.py, 4f). */
+#define ESP_BRUTO      (*(volatile u16 *)0x0001463C)         /* 83516: leitura crua do ponto */
+#define ESP_MIN        (*(volatile u16 *)0x00014640)         /* 83520 */
+#define ESP_MAX        (*(volatile u16 *)0x00014644)         /* 83524: maior leitura da passada */
+#define ESP_INDICE     (*(volatile u8 *)0x0001464E)          /* 83534: coluna (ponto) atual */
+#define ESP_PASSO      (*(volatile u16 *)0x00014650)         /* 83536: passo entre colunas, em 10 Hz */
+#define ESP_FREQ       (*(volatile u32 *)0x000148DC)         /* 84188: frequencia sintonizada */
+#define ESP_PICO_FREQ  (*(volatile u32 *)0x000148E0)         /* 84192: onde esta a maior leitura */
+#define ESP_CENTRO     (*(volatile u32 *)0x000148E4)         /* 84196 */
+#define ESP_FIM        (*(volatile u32 *)0x000148E8)         /* 84200 */
+#define ESP_INICIO     (*(volatile u32 *)0x000148EC)         /* 84204 */
+#define ALTURAS        ((volatile u8 *)0x0001551B)           /* 87323: 160 colunas do grafico, 0..64 */
+/* Configuracao do espectro (0x6EC0, 73 bytes que o firmware grava na saida e le na partida). */
+#define CFG_PONTOS     (*(volatile u32 *)0x00006EC4)         /* 28356: 0..3 = 160 >> n; nossos 4 = 640, 5 = 320 */
+#define CFG_PASSO      (*(volatile u32 *)0x00006EC8)         /* 28360: 0..4 os de fabrica; nosso 5 = 10 kHz */
+#define CFG_FILTRO     (*(volatile u32 *)0x00006ED0)         /* 28368: filtro do passo, para o FILTRO() */
+/* Roger (84867, offset 0x17 do bloco de ajustes, 0x9017 no cabo, 2 bits no CHIRP): 0 OFF, 1 BEEP,
+ * 2 TONE1200 e, nosso, 3 = BEEP 2. A tabela do BEEP de fabrica: (f1, f2) do segundo tom e (f1, f2)
+ * do primeiro, que o laco de 0x01E44638 le de tras para frente. */
+#define ROGER          (*(volatile u8 *)0x00014B83)
+#define BEEP_FABRICA   ((const volatile u16 *)0x01E60DC8)
+/* Teclas do espectro que viram nossas: OK troca o passo (17), # troca a quantidade de pontos (24). */
+#define TECLA_OK         17
+#define TECLA_CERQUILHA  24
+/* Codigos das setas no tratador de teclas (0x01E4B946 le de b[sp+13]): 19 e a de cima - no modo
+ * principal ela leva ao AVANCA do menu e no espectro sobe o limite -, 21 a de baixo. */
+#define TECLA_CIMA   19
+#define TECLA_BAIXO  21
 
 #define NUM_BANCOS   16
 #define NUM_CANAIS   960
@@ -111,12 +164,13 @@ FIRMWARE(SAI_DO_EDITOR, 0x01E3C7AA); void SAI_DO_EDITOR(void);
 #define TAM_NOME     12
 #define NUM_ZONAS    15                    /* 15 x 64 = 960; as mascaras por zona cobrem isso */
 #define TAM_PEDACO   24                    /* le o mapa de um banco em pedacos; 120 = 5 x 24 */
-/* Verde do fundo do bloco do VFO em evidencia: #005900, degrau 22 dos 64 do verde em RGB565. Ja
+/* Verde do fundo do bloco do VFO em evidencia: #004900, degrau 18 dos 64 do verde em RGB565. Ja
  * passaram por aqui o 0x00E0 (degrau 7, "nao da nem pra perceber que e verde"), o 0x0280 (20,
- * pedido "um pouco mais claro") e o 0x0380 (28, claro demais no bloco inteiro); este fica entre os
- * dois ultimos. Os ganchos passam a cor como valor de 16 bits, entao aqui nao vale o limite de 8
- * bits do remendo direto. Para mudar o tom, mexer so nesta linha. */
-#define COR_REALCE   0x02C0u
+ * pedido "um pouco mais claro" quando o verde ainda so saia na barra), o 0x0380 (28, claro demais
+ * no bloco inteiro) e o 0x02C0 (22, v17 a v19: "ainda bem claro", pedido um pouco mais escuro). Os
+ * ganchos passam a cor como valor de 16 bits, entao aqui nao vale o limite de 8 bits do remendo
+ * direto. Para mudar o tom, mexer so nesta linha. */
+#define COR_REALCE   0x0240u
 
 /* ---------- onde os bancos ficam gravados ----------
  * Setores proprios depois da area que o firmware usa em 0xC0000 (64 registros de 60 B, que ele le
@@ -399,6 +453,254 @@ void gancho_scan(void)
     AVANCA_SCAN();
     REDESENHA1 = 1;
     REDESENHA2 = 1;
+}
+
+/* ---------- espectro: passos, quantidade de pontos, velocidade e pico ----------
+ * Mapa completo na secao 11 de docs/engenharia-reversa.md. Os indices de fabrica da configuracao
+ * (pontos 0..3, passo 0..4) mantem o significado, porque ela e gravada na saida do espectro e lida
+ * na partida: os valores novos entram no fim (pontos 4 = 640 e 5 = 320, passo 5 = 10 kHz) e so a
+ * ORDEM em que as teclas passam por eles muda. Valor fora da faixa (gravado por outra versao) vale
+ * como o primeiro.
+ *
+ * 320 e 640 pontos: a maquina do firmware continua varrendo 160 colunas (o indice dela e um byte e
+ * o grafico tem 160 colunas), com o passo entre colunas multiplicado por 2 ou 4; cada coluna mede
+ * os seus 2 ou 4 sub-pontos no passo de verdade e fica com o maior. Qual sub-ponto esta sintonizado
+ * sai da propria frequencia, entao nao precisa de memoria nova. */
+#define PASSOS    6
+#define LARGURAS  6
+static const u16 passo_de[PASSOS] = {625, 833, 1250, 2000, 2500, 1000};   /* em 10 Hz */
+static const u8 filtro_de[PASSOS] = {2, 1, 1, 0, 0, 1};    /* os de fabrica (0x01E60460) + 10k = 8.33/12.5 */
+static const u8 passo_seguinte[PASSOS] = {1, 5, 3, 4, 0, 2};   /* 6.25 8.33 10 12.5 20 25 */
+static const char *const rotulo_passo[PASSOS] = {"6.25k", "8.33k", "12.5k", "20.0k", "25.0k", "10.0k"};
+static const char *const rotulo_pontos[LARGURAS] = {"x160 ", " x80 ", " x40 ", " x20 ", "x640 ", "x320 "};
+
+static unsigned cfg_pontos(void)
+{
+    unsigned n = CFG_PONTOS;
+
+    return n < LARGURAS ? n : 0;
+}
+
+static unsigned cfg_passo(void)
+{
+    unsigned p = CFG_PASSO;
+
+    return p < PASSOS ? p : 0;
+}
+
+/* Sub-pontos por coluna: 4 com 640 pontos, 2 com 320, 1 no resto. */
+static unsigned sub_pontos(void)
+{
+    unsigned n = cfg_pontos();
+
+    return n == 4 ? 4 : n == 5 ? 2 : 1;
+}
+
+/* Qual sub-ponto da coluna esta sintonizado: a frequencia e inicio + coluna * passo das colunas +
+ * sub-ponto * passo de verdade. Sempre 0 com 160 pontos ou menos. */
+static unsigned sub_ponto(void)
+{
+    unsigned k = sub_pontos();
+
+    return (ESP_FREQ - ESP_INICIO) / (ESP_PASSO / k) % k;
+}
+
+/* No lugar de 0x01E4A9C2 (desvio na entrada dela): quantos pontos a maquina varre. */
+unsigned espectro_pontos(void)
+{
+    unsigned n = cfg_pontos();
+
+    return n < 4 ? 160 >> n : 160;
+}
+
+/* No lugar de 0x01E4A99C: o passo entre colunas, em 10 Hz. */
+unsigned espectro_passo(void)
+{
+    return passo_de[cfg_passo()] * sub_pontos();
+}
+
+/* No lugar de 0x01E4ABDC: os rotulos da quantidade de pontos e do passo, com as mesmas janelas, o
+ * mesmo formato e as mesmas posicoes do firmware - so as tabelas sao as nossas. */
+void espectro_rotulos(unsigned n, unsigned p)
+{
+    char texto[12];
+
+    if (n >= LARGURAS)
+        n = 0;
+    if (p >= PASSOS)
+        p = 0;
+    zera(texto, sizeof texto);
+    JANELA(0, 32, 17, 33, 1, 0);
+    SPRINTF(texto, "%s ", rotulo_pontos[n]);
+    ESCREVE(20, 1, texto, 12, 0);
+    ENVIA();
+    JANELA(0, 32, 33, 49, 1, 0);
+    SPRINTF(texto, "%s", rotulo_passo[p]);
+    ESCREVE(34, 1, texto, 12, 0);
+    ENVIA();
+}
+
+/* Nas chamadas do proximo ponto (0x01E4AF86, que serve a varredura e a retomada, e 0x01E4C6B8, da
+ * tecla 2): com sub-pontos, anda o passo de verdade dentro da coluna; no ultimo, volta ao comeco
+ * dela e deixa o firmware passar para a coluna seguinte (ou recomecar a janela). */
+void gancho_avanca(void)
+{
+    unsigned k = sub_pontos(), s = ESP_PASSO / k;
+
+    if (sub_ponto() != k - 1) {
+        ESP_FREQ += s;
+        return;
+    }
+    ESP_FREQ -= (k - 1) * s;
+    ESPECTRO_AVANCA();
+}
+
+/* Nas duas chamadas do registro do ponto (0x01E4AEE0 parado, 0x01E4AF7A varrendo), no lugar de
+ * 0x01E4AD7C. Faz o que ele fazia - maior e menor leitura da passada, onde esta a maior, e a altura
+ * nas colunas do ponto - com duas diferencas: a barra SOBE na hora e, quando o sinal cai, desce so
+ * a METADE do caminho a cada passada (o sinal curto fica marcado e o ruido para de piscar); e, nos
+ * sub-pontos depois do primeiro, a coluna fica com o maior. A leitura e a mesma que o firmware
+ * usava: a medida guarda o mesmo valor em ESP_BRUTO e na lista de leituras que ele relia. */
+void gancho_registra(void)
+{
+    unsigned bruto = ESP_BRUTO, largura = 160 / espectro_pontos(), novo = ALTURA(bruto);
+    unsigned sub = sub_ponto();
+    volatile u8 *c = ALTURAS + ESP_INDICE * largura;
+
+    if (bruto > ESP_MAX) {
+        ESP_MAX = bruto;
+        ESP_PICO_FREQ = ESP_FREQ;
+    }
+    if (bruto < ESP_MIN)
+        ESP_MIN = bruto;
+    while (largura--) {
+        unsigned velho = *c;
+
+        *c++ = novo >= velho ? novo : sub ? velho : (velho + novo) >> 1;
+    }
+}
+
+/* Nas chamadas que centram a janela pela frequencia digitada (0x01E4C054) e na entrada do
+ * espectro (0x01E4CFBC): zera o grafico antes, porque com o pico seguro as barras de outra janela
+ * ficariam la, descendo devagar, por cima da nova. */
+void gancho_janela(u32 centro)
+{
+    zera((void *)ALTURAS, 160);
+    JANELA_ESPECTRO(centro);
+}
+
+/* No lugar da chamada da varredura no laco principal (0x01E4D5B2). De fabrica cada ponto custa
+ * duas voltas do laco (uma sintoniza, a seguinte mede). Aqui, quando a volta mediu e passou ao
+ * ponto seguinte, a mesma volta ja sintoniza esse ponto - e ele so e medido na volta seguinte, como
+ * no firmware, entao o chip tem o mesmo tempo para estabilizar. Um ponto por volta: o dobro. */
+void gancho_espectro(unsigned arg)
+{
+    unsigned antes = ESPECTRO_ESTADO;
+
+    ESPECTRO(arg);
+    if (antes == 1 && ESPECTRO_ESTADO == 0)
+        ESPECTRO(arg);
+}
+
+/* O que o firmware faz depois de trocar o passo ou a quantidade de pontos (0x01E4C628..0x01E4C664):
+ * filtro do passo, janela nova, frequencia e rotulos, e a varredura recomeca. */
+static void reconfigura(void)
+{
+    unsigned filtro = filtro_de[cfg_passo()];
+
+    CFG_FILTRO = filtro;
+    FILTRO(filtro);
+    gancho_janela(ESP_CENTRO);
+    MOSTRA_FREQ(ESP_PICO_FREQ);
+    ROTULOS_FREQ(ESP_INICIO, ESP_FIM);
+    espectro_rotulos(cfg_pontos(), cfg_passo());
+    ESPECTRO(0);
+}
+
+/* ---------- gancho das teclas do espectro ----------
+ * Entra no lugar do "r1 = r0 - 16" com que o tratador de teclas do espectro (0x01E4BFBE) escolhe o
+ * caso do tbh: recebe a tecla em r0 e devolve r0 = a tecla e r1 = o caso, num u64 (o clang poe a
+ * metade de baixo em r0 e a de cima em r1). A chamada passa a sujar r2 e r3, que estao mortos ali
+ * em todos os caminhos. Tres coisas mudam, o resto e o caso de fabrica:
+ *  - parado num achado (estado 2), as setas (que de fabrica so mexem no limite, +-2 em [0x6ED5])
+ *    fazem a mesma retomada do firmware (0x01E4AEFC) e viram o caso da tecla 20, que so bipa;
+ *  - OK e # trocam passo e pontos pela nossa ordem, com os valores novos, e fazem o que o firmware
+ *    faz em seguida; voltam como tecla 255 no caso 20, que pula o bipe - como as duas de fabrica.
+ */
+unsigned long long gancho_tecla_espectro(unsigned tecla)
+{
+    unsigned caso = tecla - 16;
+
+    if ((tecla == TECLA_CIMA || tecla == TECLA_BAIXO) && ESPECTRO_ESTADO == 2) {
+        ESPECTRO_ESTADO = 0;
+        AUDIO_DO_CHIP(0);
+        PEDE_AMPLI(6);
+        AMPLI(0);
+        gancho_avanca();
+        caso = 20 - 16;
+    } else if (tecla == TECLA_OK || tecla == TECLA_CERQUILHA) {
+        if (tecla == TECLA_OK)
+            CFG_PASSO = passo_seguinte[cfg_passo()];
+        else
+            CFG_PONTOS = (cfg_pontos() + 1) % LARGURAS;
+        reconfigura();
+        tecla = 255;
+        caso = 20 - 16;
+    }
+    return (unsigned long long)caso << 32 | tecla;
+}
+
+/* ---------- roger: BEEP 2, o tom de quatro notas ----------
+ * O item ROGER do menu passa a ter quatro opcoes, na ordem OFF, BEEP 1, BEEP 2, TONE1200. Os
+ * valores gravados continuam os de fabrica (0 OFF, 1 BEEP, 2 TONE1200) e o BEEP 2 fica com o 3,
+ * que cabe nos 2 bits do ajuste; o get e o set do item trocam posicao e valor (2 <-> 3).
+ *
+ * O fim da transmissao (0x01E44604) toca o roger antes de voltar a receber. Um desvio dele foi
+ * trocado (0x01E4461E: "se nao for 1, pula" virou "se for 0, pula"), entao o valor 3 entra pelo
+ * mesmo caminho do BEEP - liga o gerador, toca, desliga, mesmo final - e o laco dos tons
+ * (0x01E44638) virou uma chamada para ca e um desvio por cima dele. */
+const char *const roger_opcoes[4] = {"OFF", "BEEP 1", "BEEP 2", "TONE1200"};
+const char *const roger_opcoes_cn[4] = {(const char *)0x01E5FC88, "BEEP 1", "BEEP 2", "TONE1200"};
+/* Os quatro tons do roger que o dono mandou em mp3, medidos: 1125, 1857, 1359 e 931 Hz, 100 ms
+ * cada. Em unidades do gerador (Hz x 10.32444, a mesma conta que da 10324 para os 1000 Hz do BEEP
+ * e 12389 para o TONE1200). */
+static const u16 beep2[4] = {11615, 19172, 14031, 9612};
+
+static unsigned troca_roger(unsigned v)
+{
+    return v >= 2 ? v ^ 1 : v;
+}
+
+u16 roger_le(void)
+{
+    unsigned v = ROGER;
+
+    return v < 4 ? troca_roger(v) : 0;
+}
+
+void roger_grava(void)
+{
+    ROGER = (u8)troca_roger(VALOR & 3);
+}
+
+/* No lugar do laco dos tons do BEEP. Com o BEEP de fabrica, faz exatamente o que o laco fazia:
+ * os dois pares da tabela, de tras para frente, ESPERA_2MS(40) = 80 ms cada. */
+#define TOM_MS  100            /* cada tom do BEEP 2, como no mp3 */
+void gancho_roger_tons(void)
+{
+    unsigned i;
+
+    if (ROGER == 3) {
+        for (i = 0; i < 4; i++) {
+            TOM(beep2[i], 0);
+            ESPERA_2MS(TOM_MS / 2);
+        }
+        return;
+    }
+    TOM(BEEP_FABRICA[2], BEEP_FABRICA[3]);
+    ESPERA_2MS(40);
+    TOM(BEEP_FABRICA[0], BEEP_FABRICA[1]);
+    ESPERA_2MS(40);
 }
 
 /* ---------- gancho do cabo: endereco de 24 bits, para ler e para gravar ----------

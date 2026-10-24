@@ -5,6 +5,108 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v23 — 24/10 — BEEP 2 na velocidade do mp3 ✅
+
+Na v22 o BEEP 2 funcionou, mas levava 0,8 a 1 s, contra ~0,4 s do mp3. A causa está no firmware: a
+rotina de espera que o roger usa (`0x01E36286`) conta em **unidades de 2 ms**, não em ms — o
+temporizador interrompe a cada 48000 ciclos de 24 MHz (2 ms, `0x01E3E44C`) e a espera vai até o
+contador andar o dobro do que se pede. Os `100` da v22 davam 200 ms por tom. Agora cada tom espera
+50 unidades = **100 ms**, e o BEEP 2 inteiro fica em ~0,4 s. (O BEEP de fábrica, com 40 unidades,
+sempre teve 80 ms por tom; ele não mudou.)
+
+Só muda o número da espera; código e ganchos são os da v22. **Testada no rádio** (24/10): funcionou.
+
+## v22 — 24/10 — roger BEEP 2
+
+- **ROGER com quatro opções: OFF, BEEP 1, BEEP 2, TONE1200.** O BEEP 1 é o BEEP de fábrica
+  (1000 Hz e 850 Hz, 80 ms cada); o **BEEP 2** toca os quatro tons do mp3 que o dono mandou —
+  **1125, 1857, 1359 e 931 Hz, 100 ms cada** —, transmitindo, logo antes de o rádio voltar a
+  receber. Os valores gravados continuam os de fábrica (BEEP 1, TONE1200 = 2) e o BEEP 2 é o 3, que
+  cabe nos 2 bits do ajuste; o menu troca a ordem. Os quatro tons saem com o mesmo volume (no mp3 o
+  segundo é mais baixo). Detalhes na [seção 12 da engenharia reversa](engenharia-reversa.md#12-roger).
+
+Código: 2764 B de 3292. Build reprodutível, zero desvios em remendo, os três testes passando. **No rádio:** o BEEP 2
+funcionou, mas com 200 ms por tom em vez de 100 (corrigido na v23).
+
+## v21 — 24/10 — a v20 sem o bootloop ✅
+
+O mesmo conteúdo da v20 (espectro 2× mais rápido, passo de 10 kHz, 320/640 pontos, pico seguro,
+verde `0x0240`), com o código gravado onde o linker o ligou. Código e ganchos são byte a byte os da
+v20; muda só o lugar do bloco na flash.
+
+**Por que a v20 entrava em bootloop:** o linker alinha a seção de código pelo maior alinhamento
+que encontra dentro dela, e a v20 trouxe as tabelas de ponteiros dos rótulos novos (alinhamento 4):
+o código saiu ligado para `0x01E96124`, mas o montador gravava num endereço fixo, `0x01E96122`. Tudo
+ficou 2 bytes fora do lugar, e o primeiro gancho a rodar — o do fim da partida, logo depois do logo
+— pulava para o meio de uma instrução. Nenhuma conferência pegou porque todas usavam o mesmo
+endereço fixo dos dois lados.
+
+**O que impede de novo:** o código começa no primeiro endereço múltiplo de 4 (`0x01E96124`); o
+`montar.py` lê o endereço do código no ELF e recusa montar se não for onde ele grava; e o
+`conferir.py` ganhou a `2c` (endereço ligado = gravado) e a `2d`, de ponta a ponta: cada um dos 33
+desvios do firmware para o código novo é seguido até a flash, e os bytes que estão lá, decifrados,
+nas 6 imagens, têm de ser os do ELF. Rodadas contra a v20, as duas reprovam — a `2d` aponta
+exatamente o gancho da partida.
+
+Código: 2558 B de 3292. Build reprodutível, zero desvios em remendo, os três testes passando.
+**Testada no rádio** (24/10): "funcionou perfeito"; a varredura ficou cerca de 1 s mais rápida.
+
+## v20 — 24/10 — espectro mais rápido, 10 kHz, 320/640 pontos, pico seguro, verde mais escuro ❌ **bootloop, retirada**
+
+- **Espectro duas vezes mais rápido:** cada volta do laço passa a medir um ponto e já sintonizar o
+  seguinte, em vez de gastar uma volta para cada coisa. O chip continua tendo uma volta inteira
+  entre sintonizar e medir, como de fábrica, então a medida sai igual: 160 pontos em ≈ 2,5 s
+  (eram 5 s).
+- **Passo de 10 kHz:** o OK passa por 6,25 → 8,33 → **10** → 12,5 → 20 → 25 kHz (filtro do chip o
+  mesmo do 8,33 e do 12,5).
+- **320 e 640 pontos:** o # passa por 160 → 80 → 40 → 20 → **640** → **320**. O gráfico continua
+  com 160 colunas; cada coluna mede 2 ou 4 frequências e mostra a maior, e parar num sinal acontece
+  na frequência exata dele. Com 25 kHz, 640 pontos cobrem 16 MHz; a varredura leva ≈ 5 s (320) e
+  ≈ 10 s (640).
+- **Pico seguro:** a barra sobe na hora e, quando o sinal some, desce a metade do caminho a cada
+  passada. Um sinal curto fica marcado por algumas passadas e o ruído para de piscar. Trocar de
+  janela (digitar frequência, OK, #, entrar no espectro) limpa o gráfico.
+- **Verde do realce mais escuro:** `0x0240` (#004900, degrau 18), contra o `0x02C0` (#005900, 22)
+  da v17 à v19.
+- Os índices novos (640, 320 e 10 kHz) entram no fim da configuração que o rádio grava, então os de
+  fábrica mantêm o valor. **Antes de voltar para uma versão anterior**, deixe o # num de 160/80/40/20
+  e o passo fora do 10 kHz: as versões anteriores não conhecem os novos e mostrariam lixo.
+
+Duas coisas do plano saíram diferentes do proposto, por motivo concreto:
+- **"Redesenhar o texto do pico só quando muda"** não tinha o que ganhar: mapeado, o texto em dBm
+  só é desenhado uma vez por passada e quando a varredura para — não a cada coluna, como eu tinha
+  dito.
+- **"Média de leituras por ponto"** não entrou como várias leituras seguidas: sem saber de quanto em
+  quanto tempo o chip renova o RSSI, ler duas vezes seguidas pode devolver o mesmo número e não
+  limpar nada, e custaria tempo. A descida pela metade do pico já é uma média entre a passada nova
+  e a anterior. "Sempre 160 pontos" é o que o # em 160, 320 e 640 já dá; com 20/40/80 os degraus
+  são o próprio significado de medir menos pontos.
+
+Mapa completo na [seção 11 da engenharia reversa](engenharia-reversa.md#11-espectro). Código: 2558 B
+de 3294. Build reprodutível, zero desvios em remendo, os três testes passando. **No rádio: bootloop**
+— o logo aparece e o rádio reinicia em menos de 1 s, em laço. Causa e correção na v21.
+
+## v19 — 24/10 — seta continua o espectro, e a tabela de menus no lugar ✅
+
+- **Espectro:** parado num sinal achado, a seta (de cima ou de baixo) **continua a varredura** e,
+  dessa vez, não mexe no limite. Enquanto varre, a seta faz o que sempre fez (sobe ou desce o
+  limite). A continuação é exatamente a retomada que o próprio firmware faz quando o sinal cai
+  (`0x01E4AEFC`: fecha o áudio e passa ao próximo ponto), e o build confere isso nos bytes de
+  fábrica (verificação `4i`). O gancho entra numa instrução de 4 bytes do tratador de teclas do
+  espectro (`0x01E4BFBE`); os registradores que a chamada nova suja foram conferidos mortos ali em
+  todos os caminhos. Detalhes na [seção 11 da engenharia reversa](engenharia-reversa.md#11-espectro).
+  O bipe dessa tecla passa a ser o das teclas sem função no espectro (código 0), não o da seta.
+  Se o sinal for forte, a varredura pode parar de novo no ponto vizinho do mesmo sinal: aí é
+  apertar de novo.
+- **Espaço:** a tabela de menus nova passa a ser gravada **no lugar da original** (as 54 vagas, com
+  o item zerado do fim, são exatamente os 54 itens dela), em vez de ocupar 1512 bytes da área livre.
+  O código tem agora 3294 bytes disponíveis, contra 1782. Provado antes que mais nada lê a tabela
+  original; o ponteiro dela fica como era. O código e a tabela saíram byte a byte iguais aos da
+  v18, só a tabela em outro lugar.
+
+Código: 1792 B de 3294. Build reprodutível, zero desvios em remendo, os três testes passando.
+**Testada no rádio** (24/10): para no sinal, a seta continua sem mexer no limite, e o bipe ficou bom.
+
 ## Driver do CHIRP — 24/10 — sem zonas, e a trava do firmware refeita
 
 Revisão geral do `chirp/bj8300_v1.0TEMPRA.py`, com um teste novo (`tests/teste_clonagem.py`) que

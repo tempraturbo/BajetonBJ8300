@@ -226,9 +226,9 @@ void gancho_limpa(unsigned modo)
 }
 ```
 
-A cor fica em `COR_REALCE`, no `firmware/src/bancos.c` — uma linha só. O valor atual é `0x02C0`
-(#005900). O buffer de vídeo guarda o byte alto primeiro, então o gancho do envio usa `COR_BUF`, o
-mesmo valor com os bytes trocados (`0xC002`); o enchimento recebe a cor normal, porque a própria
+A cor fica em `COR_REALCE`, no `firmware/src/bancos.c` — uma linha só. O valor atual é `0x0240`
+(#004900, degrau 18 dos 64 do verde, desde a v20; da v17 à v19 era `0x02C0`). O buffer de vídeo guarda o byte alto primeiro, então o gancho do envio usa `COR_BUF`, o
+mesmo valor com os bytes trocados (`0x4002`); o enchimento recebe a cor normal, porque a própria
 rotina separa os bytes. Os dois conferidos no código de máquina gerado.
 
 ## 8. Vãos que nenhuma janela cobre
