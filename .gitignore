@@ -1,0 +1,13 @@
+# Saida de compilacao: tudo aqui se refaz com "sh firmware/build.sh"
+firmware/build/
+
+# Python
+__pycache__/
+*.pyc
+
+# Imagens geradas a partir do BMP (firmware/scripts/logo_bmp.py refaz)
+logo/*.bin
+
+# Despejos da memoria do radio: contem os canais programados de quem rodou
+dump_*.bin
+*.dump
