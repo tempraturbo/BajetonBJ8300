@@ -6,6 +6,8 @@ Verifica, sem precisar do radio:
   - todos os CRCs do arquivo;
   - que o codigo novo e a tabela de menus nova estao nas 6 imagens, no mesmo endereco, e que
     decifrados pelo SFC saem iguais ao que foi montado (gravar em claro ali seria lixo);
+  - que o app.bin decifrado e o mesmo nas 6 imagens, de modo que os remendos conferidos na
+    primeira valem para todas;
   - que os simbolos que o menu aponta caem dentro do codigo novo;
   - que a tabela nova, gravada no lugar da original, tem os itens de fabrica que ficam intactos
     (saem o ZONE e o Zone Or Channel), os tres itens dos bancos certos, e que o firmware vai
@@ -152,6 +154,22 @@ print(f'2d. {desvios_novos} desvios do firmware para o codigo novo, destino conf
 for r in ruins:
     print('    ' + r)
     erros.append('desvio para o codigo novo errado: ' + r)
+
+# 2e. o app.bin inteiro, decifrado, e o mesmo nas 6 imagens (no de fabrica tambem e): o que se
+# confere daqui em diante no app da imagem tipo 0 - remendos do roger e do scramble, textos - vale
+# para todas.
+diferentes = []
+for e in entradas:
+    if e['type'] in jlfw.FLASH_TYPES:
+        img = dados[e['offset']:e['offset'] + e['size']]
+        _, base, sub = jlfw.app_dir(img, chave)
+        ent = next(s for s in sub if s['name'] == 'app.bin')
+        if jlfw.sfc(img[base + ent['offset']:base + ent['offset'] + ent['size']], chave, ent['offset']) != app:
+            diferentes.append(e['name'])
+print(f'2e. app.bin decifrado igual nas {len(imagens)} imagens: '
+      + ('ok' if not diferentes else 'FALHOU em ' + ', '.join(diferentes)))
+if diferentes:
+    erros.append('app.bin diferente em ' + ', '.join(diferentes))
 
 # 3. a copia da tabela: nenhum item de fabrica perdido e os dos bancos no lugar certo
 T = montar.TAM_ITEM
@@ -457,6 +475,28 @@ for oque, ok in verificacoes:
         erros.append('roger: ' + oque)
 previsto += [(montar.ROGER_DESVIO_EM, montar.ROGER_DESVIO_EM + 3, 'roger: desvio'),
              (montar.ROGER_LACO_EM, montar.ROGER_LACO_EM + 7, 'roger: laco')]
+
+# 4k. scramble 2900 Hz. A tabela e a que a rotina que aplica o scramble (0x01E408E2) le: o r1 de
+# 0x01E40936, indexado por "valor == 1 ? 0 : 1". A conta Hz -> registro sai da 1a entrada, que fica
+# como estava: 3400 Hz, a frequencia medida na gravacao do dono.
+scr_tabela = imediato(0x01E40936)
+o = scr_tabela - montar.BASE_APP
+scr_velha, scr_nova = struct.unpack_from('<2H', app_velho, o), struct.unpack_from('<2H', app, o)
+scr_hz = scr_nova[1] * 3400 / scr_velha[0]
+cn = struct.unpack_from('<I', blob, montar.S['scramble_opcoes_cn'] - montar.ENDERECO_CODIGO)[0]
+cn_fabrica = struct.unpack_from('<I', app_velho, 0x6AC0C + struct.unpack_from(
+    '<I', velha, montar.SCRAMBLE_ITEM * T + montar.CAMPO['opcoes_cn'])[0])[0]
+verificacoes = [
+    (f'tabela em {scr_tabela:#x}, a que a rotina le', scr_tabela == montar.SCRAMBLE_TABELA),
+    (f'3400 Hz intacto ({scr_nova[0]})', scr_velha == montar.SCRAMBLE_ANTES and scr_nova[0] == scr_velha[0]),
+    (f'2a entrada {scr_velha[1]} -> {scr_nova[1]} = {scr_hz:.1f} Hz', abs(scr_hz - 2900) < 0.5),
+    ('OFF em chines e o de fabrica', cn == cn_fabrica),
+]
+for oque, ok in verificacoes:
+    print(f'4k. scramble: {oque}: ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append('scramble: ' + oque)
+previsto.append((montar.SCRAMBLE_TABELA + 2, montar.SCRAMBLE_TABELA + 3, 'scramble: 2900 Hz'))
 
 if montar.REALCE_DIAG:
     certas = sum(bytes(app[e - montar.BASE_APP:e - montar.BASE_APP + 2])

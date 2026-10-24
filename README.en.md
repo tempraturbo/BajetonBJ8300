@@ -52,6 +52,7 @@ channels and calibration live on a different chip and are never touched.
 | **Selected VFO highlight** | The active side's block (name, frequency and signal bar) gets a green background; the other stays black |
 | **Menu arrows inverted** | The up arrow now moves *up* the list instead of increasing the value |
 | **BEEP 2 roger** | ROGER gets a fourth option: OFF, BEEP 1 (the stock one), **BEEP 2** (four tones, 1125/1857/1359/931 Hz) and TONE1200 |
+| **2900 Hz scramble** | SCRAMBLE gets a third option: OFF, 3400 Hz (the stock one) and **2900 Hz**, the same inversion as the Baofeng UV-17L in mode 3 |
 | **Better spectrum** | Twice as fast (160 points in ≈ 2.5 s); **10 kHz** step; **320 and 640 points**; peak hold (the bar rises at once and comes down slowly); and, stopped on a found signal, the arrow continues the sweep without changing the threshold |
 | **Signal bar during scan** | The bar no longer freezes at the last channel found, and the channel number no longer drifts from the name |
 | **English texts revised** | 25 strings fixed/standardised (e.g. `VOICEPRI` → `ENCRYPT`); the menu version now reads `V1.0T` |
@@ -72,6 +73,7 @@ cannot get stuck in zone mode, the CHIRP driver writes **Full Channel** on every
    | File | Status |
    |---|---|
    | `firmware/releases/BJ8300_BANK_v12.anc` | **recommended** — tested and sound |
+   | `firmware/releases/BJ8300_BANK_v24.anc` | v23 + **2900 Hz scramble** (the Baofeng UV-17L's mode 3) — **tested on the radio** with the UV-17L |
    | `firmware/releases/BJ8300_BANK_v23.anc` | v21 + **BEEP 2 roger** (100 ms per tone, like the mp3); use with this version's CHIRP driver — **tested on the radio** |
    | `firmware/releases/BJ8300_BANK_v21.anc` | v19 + **spectrum** twice as fast, 10 kHz step, 320 and 640 points and peak hold; darker highlight green (v20 without the boot loop; v20 was withdrawn) — **tested on the radio** |
    | `firmware/releases/BJ8300_BANK_v19.anc` | v18 + **the arrow continues the spectrum** when stopped on a find, without changing the threshold; the menu table now sits where the original was (code gains 1512 bytes of room) — **tested on the radio** |

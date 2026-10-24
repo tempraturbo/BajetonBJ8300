@@ -149,6 +149,7 @@ outro endereço é ignorado sem escrever nada (provado com `tools/cabo/teste_cab
 | `0x01E44604` | fim da transmissão: toca o roger e volta para a recepção |
 | `0x01E43B4E` | frequências dos dois geradores de tom (registradores `0x71`/`0x72`, Hz × 10,32444) |
 | `0x01E43AFE` | liga (1) / desliga (0) o modo de tom do chip |
+| `0x01E408E2` | aplica o scramble: bit 1 do registrador `0x31` e a frequência de inversão no `0x71` (seção 13) |
 | `0x01E36286` | espera ocupada em **unidades de 2 ms**: o temporizador interrompe a cada 48000 ciclos de 24 MHz = 2 ms (`0x01E3E44C`) e soma 2 ao contador `[0x14810]` (`0x01E51356`), que anda 1 por ms; a espera vai até ele andar `2n` |
 
 ### Memória usada
@@ -166,6 +167,8 @@ outro endereço é ignorado sem escrever nada (provado com `tools/cabo/teste_cab
 | `0x00015367`, `0x0001536F` | flags de "redesenhar" |
 | `0x00016671` / `0x0001666C` | pacote do cabo / comprimento recebido |
 | `0x00014B83` | roger: 0 OFF, 1 BEEP, 2 TONE1200; 3 = BEEP 2 (v22) |
+| `0x00015E2C` / `0x000129A4` | scramble do canal ou VFO atual / o da sintonia: 0 OFF, 1 3400 Hz, 2 2900 Hz (v24) |
+| `0x01E68B18` | frequências de inversão do scramble (u16, Hz × 10,32444): 35103 = 3400 Hz e, desde a v24, 29941 = 2900 Hz |
 | `0x0001533D` | modo da tela (20 = espectro) |
 | `0x00014654` | estado da varredura do espectro: 0 sintoniza, 1 mede, 2 parado num achado |
 | `0x00014648` / `0x0001464C` | nível medido / limite que faz parar, os dois em altura do gráfico (0..64) |
@@ -419,3 +422,41 @@ cada, porque a espera conta em unidades de 2 ms — corrigido na v23). Conferido
 ninguém de fora desvia para dentro do laço, r5 e r6 são escritos antes de lidos dali em diante, e
 r0..r3 já chegavam ali como lixo de chamada. A verificação `4j` do `conferir.py` tira dos bytes de
 fábrica a variável, a tabela do BEEP e as rotinas de tom e de espera, e confere os dois remendos.
+
+## 13. Scramble
+
+O SCRAMBLE do chip é **inversão de espectro** da voz, não criptografia: o áudio é espelhado em
+torno de uma frequência, e quem recebe precisa espelhar na mesma para entender. É o bit 1 do
+registrador `0x31` do chip de rádio, e a frequência de inversão vai no registrador `0x71`, o mesmo
+que o gerador de tom usa (Hz × 10,32444, a conta do roger).
+
+O caminho do valor, do menu até o chip:
+
+1. **Item SCRAMBLE** (índice 47 de fábrica, 2 opções: OFF e ON). O get `0x01E3D058` devolve
+   `b[0x15E2C] & 3`. O set `0x01E3D06C` grava o valor no **nibble alto** do byte 14 do registro do
+   canal (`0x15E52`) ou do byte 16 do VFO (`0x15E90`), mantendo o nibble baixo.
+2. **Carga do canal** (`0x01E3900C`): `b[0x15E2C] = byte 14 >> 4`, o nibble inteiro (no VFO, o byte
+   16).
+3. **Sintonia** (`0x01E43FCA`): guarda o valor em `b[0x129A4]`.
+4. **Aplicação** (`0x01E408E2`): com 0, ou na faixa aérea (108–136 MHz), apaga o bit 1 do `0x31`.
+   Senão, liga o bit e escreve no `0x71` uma entrada da tabela **`0x01E68B18`**: o valor 1 usa a
+   primeira, **35103 = 3400 Hz**, e qualquer valor maior usa a segunda, 36135 = 3500 Hz, que
+   nenhuma opção do menu alcançava.
+
+Todos os leitores de `b[0x129A4]` (`0x01E43B40`, `0x01E4431A`, `0x01E443D2`) só testam zero ou não
+zero, e a única instrução que aponta a tabela é `0x01E40936` (o byte seguinte, `0x01E68B1C`, já é
+outra tabela, lida por `0x01E1440C`).
+
+**Medido** numa gravação do dono, com um tom de 1 kHz transmitido com scramble e recebido sem: o
+BJ-8300 inverte em **3400 Hz**, o que confirma a tabela. O Baofeng UV-17L inverte em **2900 Hz** no
+modo 3, com a portadora residual visível em 2900 Hz (−45 dB). É o mesmo método, só que em outra
+frequência. Os modos 1 e 2 do UV-17L também não batem com o BJ-8300 (testado pelo dono). O tom
+de chamada do menu TONE (1000/1450/1750/2100 Hz, tecla lateral, `0x01E412D4` → `0x01E408CA`) usa o
+mesmo registrador `0x71`, e por isso não serve para medir o scramble.
+
+**v24:** a segunda entrada da tabela passa a **29941 = 2900 Hz**, e o item SCRAMBLE ganha a
+terceira opção: **OFF, 3400 Hz, 2900 Hz**. Valor 2 = 2900 Hz.
+- Só mudam a quantidade de opções (3) e as duas tabelas de nomes. O get e o set continuam os de
+  fábrica, porque o valor gravado já é a posição no menu. O OFF em chinês é o de fábrica.
+- A verificação `4k` do `conferir.py` tira a tabela da instrução de `0x01E40936`. Ela confere que
+  a primeira entrada não mudou e calcula a frequência da segunda pela conta da primeira (3400 Hz).

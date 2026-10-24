@@ -49,7 +49,8 @@ ENDERECO_CODIGO = 0x01E96124
 PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho_tecla_espectro',
            'gancho_espectro', 'gancho_registra', 'gancho_avanca', 'gancho_janela',
            'espectro_pontos', 'espectro_passo', 'espectro_rotulos',
-           'roger_le', 'roger_grava', 'roger_opcoes', 'roger_opcoes_cn', 'gancho_roger_tons', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
+           'roger_le', 'roger_grava', 'roger_opcoes', 'roger_opcoes_cn', 'gancho_roger_tons',
+           'scramble_opcoes', 'scramble_opcoes_cn', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
            'gancho_partida', 'canal_exibe', 'canal_le', 'canal_grava',
            'titulo_bank', 'titulo_nome', 'titulo_canal')
 
@@ -148,8 +149,20 @@ ITENS_FORA = (ZONA_OU_CANAL, ZONE)
 # das opcoes, em ingles e chines (as de fabrica moram na RAM, em 0x6E3C/0x6E30, com outros dados
 # colados depois - nao crescem no lugar). Detalhes no bancos.c.
 ROGER_ITEM = 20
+# O SCRAMBLE (indice 47) ganha a terceira opcao, 2900 Hz (o modo 3 do Baofeng UV-17L): so a
+# quantidade de opcoes e as tabelas de nomes mudam - get e set continuam os de fabrica.
+SCRAMBLE_ITEM = 47
 ITENS_MUDADOS = {ROGER_ITEM: dict(maximo=4, get='roger_le', set='roger_grava',
-                                  exibe='roger_opcoes', opcoes_cn='roger_opcoes_cn')}
+                                  exibe='roger_opcoes', opcoes_cn='roger_opcoes_cn'),
+                 SCRAMBLE_ITEM: dict(maximo=3, exibe='scramble_opcoes', opcoes_cn='scramble_opcoes_cn')}
+
+# A tabela das frequencias de inversao do scramble (lida pela rotina 0x01E408E2, que o r1 de
+# 0x01E40936 aponta): a 1a entrada (valor 1 do canal) fica em 3400 Hz; a 2a (valor 2 ou mais), que
+# era 3500 Hz e nenhuma opcao alcancava, vira 2900 Hz. Unidade do registro: Hz x 10.32444, a mesma
+# conta conferida nos tons do roger.
+SCRAMBLE_TABELA = 0x01E68B18
+SCRAMBLE_ANTES = (35103, 36135)                    # 3400 e 3500 Hz
+SCRAMBLE_2900 = round(2900 * 10.32444)             # 29941
 ITENS = [
     dict(nome='BANK', molde=ZONE, flags=FLAGS_NUMERO, maximo=16,
          get='bank_le', set='bank_grava', titulo='titulo_bank', exibe='bank_exibe'),
@@ -441,7 +454,8 @@ def main():
         escritas += [(s, 4, f'espectro: {d}') for s, _, _, d in ESPECTRO_CHAMADAS]
         escritas += [(e, 4, f'espectro: {d}') for e, _, _, d in ESPECTRO_FUNCOES]
     escritas += [(ROGER_DESVIO_EM, 4, 'roger: valor 3 no caminho do BEEP'),
-                 (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons')]
+                 (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
+                 (SCRAMBLE_TABELA + 2, 2, 'scramble: 2a frequencia de inversao')]
     if CABO_ESTENDIDO:
         escritas += [(s, 4, f'gancho do cabo ({p})') for s, p in CABO_SITIOS]
     if MENU_NOVO:
@@ -518,6 +532,14 @@ def main():
                     + monta_goto(ROGER_LACO_EM + 4, ROGER_LACO_FIM))
     print(f"  roger: valor 3 no caminho do BEEP ({ROGER_DESVIO_EM:#x}) e laco dos tons -> "
           f"gancho_roger_tons ({ROGER_LACO_EM:#x}, depois desvia para {ROGER_LACO_FIM:#x})")
+
+    # 3d. scramble: a 2a frequencia de inversao vira 2900 Hz
+    o = SCRAMBLE_TABELA - BASE_APP
+    if struct.unpack_from('<2H', app, o) != SCRAMBLE_ANTES:
+        raise SystemExit(f'{SCRAMBLE_TABELA:#x} nao e a tabela do scramble: {bytes(app[o:o + 4]).hex()}')
+    struct.pack_into('<H', app, o + 2, SCRAMBLE_2900)
+    print(f'  scramble: 2a frequencia de inversao {SCRAMBLE_ANTES[1]} (3500 Hz) -> {SCRAMBLE_2900} '
+          f'(2900 Hz) em {SCRAMBLE_TABELA + 2:#x}')
 
     # 2 e 3. tabela de menus no lugar da original, e a quantidade de itens fixa.
     # Com MENU_NOVO desligado nada disso entra: o menu fica o de fabrica (sem os itens BANK), o

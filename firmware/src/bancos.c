@@ -683,6 +683,17 @@ void roger_grava(void)
     ROGER = (u8)troca_roger(VALOR & 3);
 }
 
+/* ---------- scramble: 2900 Hz, para falar com o Baofeng UV-17L ----------
+ * O scramble do chip e inversao de espectro (bit 1 do reg 0x31), e a frequencia de inversao vem de
+ * uma tabela de duas entradas (0x01E68B18): o valor 1 do canal usa a primeira (3400 Hz) e qualquer
+ * valor maior, a segunda - que era 3500 Hz e nenhuma opcao do menu alcancava. Medido pelo dono com
+ * um tom de 1 kHz: este radio inverte em 3400 Hz e o UV-17L, no modo 3, em 2900 (os modos 1 e 2
+ * dele tambem nao batem com este). A segunda entrada passa a ser 2900 Hz (montar.py), e o item
+ * SCRAMBLE ganha a terceira opcao. Get e set continuam os de fabrica: o valor gravado e a posicao
+ * no menu, e a troca de canal le o nibble inteiro (0x01E3900C: b[0x15E2C] = byte 14 >> 4). */
+const char *const scramble_opcoes[3] = {"OFF", "3400 Hz", "2900 Hz"};
+const char *const scramble_opcoes_cn[3] = {(const char *)0x01E5FC88, "3400 Hz", "2900 Hz"};
+
 /* No lugar do laco dos tons do BEEP. Com o BEEP de fabrica, faz exatamente o que o laco fazia:
  * os dois pares da tabela, de tras para frente, ESPERA_2MS(40) = 80 ms cada. */
 #define TOM_MS  100            /* cada tom do BEEP 2, como no mp3 */

@@ -148,6 +148,7 @@ it. Any other address is ignored without writing anything (proven with
 | `0x01E44604` | end of transmission: plays the roger and switches back to receive |
 | `0x01E43B4E` | frequencies of the two tone generators (registers `0x71`/`0x72`, Hz × 10.32444) |
 | `0x01E43AFE` | turns the chip's tone mode on (1) / off (0) |
+| `0x01E408E2` | applies the scramble: bit 1 of register `0x31` and the inversion frequency in `0x71` (section 13) |
 | `0x01E36286` | busy wait in **2 ms units**: the timer interrupts every 48000 cycles of 24 MHz = 2 ms (`0x01E3E44C`) and adds 2 to the counter `[0x14810]` (`0x01E51356`), which advances 1 per ms; the wait runs until it advances `2n` |
 
 ### Memory used
@@ -165,6 +166,8 @@ it. Any other address is ignored without writing anything (proven with
 | `0x00015367`, `0x0001536F` | redraw flags |
 | `0x00016671` / `0x0001666C` | cable packet / received length |
 | `0x00014B83` | roger: 0 OFF, 1 BEEP, 2 TONE1200; 3 = BEEP 2 (v22) |
+| `0x00015E2C` / `0x000129A4` | scramble of the current channel or VFO / the tuned one: 0 OFF, 1 3400 Hz, 2 2900 Hz (v24) |
+| `0x01E68B18` | scramble inversion frequencies (u16, Hz × 10.32444): 35103 = 3400 Hz and, since v24, 29941 = 2900 Hz |
 | `0x0001533D` | screen mode (20 = spectrum) |
 | `0x00014654` | spectrum sweep state: 0 tune, 1 measure, 2 stopped on a find |
 | `0x00014648` / `0x0001464C` | measured level / threshold that stops the sweep, both in graph height (0..64) |
@@ -421,3 +424,42 @@ v23). Checked first: nothing outside branches into the loop, r5 and r6 are
 written before being read from there on, and r0..r3 already arrived there as call garbage. Check
 `4j` in `conferir.py` takes the variable, the BEEP table and the tone and delay routines from the
 stock bytes, and verifies both patches.
+
+## 13. Scramble
+
+The chip's SCRAMBLE is voice **spectrum inversion**, not encryption. The audio is mirrored around
+a frequency, and the receiver has to mirror it around the same one to understand it. It is bit 1
+of the radio chip's register `0x31`, and the inversion frequency goes into register `0x71`, the
+same one the tone generator uses (Hz × 10.32444, the roger arithmetic).
+
+The value's path, from the menu to the chip:
+
+1. **SCRAMBLE item** (stock index 47, 2 options: OFF and ON). The get `0x01E3D058` returns
+   `b[0x15E2C] & 3`. The set `0x01E3D06C` writes the value into the **high nibble** of byte 14 of
+   the channel record (`0x15E52`) or of byte 16 of the VFO (`0x15E90`), keeping the low nibble.
+2. **Channel load** (`0x01E3900C`): `b[0x15E2C] = byte 14 >> 4`, the whole nibble (byte 16 for the
+   VFO).
+3. **Tuning** (`0x01E43FCA`): stores the value in `b[0x129A4]`.
+4. **Apply** (`0x01E408E2`): with 0, or in the airband (108–136 MHz), it clears bit 1 of `0x31`.
+   Otherwise it sets the bit and writes into `0x71` an entry from the table **`0x01E68B18`**.
+   Value 1 uses the first entry, **35103 = 3400 Hz**. Any higher value uses the second one,
+   36135 = 3500 Hz, which no menu option could reach.
+
+Every reader of `b[0x129A4]` (`0x01E43B40`, `0x01E4431A`, `0x01E443D2`) only tests zero against
+non-zero. The only instruction that points to the table is `0x01E40936`. The next byte,
+`0x01E68B1C`, is already another table, read by `0x01E1440C`.
+
+**Measured** from a recording made by the owner: a 1 kHz tone transmitted with scramble on and
+received with it off. The BJ-8300 inverts at **3400 Hz**, which confirms the table. The Baofeng
+UV-17L inverts at **2900 Hz** in mode 3, with the residual carrier visible at 2900 Hz (−45 dB).
+Same method, different frequency. The owner also tested UV-17L modes 1 and 2, and neither matches
+the BJ-8300. The TONE menu's call tone (1000/1450/1750/2100 Hz, side key, `0x01E412D4` →
+`0x01E408CA`) uses the same register `0x71`, so it cannot be used to measure the scramble.
+
+**v24:** the table's second entry becomes **29941 = 2900 Hz**, and the SCRAMBLE item gains a third
+option: **OFF, 3400 Hz, 2900 Hz**. Value 2 = 2900 Hz.
+- Only the option count (3) and the two name tables change. The get and set stay stock, because
+  the stored value already is the menu position. The Chinese OFF is the stock one.
+- Check `4k` in `conferir.py` takes the table from the instruction at `0x01E40936`. It confirms the
+  first entry is unchanged and computes the second entry's frequency from the first one's ratio
+  (3400 Hz).

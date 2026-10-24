@@ -5,6 +5,25 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v24 — Oct 24 — a scramble that talks to the Baofeng UV-17L ✅
+
+- **SCRAMBLE with three options: OFF, 3400 Hz, 2900 Hz.** The chip's scramble is spectrum
+  inversion, and the inversion frequency comes from a two-entry table in the firmware. The first
+  entry (3400 Hz) is the one the stock ON option uses. No option could reach the second one
+  (3500 Hz), and it is now **2900 Hz**, where the UV-17L inverts in mode 3. Both frequencies were
+  measured from the owner's recording of a 1 kHz tone. UV-17L modes 1 and 2 do not match the
+  BJ-8300. The item's get and set stay stock; only the option count, the names and 2 bytes of the
+  table change. Details in [section 13 of the reverse-engineering notes](reverse-engineering.md#13-scramble).
+- **Checks:** `4k` checks the scramble table. `2e` is new and covers everything: the decrypted
+  app.bin must be the same in all 6 images. Until now only the code and the menu table were
+  checked in all six; the roger and scramble patches only in the first one. Both checks were
+  tested against the fault they must catch (v23, without the patch, and a copy with one byte
+  changed in the second image only).
+
+Code: 2804 B of 3292. Reproducible build, zero branches into patches, all three tests passing.
+**Tested on the radio** (Oct 24): with the scramble at 2900 Hz,
+the BJ-8300 and the UV-17L in mode 3 understand each other.
+
 ## v23 — Oct 24 — BEEP 2 at the mp3's speed ✅
 
 In v22 BEEP 2 worked, but took 0.8 to 1 s, against ~0.4 s in the mp3. The cause is in the firmware:
