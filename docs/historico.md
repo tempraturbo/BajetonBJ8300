@@ -5,6 +5,30 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 24/10 — sem zonas, e a trava do firmware refeita
+
+Revisão geral do `chirp/bj8300_v1.0TEMPRA.py`, com um teste novo (`tests/teste_clonagem.py`) que
+roda o `sync_in`/`sync_out` inteiros do CHIRP contra um rádio simulado, nos dois firmwares:
+
+- **Zonas:** o driver já não mostrava nada de zona (a base BJ7800 esconde, e o modelo de 15 zonas
+  fixas é trocado pelos bancos) — levantado ajuste por ajuste no CHIRP real: 111 ajustes em 4
+  grupos, nenhum de zona. O que faltava era o **modo**: ele continua no firmware (`b[0x14BD4]`,
+  que o cabo lê e grava em `0x9028` — deduzido da rotina que salva os ajustes, `0x01E3AB36`, e
+  conferido no formato do CHIRP), e sem o item de menu o rádio não sairia dele. Agora todo upload
+  grava **Full Channel**. O rádio do dono já estava em Full Channel (dump de 24/10).
+- **Trava do firmware:** comparava a leitura estendida de `0x0C0000` com a leitura normal de
+  `0x0000` — mas a normal volta decifrada e a estendida crua, então nunca coincidiam. Contra um
+  rádio de fábrica ela só segurava porque a resposta longa dele (4 + `0x8C` bytes, lido no tratador
+  `0x01E4BB6E`) dessincronizava o cabo, e a mensagem era um "Failed to read block" genérico. Agora
+  o driver lê o cabeçalho da resposta: `0x40` = firmware dos bancos; outra coisa = fábrica,
+  descarta o resto e para com a mensagem certa.
+- Rodado contra o driver antigo, o teste novo falha exatamente nesses pontos (Full Channel,
+  mensagem, cabo dessincronizado) e passa no que importava: nenhuma gravação estendida chegava ao
+  firmware de fábrica.
+
+Os bancos em si (formato, marca, soma, pertinência múltipla, só os setores mudados) passaram em
+tudo: 27 + 20 + 16 conferências.
+
 ## v18 — 24/10 — fundo verde também no RX/TX
 
 Na v17 a caixinha do **RX/TX**, na ponta da barra, ficava com fundo preto (e os fiozinhos entre os

@@ -233,11 +233,29 @@ class _BancosPeloCabo(object):
     """
 
     def _le_estendido(self, endereco):
-        self.pipe.write(_comando(b'R', endereco))
-        resposta = self.pipe.read(4 + TAM_BLOCO)
-        if len(resposta) != 4 + TAM_BLOCO or resposta[0:3] != _comando(b'R', endereco)[0:3]:
+        """Le 64 bytes crus de um endereco de 24 bits.
+
+        O 4o byte da resposta e o que separa os firmwares: o dos bancos responde com 0x40 (o
+        gancho do cabo troca o tamanho por isso antes de responder), e o de fabrica ecoa o tamanho
+        que recebeu - com o bit 7 ligado - e manda 4 + esse tamanho (0x01E4BB6E..0x01E4BB78), ou
+        seja, mais de 128 bytes. O resto dessa resposta e descartado, para nao dessincronizar o
+        cabo, e nenhuma gravacao estendida chega a ser tentada.
+        """
+        comando = _comando(b'R', endereco)
+        self.pipe.write(comando)
+        cabeca = self.pipe.read(4)
+        if len(cabeca) != 4 or cabeca[0:3] != comando[0:3]:
             raise errors.RadioError('O radio nao respondeu a leitura de %06X' % endereco)
-        return resposta[4:]
+        if cabeca[3] != TAM_BLOCO:
+            self.pipe.read(cabeca[3])
+            raise errors.RadioError(
+                'Este radio esta com firmware sem a area de bancos (o endereco de 24 bits nao '
+                'passa). Grave o firmware BJ8300_BANK (v12 ou mais novo), ou use o driver '
+                'Radtel RT-920 para mexer so nos canais.')
+        dados = self.pipe.read(TAM_BLOCO)
+        if len(dados) != TAM_BLOCO:
+            raise errors.RadioError('O radio nao respondeu a leitura de %06X' % endereco)
+        return dados
 
     def _grava_estendido(self, endereco, dados):
         if len(dados) != TAM_BLOCO:
@@ -247,16 +265,15 @@ class _BancosPeloCabo(object):
             raise errors.RadioError('O radio nao confirmou a gravacao em %06X' % endereco)
 
     def _confere_firmware(self):
-        """O firmware dos bancos entende 24 bits; o de fabrica trunca em 16 e devolve 0x0000.
+        """Uma leitura estendida do cabecalho: no firmware de fabrica ela falha (ver _le_estendido).
 
         Esta conferencia e obrigatoria antes de qualquer gravacao: num firmware de fabrica, um
         'W' estendido viraria escrita em cima dos CANAIS (0xC1000 truncado da 0x1000).
+        (Ate 2026-10-24 ela comparava esta leitura com a leitura normal de 0x0000 - mas a normal
+        volta decifrada e a estendida crua, entao as duas nunca coincidiam e a trava so segurava
+        porque a resposta longa do firmware de fabrica dessincronizava o cabo.)
         """
-        if self._le_estendido(0x0C0000) == radtel_rt900._read_block(self, 0x0000, TAM_BLOCO):
-            raise errors.RadioError(
-                'Este radio esta com firmware sem a area de bancos (o endereco de 24 bits nao '
-                'passa). Grave o firmware BJ8300_BANK (v12 ou mais novo), ou use o driver '
-                'Radtel RT-920 para mexer so nos canais.')
+        self._le_estendido(SETOR_CAB)
 
     def _baixa_bancos(self):
         """Le os 17 setores (cabecalho + 16 bancos) e devolve o blob que vai para o .img."""
@@ -296,9 +313,14 @@ class BJ8300(_BancosPeloCabo, radtel_rt900.BJ7800):
     MODEL = 'BJ8300_v1.0TEMPRA'        # nome proprio: so serve com o firmware modificado
     VARIANT = ''
 
-    # Canais, ajustes, faixas e protocolo sao os mesmos do BJ7800 (960 canais de 32 bytes, 15
-    # zonas de 64). _banks continua sendo a contagem de ZONAS de fabrica, que o formato bitwise
-    # usa; os nossos bancos sao outra coisa e nao passam por ali.
+    # Canais, ajustes, faixas e protocolo sao os mesmos do BJ7800 (960 canais de 32 bytes).
+    #
+    # ZONAS: o firmware modificado tirou do menu o ZONE e o "Zone Or Channel" - os bancos fazem o
+    # papel delas. Mas o modo zona continua existindo no firmware (flag em b[0x14BD4], que o cabo
+    # le e grava em 0x9028, o zone_or_channel do formato: 0 = Zone Mode, 1 = Full Channel), e em
+    # modo zona o sobe/desce fica preso em 64 canais - sem o menu, o radio nao teria como sair.
+    # Por isso o upload sempre grava Full Channel (sync_out). A base BJ7800 ja nao mostra nada de
+    # zona nos ajustes, e o modelo de bancos dela (15 zonas fixas de 64) e trocado pelo nosso.
 
     def get_bank_model(self):
         return ModeloBancosBJ8300(self, 'Bancos')
@@ -330,6 +352,8 @@ class BJ8300(_BancosPeloCabo, radtel_rt900.BJ7800):
             'estiver vazio aqui fica vazio no radio. Se a imagem veio do driver RT-920 (que nao\n'
             'le bancos), todos os bancos do radio serao apagados.\n'
             '\n'
+            'O radio tambem e posto em Full Channel (sem zonas): os bancos substituem as zonas.\n'
+            '\n'
             'Depois de gravar, DESLIGUE E LIGUE o radio: o filtro dos bancos e montado na\n'
             'partida.')
         return rp
@@ -359,6 +383,7 @@ class BJ8300(_BancosPeloCabo, radtel_rt900.BJ7800):
         self.process_mmap()
 
     def sync_out(self):
+        self._memobj.settings.zone_or_channel = 1   # Full Channel: sem zonas (ver no topo da classe)
         super().sync_out()                     # canais e ajustes, pelo caminho de fabrica
         try:
             radtel_rt900._enter_programming_mode(self)

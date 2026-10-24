@@ -57,7 +57,8 @@ channels and calibration live on a different chip and are never touched.
 | **Extended cable command** | 24-bit reads (whole chip) and writes into the bank area — this is what the CHIRP driver uses |
 | **Zone menus removed** | `ZONE` and `Zone Or Channel` were dropped from the menu, by explicit choice: banks replace them, and the 56 bytes freed are what made the highlight fit |
 
-The zone **function** is still in the firmware; only its two menu entries are gone.
+The zone **function** is still in the firmware; only its two menu entries are gone. So the radio
+cannot get stuck in zone mode, the CHIRP driver writes **Full Channel** on every upload.
 
 ---
 
@@ -125,20 +126,32 @@ this radio as part of the RT-920/BJ7800 family):
 - A **Banks** tab with one column per bank: tick channels in and out, rename banks.
 - Under **Settings → Bancos**: enable/disable each bank and choose which one the radio's own menu
   entries edit.
-- Bank area downloaded and uploaded through the extended command, alongside the channels.
-- It refuses to run if the radio does **not** have this firmware (it compares a 24-bit read against
-  the 16-bit one; equal means stock firmware), so it can never write bank data over channels.
+- Bank area downloaded and uploaded through the extended command, alongside the channels; on
+  upload, only the sectors that changed.
+- **No zones:** banks take their place, and the driver shows nothing about zones. Every upload
+  writes **Full Channel** (`0x9028` = 1), because zone mode still exists in the firmware and, with
+  the menu entry gone, the radio would have no way out of it — in zone mode up/down is stuck within
+  64 channels.
+- It refuses to run if the radio does **not** have this firmware, so it can never write bank data
+  over channels: the bank firmware answers the extended read with size `0x40`, while the stock one
+  echoes the size with bit 7 set and sends more than 128 bytes — the driver reads the header,
+  discards the rest (the cable does not desync) and stops with the right message.
 
-Two test suites, both without a radio:
+Three test suites, all without a radio:
 
 - `python -I tests/teste_bj8300.py` — 27 core checks (stored format, checksum matching the one the
   radio itself wrote, multi-bank membership), with CHIRP stubbed out;
 - `python -I tests/teste_chirp_real.py` — 20 checks **against a real CHIRP install**: whether the
   class fits the API (bank model, `apply_to` + setting callbacks), whether an image saved by the
-  RT-920 driver opens without blowing up, and whether edits end up in the image bytes.
+  RT-920 driver opens without blowing up, and whether edits end up in the image bytes;
+- `python -I tests/teste_clonagem.py` — 16 checks of the **cable conversation**: CHIRP's full
+  `sync_in` and `sync_out` against a simulated radio that answers like the firmware (read from the
+  disassembly), for both firmwares — banks read and written with marker and checksum, only changed
+  sectors, round trip, Full Channel, and the stock firmware refused with no extended write and
+  without leaving the cable out of sync.
 
-Neither covers talking to the radio over the cable — that part was validated by hand with the
-tools in `tools/cabo/` against the real radio.
+The cable's electrical side and the radio's timing can only be tested on the real radio — that was
+validated by hand with the tools in `tools/cabo/`.
 
 ---
 

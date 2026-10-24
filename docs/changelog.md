@@ -5,6 +5,30 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 24 — no zones, and the firmware guard redone
+
+General review of `chirp/bj8300_v1.0TEMPRA.py`, with a new test (`tests/teste_clonagem.py`) that runs
+CHIRP's full `sync_in`/`sync_out` against a simulated radio, for both firmwares:
+
+- **Zones:** the driver already showed nothing about zones (the BJ7800 base hides them, and the
+  15-fixed-zone model is replaced by the banks) — surveyed setting by setting in real CHIRP: 111
+  settings in 4 groups, none about zones. What was missing was the **mode**: it still exists in the
+  firmware (`b[0x14BD4]`, which the cable reads and writes at `0x9028` — derived from the settings
+  save routine, `0x01E3AB36`, and checked against CHIRP's format), and with the menu entry gone the
+  radio could not leave it. Every upload now writes **Full Channel**. The owner's radio was already
+  in Full Channel (dump from Oct 24).
+- **Firmware guard:** it compared the extended read of `0x0C0000` with the normal read of `0x0000`
+  — but the normal one comes back decrypted and the extended one raw, so they never matched. Against
+  a stock radio it only held because the stock firmware's long answer (4 + `0x8C` bytes, read from
+  the handler at `0x01E4BB6E`) desynced the cable, and the message was a generic "Failed to read
+  block". The driver now reads the answer's header: `0x40` = bank firmware; anything else = stock,
+  discard the rest and stop with the right message.
+- Run against the old driver, the new test fails exactly at those points (Full Channel, message,
+  cable desync) and passes the one that mattered: no extended write ever reached the stock firmware.
+
+The banks themselves (format, marker, checksum, multi-bank membership, only changed sectors) passed
+everything: 27 + 20 + 16 checks.
+
 ## v18 — Oct 24 — green background on RX/TX too
 
 In v17 the **RX/TX** box at the end of the bar kept a black background (as did the thin lines between

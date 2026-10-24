@@ -57,7 +57,8 @@ original — os canais e a calibração ficam em outro chip e não são tocados.
 | **Comando estendido no cabo** | Leitura de 24 bits (chip inteiro) e gravação na área dos bancos — é o que o driver do CHIRP usa |
 | **Menus de zona removidos** | `ZONE` e `Zone Or Channel` saíram do menu, por escolha explícita: o banco faz o papel deles e os 56 bytes liberados são o que fez o realce caber |
 
-A **função** de zona continua no firmware; o que saiu foram os dois itens de menu.
+A **função** de zona continua no firmware; o que saiu foram os dois itens de menu. Para o rádio
+não ficar preso em modo zona, o driver do CHIRP grava **Full Channel** em todo upload.
 
 ---
 
@@ -126,20 +127,31 @@ como família RT-920/BJ7800):
 - Aba **Banks** com uma coluna por banco: marcar e desmarcar canal, e renomear banco.
 - Em **Settings → Bancos**: ligar/desligar cada banco e escolher qual deles os itens do rádio
   editam.
-- Download e upload da área dos bancos pelo comando estendido, junto com os canais.
-- Recusa funcionar se o rádio **não** tiver este firmware (compara uma leitura de 24 bits com a de
-  16 bits; iguais = firmware de fábrica), para nunca gravar banco em cima de canal.
+- Download e upload da área dos bancos pelo comando estendido, junto com os canais; no upload, só
+  os setores que mudaram.
+- **Sem zonas:** os bancos fazem o papel delas, e o driver não mostra nada de zona. Todo upload
+  grava **Full Channel** (`0x9028` = 1), porque o modo zona continua no firmware e, sem o item de
+  menu, o rádio não teria como sair dele — em modo zona o sobe/desce fica preso em 64 canais.
+- Recusa funcionar se o rádio **não** tiver este firmware, para nunca gravar banco em cima de
+  canal: o firmware dos bancos responde à leitura estendida com tamanho `0x40`, e o de fábrica ecoa
+  o tamanho com o bit 7 ligado e manda mais de 128 bytes — o driver lê o cabeçalho, descarta o
+  resto (o cabo não dessincroniza) e para com a mensagem certa.
 
-Dois conjuntos de teste, os dois sem rádio:
+Três conjuntos de teste, os três sem rádio:
 
 - `python -I tests/teste_bj8300.py` — 27 conferências do miolo (formato gravado, soma batendo com
   a que o próprio rádio gravou, pertinência múltipla), com o CHIRP stubado;
 - `python -I tests/teste_chirp_real.py` — 20 conferências **contra o CHIRP instalado de verdade**:
   se a classe encaixa na API (modelo de bancos, `apply_to` + callbacks dos ajustes), se imagem
-  salva pelo driver RT-920 abre sem estourar, e se o que foi editado termina nos bytes da imagem.
+  salva pelo driver RT-920 abre sem estourar, e se o que foi editado termina nos bytes da imagem;
+- `python -I tests/teste_clonagem.py` — 16 conferências da **conversa pelo cabo**: `sync_in` e
+  `sync_out` inteiros do CHIRP contra um rádio simulado que responde como o firmware (lido no
+  desmontado), nos dois firmwares — bancos lidos e gravados com marca e soma, só os setores
+  mudados, ida e volta, Full Channel, e o firmware de fábrica recusado sem gravação estendida e sem
+  deixar o cabo dessincronizado.
 
-O que nenhum dos dois cobre é a conversa com o rádio pelo cabo — essa parte foi validada à mão com
-as ferramentas de `tools/cabo/` contra o rádio real.
+A elétrica do cabo e o tempo de resposta do rádio só o rádio real testa — isso foi validado à mão
+com as ferramentas de `tools/cabo/`.
 
 ---
 
