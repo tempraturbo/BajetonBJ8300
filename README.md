@@ -232,9 +232,11 @@ docs/           documentação (engenharia reversa, histórico) e notas de traba
 - O driver do CHIRP **deriva** do `chirp/drivers/radtel_rt900.py` (Copyright 2025, 2026 Fred
   Trimble; 2024 Pavel Moravec, OK2MOP; 2023 Jim Unroe), distribuído sob **GPL-2.0-or-later** — a
   mesma licença se aplica a ele.
-- O firmware de fábrica e o gravador são do fabricante e estão aqui só para reprodutibilidade e
-  recuperação.
-- O restante (código dos bancos, scripts e documentação) é de **tempraturbo**. Se for publicar,
-  vale escolher uma licença explícita para esta parte.
+- O firmware de fábrica (e a parte dele dentro das releases `.anc`), o gravador BinTe, o driver
+  CH340 (WCH) e o logo `bajeton` são dos respectivos fabricantes e estão aqui só para
+  reprodutibilidade e recuperação.
+- O restante (código dos bancos, scripts, ferramentas e documentação) é de **tempraturbo**, sob a
+  licença **[0BSD](LICENSE)**: use, copie, modifique e distribua para o que quiser, sem precisar
+  nem dar crédito.
 
 Sem garantia de espécie alguma. Você é responsável pelo que grava no seu rádio.

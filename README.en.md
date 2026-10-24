@@ -232,9 +232,11 @@ docs/           documentation (reverse engineering, changelog) and working notes
 - The CHIRP driver **derives** from `chirp/drivers/radtel_rt900.py` (Copyright 2025, 2026 Fred
   Trimble; 2024 Pavel Moravec, OK2MOP; 2023 Jim Unroe), distributed under **GPL-2.0-or-later** —
   the same licence applies to it.
-- The stock firmware and the flasher belong to the manufacturer and are kept here only for
+- The stock firmware (and its part inside the `.anc` releases), the BinTe flasher, the CH340
+  driver (WCH) and the `bajeton` logo belong to their makers and are kept here only for
   reproducibility and recovery.
-- Everything else (bank code, scripts and documentation) is by **tempraturbo**. If you publish
-  this, it is worth picking an explicit licence for that part.
+- Everything else (bank code, scripts, tools and documentation) is by **tempraturbo**, under the
+  **[0BSD](LICENSE)** licence: use, copy, modify and distribute it for any purpose, without even
+  having to give credit.
 
 No warranty of any kind. You are responsible for whatever you flash onto your radio.
