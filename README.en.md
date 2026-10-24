@@ -73,7 +73,7 @@ cannot get stuck in zone mode, the CHIRP driver writes **Full Channel** on every
    | File | Status |
    |---|---|
    | `firmware/releases/BJ8300_BANK_v12.anc` | **recommended** — tested and sound |
-   | `firmware/releases/BJ8300_BANK_v25.anc` | v24 + **scramble from 2700 to 3400 Hz** in 100 Hz steps, ascending in the menu — **tested on the radio** with all three UV-17L modes |
+   | `firmware/releases/BJ8300_BANK_v25.anc` | v24 + **scramble from 2700 to 3400 Hz** in 100 Hz steps, ascending in the menu; use with this version's CHIRP driver — **tested on the radio** with all three UV-17L modes |
    | `firmware/releases/BJ8300_BANK_v24.anc` | v23 + **2900 Hz scramble** (the Baofeng UV-17L's mode 3); use with this version's CHIRP driver — **tested on the radio** with the UV-17L |
    | `firmware/releases/BJ8300_BANK_v23.anc` | v21 + **BEEP 2 roger** (100 ms per tone, like the mp3); use with this version's CHIRP driver — **tested on the radio** |
    | `firmware/releases/BJ8300_BANK_v21.anc` | v19 + **spectrum** twice as fast, 10 kHz step, 320 and 640 points and peak hold; darker highlight green (v20 without the boot loop; v20 was withdrawn) — **tested on the radio** |

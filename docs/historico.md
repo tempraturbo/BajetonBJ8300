@@ -16,6 +16,8 @@ causa, porque é isso que evita repetir.
   mascarado em 4 bits. O get e o set do item são nossos e traduzem posição e valor, e o set grava
   pelo de fábrica. A tabela de fábrica volta a ficar intacta. Detalhes na
   [seção 13 da engenharia reversa](engenharia-reversa.md#13-scramble).
+- **Driver do CHIRP:** as nove opções no canal e nos VFO A e B, na mesma ordem do rádio. O teste
+  tira do `bancos.c` o valor que cada opção grava.
 - **Conferência:** a `4k` foi refeita. Ela confere cada frequência, a ordem do menu, os nomes, a
   ida e volta posição ↔ valor e os 14 bytes do remendo, e foi testada trocando duas posições.
 

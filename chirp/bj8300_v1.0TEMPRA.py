@@ -326,24 +326,26 @@ class _RogerBJ8300(MemSetting):
         memobj.settings.roger = _troca_roger(int(self.value))
 
 
-# SCRAMBLE (firmware v24 em diante): OFF, 3400 Hz (o de fabrica) e 2900 Hz (o do Baofeng UV-17L).
-# O radio guarda a posicao no menu no nibble alto de um byte - o 14 do canal, o 16 do VFO - e
-# inverte em 3400 Hz com 1 e em 2900 Hz com qualquer valor maior. No canal, o campo scramble da
-# classe base pega os bits 7-2, entao vale nibble << 2 e basta o mapa com a terceira opcao. No
-# VFO o formato parte o nibble em unknown3 (bits 7-5) e scramble (bits 4-2), por isso o ajuste e
-# trocado pelo nosso.
-SCRAMBLE_OPCOES = ['Off', '3400 Hz', '2900 Hz']
-SCRAMBLE_DOC = ('Inversao de voz. 3400 Hz e a de fabrica deste radio; 2900 Hz e a do Baofeng '
-                'UV-17L (o modo 3 dele).')
+# SCRAMBLE (firmware v25 em diante): OFF e de 2700 a 3400 Hz, de 100 em 100, em ordem crescente,
+# como no menu do radio. O radio guarda um valor no nibble alto de um byte - o 14 do canal, o 16
+# do VFO -: 1 = 3400 Hz (o ON de fabrica, o dos outros BJ-8300), 2 = 2900 Hz (o do Baofeng UV-17L
+# no modo 3) e de 3 a 8 os outros (scramble_valor no bancos.c); de 9 a 15 o radio inverte em
+# 3400 Hz. No canal, o campo scramble da classe base pega os bits 7-2, entao vale valor << 2 e
+# basta o mapa. No VFO o formato parte o nibble em unknown3 (bits 7-5) e scramble (bits 4-2), por
+# isso o ajuste e trocado pelo nosso.
+SCRAMBLE_OPCOES = ['Off'] + ['%d Hz' % f for f in range(2700, 3401, 100)]
+SCRAMBLE_VALOR = [0, 3, 4, 2, 5, 6, 7, 8, 1]              # posicao na lista -> valor no radio
+SCRAMBLE_DOC = ('Inversao de voz. 3400 Hz e a de fabrica deste radio (e a dos outros BJ-8300); '
+                '2900 Hz e a do Baofeng UV-17L no modo 3.')
 
 
 class _ScrambleVfo(MemSetting):
     """O scramble do VFO, gravado como o set do item no radio (0x01E3D06C): o nibble alto do byte
-    16 vira a posicao no menu, e o resto do byte fica."""
+    16 vira o valor, e o resto do byte fica."""
 
     def apply_to_memobj(self, memobj):
         vfo = getattr(memobj.vfo, self._path.split('.')[1])
-        n = int(self.value)
+        n = SCRAMBLE_VALOR[int(self.value)]
         vfo.unknown3 = n >> 1
         vfo.scramble = vfo.scramble & 3 | (n & 1) << 2
 
@@ -374,8 +376,9 @@ def _roger(antigo, roger):
 
 def _scramble_vfo(antigo, lado, vfo):
     nibble = int(vfo.unknown3) << 1 | int(vfo.scramble) >> 2
+    posicao = SCRAMBLE_VALOR.index(nibble if nibble in SCRAMBLE_VALOR else 1)     # 9-15: 3400 Hz
     rs = _ScrambleVfo('vfo.%s.scramble' % lado, antigo.get_shortname(),
-                      RadioSettingValueList(SCRAMBLE_OPCOES, current_index=min(nibble, 2)))
+                      RadioSettingValueList(SCRAMBLE_OPCOES, current_index=posicao))
     rs.set_doc(SCRAMBLE_DOC)
     return rs
 
@@ -387,8 +390,8 @@ class BJ8300(_BancosPeloCabo, radtel_rt900.BJ7800):
     MODEL = 'BJ8300_v1.0TEMPRA'        # nome proprio: so serve com o firmware modificado
     VARIANT = ''
 
-    # o scramble do canal com as tres opcoes do firmware (ver SCRAMBLE_OPCOES): 0x00, 0x04, 0x08
-    _scramble_map = [(nome, n << 2) for n, nome in enumerate(SCRAMBLE_OPCOES)]
+    # o scramble do canal com as opcoes do firmware, na ordem do menu (ver SCRAMBLE_OPCOES)
+    _scramble_map = [(nome, v << 2) for nome, v in zip(SCRAMBLE_OPCOES, SCRAMBLE_VALOR)]
 
     # Canais, ajustes, faixas e protocolo sao os mesmos do BJ7800 (960 canais de 32 bytes).
     #

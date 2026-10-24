@@ -478,6 +478,9 @@ se entendem com o BJ-8300, cada um numa dessas frequências.
   posição ↔ valor. O set põe o valor em `h[0x14BFC]`, chama o set de fábrica e devolve a posição.
   Assim o nibble do canal ou do VFO e o `b[0x15E2C]` continuam gravados pelo firmware. O get e o set
   de fábrica só eram usados pelo item 47 da tabela de menus.
+- **CHIRP.** O campo scramble do canal pega os bits 7–2 do byte 14, então cada opção é o valor
+  << 2. No VFO, o formato da base parte o nibble em `unknown3` (bits 7–5) e `scramble` (bits 4–2),
+  e o driver troca esse ajuste pelo dele. O teste lê do `bancos.c` o valor que cada opção grava.
 - **Conferência `4k`.** Tira a conta Hz → registro da tabela de fábrica (3400 Hz) e confere no
   blob cada frequência, o menu de 2700 a 3400 Hz de 100 em 100, os nomes, a ida e volta
   posição ↔ valor, que todo valor de 0 a 15 aparece no menu com a frequência em que o rádio

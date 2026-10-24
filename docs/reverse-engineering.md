@@ -480,6 +480,10 @@ all talk to the BJ-8300, each on one of these frequencies.
   position ↔ value. The set puts the value in `h[0x14BFC]`, calls the stock set and restores the
   position. So the channel or VFO nibble and `b[0x15E2C]` are still written by the firmware. The
   stock get and set were only used by item 47 of the menu table.
+- **CHIRP.** The channel's scramble field takes bits 7–2 of byte 14, so each option is the value
+  << 2. In the VFO, the base format splits the nibble into `unknown3` (bits 7–5) and `scramble`
+  (bits 4–2), and the driver replaces that setting with its own. The test reads from `bancos.c`
+  the value each option writes.
 - **Check `4k`.** Takes the Hz → register ratio from the stock table (3400 Hz) and checks, in the
   blob, every frequency, the menu from 2700 to 3400 Hz in 100 Hz steps, the names, the position ↔
   value round trip, that every value from 0 to 15 shows in the menu with the frequency the radio

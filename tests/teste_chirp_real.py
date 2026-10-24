@@ -171,9 +171,15 @@ def main():
     confere('8f. a lista da classe base nao mudou', radtel_rt900.ROGER_LIST,
             ['OFF', 'BEEP', 'TONE1200'])
 
-    # 9. scramble com 2900 Hz. Os bytes entram e saem crus, como o radio os grava: o set do item
-    # (0x01E3D06C) poe a posicao no menu no nibble alto (byte 14 do canal, 16 do VFO) e guarda o
-    # nibble baixo - aqui com bits ligados de proposito, para ver que ninguem os apaga sem querer.
+    # 9. scramble de 2700 a 3400 Hz. Os bytes entram e saem crus, como o radio os grava: o set do
+    # item (0x01E3D06C) poe o valor no nibble alto (byte 14 do canal, 16 do VFO) e guarda o nibble
+    # baixo - aqui com bits ligados de proposito, para ver que ninguem os apaga sem querer. Qual
+    # valor cada opcao grava sai do firmware (scramble_valor no bancos.c), nao do driver.
+    import re
+    with open(os.path.join(RAIZ, 'firmware', 'src', 'bancos.c'), encoding='utf-8') as f:
+        valor = [int(v) for v in re.search(r'scramble_valor\[9\] = \{([^}]*)\}', f.read()).group(1).split(',')]
+    opcoes = ['Off'] + ['%d Hz' % hz for hz in range(2700, 3401, 100)]
+
     def poe_byte(obj, pos, valor):
         cru = bytearray(obj.get_raw())
         cru[pos] = valor
@@ -187,32 +193,33 @@ def main():
     baixo = radio._memobj.memory[9].get_raw()[14] & 0x0F                   # a potencia, entre outros
     poe_byte(radio._memobj.memory[9], 14, 0x20 | baixo)                    # canal 10 em 2900 Hz
     mem = radio.get_memory(10)
-    confere('9. canal: as tres opcoes', mem.extra['scramble'].value.get_options(),
-            ['Off', '3400 Hz', '2900 Hz'])
-    confere('9b. canal com nibble 2 aparece como 2900 Hz', str(mem.extra['scramble'].value), '2900 Hz')
+    confere('9. canal: OFF e de 2700 a 3400 Hz, em ordem crescente',
+            mem.extra['scramble'].value.get_options(), opcoes)
+    confere('9b. canal com o valor 2 aparece como 2900 Hz', str(mem.extra['scramble'].value), '2900 Hz')
     gravados = []
-    for nome in ('Off', '3400 Hz', '2900 Hz'):
+    for nome in opcoes:
         mem = radio.get_memory(10)
         mem.extra['scramble'].value.set_value(nome)
         radio.set_memory(mem)
         gravados.append(radio._memobj.memory[9].get_raw()[14])
-    confere('9c. canal: Off/3400/2900 gravam o nibble 0/1/2, potencia junto',
-            (baixo != 0, gravados), (True, [baixo, 0x10 | baixo, 0x20 | baixo]))
+    confere('9c. canal: cada opcao grava o valor do firmware, potencia junto',
+            (baixo != 0, gravados), (True, [v << 4 | baixo for v in valor]))
 
     poe_byte(radio._memobj.vfo.a, 16, 0x2E)                   # VFO A: 2900 Hz, nibble baixo 0xE
-    poe_byte(radio._memobj.vfo.b, 16, 0x11)                   # VFO B: 3400 Hz, potencia 1
+    poe_byte(radio._memobj.vfo.b, 16, 0x91)                   # VFO B: valor 9 (o radio: 3400 Hz)
     ajustes = {s.get_name(): s for s in radio.get_settings().walk()}
-    confere('9d. VFO A e B lidos do nibble alto',
+    confere('9d. VFO A e B lidos do nibble alto (o 9 como 3400 Hz)',
             (str(ajustes['vfo_a_scramble'].value), str(ajustes['vfo_b_scramble'].value)),
             ('2900 Hz', '3400 Hz'))
     gravados = []
-    for nome in ('Off', '3400 Hz', '2900 Hz'):
+    for nome in opcoes:
         ajustes = radio.get_settings()
         [s for s in ajustes.walk() if s.get_name() == 'vfo_a_scramble'][0].value.set_value(nome)
         ajustes.apply_to(radio._memobj)                       # ver a nota do 8e
         gravados.append((radio._memobj.vfo.a.get_raw()[16], radio._memobj.vfo.b.get_raw()[16]))
-    confere('9e. VFO A: Off/3400/2900 gravam o nibble 0/1/2; o resto e o B ficam',
-            gravados, [(0x0E, 0x11), (0x1E, 0x11), (0x2E, 0x11)])
+    # o B volta como 1: o apply_to grava todo ajuste, e o 9 e o 1 invertem nos mesmos 3400 Hz
+    confere('9e. VFO A: cada opcao grava o valor do firmware; resto do byte fica; B em 3400 Hz',
+            gravados, [(v << 4 | 0x0E, 0x11) for v in valor])
     confere('9f. o mapa da classe base nao mudou', radtel_rt900.RT900BT._scramble_map,
             [('Off', 0x00), ('On', 0x04)])
 

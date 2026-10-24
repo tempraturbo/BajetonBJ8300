@@ -16,6 +16,8 @@ its cause, because that is what stops it happening twice.
   value, with the index masked to 4 bits. The item's get and set are ours and translate position
   and value, and the set writes through the stock one. The stock table is back to untouched.
   Details in [section 13 of the reverse-engineering notes](reverse-engineering.md#13-scramble).
+- **CHIRP driver:** the nine options in the channel and in VFO A and B, in the radio's order. The
+  test takes from `bancos.c` the value each option writes.
 - **Checks:** `4k` was rewritten. It checks every frequency, the menu order, the names, the
   position ↔ value round trip and the 14 patched bytes, and it was tested by swapping two
   positions.
