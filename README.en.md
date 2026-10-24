@@ -69,7 +69,7 @@ The zone **function** is still in the firmware; only its two menu entries are go
    | File | Status |
    |---|---|
    | `firmware/releases/BJ8300_BANK_v12.anc` | **recommended** — tested and sound |
-   | `firmware/releases/BJ8300_BANK_v13.anc` | adds the VFO highlight, but has a **known problem**: the highlight does not show and the radio resets when changing channel on the highlighted side ([changelog](docs/changelog.md)) |
+   | `firmware/releases/BJ8300_BANK_v14.anc` | adds the **selected-VFO highlight**; fixes both v13 defects ([screen map](docs/screen-map.md)), but has **not been tested on the radio yet** |
    | `firmware/original/BJ8300_V0.12.anc` | stock firmware, to go back |
 3. Power the radio on while **holding PTT2 + the shortcut key** until `UPDATE` shows (most
    reliable), or leave it on the normal screen and click **Update**.

@@ -69,7 +69,7 @@ A **função** de zona continua no firmware; o que saiu foram os dois itens de m
    | Arquivo | Estado |
    |---|---|
    | `firmware/releases/BJ8300_BANK_v12.anc` | **recomendado** — testado e íntegro |
-   | `firmware/releases/BJ8300_BANK_v13.anc` | acrescenta o realce do VFO, mas **tem problema conhecido**: o realce não aparece e o rádio reinicia ao trocar de canal no lado em evidência ([histórico](docs/historico.md)) |
+   | `firmware/releases/BJ8300_BANK_v14.anc` | acrescenta o **realce do VFO selecionado**; corrige os dois defeitos da v13 ([mapa da tela](docs/mapa-da-tela.md)), mas **ainda não foi testado no rádio** |
    | `firmware/original/BJ8300_V0.12.anc` | firmware de fábrica, para voltar atrás |
 3. Ligue o rádio **segurando PTT2 + o botão de atalho** até aparecer `UPDATE` (mais confiável), ou
    deixe ele na tela normal e clique **Update**.

@@ -82,10 +82,12 @@ typedef unsigned int u32;
  * base **0x14680** (r13 em 0x01E4B422, o mesmo r6 de 0x01E43970, que le o alto em b[r6+8178], o
  * baixo em b[r6+8179] e os dados em r6+8181): o pacote comeca em 0x16671, nao em 0x16691. */
 #define CABO           ((volatile u8 *)0x00016671)
-/* VFO ativo (o lado que transmite e aparece maior na tela). E o byte 0x18 do bloco de ajustes
- * 0x9000 da memoria de dados, que o firmware espelha em 0x14B6C (visto na rotina do cabo, que
- * responde a leitura de 0x9000 copiando de la): 0x14B6C + 0x18 = 0x14B84. 0 = A, 1 = B. */
-#define VFO_ATIVO      (*(volatile u8 *)0x00014B84)
+/* Lado selecionado na tela principal: 0 = VFO A, diferente de 0 = VFO B. E a variavel que o
+ * proprio firmware consulta para montar a tela - em 0x01E41432 ela decide se a faixa da barra do
+ * A sai em 74 (expandido, selecionado) ou 41 (compacto), e em 0x01E4B308 se o numero do canal sai
+ * em 62 ou 101. Nao confundir com tx_ab (0x14B84, o ajuste 0x9018 gravado na memoria de dados):
+ * aquele e o ajuste, este e o estado da tela, e foi usar o errado que fez a v13 nao realcar nada. */
+#define LADO_B         (*(volatile u8 *)0x00015E04)
 
 #define NUM_BANCOS   16
 #define NUM_CANAIS   960
@@ -426,35 +428,32 @@ void gancho_cabo(unsigned grava)
 }
 
 /* ---------- gancho do realce: fundo do bloco do VFO selecionado ----------
- * A tela principal pinta o fundo de cada faixa chamando janela(x0,x1,y0,y1,limpar,cor), sempre com
- * cor 0 (preto). A faixa da barra de sinal (160x14) sai em **y=41 ou 74 no VFO A** e em **y=114 no
- * VFO B** - conferido no radio com um firmware de diagnostico que pintava essa chamada de azul -
- * entao o proprio y diz qual lado esta sendo desenhado, e comparando com o VFO ativo (tx_ab) da
- * para agir so no selecionado.
+ * A tela principal e desenhada em JANELAS: para cada pedaco o firmware chama
+ * janela(x0, x1, y0, y1, limpar, cor), desenha dentro e manda para o LCD (0x01E3ADBC).
  *
- * O bloco INTEIRO fica verde, nao so a faixa da barra: no modo de dois VFOs as linhas de nome e
- * frequencia nao passam por janela() - quem pinta o fundo delas e a limpeza da tela, e o texto vem
- * depois, por cima. Entao pintar o bloco aqui, antes da barra, deixa o texto intacto. A barra e a
- * primeira coisa que o firmware desenha no bloco, o que torna este o momento certo.
- * Os limites de cima sao fixos porque a tela e: abaixo da barra de status (17) quando o bloco e o
- * de cima, e abaixo da faixa da barra do VFO A compacto, que fica em 41..55 (57) quando e o de
- * baixo. O fim do bloco e o proprio fim da faixa da barra, que chega como argumento.
- * Quando o lado nao esta selecionado nada e pintado: ele volta ao preto de fabrica sozinho, porque
- * a chamada original segue com a cor que veio.
+ * REGRA DURA, PAGA CARO (v13): o buffer de video em 0x10190 tem **10240 bytes**, uma banda de
+ * 160x32, e janela() enche (x1-x0)*(y1-y0)*2 bytes **sem nenhuma trava** (o laco em 0x01E3AD8E so
+ * compara com o tamanho pedido). Pedir uma janela maior que isso atropela a RAM logo depois do
+ * video - o buffer de texto fica em 0x129B0, a base global em 0x14680 - e o radio reinicia. A v13
+ * tentava pintar o bloco inteiro de uma vez (71 linhas = 22720 bytes) e foi exatamente isso que
+ * aconteceu. Por isso aqui **a geometria nunca muda**: o gancho so troca a cor com que o firmware
+ * ja ia encher aquela janela.
+ *
+ * Sao tres janelas por bloco, todas lidas no desmontado:
+ *   nome + frequencia  sitio 0x01E4B270   (7, 160, y, y+24)    y = 30 (A) ou 69 (B)
+ *   barra de sinal     sitio 0x01E41468   (0, 160, y, y+14)    y = 41/74 (A) ou 114 (B)
+ *   numero do canal    sitio 0x01E4B314   (127, 159, y, y+9)   y = 62 (A) ou 101 (B)
+ *
+ * A altura diz qual das tres e (24 so a do nome), e dai sai o limite de y que separa os lados.
  */
-#define TOPO_BLOCO_A  17                   /* logo abaixo da barra de status */
-#define TOPO_BLOCO_B  57                   /* logo abaixo da faixa da barra do A compacto */
-
-void gancho_barra(unsigned x0, unsigned x1, unsigned y0, unsigned y1, unsigned limpar, unsigned cor)
+void gancho_realce(unsigned x0, unsigned x1, unsigned y0, unsigned y1, unsigned limpar,
+                   unsigned cor)
 {
-    unsigned e_o_de_baixo = y0 >= 100;     /* 41/74 = VFO A; 114 = VFO B */
+    unsigned limite = y1 - y0 > 14 ? 60 : 100;
 
-    if (e_o_de_baixo == (VFO_ATIVO & 1)) {
-        /* x0, x1 e limpar vem prontos da propria chamada (a faixa e de largura total) */
-        JANELA(x0, x1, e_o_de_baixo ? TOPO_BLOCO_B : TOPO_BLOCO_A, y1, limpar, COR_REALCE);
-        cor = COR_REALCE;                  /* a faixa da barra entra no mesmo fundo */
-    }
-    JANELA(x0, x1, y0, y1, limpar, cor);   /* a original tambem repoe a area de desenho */
+    if ((y0 >= limite) == (LADO_B != 0))
+        cor = COR_REALCE;
+    JANELA(x0, x1, y0, y1, limpar, cor);
 }
 
 /* ---------- textos ---------- */

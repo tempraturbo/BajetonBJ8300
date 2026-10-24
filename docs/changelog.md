@@ -5,6 +5,27 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v14 — Oct 24 — highlight redone from the screen map
+
+Done after mapping the whole screen ([screen-map.md](screen-map.md)), which explained both v13
+defects with addresses:
+
+1. **The reset** was a video-buffer overflow. v13 painted the whole block in a single call — 71
+   full-width rows = **22,720 bytes** — and the buffer at 0x10190 holds **10,240** (one 160×32
+   band). `janela()` has no size guard (loop at `0x01E3AD8E`), so the excess landed on the text
+   buffer, the global base and the redraw flags.
+2. **The highlight not showing** was the wrong variable: I used `tx_ab` (`0x14B84`, the setting
+   stored in data flash) instead of **`b[0x15E04]`**, the screen state the firmware itself consults
+   to place every row.
+
+The hook now goes into the **three windows that make up a block** (name+frequency at `0x01E4B270`,
+signal bar at `0x01E41468`, channel number at `0x01E4B314`) and **never touches the geometry**: it
+only swaps the colour the firmware was going to fill that window with. Verified in the generated
+machine code — r0 to r3 are never written — so v13's overflow is impossible by construction.
+
+**Not yet tested on the radio.** What is proven is static: the map, the truth table of the seven
+window/side combinations, and that the build ends in `RESULTADO: tudo certo`.
+
 ## v13 — Oct 24 — selected-VFO highlight ⚠️ **known problem**
 
 - **Highlight of the selected VFO block** (hook at `0x01E41468`, the call that paints the signal
@@ -24,7 +45,7 @@ The cause has **not been determined**. The survey of which routine draws each pa
 screen is in [mapa-da-tela.md](mapa-da-tela.md); until that closes with evidence from the
 disassembly, there is no v14.
 
-**The recommended version is v12**, which was tested and is sound.
+**Fixed in v14** (above). v12 remains the last version actually tested on the radio.
 
 ## v12 — Oct 24 — 24-bit cable, read and write
 

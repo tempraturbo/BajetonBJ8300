@@ -189,12 +189,14 @@ previsto += [(montar.GANCHO_EM, montar.GANCHO_EM + 3, 'gancho')]
 if montar.SCAN_REDESENHA:
     previsto += [(montar.SCAN_EM, montar.SCAN_EM + 3, 'gancho do scan')]
 if montar.REALCE:
-    o = montar.REALCE_EM - montar.BASE_APP
-    ok = bytes(app[o:o + 4]) == montar.monta_call(montar.REALCE_EM, montar.S['gancho_barra'])
-    print(f'4e. gancho do realce em {montar.REALCE_EM:#x}: ' + ('ok' if ok else 'FALHOU'))
-    if not ok:
-        erros.append('gancho do realce errado')
-    previsto += [(montar.REALCE_EM, montar.REALCE_EM + 3, 'gancho do realce')]
+    for sitio, oque in montar.REALCE_SITIOS_GANCHO:
+        o = sitio - montar.BASE_APP
+        ok = bytes(app[o:o + 4]) == montar.monta_call(sitio, montar.S['gancho_realce'])
+        print(f'4e. gancho do realce em {sitio:#x} ({oque.split(",")[0]}): '
+              + ('ok' if ok else 'FALHOU'))
+        if not ok:
+            erros.append(f'gancho do realce errado em {sitio:#x}')
+    previsto += [(e, e + 3, 'gancho do realce') for e, _ in montar.REALCE_SITIOS_GANCHO]
 
 if montar.REALCE_DIAG:
     certas = sum(bytes(app[e - montar.BASE_APP:e - montar.BASE_APP + 2])

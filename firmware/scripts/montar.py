@@ -43,7 +43,7 @@ PROTEGIDAS = [
 # Onde o codigo novo roda (igual nas 6 imagens; ver bancos.ld).
 ENDERECO_CODIGO = 0x01E96122
 
-PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_barra', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
+PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_realce', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
            'gancho_partida', 'canal_exibe', 'canal_le', 'canal_grava',
            'titulo_bank', 'titulo_nome', 'titulo_canal')
 
@@ -185,8 +185,12 @@ SCAN_ERA = 0x01E458E4
 # conferido no radio) e o VFO ativo sai de tx_ab, que o firmware espelha em 0x14B84.
 # A cor fica em COR_REALCE, no bancos.c.
 REALCE = True
-REALCE_EM = 0x01E41468
 REALCE_ERA = 0x01E3AD34
+# As tres janelas que formam o bloco de um VFO na tela principal, com a geometria lida no
+# desmontado. O gancho e o mesmo nos tres: ele so troca a cor, nunca a geometria.
+REALCE_SITIOS_GANCHO = ((0x01E4B270, 'nome e frequencia, (7,160,y,y+24), y=30 no A e 69 no B'),
+                        (0x01E41468, 'barra de sinal, (0,160,y,y+14), y=41/74 no A e 114 no B'),
+                        (0x01E4B314, 'numero do canal, (127,159,y,y+9), y=62 no A e 101 no B'))
 # Diagnostico (pinta faixas inteiras trocando so a cor, 2 bytes por sitio) fica desligado: serviu
 # para descobrir qual chamada pinta o que. Os sitios conferidos estao no historico do git.
 REALCE_DIAG = False
@@ -314,7 +318,7 @@ def main():
     if REALCE_DIAG:
         escritas += [(e, 2, 'cor de faixa (diagnostico)') for e, _ in REALCE_SITIOS]
     if REALCE:
-        escritas.append((REALCE_EM, 4, 'gancho do realce do VFO selecionado'))
+        escritas += [(e, 4, f'gancho do realce ({o})') for e, o in REALCE_SITIOS_GANCHO]
     if TEXTOS_REVISADOS:
         escritas += [(e, len(v) + 1, f'texto "{v}"') for e, v, _ in TEXTOS]
     confere_trava(escritas)
@@ -384,14 +388,14 @@ def main():
 
     # 4b. realce do VFO selecionado: o gancho entra na chamada que pinta a faixa da barra
     if REALCE:
-        o = REALCE_EM - BASE_APP
-        antes = bytes(app[o:o + 4])
-        if antes != monta_call(REALCE_EM, REALCE_ERA):
-            raise SystemExit(f'{REALCE_EM:#x} nao e a chamada esperada para {REALCE_ERA:#x}: '
-                             f'{antes.hex()}')
-        app[o:o + 4] = monta_call(REALCE_EM, S['gancho_barra'])
-        print(f"  gancho do realce {REALCE_EM:#x}: chamada para {REALCE_ERA:#x} -> "
-              f"{S['gancho_barra']:#x} (faixa da barra do VFO selecionado)")
+        for sitio, oque in REALCE_SITIOS_GANCHO:
+            o = sitio - BASE_APP
+            antes = bytes(app[o:o + 4])
+            if antes != monta_call(sitio, REALCE_ERA):
+                raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {REALCE_ERA:#x}: '
+                                 f'{antes.hex()}')
+            app[o:o + 4] = monta_call(sitio, S['gancho_realce'])
+            print(f"  gancho do realce {sitio:#x} -> {S['gancho_realce']:#x}: {oque}")
 
     # 4c. diagnostico das faixas: so a cor do preenchimento, 2 bytes por sitio
     if REALCE_DIAG:

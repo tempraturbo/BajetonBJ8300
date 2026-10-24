@@ -5,6 +5,27 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v14 — 24/10 — realce refeito a partir do mapa da tela
+
+Feito depois de mapear a tela inteira ([mapa-da-tela.md](mapa-da-tela.md)), que explicou os dois
+defeitos da v13 com endereço:
+
+1. **O reset** era estouro do buffer de vídeo. A v13 pintava o bloco inteiro numa chamada só — 71
+   linhas em largura cheia = **22.720 bytes** — e o buffer em 0x10190 tem **10.240** (uma banda de
+   160×32). `janela()` não tem trava de tamanho (laço em `0x01E3AD8E`), então o excedente caía em
+   cima do buffer de texto, da base global e das flags de redesenho.
+2. **O realce não aparecer** era variável errada: eu usei `tx_ab` (`0x14B84`, o ajuste gravado na
+   memória de dados) em vez de **`b[0x15E04]`**, que é o estado da tela que o próprio firmware
+   consulta para decidir a posição de cada linha.
+
+Agora o gancho entra nas **três janelas que formam um bloco** (nome+frequência em `0x01E4B270`,
+barra de sinal em `0x01E41468`, número do canal em `0x01E4B314`) e **não mexe na geometria**: só
+troca a cor com que o firmware já ia encher aquela janela. Conferido no código de máquina gerado —
+r0 a r3 não são tocados —, então o estouro da v13 é impossível por construção.
+
+**Ainda não testado no rádio.** O que está provado é estático: o mapa, a tabela-verdade das sete
+combinações de janela e lado, e que a montagem fecha em `RESULTADO: tudo certo`.
+
 ## v13 — 24/10 — realce do VFO ⚠️ **com problema conhecido**
 
 - **Realce do bloco do VFO selecionado** (gancho em `0x01E41468`, a chamada que pinta a faixa da
@@ -23,7 +44,7 @@ Causa ainda **não determinada**. O levantamento de qual rotina desenha cada par
 está em [mapa-da-tela.md](mapa-da-tela.md); enquanto ele não fechar com evidência no
 desassemblado, não sai v14.
 
-**A versão recomendada é a v12**, que foi testada e está íntegra.
+**Corrigido na v14** (acima). A v12 continua sendo a última versão testada no rádio.
 
 ## v12 — 24/10 — cabo de 24 bits, para ler e gravar
 
