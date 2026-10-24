@@ -5,6 +5,25 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v25 — Oct 24 — scramble from 2700 to 3400 Hz ✅
+
+- **SCRAMBLE with nine options, in ascending order: OFF and 2700 to 3400 Hz in 100 Hz steps.**
+  It is meant to cover the Baofeng's other modes, not just mode 3 (2900 Hz). Values already stored
+  in channels do not change: 1 is still 3400 Hz (the stock ON, the one that talks to other
+  BJ-8300s) and 2 is still 2900 Hz. The new frequencies take values 3 to 8.
+- **How:** the routine that applies the scramble used to pick between two frequencies by "is the
+  value 1 or not". Now 14 of its bytes read the frequency from a table of ours, by the stored
+  value, with the index masked to 4 bits. The item's get and set are ours and translate position
+  and value, and the set writes through the stock one. The stock table is back to untouched.
+  Details in [section 13 of the reverse-engineering notes](reverse-engineering.md#13-scramble).
+- **Checks:** `4k` was rewritten. It checks every frequency, the menu order, the names, the
+  position ↔ value round trip and the 14 patched bytes, and it was tested by swapping two
+  positions.
+
+Code: 3012 B of 3292. Reproducible build, zero branches into patches, all three tests passing.
+**Tested on the radio** (Oct 24): the UV-17L's modes 1, 2 and 3 all talk to the BJ-8300, each
+on one of the menu frequencies.
+
 ## v24 — Oct 24 — a scramble that talks to the Baofeng UV-17L ✅
 
 - **SCRAMBLE with three options: OFF, 3400 Hz, 2900 Hz.** The chip's scramble is spectrum

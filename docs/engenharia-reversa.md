@@ -167,8 +167,8 @@ outro endereço é ignorado sem escrever nada (provado com `tools/cabo/teste_cab
 | `0x00015367`, `0x0001536F` | flags de "redesenhar" |
 | `0x00016671` / `0x0001666C` | pacote do cabo / comprimento recebido |
 | `0x00014B83` | roger: 0 OFF, 1 BEEP, 2 TONE1200; 3 = BEEP 2 (v22) |
-| `0x00015E2C` / `0x000129A4` | scramble do canal ou VFO atual / o da sintonia: 0 OFF, 1 3400 Hz, 2 2900 Hz (v24) |
-| `0x01E68B18` | frequências de inversão do scramble (u16, Hz × 10,32444): 35103 = 3400 Hz e, desde a v24, 29941 = 2900 Hz |
+| `0x00015E2C` / `0x000129A4` | scramble do canal ou VFO atual / o da sintonia: 0 OFF, 1 3400 Hz, 2 2900 Hz, 3–8 = 2700, 2800, 3000…3300 Hz (v25) |
+| `0x01E68B18` | frequências de inversão de fábrica (u16, Hz × 10,32444): 35103 = 3400 Hz e 36135 = 3500 Hz; desde a v25 ninguém a lê (seção 13) |
 | `0x0001533D` | modo da tela (20 = espectro) |
 | `0x00014654` | estado da varredura do espectro: 0 sintoniza, 1 mede, 2 parado num achado |
 | `0x00014648` / `0x0001464C` | nível medido / limite que faz parar, os dois em altura do gráfico (0..64) |
@@ -454,12 +454,32 @@ frequência. Os modos 1 e 2 do UV-17L também não batem com o BJ-8300 (testado 
 de chamada do menu TONE (1000/1450/1750/2100 Hz, tecla lateral, `0x01E412D4` → `0x01E408CA`) usa o
 mesmo registrador `0x71`, e por isso não serve para medir o scramble.
 
-**v24:** a segunda entrada da tabela passa a **29941 = 2900 Hz**, e o item SCRAMBLE ganha a
-terceira opção: **OFF, 3400 Hz, 2900 Hz**. Valor 2 = 2900 Hz.
-- Só mudam a quantidade de opções (3) e as duas tabelas de nomes. O get e o set continuam os de
-  fábrica, porque o valor gravado já é a posição no menu. O OFF em chinês é o de fábrica.
-- No CHIRP, o campo scramble do canal pega os bits 7–2 do byte 14, então a opção 2900 Hz é o
-  `0x08`. No VFO, o formato da base parte o nibble em `unknown3` (bits 7–5) e `scramble` (bits
-  4–2), e por isso o driver troca esse ajuste pelo dele.
-- A verificação `4k` do `conferir.py` tira a tabela da instrução de `0x01E40936`. Ela confere que
-  a primeira entrada não mudou e calcula a frequência da segunda pela conta da primeira (3400 Hz).
+**v24:** a segunda entrada da tabela passou a 29941 = 2900 Hz, e o item ganhou a terceira opção
+(OFF, 3400 Hz, 2900 Hz), com o get e o set de fábrica. Testada com o UV-17L no modo 3: os dois se
+entendem.
+
+**v25: de 2700 a 3400 Hz, de 100 em 100**, para cobrir os outros modos do Baofeng. São nove
+opções em ordem crescente: OFF, 2700, 2800, …, 3400 Hz. Testada: os modos 1, 2 e 3 do UV-17L
+se entendem com o BJ-8300, cada um numa dessas frequências.
+- **Frequência pelo valor.** Na aplicação, os 14 bytes que escolhiam a entrada (`0x01E4092E`:
+  `r0 = 1; se r4 == 1, r0 = 0; r1 = 0x01E68B18`) viraram `r0 = r4 & 0xF; nop; r1 =
+  scramble_freqs`. A instrução seguinte, de fábrica (`r1 = h[r1 + r0<<1]`), passa a ler a
+  frequência da nossa tabela de 16 entradas, pelo valor gravado. As codificações saíram do próprio
+  firmware (`40 16` em `0x01E005E6`, `60 e1 0f 00` em `0x01E00350`, `00 00` em `0x01E0019A`), e o
+  trecho foi conferido no `llvm-objdump` da v25. O r4 é o valor que a rotina recebeu em r0, e a
+  chamada de `0x01E4092A` o preserva. Com a máscara, qualquer byte cai dentro da tabela, e por isso
+  não foi preciso provar a origem de cada caminho até aqui. A tabela de fábrica fica intacta, e
+  ninguém mais a lê.
+- **Valores que não mudam.** O 1 continua 3400 Hz (o ON de fábrica, o que fala com os outros
+  BJ-8300) e o 2 continua 2900 Hz (o da v24). Os novos são 3 = 2700, 4 = 2800, 5 = 3000, 6 = 3100,
+  7 = 3200 e 8 = 3300 Hz. De 9 a 15, valores que nenhum menu grava, o rádio inverte em 3400 Hz e o
+  menu mostra 3400 Hz.
+- **Menu em ordem.** O get (`scramble_le`) e o set (`scramble_grava`) são nossos e traduzem
+  posição ↔ valor. O set põe o valor em `h[0x14BFC]`, chama o set de fábrica e devolve a posição.
+  Assim o nibble do canal ou do VFO e o `b[0x15E2C]` continuam gravados pelo firmware. O get e o set
+  de fábrica só eram usados pelo item 47 da tabela de menus.
+- **Conferência `4k`.** Tira a conta Hz → registro da tabela de fábrica (3400 Hz) e confere no
+  blob cada frequência, o menu de 2700 a 3400 Hz de 100 em 100, os nomes, a ida e volta
+  posição ↔ valor, que todo valor de 0 a 15 aparece no menu com a frequência em que o rádio
+  inverte, e os 14 bytes do remendo. Foi testada trocando duas posições no blob, e quatro dessas
+  conferências acusaram.

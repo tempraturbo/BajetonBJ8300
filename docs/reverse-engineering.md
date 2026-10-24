@@ -166,8 +166,8 @@ it. Any other address is ignored without writing anything (proven with
 | `0x00015367`, `0x0001536F` | redraw flags |
 | `0x00016671` / `0x0001666C` | cable packet / received length |
 | `0x00014B83` | roger: 0 OFF, 1 BEEP, 2 TONE1200; 3 = BEEP 2 (v22) |
-| `0x00015E2C` / `0x000129A4` | scramble of the current channel or VFO / the tuned one: 0 OFF, 1 3400 Hz, 2 2900 Hz (v24) |
-| `0x01E68B18` | scramble inversion frequencies (u16, Hz × 10.32444): 35103 = 3400 Hz and, since v24, 29941 = 2900 Hz |
+| `0x00015E2C` / `0x000129A4` | scramble of the current channel or VFO / the tuned one: 0 OFF, 1 3400 Hz, 2 2900 Hz, 3–8 = 2700, 2800, 3000…3300 Hz (v25) |
+| `0x01E68B18` | stock inversion frequencies (u16, Hz × 10.32444): 35103 = 3400 Hz and 36135 = 3500 Hz; since v25 nothing reads it (section 13) |
 | `0x0001533D` | screen mode (20 = spectrum) |
 | `0x00014654` | spectrum sweep state: 0 tune, 1 measure, 2 stopped on a find |
 | `0x00014648` / `0x0001464C` | measured level / threshold that stops the sweep, both in graph height (0..64) |
@@ -456,13 +456,32 @@ Same method, different frequency. The owner also tested UV-17L modes 1 and 2, an
 the BJ-8300. The TONE menu's call tone (1000/1450/1750/2100 Hz, side key, `0x01E412D4` →
 `0x01E408CA`) uses the same register `0x71`, so it cannot be used to measure the scramble.
 
-**v24:** the table's second entry becomes **29941 = 2900 Hz**, and the SCRAMBLE item gains a third
-option: **OFF, 3400 Hz, 2900 Hz**. Value 2 = 2900 Hz.
-- Only the option count (3) and the two name tables change. The get and set stay stock, because
-  the stored value already is the menu position. The Chinese OFF is the stock one.
-- In CHIRP, the channel's scramble field takes bits 7–2 of byte 14, so the 2900 Hz option is
-  `0x08`. In the VFO, the base format splits the nibble into `unknown3` (bits 7–5) and `scramble`
-  (bits 4–2), so the driver replaces that setting with its own.
-- Check `4k` in `conferir.py` takes the table from the instruction at `0x01E40936`. It confirms the
-  first entry is unchanged and computes the second entry's frequency from the first one's ratio
-  (3400 Hz).
+**v24:** the table's second entry became 29941 = 2900 Hz, and the item gained a third option (OFF,
+3400 Hz, 2900 Hz), with the stock get and set. Tested with the UV-17L in mode 3: the two radios
+understand each other.
+
+**v25: 2700 to 3400 Hz, in 100 Hz steps**, to cover the Baofeng's other modes. There are nine
+options in ascending order: OFF, 2700, 2800, …, 3400 Hz. Tested: the UV-17L's modes 1, 2 and 3
+all talk to the BJ-8300, each on one of these frequencies.
+- **Frequency by value.** In the apply routine, the 14 bytes that picked the entry (`0x01E4092E`:
+  `r0 = 1; if r4 == 1, r0 = 0; r1 = 0x01E68B18`) became `r0 = r4 & 0xF; nop; r1 =
+  scramble_freqs`. The next stock instruction (`r1 = h[r1 + r0<<1]`) now reads the frequency from
+  our 16-entry table, by the stored value. The encodings come from the firmware itself (`40 16` at
+  `0x01E005E6`, `60 e1 0f 00` at `0x01E00350`, `00 00` at `0x01E0019A`), and the stretch was
+  checked with `llvm-objdump` on v25. r4 is the value the routine received in r0, and the call at
+  `0x01E4092A` preserves it. With the mask, any byte lands inside the table, so there was no need
+  to prove where each path into here gets its value. The stock table stays intact, and nothing
+  reads it anymore.
+- **Values that do not change.** 1 is still 3400 Hz (the stock ON, the one that talks to other
+  BJ-8300s) and 2 is still 2900 Hz (v24's). The new ones are 3 = 2700, 4 = 2800, 5 = 3000,
+  6 = 3100, 7 = 3200 and 8 = 3300 Hz. For 9 to 15, values no menu writes, the radio inverts at
+  3400 Hz and the menu shows 3400 Hz.
+- **Sorted menu.** The get (`scramble_le`) and set (`scramble_grava`) are ours and translate
+  position ↔ value. The set puts the value in `h[0x14BFC]`, calls the stock set and restores the
+  position. So the channel or VFO nibble and `b[0x15E2C]` are still written by the firmware. The
+  stock get and set were only used by item 47 of the menu table.
+- **Check `4k`.** Takes the Hz → register ratio from the stock table (3400 Hz) and checks, in the
+  blob, every frequency, the menu from 2700 to 3400 Hz in 100 Hz steps, the names, the position ↔
+  value round trip, that every value from 0 to 15 shows in the menu with the frequency the radio
+  really inverts at, and the 14 patched bytes. It was tested by swapping two positions in the
+  blob, and four of those checks failed.

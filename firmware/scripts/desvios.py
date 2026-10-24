@@ -32,7 +32,8 @@ def remendos():
         # nele (so na entrada, que agora e o goto)
         fora += [(e + 2, 2, 'espectro: entrada de ' + d) for e, _, _, d in montar.ESPECTRO_FUNCOES]
     fora += [(montar.ROGER_DESVIO_EM, 4, 'roger: desvio do valor 3'),
-             (montar.ROGER_LACO_EM, len(montar.ROGER_LACO_ANTES), 'roger: laco dos tons')]
+             (montar.ROGER_LACO_EM, len(montar.ROGER_LACO_ANTES), 'roger: laco dos tons'),
+             (montar.SCRAMBLE_EM, len(montar.SCRAMBLE_ANTES), 'scramble: frequencia pelo valor')]
     return [(a, a + t, n) for a, t, n in fora]
 
 

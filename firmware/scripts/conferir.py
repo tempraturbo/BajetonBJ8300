@@ -476,27 +476,55 @@ for oque, ok in verificacoes:
 previsto += [(montar.ROGER_DESVIO_EM, montar.ROGER_DESVIO_EM + 3, 'roger: desvio'),
              (montar.ROGER_LACO_EM, montar.ROGER_LACO_EM + 7, 'roger: laco')]
 
-# 4k. scramble 2900 Hz. A tabela e a que a rotina que aplica o scramble (0x01E408E2) le: o r1 de
-# 0x01E40936, indexado por "valor == 1 ? 0 : 1". A conta Hz -> registro sai da 1a entrada, que fica
-# como estava: 3400 Hz, a frequencia medida na gravacao do dono.
-scr_tabela = imediato(0x01E40936)
-o = scr_tabela - montar.BASE_APP
-scr_velha, scr_nova = struct.unpack_from('<2H', app_velho, o), struct.unpack_from('<2H', app, o)
-scr_hz = scr_nova[1] * 3400 / scr_velha[0]
-cn = struct.unpack_from('<I', blob, montar.S['scramble_opcoes_cn'] - montar.ENDERECO_CODIGO)[0]
+# 4k. scramble de 2700 a 3400 Hz. A conta Hz -> registro sai da 1a entrada da tabela de fabrica
+# (a que o r1 de 0x01E40936 apontava), 3400 Hz - a frequencia medida na gravacao do dono -, e a
+# tabela de fabrica tem de continuar intacta. Do blob saem a tabela nova, as traducoes posicao <->
+# valor e os nomes das opcoes: o menu em ordem crescente de 100 em 100, cada posicao gravando um
+# valor que inverte na frequencia do nome, e todo valor de 0 a 15 aparecendo no menu com a
+# frequencia em que o radio inverte de verdade.
+def do_blob(nome, formato, n):
+    return struct.unpack_from('<%d%s' % (n, formato), blob, montar.S[nome] - montar.ENDERECO_CODIGO)
+
+
+def texto_do_blob(endereco):
+    o = endereco - montar.ENDERECO_CODIGO
+    return blob[o:blob.index(b'\0', o)].decode() if 0 <= o < len(blob) else None
+
+
+fabrica = imediato(0x01E40936)
+o = fabrica - montar.BASE_APP
+hz_por_unidade = 3400 / struct.unpack_from('<H', app_velho, o)[0]
+freqs = [round(v * hz_por_unidade) for v in do_blob('scramble_freqs', 'H', 16)]
+erro_hz = max(abs(v * hz_por_unidade - f) for v, f in zip(do_blob('scramble_freqs', 'H', 16), freqs))
+valor, posicao = do_blob('scramble_valor', 'B', 9), do_blob('scramble_posicao', 'B', 16)
+nomes = [texto_do_blob(p) for p in do_blob('scramble_opcoes', 'I', 9)]
+cn = do_blob('scramble_opcoes_cn', 'I', 9)
 cn_fabrica = struct.unpack_from('<I', app_velho, 0x6AC0C + struct.unpack_from(
     '<I', velha, montar.SCRAMBLE_ITEM * T + montar.CAMPO['opcoes_cn'])[0])[0]
+menu = [None] + [freqs[valor[p]] for p in range(1, 9)]        # frequencia que cada posicao grava
+o_rem = montar.SCRAMBLE_EM - montar.BASE_APP
 verificacoes = [
-    (f'tabela em {scr_tabela:#x}, a que a rotina le', scr_tabela == montar.SCRAMBLE_TABELA),
-    (f'3400 Hz intacto ({scr_nova[0]})', scr_velha == montar.SCRAMBLE_ANTES and scr_nova[0] == scr_velha[0]),
-    (f'2a entrada {scr_velha[1]} -> {scr_nova[1]} = {scr_hz:.1f} Hz', abs(scr_hz - 2900) < 0.5),
-    ('OFF em chines e o de fabrica', cn == cn_fabrica),
+    ('tabela de fabrica intacta', app[o:o + 4] == app_velho[o:o + 4]),
+    (f'tabela nova: cada entrada a menos de {erro_hz:.2f} Hz da frequencia redonda', erro_hz < 0.5),
+    ('valores 1 = 3400 Hz (ON de fabrica) e 2 = 2900 Hz (v24)', freqs[1] == 3400 and freqs[2] == 2900),
+    ('menu de 2700 a 3400 Hz, de 100 em 100: ' + ' '.join(map(str, menu[1:])),
+     menu[1:] == list(range(2700, 3401, 100)) and valor[0] == 0),
+    ('nomes das opcoes', nomes == ['OFF'] + [f'{f} Hz' for f in menu[1:]]
+     and [texto_do_blob(p) for p in cn[1:]] == nomes[1:]),
+    ('OFF em chines e o de fabrica', cn[0] == cn_fabrica),
+    ('posicao <-> valor: ida e volta', all(posicao[valor[p]] == p for p in range(9))),
+    ('valores 0 a 15: o menu mostra a frequencia em que o radio inverte',
+     posicao[0] == 0 and all(menu[posicao[v]] == freqs[v] for v in range(1, 16))),
+    (f'remendo em {montar.SCRAMBLE_EM:#x}: r0 = r4 & 0xF; r1 = scramble_freqs',
+     bytes(app_velho[o_rem:o_rem + 14]) == montar.SCRAMBLE_ANTES
+     and bytes(app[o_rem:o_rem + 14]) == montar.monta_scramble()
+     and struct.unpack_from('<I', app, o_rem + 10)[0] == montar.S['scramble_freqs']),
 ]
 for oque, ok in verificacoes:
     print(f'4k. scramble: {oque}: ' + ('ok' if ok else 'FALHOU'))
     if not ok:
         erros.append('scramble: ' + oque)
-previsto.append((montar.SCRAMBLE_TABELA + 2, montar.SCRAMBLE_TABELA + 3, 'scramble: 2900 Hz'))
+previsto.append((montar.SCRAMBLE_EM, montar.SCRAMBLE_EM + 13, 'scramble: frequencia pelo valor'))
 
 if montar.REALCE_DIAG:
     certas = sum(bytes(app[e - montar.BASE_APP:e - montar.BASE_APP + 2])

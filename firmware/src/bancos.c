@@ -91,6 +91,8 @@ FIRMWARE(TOM, 0x01E43B4E);             void TOM(unsigned, unsigned);     /* freq
  * temporizador interrompe a cada 48000 ciclos de 24 MHz = 2 ms (0x01E3E44C) e soma 2 ao contador
  * [0x14810] (0x01E51356), que anda 1 por ms; a espera vai ate o contador andar n x 2. */
 FIRMWARE(ESPERA_2MS, 0x01E36286);      void ESPERA_2MS(unsigned);        /* espera ocupada, n x 2 ms */
+/* Scramble: o set de fabrica do item, que grava b[0x14BFC] no canal ou no VFO e em b[0x15E2C]. */
+FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 
 /* ---------- memoria do firmware que usamos ----------
  * VALOR (h[0x14BFC]) e o valor do item em edicao: o motor de menus (0x01E489E0) guarda o valor
@@ -150,6 +152,7 @@ FIRMWARE(ESPERA_2MS, 0x01E36286);      void ESPERA_2MS(unsigned);        /* espe
  * do primeiro, que o laco de 0x01E44638 le de tras para frente. */
 #define ROGER          (*(volatile u8 *)0x00014B83)
 #define BEEP_FABRICA   ((const volatile u16 *)0x01E60DC8)
+#define SCRAMBLE       (*(volatile u8 *)0x00015E2C)          /* scramble do canal ou VFO atual */
 /* Teclas do espectro que viram nossas: OK troca o passo (17), # troca a quantidade de pontos (24). */
 #define TECLA_OK         17
 #define TECLA_CERQUILHA  24
@@ -683,16 +686,44 @@ void roger_grava(void)
     ROGER = (u8)troca_roger(VALOR & 3);
 }
 
-/* ---------- scramble: 2900 Hz, para falar com o Baofeng UV-17L ----------
- * O scramble do chip e inversao de espectro (bit 1 do reg 0x31), e a frequencia de inversao vem de
- * uma tabela de duas entradas (0x01E68B18): o valor 1 do canal usa a primeira (3400 Hz) e qualquer
- * valor maior, a segunda - que era 3500 Hz e nenhuma opcao do menu alcancava. Medido pelo dono com
- * um tom de 1 kHz: este radio inverte em 3400 Hz e o UV-17L, no modo 3, em 2900 (os modos 1 e 2
- * dele tambem nao batem com este). A segunda entrada passa a ser 2900 Hz (montar.py), e o item
- * SCRAMBLE ganha a terceira opcao. Get e set continuam os de fabrica: o valor gravado e a posicao
- * no menu, e a troca de canal le o nibble inteiro (0x01E3900C: b[0x15E2C] = byte 14 >> 4). */
-const char *const scramble_opcoes[3] = {"OFF", "3400 Hz", "2900 Hz"};
-const char *const scramble_opcoes_cn[3] = {(const char *)0x01E5FC88, "3400 Hz", "2900 Hz"};
+/* ---------- scramble: 8 frequencias de inversao, de 2700 a 3400 Hz ----------
+ * O scramble do chip e inversao de espectro (bit 1 do reg 0x31), com a frequencia de inversao no
+ * reg 0x71. De fabrica ela sai de uma tabela de duas entradas (0x01E68B18), escolhida por "valor
+ * == 1": o ON (valor 1) inverte em 3400 Hz. Medido pelo dono com um tom de 1 kHz: este radio
+ * inverte em 3400 Hz, e o Baofeng UV-17L, no modo 3, em 2900. Desde a v25 a rotina que aplica
+ * (0x01E408E2) le a frequencia de scramble_freqs, pelo valor gravado (remendo de 0x01E4092E no
+ * montar.py, com o indice mascarado em 4 bits), e o menu vai de 2700 a 3400 Hz, de 100 em 100.
+ *
+ * Os valores que ja existiam ficam: 1 = 3400 Hz (o ON de fabrica, o que fala com os outros BJ-8300)
+ * e 2 = 2900 Hz (v24). Os novos vao de 3 a 8, e o menu mostra em ordem crescente: o get e o set
+ * traduzem posicao e valor. A troca de canal le o nibble inteiro (0x01E3900C: b[0x15E2C] = byte 14
+ * >> 4), e o set grava pelo de fabrica, que poe o valor no nibble alto do byte 14 do canal (ou 16
+ * do VFO) e em b[0x15E2C]. Valor que nenhum menu grava (9 a 15) inverte em 3400 Hz e aparece como
+ * 3400 Hz: menu e radio concordam sempre. */
+#define HZ(f)  ((u16)((f) * 10.32444 + 0.5))     /* unidade do reg 0x71, a conta do roger */
+const u16 scramble_freqs[16] = {
+    HZ(3400), HZ(3400), HZ(2900), HZ(2700), HZ(2800), HZ(3000), HZ(3100), HZ(3200),
+    HZ(3300), HZ(3400), HZ(3400), HZ(3400), HZ(3400), HZ(3400), HZ(3400), HZ(3400)};
+const u8 scramble_valor[9] = {0, 3, 4, 2, 5, 6, 7, 8, 1};                  /* posicao -> valor */
+const u8 scramble_posicao[16] = {0, 8, 3, 1, 2, 4, 5, 6, 7, 8, 8, 8, 8, 8, 8, 8};  /* e a volta */
+const char *const scramble_opcoes[9] = {"OFF", "2700 Hz", "2800 Hz", "2900 Hz", "3000 Hz",
+                                        "3100 Hz", "3200 Hz", "3300 Hz", "3400 Hz"};
+const char *const scramble_opcoes_cn[9] = {(const char *)0x01E5FC88, "2700 Hz", "2800 Hz", "2900 Hz",
+                                           "3000 Hz", "3100 Hz", "3200 Hz", "3300 Hz", "3400 Hz"};
+
+u16 scramble_le(void)
+{
+    return scramble_posicao[SCRAMBLE & 15];
+}
+
+void scramble_grava(void)
+{
+    unsigned posicao = VALOR;
+
+    VALOR = scramble_valor[posicao];
+    SCRAMBLE_SET();
+    VALOR = posicao;               /* o motor de menus segue com a posicao */
+}
 
 /* No lugar do laco dos tons do BEEP. Com o BEEP de fabrica, faz exatamente o que o laco fazia:
  * os dois pares da tabela, de tras para frente, ESPERA_2MS(40) = 80 ms cada. */
