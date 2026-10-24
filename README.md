@@ -127,8 +127,16 @@ como família RT-920/BJ7800):
 - Recusa funcionar se o rádio **não** tiver este firmware (compara uma leitura de 24 bits com a de
   16 bits; iguais = firmware de fábrica), para nunca gravar banco em cima de canal.
 
-Testes do miolo do driver (sem precisar do CHIRP instalado): `python -I tests/teste_bj8300.py` —
-27 conferências, incluindo a soma de verificação batendo com a que o próprio rádio gravou.
+Dois conjuntos de teste, os dois sem rádio:
+
+- `python -I tests/teste_bj8300.py` — 27 conferências do miolo (formato gravado, soma batendo com
+  a que o próprio rádio gravou, pertinência múltipla), com o CHIRP stubado;
+- `python -I tests/teste_chirp_real.py` — 20 conferências **contra o CHIRP instalado de verdade**:
+  se a classe encaixa na API (modelo de bancos, `apply_to` + callbacks dos ajustes), se imagem
+  salva pelo driver RT-920 abre sem estourar, e se o que foi editado termina nos bytes da imagem.
+
+O que nenhum dos dois cobre é a conversa com o rádio pelo cabo — essa parte foi validada à mão com
+as ferramentas de `tools/cabo/` contra o rádio real.
 
 ---
 

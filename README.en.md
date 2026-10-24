@@ -126,8 +126,16 @@ this radio as part of the RT-920/BJ7800 family):
 - It refuses to run if the radio does **not** have this firmware (it compares a 24-bit read against
   the 16-bit one; equal means stock firmware), so it can never write bank data over channels.
 
-Core tests (no CHIRP install needed): `python -I tests/teste_bj8300.py` — 27 checks, including the
-checksum matching the one the radio itself wrote.
+Two test suites, both without a radio:
+
+- `python -I tests/teste_bj8300.py` — 27 core checks (stored format, checksum matching the one the
+  radio itself wrote, multi-bank membership), with CHIRP stubbed out;
+- `python -I tests/teste_chirp_real.py` — 20 checks **against a real CHIRP install**: whether the
+  class fits the API (bank model, `apply_to` + setting callbacks), whether an image saved by the
+  RT-920 driver opens without blowing up, and whether edits end up in the image bytes.
+
+Neither covers talking to the radio over the cable — that part was validated by hand with the
+tools in `tools/cabo/` against the real radio.
 
 ---
 
