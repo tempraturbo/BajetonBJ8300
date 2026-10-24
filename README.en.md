@@ -69,7 +69,9 @@ The zone **function** is still in the firmware; only its two menu entries are go
    | File | Status |
    |---|---|
    | `firmware/releases/BJ8300_BANK_v12.anc` | **recommended** — tested and sound |
-   | `firmware/releases/BJ8300_BANK_v16.anc` | adds the **highlight of the selected VFO's block** — **tested on the radio and working**; thin black strips still remain between the block's lines ([screen map](docs/screen-map.md)) |
+   | `firmware/releases/BJ8300_BANK_v18.anc` | v17 with the green background on the RX/TX box too; **not yet tested on the radio** |
+   | `firmware/releases/BJ8300_BANK_v17.anc` | **highlight of the selected VFO's block** without the black strips and with a darker green ([screen map](docs/screen-map.md)) — **tested on the radio**; only RX/TX keeps a black background |
+   | `firmware/releases/BJ8300_BANK_v16.anc` | first highlight tested and working; thin black strips remain between the block's lines |
    | `firmware/releases/BJ8300_BANK_v14.anc` | earlier attempt at the highlight: it stopped v13's reset, but the green only showed in the signal bar |
    | `firmware/original/BJ8300_V0.12.anc` | stock firmware, to go back |
 3. Power the radio on while **holding PTT2 + the shortcut key** until `UPDATE` shows (most

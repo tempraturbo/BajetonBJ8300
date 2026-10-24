@@ -197,6 +197,14 @@ if montar.REALCE:
         if not ok:
             erros.append(f'gancho do realce errado em {sitio:#x}')
     previsto += [(e, e + 3, 'gancho do realce') for e, _ in montar.REALCE_SITIOS_GANCHO]
+    for sitio, oque in montar.LIMPA_SITIOS:
+        o = sitio - montar.BASE_APP
+        ok = bytes(app[o:o + 4]) == montar.monta_call(sitio, montar.S['gancho_limpa'])
+        print(f'4e. gancho da limpeza em {sitio:#x} ({oque.split(":")[0]}): '
+              + ('ok' if ok else 'FALHOU'))
+        if not ok:
+            erros.append(f'gancho da limpeza errado em {sitio:#x}')
+    previsto += [(e, e + 3, 'gancho da limpeza') for e, _ in montar.LIMPA_SITIOS]
 
     # 4f. os enderecos que o gancho le sao os que a janela() grava - tirados das PROPRIAS instrucoes
     # dela no firmware de fabrica, nunca convertidos a mao. Na v15 eles foram convertidos errado do
@@ -224,6 +232,38 @@ if montar.REALCE:
               f'{instrucao:#x}): ' + ('ok' if ok else 'FALHOU'))
         if not ok:
             erros.append(f'{nome} nao e o endereco que a janela() usa')
+
+# 4g. todo call/goto do codigo novo vai para dentro dele mesmo ou para uma rotina do firmware
+# declarada em FIRMWARE() no bancos.c. As rotinas viraram simbolos absolutos e a chamada e
+# relativa, resolvida pelo linker: aqui o destino de cada uma e recalculado do proprio deslocamento
+# que esta nos bytes (com ou sem rotulo no desmontado), e chamada por registrador e recusada,
+# porque o destino dela nao se confere.
+import re
+_fonte = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', 'bancos.c'),
+              encoding='utf-8').read()
+declaradas = {int(e, 16): n for n, e in re.findall(r'^FIRMWARE\((\w+), (0x[0-9A-Fa-f]+)\)', _fonte, re.M)}
+fim_novo = montar.ENDERECO_CODIGO + len(blob)
+usadas, estranhas = {}, []
+for linha in open(os.path.join(os.path.dirname(codigo), 'bancos.dis'), encoding='utf-8', errors='replace'):
+    m = re.match(r'\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+)\s*(call|goto)\s+(\S+)', linha)
+    if not m:
+        continue
+    onde, tam, alvo = int(m.group(1), 16), len(m.group(2).split()), m.group(4)
+    if not re.fullmatch(r'-?\d+', alvo):
+        estranhas.append(f'{onde:#x} {m.group(3)} {alvo} (por registrador)')
+        continue
+    destino = onde + tam + int(alvo)
+    if montar.ENDERECO_CODIGO <= destino < fim_novo:
+        continue
+    if destino in declaradas:
+        usadas[declaradas[destino]] = usadas.get(declaradas[destino], 0) + 1
+    else:
+        estranhas.append(f'{onde:#x} {m.group(3)} -> {destino:#x} (fora do codigo e nao declarado)')
+print(f'4g. chamadas ao firmware: {sum(usadas.values())}, todas para enderecos declarados '
+      f'({len(usadas)} rotinas): ' + ('ok' if not estranhas else 'FALHOU'))
+for e in estranhas:
+    print('    ' + e)
+    erros.append('chamada com destino nao conferido: ' + e)
 
 if montar.REALCE_DIAG:
     certas = sum(bytes(app[e - montar.BASE_APP:e - montar.BASE_APP + 2])

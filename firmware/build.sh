@@ -20,6 +20,8 @@ mkdir -p build
 "$B/llvm-objcopy.exe" -O binary -j .text build/bancos.elf build/bancos.bin
 
 "$B/llvm-nm.exe" -n build/bancos.elf > build/simbolos.txt
+# o desmontado do codigo novo: o conferir.py decodifica dele todo call/goto (verificacao 4g)
+"$B/llvm-objdump.exe" -d -triple=pi32v2 build/bancos.elf > build/bancos.dis
 echo "=== simbolos:"
 grep ' T ' build/simbolos.txt
 echo "=== tamanho: $(stat -c%s build/bancos.bin) bytes"

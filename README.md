@@ -69,7 +69,9 @@ A **função** de zona continua no firmware; o que saiu foram os dois itens de m
    | Arquivo | Estado |
    |---|---|
    | `firmware/releases/BJ8300_BANK_v12.anc` | **recomendado** — testado e íntegro |
-   | `firmware/releases/BJ8300_BANK_v16.anc` | acrescenta o **realce do bloco do VFO em evidência** — **testado no rádio e funcionando**; ainda sobram faixas finas pretas entre as linhas do bloco ([mapa da tela](docs/mapa-da-tela.md)) |
+   | `firmware/releases/BJ8300_BANK_v18.anc` | v17 com o fundo verde também na caixinha do RX/TX; **ainda não testado no rádio** |
+   | `firmware/releases/BJ8300_BANK_v17.anc` | **realce do bloco do VFO em evidência** sem as faixas pretas e com verde mais escuro ([mapa da tela](docs/mapa-da-tela.md)) — **testado no rádio**; só o RX/TX fica com fundo preto |
+   | `firmware/releases/BJ8300_BANK_v16.anc` | primeiro realce testado e funcionando; sobram faixas finas pretas entre as linhas do bloco |
    | `firmware/releases/BJ8300_BANK_v14.anc` | tentativa anterior do realce: parou o reset da v13, mas o verde só saía na barra de sinal |
    | `firmware/original/BJ8300_V0.12.anc` | firmware de fábrica, para voltar atrás |
 3. Ligue o rádio **segurando PTT2 + o botão de atalho** até aparecer `UPDATE` (mais confiável), ou

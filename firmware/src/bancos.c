@@ -43,13 +43,31 @@ typedef unsigned int u32;
  *                          LE_FLASH, nunca com a flash do firmware.
  * VALIDA_FREQ  0x01E38C3A  1 se a frequencia cai numa faixa permitida (o que a partida usa)
  * REVALIDA     0x01E3A700  se o canal atual nao vale mais, pula para o proximo que vale
+ *
+ * Cada uma vira um SIMBOLO ABSOLUTO para o linker, e nao um ponteiro feito de constante: assim a
+ * chamada sai como "call" relativo de 4 bytes (ou "goto", na cauda), em vez de carregar o endereco
+ * num registrador (6 bytes) e chamar por ele (2). Mesmo destino, ~4 bytes a menos por chamada - foi
+ * o que abriu espaco para o gancho da limpeza. O linker resolve cada uma no endereco exato, e a
+ * montagem confere isso no desmontado do codigo gerado (verificacao 4g do conferir.py).
  */
-#define SPRINTF      ((int (*)(char *, const char *, ...))0x01E19DCC)
-#define LE_FLASH     ((void (*)(u32, void *, u32))0x01E390AC)
-#define APAGA_SETOR  ((void (*)(u32))0x01E3A126)
-#define GRAVA_FLASH  ((void (*)(u32, const void *, u32))0x01E3A25A)
-#define VALIDA_FREQ  ((int (*)(u32))0x01E38C3A)
-#define REVALIDA     ((void (*)(void))0x01E3A700)
+#define FIRMWARE(nome, endereco)  __asm__(".set " #nome ", " #endereco)
+FIRMWARE(SPRINTF, 0x01E19DCC);      int SPRINTF(char *, const char *, ...);
+FIRMWARE(LE_FLASH, 0x01E390AC);     void LE_FLASH(u32, void *, u32);
+FIRMWARE(APAGA_SETOR, 0x01E3A126);  void APAGA_SETOR(u32);
+FIRMWARE(GRAVA_FLASH, 0x01E3A25A);  void GRAVA_FLASH(u32, const void *, u32);
+FIRMWARE(VALIDA_FREQ, 0x01E38C3A);  int VALIDA_FREQ(u32);
+FIRMWARE(REVALIDA, 0x01E3A700);     void REVALIDA(void);
+/* As tres que os ganchos substituem e repassam (o que a chamada original fazia). */
+FIRMWARE(FIM_DA_CARGA, 0x01E3951C); void FIM_DA_CARGA(void);     /* ultima etapa da partida */
+FIRMWARE(AVANCA_SCAN, 0x01E458E4);  void AVANCA_SCAN(void);      /* proximo canal da varredura */
+FIRMWARE(DADOS_CABO, 0x01E43970);   void DADOS_CABO(unsigned);   /* 'R' (0) e 'W' (1) do cabo */
+/* Tela: envio ao LCD, layout do lado, limpeza e enchimento (ver o gancho do realce) e a saida do
+ * editor de texto que o CH-NAME faz. */
+FIRMWARE(ENVIA, 0x01E3ADBC);        void ENVIA(void);
+FIRMWARE(LAYOUT, 0x01E3B1A2);       unsigned LAYOUT(unsigned);
+FIRMWARE(LIMPA, 0x01E3ACBA);        void LIMPA(unsigned);
+FIRMWARE(ENCHE, 0x01E3AC68);        void ENCHE(unsigned, unsigned, unsigned);
+FIRMWARE(SAI_DO_EDITOR, 0x01E3C7AA); void SAI_DO_EDITOR(void);
 
 /* ---------- memoria do firmware que usamos ----------
  * VALOR (h[0x14BFC]) e o valor do item em edicao: o motor de menus (0x01E489E0) guarda o valor
@@ -93,10 +111,12 @@ typedef unsigned int u32;
 #define TAM_NOME     12
 #define NUM_ZONAS    15                    /* 15 x 64 = 960; as mascaras por zona cobrem isso */
 #define TAM_PEDACO   24                    /* le o mapa de um banco em pedacos; 120 = 5 x 24 */
-/* Verde do fundo da faixa do VFO selecionado (#007100). Vem pelo gancho, que passa a cor como
- * valor de 16 bits - por isso aqui nao vale o limite de 8 bits do remendo direto, que so alcanca
- * verdes escuros demais para enxergar. Para mudar o tom, mexer so nesta linha. */
-#define COR_REALCE   0x0380u
+/* Verde do fundo do bloco do VFO em evidencia: #005900, degrau 22 dos 64 do verde em RGB565. Ja
+ * passaram por aqui o 0x00E0 (degrau 7, "nao da nem pra perceber que e verde"), o 0x0280 (20,
+ * pedido "um pouco mais claro") e o 0x0380 (28, claro demais no bloco inteiro); este fica entre os
+ * dois ultimos. Os ganchos passam a cor como valor de 16 bits, entao aqui nao vale o limite de 8
+ * bits do remendo direto. Para mudar o tom, mexer so nesta linha. */
+#define COR_REALCE   0x02C0u
 
 /* ---------- onde os bancos ficam gravados ----------
  * Setores proprios depois da area que o firmware usa em 0xC0000 (64 registros de 60 B, que ele le
@@ -358,7 +378,7 @@ static int aplica_filtro(int reconstruir)
  */
 void gancho_partida(void)
 {
-    ((void (*)(void))0x01E3951C)();
+    FIM_DA_CARGA();
     aplica_filtro(0);
     /* Na partida o logo ja esta na tela. Se o filtro trocou o canal, o REVALIDA pediu redesenho
      * (0x01E39F20 liga b[0x15367]) e a interface repinta uma banda por cima do logo - era essa a
@@ -376,7 +396,7 @@ void gancho_partida(void)
  */
 void gancho_scan(void)
 {
-    ((void (*)(void))0x01E458E4)();
+    AVANCA_SCAN();
     REDESENHA1 = 1;
     REDESENHA2 = 1;
 }
@@ -422,7 +442,7 @@ void gancho_cabo(unsigned grava)
         }
         return;
     }
-    ((void (*)(unsigned))0x01E43970)(grava);
+    DADOS_CABO(grava);
 }
 
 /* ---------- gancho do realce: fundo do bloco do VFO em evidencia ----------
@@ -449,20 +469,18 @@ void gancho_cabo(unsigned grava)
  * tela de um VFO so poe 4 ali (0x01E4CDC4). E o que mantem o verde fora das outras telas, que
  * passam por estas mesmas funcoes.
  *
- * As faixas de y de cada lado, lidas no desmontado (tabelas em 0x01E3BD40/0x01E3BD4A e
- * 0x01E3C0BE), com o lado em evidencia expandido e o outro compacto:
- *   A em evidencia   A: 18, 30, 56, 58, 62, 74    B: 91, 93, 114
- *   B em evidencia   A: 19, 21, 41                B: 57, 69, 95, 97, 101, 114
- * (18/57 e a linha de informacoes, a do "H", que so existe para o lado em evidencia.) Um unico
- * limite separa os dois em cada caso: y < 89 com o A em evidencia (74 contra 91) e y >= 57 com o
- * B (41 contra 57).
+ * A AREA do lado em evidencia e a que o proprio firmware limpa ao montar a tela (0x01E3ACBA no
+ * modo 2): 72 linhas a partir de y=16 com o A, ou de y=56 com o B, e a linha separadora branca
+ * logo depois (88) ou logo antes (55). Todas as janelas do lado em evidencia caem dentro dela e as
+ * do outro lado ficam fora - lidas no desmontado (tabelas em 0x01E3BD40/0x01E3BD4A e 0x01E3C0BE):
+ *   A em evidencia, area 16..87    A: 18, 30, 56, 58, 62, 74    B: 91, 93, 114
+ *   B em evidencia, area 56..127   A: 19, 21, 41                B: 57, 69, 95, 97, 101, 114
+ * (18/57 e a linha de informacoes, a do "H", que so existe para o lado em evidencia.)
  *
  * REGRA DURA, PAGA CARO (v13): o buffer tem 10240 bytes (uma banda de 160x32) e janela() nao tem
  * trava de tamanho - foi pedir janela maior que isso que reiniciava o radio. Aqui o gancho nunca
  * desenha nada: so le os limites que o firmware ja gravou e, por garantia, nao passa do buffer.
  */
-#define ENVIA      ((void (*)(void))0x01E3ADBC)
-#define LAYOUT     ((unsigned (*)(unsigned))0x01E3B1A2)
 #define VIDEO      ((volatile u16 *)0x00010190)
 #define PIXELS     (10240u / 2)                    /* o buffer inteiro, em pixels */
 /* Os limites que janela() grava (0x01E3AD3C..0x01E3AD74: b[83464] x0, b[83466] y0, b[83468] x1,
@@ -474,11 +492,24 @@ void gancho_cabo(unsigned grava)
 #define JAN_LINHA  (*(volatile u16 *)0x00014610)   /* 83472, bytes por linha: (x1 - x0) * 2 */
 #define COR_BUF    ((u16)(COR_REALCE >> 8 | COR_REALCE << 8))
 
+#define AREA       72u                             /* linhas da area do lado em evidencia */
+
+/* Primeira linha da area do lado em evidencia (16 com o A, 56 com o B), ou 0 fora da tela de dois
+ * VFOs. Chamado com o lado selecionado, layout() devolve 2 com o A em evidencia, 1 com o B e 0 nas
+ * outras telas - e ele so testa se o argumento e zero (0x01E3B1CC/0x01E3B1D4), entao LADO_B vai
+ * direto. 96 - 40 * lado da 16 para o A e 56 para o B. */
+static unsigned area_realce(void)
+{
+    unsigned lado = LAYOUT(LADO_B);
+
+    return lado - 1 <= 1 ? 96 - 40 * lado : 0;
+}
+
 void gancho_envia(void)
 {
-    unsigned y0 = JAN_Y0, lado = LAYOUT(LADO_B != 0);
+    unsigned y0 = JAN_Y0, inicio = area_realce();
 
-    if (lado == 2 ? y0 < 89 : lado == 1 && y0 >= 57) {
+    if (inicio && y0 - inicio < AREA) {      /* sem sinal: y0 abaixo do inicio da um numero enorme */
         unsigned n = (JAN_LINHA >> 1) * (JAN_Y1 - y0);
         volatile u16 *p = VIDEO;
 
@@ -491,6 +522,24 @@ void gancho_envia(void)
         }
     }
     ENVIA();
+}
+
+/* As janelas nao cobrem a area inteira: entre o nome grande e a frequencia, e entre a frequencia e
+ * a barra, sobram faixas que ninguem desenha (secao 8 de docs/mapa-da-tela.md) - e que, depois da
+ * limpeza, ficavam pretas. Este gancho entra nas duas chamadas que limpam a tela e em seguida a
+ * redesenham inteira (0x01E3C294, dentro de 0x01E3C290, por onde passam a partida e a saida do
+ * menu; e 0x01E40F66, dentro de 0x01E40F1C, que e a troca de lado): deixa a limpeza de fabrica
+ * correr (preto e a separadora) e enche de verde a area do lado em evidencia. As janelas vem por
+ * cima, recoloridas pelo gancho do envio, e nas faixas que sobram fica o verde. Nenhum outro
+ * caminho pinta aquelas faixas, entao elas continuam verdes ate a proxima limpeza. A entrada do
+ * menu limpa por outra chamada e nao passa por aqui. */
+void gancho_limpa(unsigned modo)
+{
+    unsigned inicio;
+
+    LIMPA(modo);
+    if ((inicio = area_realce()) != 0)
+        ENCHE(inicio, AREA, COR_REALCE);
 }
 
 /* ---------- textos ---------- */
@@ -597,8 +646,8 @@ void nome_grava(void)
     /* Sair do editor e o que o CH-NAME faz no fim do set dele (0x01E3C822): sem estas duas
      * chamadas o estado do editor fica ligado e o cabecalho do menu continua mostrando o "abc" do
      * teclado em vez do canal, em todos os itens, ate sair e entrar no menu de novo. */
-    ((void (*)(unsigned))0x01E3ACBA)(2);
-    ((void (*)(void))0x01E3C7AA)();
+    LIMPA(2);
+    SAI_DO_EDITOR();
 }
 
 /* ---------- item BANK CH: percorre os canais e marca (flags 0x80, max 960) ---------- */

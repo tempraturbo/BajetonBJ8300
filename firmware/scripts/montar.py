@@ -43,7 +43,7 @@ PROTEGIDAS = [
 # Onde o codigo novo roda (igual nas 6 imagens; ver bancos.ld).
 ENDERECO_CODIGO = 0x01E96122
 
-PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
+PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
            'gancho_partida', 'canal_exibe', 'canal_le', 'canal_grava',
            'titulo_bank', 'titulo_nome', 'titulo_canal')
 
@@ -203,11 +203,27 @@ REALCE_SITIOS_GANCHO = (
     (0x01E3C176, 'tela: barra do A compacto, (0,160,41,55)'),
     (0x01E3C19E, 'tela: barra do A expandido, (0,160,74,88)'),
     (0x01E3C1D0, 'tela: barra do B, (0,160,114,128)'),
+    # recepcao e transmissao (0x01E40F1C com argumento 1 ou 2): a barra do lado que recebe ou
+    # transmite e redesenhada em janela propria, com os segmentos e o texto RX/TX em x=127; e,
+    # no modo frequencia, a linha grande tambem
+    (0x01E3B7CA, 'RX/TX: barra e texto RX/TX, janela propria (19,140,y,y+9), y=77 no A e 115 no B'),
+    (0x01E41008, 'RX/TX: linha grande no modo frequencia, (0,160,y,y+24), y=30 no A e 69 no B'),
     # atualizacoes parciais, que correm ao trocar de canal
     (0x01E41452, 'parcial: barra de sinal'),
     (0x01E4147E, 'parcial: barra de sinal (nivel)'),
     (0x01E4B294, 'parcial: nome e frequencia, y=30 no A e 69 no B'),
     (0x01E4B322, 'parcial: numero do canal, y=62 no A e 101 no B'),
+)
+# As janelas nao cobrem a area inteira do lado em evidencia: entre o nome grande e a frequencia, e
+# entre a frequencia e a barra, sobram faixas que ninguem desenha e que a limpeza deixa pretas. Por
+# isso as duas chamadas que limpam a tela e a redesenham inteira passam pelo gancho_limpa, que deixa
+# a limpeza de fabrica correr (preto e a linha separadora) e enche de verde a area do lado em
+# evidencia - 72 linhas a partir de 16 (A) ou 56 (B), a mesma area que a limpeza usa. A entrada do
+# menu tambem limpa no modo 2, mas por outra chamada (0x01E4CBAE), e nao e tocada.
+LIMPA_ERA = 0x01E3ACBA
+LIMPA_SITIOS = (
+    (0x01E3C294, 'limpa e redesenha (0x01E3C290): partida, saida do menu e mais 14 chamadores'),
+    (0x01E40F66, 'limpa e redesenha na troca de lado (0x01E40F1C)'),
 )
 # Diagnostico (pintava faixas inteiras trocando so a cor, 2 bytes por sitio) fica desligado: serviu
 # para descobrir qual chamada pinta o que. Os sitios conferidos estao no historico do git.
@@ -414,6 +430,14 @@ def main():
                                  f'{antes.hex()}')
             app[o:o + 4] = monta_call(sitio, S['gancho_envia'])
             print(f"  gancho do realce {sitio:#x} -> {S['gancho_envia']:#x}: {oque}")
+        for sitio, oque in LIMPA_SITIOS:
+            o = sitio - BASE_APP
+            antes = bytes(app[o:o + 4])
+            if antes != monta_call(sitio, LIMPA_ERA):
+                raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {LIMPA_ERA:#x}: '
+                                 f'{antes.hex()}')
+            app[o:o + 4] = monta_call(sitio, S['gancho_limpa'])
+            print(f"  gancho da limpeza {sitio:#x} -> {S['gancho_limpa']:#x}: {oque}")
 
     # 4c. diagnostico das faixas: so a cor do preenchimento, 2 bytes por sitio
     if REALCE_DIAG:

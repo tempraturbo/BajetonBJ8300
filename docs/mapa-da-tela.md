@@ -76,7 +76,14 @@ bloco é o expandido.
 ## 4. Os caminhos de desenho da tela de dois VFOs
 
 ```
-0x01E3C278                redesenho completo (é o que corre ao trocar de A para B)
+0x01E3C290                limpa e redesenha: partida, saída do menu e mais 14 chamadores
+  ├─ 0x01E3ACBA(2)        limpeza (ver abaixo)            ← gancho_limpa em 0x01E3C294
+  └─ 0x01E3C278           redesenho completo
+0x01E4DC9E                tecla A/B: troca o lado (0x01E3A812) e chama 0x01E41486, que vai a
+  └─ 0x01E40F1C(0)        ├─ 0x01E3ACBA(2) limpeza      ← gancho_limpa em 0x01E40F66
+                          └─ 0x01E3C132(0) a tela
+
+0x01E3C278                redesenho completo, sem limpar (também é chamado direto, na varredura)
   ├─ 0x01E3B05C           barra de estado (y 0..15) — caminho próprio, sem gancho nosso
   └─ 0x01E3C132(0)        a tela
        ├─ janela 0x01E3C176   faixa da barra do A compacto   (0,160,41,55)
@@ -92,10 +99,27 @@ atualizações parciais (correm ao trocar de canal, e a da barra também ao vari
   0x01E4B29C   número do canal (127,159,y,y+9) + barra via 0x01E413BE (0,160,y,y+14)
   0x01E4B1DE   nome e frequência (7,160,y,y+24)
   0x01E453E0   redesenha só o bloco em evidência: linha de informações, bloco e complemento
+
+recepção e transmissão (0x01E40F1C com argumento 1 ou 2)
+  0x01E3B592(1, 2, lado, 1)   barra do lado que recebe/transmite em JANELA PRÓPRIA
+                              (19,140,y,y+9), segmentos e o texto RX/TX em x=127 → envia 0x01E3B7CA
+  janela 0x01E40FD4           só no modo frequência: a linha grande (0,160,y,y+24) → envia 0x01E41008
 ```
 
 A linha de informações (`0x01E3B2C4`) só é desenhada para o lado **expandido**: com o `layout()`
 em 0 ou 3 ela pula janela e envio (`0x01E3B326`/`0x01E3B32A`).
+
+**A limpeza `0x01E3ACBA(2)` desenha a linha separadora.** Ela enche linhas inteiras com
+`0x01E3AC68(y, altura, cor)`, que manda direto ao LCD, sem passar por `janela()`/`envia()`:
+
+| | A em evidência | B em evidência |
+|---|---|---|
+| área do lado em evidência (preto) | y 16, 72 linhas (16..87) | y 56, 72 linhas (56..127) |
+| área do outro lado (preto) | y 89, 39 linhas | y 16, 39 linhas |
+| **linha separadora** (branco) | y **88** | y **55** |
+
+A mesma limpeza roda ao entrar no menu (`0x01E4CBAE`), por isso o gancho não entra nela, e sim nas
+duas chamadas que limpam **e redesenham a tela principal**.
 
 `0x01E3C132` com argumento **1** é a tela de **um** VFO: ela desvia as três faixas de barra e manda
 o bloco para y 32/36. Os onze chamadores passam 0 ou 1 — nunca outro valor.
@@ -137,17 +161,28 @@ O usuário relatou exatamente dois sintomas, e cada um tem uma causa com endere�
 
 ## 7. Como o realce é feito agora
 
-O gancho entra **no envio** (`envia()`, `0x01E3ADBC`) e troca por verde **todo pixel preto do
-pedaço** antes de ele ir para o LCD. Assim o fundo da janela, a célula de cada caractere e o vão
+São dois ganchos, que dividem a mesma conta: a área do lado em evidência é a da limpeza, 72
+linhas a partir de 16 (A) ou 56 (B).
+
+```c
+static unsigned area_realce(void)         /* 16 com o A, 56 com o B, 0 fora da tela */
+{
+    unsigned lado = LAYOUT(LADO_B);        /* 2 = A em evidência, 1 = B, 0 = outra tela */
+    return lado - 1 <= 1 ? 96 - 40 * lado : 0;
+}
+```
+
+**1. No envio** (`envia()`, `0x01E3ADBC`): troca por verde **todo pixel preto do pedaço** antes
+de ele ir para o LCD. Assim o fundo da janela, a célula de cada caractere e o vão
 entre caracteres ficam verdes de uma vez, e o que tem cor própria (texto branco, segmentos da
 barra, linha separadora) passa intacto.
 
 ```c
 void gancho_envia(void)
 {
-    unsigned y0 = JAN_Y0, lado = LAYOUT(LADO_B != 0);
+    unsigned y0 = JAN_Y0, inicio = area_realce();
 
-    if (lado == 2 ? y0 < 89 : lado == 1 && y0 >= 57) {
+    if (inicio && y0 - inicio < AREA) {    /* sem sinal: y0 abaixo do início vira número enorme */
         unsigned n = (JAN_LINHA >> 1) * (JAN_Y1 - y0);
         volatile u16 *p = VIDEO;
 
@@ -163,27 +198,44 @@ void gancho_envia(void)
 }
 ```
 
-São **14 sítios**, todas as chamadas de `envia()` dentro das sete funções que desenham a tela de
-dois VFOs (seção 4), trocadas no lugar: `call` de 4 bytes, **não cresce o código**. O único envio
+São **16 sítios**, todas as chamadas de `envia()` dentro das funções que desenham a tela de dois
+VFOs, inclusive as do caminho de recepção e transmissão (seção 4), trocadas no lugar: `call` de 4 bytes, **não cresce o código**. O único envio
 por salto do firmware (`goto` em `0x01E4544E`, no fim de `0x01E453E0`) só reenvia o último pedaço
 do complemento, que o gancho em `0x01E3C12A` já processou. A barra de
 estado, os menus e os avisos sobrepostos têm caminho próprio e continuam pretos. E o gancho ainda
 confere na rotina do firmware (seção 3) se a tela é mesmo a de dois VFOs, de modo que as outras
 telas que passam por essas mesmas funções — a de um VFO, em primeiro lugar — nunca são pintadas.
 
-O gancho **não desenha nada**: só lê os limites que `janela()` já gravou e escreve dentro do
+Esse gancho **não desenha nada**: só lê os limites que `janela()` já gravou e escreve dentro do
 buffer, com trava no tamanho dele. O estouro da v13 é impossível por construção.
 
-A cor fica em `COR_REALCE`, no `firmware/src/bancos.c` — uma linha só. O valor atual é `0x0380`
-(#007100). O buffer guarda o byte alto primeiro, então o gancho usa `COR_BUF`, o mesmo valor com os
-bytes trocados (`0x8003`) — conferido no código de máquina gerado (`0x01E96442`).
+**2. Na limpeza** (`gancho_limpa`, nas chamadas `0x01E3C294` e `0x01E40F66`): deixa a limpeza de
+fábrica correr — preto e a separadora — e enche de verde a área do lado em evidência. As janelas
+vêm por cima, recoloridas pelo primeiro gancho, e **nos vãos entre elas fica o verde**. Ninguém
+mais pinta aqueles vãos, então eles continuam verdes até a próxima limpeza, que é sempre seguida
+deste mesmo enchimento. A separadora (88 ou 55) fica fora da área e não é tocada.
 
-## 8. O que falta
+```c
+void gancho_limpa(unsigned modo)
+{
+    unsigned inicio;
 
-### Vãos que nenhuma janela cobre (confirmados no rádio com a v16)
+    LIMPA(modo);
+    if ((inicio = area_realce()) != 0)
+        ENCHE(inicio, AREA, COR_REALCE);
+}
+```
 
-O gancho só recolore o que é enviado ao LCD, e nestas faixas **ninguém envia nada** — elas ficam
-com o que a tela tinha, preto. Calculadas da tabela da seção 5 e conferidas nas fotos:
+A cor fica em `COR_REALCE`, no `firmware/src/bancos.c` — uma linha só. O valor atual é `0x02C0`
+(#005900). O buffer de vídeo guarda o byte alto primeiro, então o gancho do envio usa `COR_BUF`, o
+mesmo valor com os bytes trocados (`0xC002`); o enchimento recebe a cor normal, porque a própria
+rotina separa os bytes. Os dois conferidos no código de máquina gerado.
+
+## 8. Vãos que nenhuma janela cobre
+
+O gancho do envio só recolore o que é enviado ao LCD, e nestas faixas **ninguém envia nada**. Na
+v16 elas ficavam com o que a limpeza deixou, preto; desde a v17 o gancho da limpeza as deixa
+verdes. Calculadas da tabela da seção 5 e conferidas nas fotos da v16:
 
 | | A em evidência | B em evidência |
 |---|---|---|
@@ -191,16 +243,13 @@ com o que a tela tinha, preto. Calculadas da tabela da seção 5 e conferidas na
 | entre a frequência e a barra | y 70..74 em x 0..132 | y 109..114 em x 0..132 |
 
 À direita de x=132 não há vão porque a faixa da direita (56..78 com o A, 95..117 com o B) cobre a
-altura toda. Fechar esses vãos exige **desenhar** faixas a mais (não há o que recolorir), e antes
-disso falta mapear: quem desenha a linha separadora branca (para não pintar por cima dela), se a
-troca de lado limpa a tela inteira (senão o verde de um vão fica para trás no outro layout) e de
-onde tirar espaço — o código ocupa 1776 dos 1782 bytes.
+altura toda. Também ficam na área, e agora verdes: as linhas 16..17 entre a barra de estado e a
+linha do `H` (com o A) e a linha 56 entre a separadora e a linha do `H` (com o B).
 
-### Ainda não mapeado
+## 9. O que ainda não está mapeado
 
-- A linha separadora entre os blocos: não sai de nenhuma das janelas da seção 5. Por ser clara, o
-  gancho não a altera de qualquer forma. (O indicador `H` foi mapeado: está na linha de
-  informações, seção 4.)
+- A linha 15, entre a barra de estado (janela 0..15, linhas 0..14) e a área do A (16): ninguém a
+  desenha, nem a limpeza. Fica preta, como borda da barra de estado.
 - As outras telas (menu, FM, varredura) usam as mesmas rotinas com outras coordenadas. O gancho não
   as pinta, pela trava da seção 3, mas o realce também não foi pensado para elas.
 - A janela do nome começa em x=7 na atualização parcial (`0x01E4B270`) e em x=0 no redesenho

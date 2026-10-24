@@ -5,6 +5,52 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v18 — Oct 24 — green background on RX/TX too
+
+In v17 the **RX/TX** box at the end of the bar kept a black background (as did the thin lines between
+the bar's segments, while receiving or transmitting).
+
+When receiving or transmitting, the firmware takes another path (`0x01E40F1C` with argument 1 or 2):
+it redraws the affected side's bar in **its own window** `(19, 140, y, y+9)` — segments and the
+RX/TX text at x=127 — and sends it through `0x01E3B7CA`; in frequency mode it also redraws the big
+line, sent through `0x01E41008`. Both sends now go through the send hook, with the same guard: only a
+window inside the highlighted side's area turns green. The send at `0x01E3B7CA` sits inside a
+conditional block (`if (r8 != 0)`); checked in the final file that the block prefix is intact and
+only the call target changed.
+
+No new code (1732 B), 16 sites at the send and 2 at the clear, reproducible build, no jump into a
+patch. **Not yet tested on the radio.**
+
+## v17 — Oct 24 — whole block green, no black strips, darker green ✅
+
+**Tested on the radio:** "it turned out excellent, it's perfect" — it switches sides, gets the right
+colour, no black strips. Only the RX/TX box still had a black background (v18).
+
+Closes the thin black strips left in v16 (between the name and the frequency, and between the
+frequency and the bar), mapped and checked pixel for pixel against the photos.
+
+- **Where they came from:** no window draws there, so the send hook had nothing to recolour, and
+  the strip kept whatever the screen clear left: black.
+- **What clears:** `0x01E3ACBA(2)` fills the highlighted side's area with black (72 rows from 16
+  with A, from 56 with B), then the other side's, and draws **the white separator line** (88 or
+  55). It is the same clear the side switch performs, so no stale green from one layout ever
+  survives into the other.
+- **The fix:** a hook on the two calls that clear and redraw the main screen (`0x01E3C294` — boot,
+  leaving the menu and 14 more callers — and `0x01E40F66`, the side switch) lets the clear run and
+  fills the highlighted side's area with green. The windows come on top, and the gaps stay green.
+  Entering the menu clears the same way but through another call, and is untouched; so is the
+  redraw without a clear (scan's, for instance), so nothing flickers.
+- **Darker green:** `0x02C0` (#005900), between v16's `0x0380` (too light on the whole block) and
+  `0x0280` (which had been asked to be lighter).
+- **Room:** firmware routines are now called through absolute symbols (`FIRMWARE()`), and each call
+  shrank from 8 to 4 bytes — same target. The code is at 1732 of the 1782 bytes, with the new hook
+  inside. The new check `4g` recomputes the target of every generated `call`/`goto` and rejects any
+  that is neither an internal function nor a declared routine; tested by removing one declaration,
+  it failed as it should.
+
+Reproducible build, no jump into a patch, 16/16 sites in all six images. **Not yet tested on the
+radio.**
+
 ## v16 — Oct 24 — window addresses fixed ✅ **highlight working**
 
 **Tested on the radio:** the selected side's block turns green — `H` line, name, frequency, number

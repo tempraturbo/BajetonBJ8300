@@ -41,7 +41,18 @@ CRCs refeitos (`firmware/scripts/jlfw.py`).
   blocos de 32 bytes. Gravar código em claro ali faz o processador executar lixo — foi o primeiro
   erro grave do projeto.
 - **Área livre comum às 6 imagens: `0x1E96121..0x1E96DFF` = 3295 bytes.** É o único espaço para
-  código novo. Medir com `firmware/scripts/espaco_livre.py`.
+  código novo. Medir com `firmware/scripts/espaco_livre.py`. A cópia da tabela de menus ocupa 1512
+  deles, então o código vai até 1782.
+- **Chamar o firmware por símbolo absoluto, não por ponteiro.** `((void (*)(void))0x01E3ADBC)()`
+  compila como "carrega o endereço num registrador (6 bytes) e chama por ele (2)"; declarado com
+  `FIRMWARE(ENVIA, 0x01E3ADBC)` (um `.set` no `bancos.c`), sai como `call` relativo de 4 bytes,
+  resolvido pelo linker no endereço exato. Foi o que abriu espaço para o gancho da limpeza (v17), e a
+  verificação `4g` do `conferir.py` recalcula o destino de cada `call`/`goto` gerado.
+- **Reserva ainda não usada:** a tabela de menus original (`0x01E62F98`, 53 itens) vem seguida do
+  item zerado que a encerra, e 53 + 1 = 54 itens = exatamente o tamanho da nossa cópia. Gravar a
+  tabela nova no lugar da original devolveria os 1512 bytes da área livre. Antes, falta provar que
+  os outros dois chamadores da contagem (`FUN_01E4A81A`, em `0x01E4B3FE` e `0x01E4C3C4`) não contam
+  a tabela principal — sem o item zerado, eles passariam do fim.
 
 ## 3. Mapa do chip de dados (1 MB)
 

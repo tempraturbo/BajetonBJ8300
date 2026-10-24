@@ -41,7 +41,18 @@ recomputed (`firmware/scripts/jlfw.py`).
   32-byte blocks. Writing plain code there makes the CPU execute garbage — the project's first
   serious mistake.
 - **Free area common to all 6 images: `0x1E96121..0x1E96DFF` = 3295 bytes.** That is the only room
-  for new code. Measure it with `firmware/scripts/espaco_livre.py`.
+  for new code. Measure it with `firmware/scripts/espaco_livre.py`. The menu table copy takes 1512
+  of them, so code can go up to 1782.
+- **Call the firmware through absolute symbols, not pointers.** `((void (*)(void))0x01E3ADBC)()`
+  compiles to "load the address into a register (6 bytes) and call through it (2)"; declared with
+  `FIRMWARE(ENVIA, 0x01E3ADBC)` (a `.set` in `bancos.c`), it comes out as a 4-byte relative `call`,
+  resolved by the linker to the exact address. That is what made room for the clear hook (v17), and
+  check `4g` in `conferir.py` recomputes the target of every generated `call`/`goto`.
+- **Reserve not used yet:** the original menu table (`0x01E62F98`, 53 items) is followed by the
+  all-zero item that ends it, and 53 + 1 = 54 items = exactly the size of our copy. Writing the new
+  table over the original would give back the 1512 bytes of the free area. First it must be proven
+  that the other two callers of the count (`FUN_01E4A81A`, at `0x01E4B3FE` and `0x01E4C3C4`) do not
+  count the main table — without the zero item they would run past the end.
 
 ## 3. Data flash map (1 MB)
 

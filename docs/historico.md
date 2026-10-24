@@ -5,6 +5,52 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v18 — 24/10 — fundo verde também no RX/TX
+
+Na v17 a caixinha do **RX/TX**, na ponta da barra, ficava com fundo preto (e os fiozinhos entre os
+segmentos da barra também, enquanto recebe ou transmite).
+
+Ao receber ou transmitir, o firmware passa por outro caminho (`0x01E40F1C` com argumento 1 ou 2):
+redesenha a barra do lado afetado numa **janela própria** `(19, 140, y, y+9)` — segmentos e o texto
+RX/TX em x=127 — e manda por `0x01E3B7CA`; no modo frequência, redesenha ainda a linha grande, que
+sai por `0x01E41008`. Os dois envios entraram no gancho do envio, com a mesma trava: só fica verde a
+janela que cai na área do lado em evidência. O envio de `0x01E3B7CA` fica dentro de um bloco
+condicional (`if (r8 != 0)`); conferido no arquivo final que o prefixo do bloco ficou intacto e só
+o destino da chamada mudou.
+
+Sem código novo (1732 B), 16 sítios no envio e 2 na limpeza, build reprodutível, zero desvios em
+remendo. **Ainda não testada no rádio.**
+
+## v17 — 24/10 — bloco inteiro verde, sem faixas pretas, e verde mais escuro ✅
+
+**Testada no rádio:** "ficou excelente, tá perfeito" — muda de lado, fica da cor certa, sem as faixas
+pretas. Só a caixinha do RX/TX continuou com fundo preto (v18).
+
+Fecha as faixas finas pretas que sobravam na v16 (entre o nome e a frequência, e entre a frequência
+e a barra), mapeadas e conferidas pixel a pixel nas fotos.
+
+- **De onde vinham:** nenhuma janela desenha ali, então o gancho do envio não tinha o que
+  recolorir, e a faixa ficava com o que a limpeza da tela deixou: preto.
+- **Quem limpa:** `0x01E3ACBA(2)` enche de preto a área do lado em evidência (72 linhas a partir
+  de 16 com o A, de 56 com o B), a do outro lado, e desenha **a linha separadora branca** (88 ou
+  55). É a mesma limpeza que a troca de lado faz, então nunca sobra verde velho de um layout no
+  outro.
+- **O conserto:** um gancho nas duas chamadas que limpam e redesenham a tela principal
+  (`0x01E3C294` — partida, saída do menu e mais 14 chamadores — e `0x01E40F66`, a troca de lado)
+  deixa a limpeza correr e enche de verde a área do lado em evidência. As janelas vêm por cima, e
+  nos vãos fica o verde. A entrada do menu também limpa assim, mas por outra chamada, e não é
+  tocada; o redesenho sem limpeza (o da varredura, por exemplo) também não, para não piscar.
+- **Verde mais escuro:** `0x02C0` (#005900), entre o `0x0380` da v16 (claro demais no bloco
+  inteiro) e o `0x0280` (que tinha sido pedido mais claro).
+- **Espaço:** as rotinas do firmware passaram a ser chamadas por símbolo absoluto (`FIRMWARE()`),
+  e cada chamada caiu de 8 para 4 bytes — mesmo destino. O código ficou em 1732 dos 1782 bytes,
+  com o gancho novo dentro. A verificação nova `4g` recalcula o destino de cada `call`/`goto`
+  gerado e reprova qualquer um que não seja uma função interna ou uma rotina declarada; testada
+  tirando uma declaração, acusou.
+
+Build reprodutível, zero desvios em remendo, 16/16 sítios nas seis imagens. **Ainda não testada
+no rádio.**
+
 ## v16 — 24/10 — endereços da janela corrigidos ✅ **realce funcionando**
 
 **Testado no rádio:** o bloco do lado escolhido fica verde — linha do `H`, nome, frequência, número

@@ -76,7 +76,14 @@ block is the expanded one.
 ## 4. Drawing paths of the two-VFO screen
 
 ```
-0x01E3C278                full redraw (this is what runs when you switch A to B)
+0x01E3C290                clear and redraw: boot, leaving the menu and 14 more callers
+  ├─ 0x01E3ACBA(2)        clear (see below)               ← gancho_limpa at 0x01E3C294
+  └─ 0x01E3C278           full redraw
+0x01E4DC9E                A/B key: switches side (0x01E3A812) and calls 0x01E41486, which goes to
+  └─ 0x01E40F1C(0)        ├─ 0x01E3ACBA(2) clear        ← gancho_limpa at 0x01E40F66
+                          └─ 0x01E3C132(0) the screen
+
+0x01E3C278                full redraw without clearing (also called directly, during scan)
   ├─ 0x01E3B05C           status bar (y 0..15) — its own path, no hook of ours
   └─ 0x01E3C132(0)        the screen
        ├─ janela 0x01E3C176   bar row, A compact    (0,160,41,55)
@@ -92,10 +99,27 @@ partial updates (run on channel change; the bar one also as the signal varies)
   0x01E4B29C   channel number (127,159,y,y+9) + bar via 0x01E413BE (0,160,y,y+14)
   0x01E4B1DE   name and frequency (7,160,y,y+24)
   0x01E453E0   redraws only the highlighted block: info line, block and complement
+
+receive and transmit (0x01E40F1C with argument 1 or 2)
+  0x01E3B592(1, 2, side, 1)   bar of the side receiving/transmitting in ITS OWN WINDOW
+                              (19,140,y,y+9), segments and the RX/TX text at x=127 → send 0x01E3B7CA
+  window 0x01E40FD4           frequency mode only: the big line (0,160,y,y+24) → send 0x01E41008
 ```
 
 The info line (`0x01E3B2C4`) is only drawn for the **expanded** side: with `layout()` at 0 or 3 it
 skips both window and send (`0x01E3B326`/`0x01E3B32A`).
+
+**The clear `0x01E3ACBA(2)` draws the separator line.** It fills whole rows with
+`0x01E3AC68(y, height, colour)`, which sends straight to the LCD, bypassing `janela()`/`envia()`:
+
+| | A highlighted | B highlighted |
+|---|---|---|
+| highlighted side's area (black) | y 16, 72 rows (16..87) | y 56, 72 rows (56..127) |
+| other side's area (black) | y 89, 39 rows | y 16, 39 rows |
+| **separator line** (white) | y **88** | y **55** |
+
+The same clear runs when entering the menu (`0x01E4CBAE`), so the hook does not go into it, but
+into the two calls that clear **and redraw the main screen**.
 
 `0x01E3C132` with argument **1** is the **single**-VFO screen: it skips the three bar rows and puts
 the block at y 32/36. All eleven callers pass 0 or 1 — never any other value.
@@ -139,17 +163,28 @@ The user reported exactly two symptoms, and each has a cause with an address:
 
 ## 7. How the highlight works now
 
-The hook goes into **the send** (`envia()`, `0x01E3ADBC`) and replaces **every black pixel of the
-window** with green before it reaches the LCD. That makes the window background, every character
+There are two hooks, sharing the same arithmetic: the highlighted side's area is the clear's, 72
+rows starting at 16 (A) or 56 (B).
+
+```c
+static unsigned area_realce(void)         /* 16 with A, 56 with B, 0 off this screen */
+{
+    unsigned lado = LAYOUT(LADO_B);        /* 2 = A highlighted, 1 = B, 0 = other screen */
+    return lado - 1 <= 1 ? 96 - 40 * lado : 0;
+}
+```
+
+**1. At the send** (`envia()`, `0x01E3ADBC`): replaces **every black pixel of the window** with
+green before it reaches the LCD. That makes the window background, every character
 cell and every inter-character gap green in one go, while anything with a colour of its own (white
 text, bar segments, the separator line) passes through untouched.
 
 ```c
 void gancho_envia(void)
 {
-    unsigned y0 = JAN_Y0, lado = LAYOUT(LADO_B != 0);
+    unsigned y0 = JAN_Y0, inicio = area_realce();
 
-    if (lado == 2 ? y0 < 89 : lado == 1 && y0 >= 57) {
+    if (inicio && y0 - inicio < AREA) {    /* unsigned: y0 above the start becomes huge */
         unsigned n = (JAN_LINHA >> 1) * (JAN_Y1 - y0);
         volatile u16 *p = VIDEO;
 
@@ -165,27 +200,44 @@ void gancho_envia(void)
 }
 ```
 
-There are **14 sites**: every `envia()` call inside the seven functions that draw the two-VFO screen
-(section 4), replaced in place — a 4-byte `call`, so **the code does not grow**. The firmware's only
+There are **16 sites**: every `envia()` call inside the functions that draw the two-VFO screen,
+including those on the receive and transmit path (section 4), replaced in place — a 4-byte `call`, so **the code does not grow**. The firmware's only
 send by jump (`goto` at `0x01E4544E`, at the end of `0x01E453E0`) merely re-sends the complement's
 last window, which the hook at `0x01E3C12A` has already processed. The status bar, the
 menus and pop-up notices have their own paths and stay black. And the hook still asks the
 firmware's own routine (section 3) whether this really is the two-VFO screen, so the other screens
 that go through these same functions — the single-VFO one first of all — are never painted.
 
-The hook **draws nothing**: it only reads the bounds `janela()` already stored and writes inside the
-buffer, clamped to its size. v13's overflow is impossible by construction.
+This hook **draws nothing**: it only reads the bounds `janela()` already stored and writes inside
+the buffer, clamped to its size. v13's overflow is impossible by construction.
+
+**2. At the clear** (`gancho_limpa`, at the calls `0x01E3C294` and `0x01E40F66`): lets the stock
+clear run — black and the separator — and fills the highlighted side's area with green. The windows
+come on top, recoloured by the first hook, and **the gaps between them stay green**. Nothing else
+paints those gaps, so they stay green until the next clear, which is always followed by this same
+fill. The separator (88 or 55) lies outside the area and is untouched.
+
+```c
+void gancho_limpa(unsigned modo)
+{
+    unsigned inicio;
+
+    LIMPA(modo);
+    if ((inicio = area_realce()) != 0)
+        ENCHE(inicio, AREA, COR_REALCE);
+}
+```
 
 The colour lives in `COR_REALCE`, in `firmware/src/bancos.c` — a single line. The current value is
-`0x0380` (#007100). The buffer stores the high byte first, so the hook uses `COR_BUF`, the same
-value byte-swapped (`0x8003`) — verified in the generated machine code (`0x01E96442`).
+`0x02C0` (#005900). Video memory stores the high byte first, so the send hook uses `COR_BUF`, the
+same value byte-swapped (`0xC002`); the fill takes the plain colour, because the routine splits the
+bytes itself. Both verified in the generated machine code.
 
-## 8. What is left
+## 8. Gaps no window covers
 
-### Gaps no window covers (confirmed on the radio with v16)
-
-The hook only recolours what is sent to the LCD, and **nothing is ever sent** in these strips — they
-keep whatever the screen had, black. Computed from the table in section 5 and checked in the photos:
+The send hook only recolours what is sent to the LCD, and **nothing is ever sent** in these strips.
+In v16 they kept whatever the clear left, black; since v17 the clear hook leaves them green.
+Computed from the table in section 5 and checked in the v16 photos:
 
 | | A highlighted | B highlighted |
 |---|---|---|
@@ -193,16 +245,13 @@ keep whatever the screen had, black. Computed from the table in section 5 and ch
 | between the frequency and the bar | y 70..74 at x 0..132 | y 109..114 at x 0..132 |
 
 Right of x=132 there is no gap because the right-hand strip (56..78 with A, 95..117 with B) covers
-the whole height. Closing the gaps means **drawing** extra strips (there is nothing to recolour), and
-before that it still has to be mapped: what draws the white separator line (so as not to paint over
-it), whether switching sides clears the whole screen (otherwise a gap's green would be left behind in
-the other layout) and where to find room — the code takes 1776 of the 1782 bytes.
+the whole height. Also inside the area, and now green: rows 16..17 between the status bar and the
+`H` line (with A) and row 56 between the separator and the `H` line (with B).
 
-### Still unmapped
+## 9. Still unmapped
 
-- The separator line between the blocks: it comes from none of the windows in section 5. Being
-  light-coloured, the hook would not change it anyway. (The `H` indicator is now mapped: it lives in
-  the info line, section 4.)
+- Row 15, between the status bar (window 0..15, rows 0..14) and A's area (16): nothing draws it, not
+  even the clear. It stays black, as a border under the status bar.
 - Other screens (menu, FM, scan) use the same routines with different coordinates. The hook does not
   paint them, thanks to the guard in section 3, but the highlight was not designed for them either.
 - The name window starts at x=7 on the partial update (`0x01E4B270`) and at x=0 on the full redraw
