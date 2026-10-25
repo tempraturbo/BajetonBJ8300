@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="56" viewBox="0 0 300 56">
+  <title>Versão em português</title>
+  <rect width="300" height="56" rx="12" fill="#146c43"/>
+  <rect x="2" y="2" width="296" height="52" rx="10" fill="#198754"/>
+  <svg x="16" y="13" width="43" height="30" viewBox="0 0 100 70">
+    <rect width="100" height="70" fill="#009c3b"/>
+    <path d="M50,7 L93,35 L50,63 L7,35 z" fill="#ffdf00"/>
+    <circle cx="50" cy="35" r="17.5" fill="#002776"/>
+    <path d="M33.2,30.5 Q50,26 66.5,38.5" stroke="#fff" stroke-width="3.2" fill="none"/>
+  </svg>
+  <rect x="16" y="13" width="43" height="30" fill="none" stroke="#fff" stroke-width="1.5"/>
+  <text x="75" y="35" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#fff">Versão em português</text>
+</svg>

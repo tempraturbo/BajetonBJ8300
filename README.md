@@ -1,6 +1,8 @@
 # Baojie BJ-8300 — firmware v1.0T, bancos de canais e driver do CHIRP
 
-> 🇬🇧 **English version: [README.en.md](README.en.md)**
+<p align="center">
+  <a href="README.en.md"><img src="docs/imagens/botao-english.svg" alt="English version" height="56"></a>
+</p>
 
 Firmware modificado para o rádio **Baojie/Bajeton BJ-8300** (JieLi AC695X, CPU pi32v2), feito por
 engenharia reversa do firmware de fábrica **V0.12**, sem documentação do fabricante. Traz **16
@@ -21,6 +23,9 @@ bancos de canais de verdade**, scramble compatível com o Baofeng UV-17L, espect
 >
 > Testada no rádio. Para gravar: [passo a passo](#-como-gravar-o-firmware-passo-a-passo). Para o
 > CHIRP: [passo a passo](#-como-usar-o-chirp-com-este-firmware).
+
+💚 **Gostou do projeto?** [Apoie com uma doação pelo PayPal](#-apoie-o-projeto) — qualquer valor
+ajuda a próxima versão a sair.
 
 ---
 
@@ -335,6 +340,29 @@ logo/           imagem de abertura (BMP) e conversor
 tests/          testes do driver do CHIRP
 docs/           engenharia reversa, histórico, mapa da tela, imagens e notas de trabalho
 ```
+
+---
+
+## 💚 Apoie o projeto
+
+A v1.0T nasceu de muitas horas de engenharia reversa: o firmware de fábrica aberto byte a byte, sem
+nenhuma documentação do fabricante, cada rotina mapeada no desmontado e cada uma das 25 versões
+gravada e testada num rádio de verdade, até chegar a uma versão estável. Tudo aqui é e vai
+continuar **livre e gratuito**, para usar, estudar e modificar.
+
+Se o seu BJ-8300 ficou melhor — os bancos organizaram seus canais, o scramble passou a falar com o
+Baofeng do colega, o espectro ficou mais rápido —, considere pagar um café para o projeto. Qualquer
+valor ajuda: é tempo para novas funções, equipamento para testar e a próxima versão saindo.
+
+<p align="center">
+  <a href="https://www.paypal.com/donate/?hosted_button_id=2VPWYBMKBSJX6"><img src="https://img.shields.io/badge/Doar%20com-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="Doar com PayPal"></a>
+  <br><br>
+  <a href="https://www.paypal.com/donate/?hosted_button_id=2VPWYBMKBSJX6"><img src="docs/imagens/doacao-paypal.png" alt="QR code para doar pelo PayPal" width="128"></a>
+  <br>
+  <sub>Aponte a câmera do celular para o QR code, ou clique no botão.</sub>
+</p>
+
+**Obrigado!** Cada doação é um sinal de que vale a pena continuar. 📻
 
 ---
 

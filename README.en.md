@@ -1,6 +1,8 @@
 # Baojie BJ-8300 — firmware v1.0T, channel banks and CHIRP driver
 
-> 🇧🇷 **Versão em português: [README.md](README.md)**
+<p align="center">
+  <a href="README.md"><img src="docs/imagens/botao-portugues.svg" alt="Versão em português" height="56"></a>
+</p>
 
 Modified firmware for the **Baojie/Bajeton BJ-8300** handheld (JieLi AC695X, pi32v2 CPU), built by
 reverse engineering the stock **V0.12** firmware, with no vendor documentation. It adds **16 real
@@ -21,6 +23,9 @@ channel banks**, a scramble that talks to the Baofeng UV-17L, a faster spectrum 
 >
 > Tested on the radio. To flash it: [step by step](#-how-to-flash-the-firmware-step-by-step). For
 > CHIRP: [step by step](#-how-to-use-chirp-with-this-firmware).
+
+💚 **Like the project?** [Support it with a PayPal donation](#-support-the-project) — any amount
+helps the next version come out.
 
 ---
 
@@ -336,6 +341,29 @@ logo/           boot image (BMP) and converter
 tests/          CHIRP driver tests
 docs/           reverse engineering, changelog, screen map, images and working notes
 ```
+
+---
+
+## 💚 Support the project
+
+v1.0T came out of many hours of reverse engineering: the stock firmware opened byte by byte, with
+no vendor documentation at all, every routine mapped in the disassembly, and each of the 25
+versions flashed and tested on a real radio, until a stable release was reached. Everything here
+is, and will stay, **free**, to use, study and modify.
+
+If your BJ-8300 got better — the banks sorted out your channels, the scramble now talks to your
+friend's Baofeng, the spectrum got faster —, consider buying the project a coffee. Any amount
+helps: it means time for new features, gear to test on, and the next version coming out.
+
+<p align="center">
+  <a href="https://www.paypal.com/donate/?hosted_button_id=2VPWYBMKBSJX6"><img src="https://img.shields.io/badge/Donate%20with-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="Donate with PayPal"></a>
+  <br><br>
+  <a href="https://www.paypal.com/donate/?hosted_button_id=2VPWYBMKBSJX6"><img src="docs/imagens/doacao-paypal.png" alt="QR code to donate with PayPal" width="128"></a>
+  <br>
+  <sub>Point your phone's camera at the QR code, or click the button.</sub>
+</p>
+
+**Thank you!** Every donation is a sign that it is worth carrying on. 📻
 
 ---
 
