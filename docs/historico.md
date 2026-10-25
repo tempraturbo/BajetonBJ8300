@@ -30,6 +30,10 @@ ligou, e o nome digitado no Settings foi gravado na imagem. Os três testes pass
 novos (blocos, contagem, recusa, validação no clique, desligar sozinho, valor velho que não volta,
 e o upload que desliga banco vazio).
 
+No [release v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T), o
+`bj8300_v1.0TEMPRA.py` foi trocado por este (sha256 `073c73b5…`, conferido baixando sem login) e
+as notas do release ganharam um aviso da troca. Os outros arquivos do release não mudaram.
+
 ## v1.0T — 24/10 — a primeira versão estável ✅
 
 A v25 virou a **v1.0T** ("T" de Tempra), a primeira versão estável. É o mesmo arquivo, byte a

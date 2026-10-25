@@ -30,6 +30,11 @@ and the name typed under Settings was written to the image. All three tests pass
 cases (blocks, count, refusal, check on click, turning off by itself, old value not coming back,
 and the upload that turns an empty bank off).
 
+In the [v1.0T release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T),
+`bj8300_v1.0TEMPRA.py` was replaced by this one (sha256 `073c73b5…`, checked by downloading
+without logging in), and the release notes got a note about it. The other release files did not
+change.
+
 ## v1.0T — Oct 24 — the first stable release ✅
 
 v25 became **v1.0T** ("T" for Tempra), the first stable release. It is the same file, byte for
