@@ -5,6 +5,17 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 25 — COIN and no Voice Prompts
+
+- **Roger with five options**, like the radio: OFF, BEEP 1, BEEP 2, **COIN** and TONE1200. COIN
+  stores the value 4, which does not fit the base class's 2-bit roger: the module reads and writes
+  3 bits, the third being the low bit of the byte above (`unused_9017`, unused by the radio).
+- **No "Voice Prompts"** in Settings: since v30 the firmware plays no voice at all, and the VOICE
+  item left the radio's menu.
+
+The test gained the value-4 cases (opens as COIN, writes the right byte) and the page without the
+voice setting. The module in the v1.0T release did not change: this one goes with v32.
+
 ## v32 — Oct 25 — the voice space, proven ✅ (in testing)
 
 v31 with a consistent `tone` directory: `repack` redoes the CRC of every file whose content changed

@@ -332,25 +332,29 @@ class _BankCableMixin(object):
                                      data[block * EXT_BLOCK:(block + 1) * EXT_BLOCK])
 
 
-# --- roger: the banks firmware adds BEEP 2 ---
-# The setting is the stock one (settings.roger, 2 bits at 0x9017): 0 OFF, 1 BEEP, 2 TONE1200, and
-# the new firmware uses 3 for BEEP 2. The radio shows OFF, BEEP 1, BEEP 2, TONE1200 - position 2
-# = value 3 and position 3 = value 2 -, and CHIRP shows the same. The base class list has only 3
-# names: with value 3 it does not even build the screen, so the swap below applies to this radio
-# only.
-ROGER_OPTIONS = ['OFF', 'BEEP 1', 'BEEP 2', 'TONE1200']
+# --- roger: the banks firmware adds BEEP 2 and COIN ---
+# The radio keeps the roger in the whole byte at 0x9017: 0 OFF, 1 BEEP, 2 TONE1200, and the new
+# firmware uses 3 for BEEP 2 and 4 for COIN. The base class reads only the low 2 bits
+# (settings.roger; the 6 above are unused_9017), so here the value has 3 bits: bit 2 is the low
+# bit of unused_9017. The radio shows OFF, BEEP 1, BEEP 2, COIN, TONE1200, and CHIRP shows the
+# same. The base class list has only 3 names: with value 3 it does not even build the screen, so
+# the map below applies to this radio only.
+ROGER_OPTIONS = ['OFF', 'BEEP 1', 'BEEP 2', 'COIN', 'TONE1200']
+ROGER_VALUES = [0, 1, 3, 4, 2]                            # list position -> value in the radio
 
 
-def _swap_roger(v):
-    """Menu position <-> stored value: swaps 2 and 3, the rest stays (it works both ways)."""
-    return v ^ 1 if v >= 2 else v
+def _roger_value(settings):
+    """The stored roger value: the base class's 2 bits plus the bit above them."""
+    return (int(settings.unused_9017) & 1) << 2 | int(settings.roger)
 
 
 class _RogerSetting(MemSetting):
     """The roger setting in the radio's order: it stores the value, not the list position."""
 
     def apply_to_memobj(self, memobj):
-        memobj.settings.roger = _swap_roger(int(self.value))
+        settings, value = memobj.settings, ROGER_VALUES[int(self.value)]
+        settings.roger = value & 3
+        settings.unused_9017 = int(settings.unused_9017) & ~1 | value >> 2
 
 
 # SCRAMBLE (firmware v25/v1.0T onwards): OFF and 2700 to 3400 Hz in 100 Hz steps, in ascending
@@ -393,11 +397,26 @@ def _replace_setting(group, name, new):
     return False
 
 
+def _remove_setting(group, name):
+    """Removes the base class setting `name` from wherever it is in the tree."""
+    children = (group.items() if isinstance(group, RadioSettingGroup)
+                else [(g.get_name(), g) for g in group])
+    for key, element in children:
+        if isinstance(element, RadioSetting):
+            if key == name:
+                del group[element]
+                return True
+        elif isinstance(element, RadioSettingGroup) and _remove_setting(element, name):
+            return True
+    return False
+
+
 def _roger_setting(old, roger):
+    position = ROGER_VALUES.index(roger) if roger in ROGER_VALUES else 0
     rs = _RogerSetting('settings.roger', old.get_shortname(),
-                       RadioSettingValueList(ROGER_OPTIONS, current_index=_swap_roger(roger)))
-    rs.set_doc('End-of-transmission tone. BEEP 2 is the four-note one from the banks firmware; '
-               'the others are the stock ones.')
+                       RadioSettingValueList(ROGER_OPTIONS, current_index=position))
+    rs.set_doc('End-of-transmission tone. BEEP 2 (four notes) and COIN (a game coin) come from '
+               'the banks firmware; the others are the stock ones.')
     return rs
 
 
@@ -528,13 +547,13 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
 
     def get_settings(self):
         # The base class builds the roger with its 3-name list and breaks on value 3 (BEEP 2): it
-        # builds with 0, then the value goes back and the setting is replaced by our 4-option one.
-        roger = int(self._memobj.settings.roger)
+        # builds with 0, then the value goes back and the setting is replaced by our 5-option one.
+        roger = _roger_value(self._memobj.settings)
         self._memobj.settings.roger = 0
         try:
             settings = super().get_settings()
         finally:
-            self._memobj.settings.roger = roger
+            self._memobj.settings.roger = roger & 3
         if not _replace_setting(settings, 'settings_roger', lambda old: _roger_setting(old, roger)):
             LOG.warning('roger setting not found in the base class')
         for side in 'ab':
@@ -542,6 +561,10 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             if not _replace_setting(settings, 'vfo_%s_scramble' % side,
                                     lambda old: _vfo_scramble_setting(old, side, vfo)):
                 LOG.warning('VFO %s scramble not found in the base class', side.upper())
+        # The banks firmware (v30 onwards) plays no voice prompt at all: their space holds code now,
+        # and the radio's VOICE menu item is gone, so the setting would do nothing.
+        if not _remove_setting(settings, 'settings_voice'):
+            LOG.warning('voice prompts setting not found in the base class')
         settings.append(self._bank_settings())
         return settings
 

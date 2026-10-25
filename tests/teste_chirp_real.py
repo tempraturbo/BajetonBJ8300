@@ -188,29 +188,45 @@ def main():
             (bj._sector_addresses()[0], bj._sector_addresses()[-1], len(bj._sector_addresses())),
             (0x0C1000, 0x0D1000, 17))
 
-    # 8. roger com o BEEP 2: o valor 3 (que a classe base nao conhece) abre, mostra na ordem do
-    # radio e grava o valor certo - e a lista da classe base, que outros radios usam, nao muda
+    # 8. roger com o BEEP 2 e o COIN: os valores 3 e 4 (que a classe base nao conhece; o 4 passa
+    # dos 2 bits dela) abrem, mostram na ordem do radio e gravam o byte certo - e a lista da classe
+    # base, que outros radios usam, nao muda
     from chirp.drivers import radtel_rt900
     radio = bj.BJ8300(imagem())
-    radio._memobj.settings.roger = 3
-    roger = [s for s in radio.get_settings().walk() if s.get_name() == 'settings_roger']
+    ajuste = radio._memobj.settings
+
+    def byte_9017():
+        return int(ajuste.unused_9017) << 2 | int(ajuste.roger)
+
+    def roger_de(r):
+        return [x for x in r.get_settings().walk() if x.get_name() == 'settings_roger']
+
+    ajuste.roger = 3
+    roger = roger_de(radio)
     confere('8. ajuste do roger presente, uma vez so', len(roger), 1)
     roger = roger[0]
-    confere('8b. as quatro opcoes na ordem do radio', roger.value.get_options(),
-            ['OFF', 'BEEP 1', 'BEEP 2', 'TONE1200'])
+    confere('8b. as cinco opcoes na ordem do radio', roger.value.get_options(),
+            ['OFF', 'BEEP 1', 'BEEP 2', 'COIN', 'TONE1200'])
     confere('8c. valor 3 aparece como BEEP 2', str(roger.value), 'BEEP 2')
-    confere('8d. a imagem continua com o valor 3', int(radio._memobj.settings.roger), 3)
+    confere('8d. a imagem continua com o valor 3', byte_9017(), 3)
+    ajuste.roger, ajuste.unused_9017 = 0, 1
+    confere('8g. valor 4 aparece como COIN', str(roger_de(radio)[0].value), 'COIN')
+    confere('8h. a imagem continua com o valor 4', byte_9017(), 4)
     gravados = []
-    for nome in ('OFF', 'BEEP 1', 'BEEP 2', 'TONE1200'):
+    for nome in ('OFF', 'BEEP 1', 'BEEP 2', 'COIN', 'TONE1200'):
         ajustes = radio.get_settings()
-        r = [s for s in ajustes.walk() if s.get_name() == 'settings_roger'][0]
+        r = [x for x in ajustes.walk() if x.get_name() == 'settings_roger'][0]
         r.value.set_value(nome)
         # a parte do set_settings que aplica os MemSetting (o roger e um); o resto do set_settings
         # roda os callbacks da classe base, e o da frequencia do VFO nao funciona com a imagem
         # zerada deste teste
         ajustes.apply_to(radio._memobj)
-        gravados.append(int(radio._memobj.settings.roger))
-    confere('8e. OFF/BEEP 1/BEEP 2/TONE1200 gravam 0/1/3/2', gravados, [0, 1, 3, 2])
+        gravados.append(byte_9017())
+    confere('8e. OFF/BEEP 1/BEEP 2/COIN/TONE1200 gravam 0/1/3/4/2', gravados, [0, 1, 3, 4, 2])
+    nomes = [x.get_name() for x in radio.get_settings().walk()]
+    confere('8g2. o Voice Prompts saiu (o firmware nao toca mais voz)', 'settings_voice' in nomes, False)
+    confere('8g3. o resto da pagina continua (Language, Beep)', ['settings_language' in nomes, 'settings_beep' in nomes],
+            [True, True])
     confere('8f. a lista da classe base nao mudou', radtel_rt900.ROGER_LIST,
             ['OFF', 'BEEP', 'TONE1200'])
 
