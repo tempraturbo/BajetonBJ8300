@@ -179,11 +179,26 @@ CHIRP shows the *"Experimental driver"* notice, with the module's instructions: 
 
 - **Memories (VHF/UHF):** the 960 channels. The **Scramble** column and the channel's other
   properties are here.
-- **Banks (VHF/UHF):** one column per bank; tick which banks each channel is in, and rename the
-  banks.
-- **Settings:** the radio settings, with the 4-option roger and the VFO A and B scramble. In
-  **Settings → Bancos**, turn each bank on or off and pick which one the radio's menu items edit.
+- **Banks (VHF/UHF):** one column per bank; tick which banks each channel is in. To rename a
+  bank, **double-click its column header**.
+- **Settings:** the radio settings, with the 4-option roger and the VFO A and B scramble.
+- **Settings → Banks:** one block per bank, from **BANK 1** to **BANK 16**:
+
+  | Row | What it is |
+  |---|---|
+  | **Name** | the bank's name (up to 12 characters), editable here too |
+  | **Channels** | how many programmed channels the bank has (read only, counted when the page opens) |
+  | **Enabled** | turns the bank on or off |
+
+  A bank with no programmed channel **cannot be turned on**: if you tick it, CHIRP unticks it right
+  away. And removing a bank's last channel turns it off by itself. At the end of the page, **Bank
+  edited by the radio menu** picks the bank the radio's `BANK NAME` and `BANK CH` items work on.
 - **Memories (FM / AM / HF):** the other bands, as in the stock driver.
+
+> [!NOTE]
+> After you tick and untick a checkbox, CHIRP draws it grey and its label in bold. That is just
+> CHIRP's way of showing "changed" (it happens with every checkbox, the stock driver's too); the
+> stored value is the unticked one.
 
 **6. Write and restart the radio.** Menu **Radio** → **Upload to radio...**. After writing,
 **turn the radio off and on**: the bank filter is built at boot.
@@ -226,7 +241,8 @@ only works with **this** firmware, so nobody with a stock BJ-8300 uses it by mis
 from CHIRP's `radtel_rt900.py`, which already handles this radio as part of the RT-920/BJ7800
 family, and adds:
 
-- The **Banks** tab and the **Settings → Bancos** group (above).
+- The **Banks** tab and the **Settings → Banks** group (above). An enabled bank with no programmed
+  channel never reaches the radio: the upload turns it off before writing, as the radio itself does.
 - Download and upload of the banks area through the extended command, together with the channels
   and **in a single session** (the firmware answers the closing `E` with an ACK and only closes the
   session afterwards); on upload, only the sectors that changed.

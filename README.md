@@ -178,11 +178,26 @@ depois **OK** para ler.
 
 - **Memories (VHF/UHF):** os 960 canais. As colunas **Scramble** e as outras propriedades do canal
   estão aqui.
-- **Banks (VHF/UHF):** uma coluna por banco; marque em quais bancos cada canal está e renomeie os
-  bancos.
-- **Settings:** os ajustes do rádio, com o roger de 4 opções e o scramble dos VFO A e B. Em
-  **Settings → Bancos**, ligue e desligue cada banco e escolha qual deles os itens do rádio editam.
+- **Banks (VHF/UHF):** uma coluna por banco; marque em quais bancos cada canal está. Para
+  renomear um banco, **dê duplo clique no cabeçalho da coluna** dele.
+- **Settings:** os ajustes do rádio, com o roger de 4 opções e o scramble dos VFO A e B.
+- **Settings → Banks:** um bloco por banco, de **BANK 1** a **BANK 16**:
+
+  | Linha | O que é |
+  |---|---|
+  | **Name** | o nome do banco (até 12 caracteres), editável aqui também |
+  | **Channels** | quantos canais gravados o banco tem (só leitura, contados quando a página abre) |
+  | **Enabled** | liga ou desliga o banco |
+
+  Banco sem nenhum canal gravado **não liga**: se você marcar, o CHIRP desmarca na hora. E tirar
+  o último canal de um banco o desliga sozinho. No fim da página, **Bank edited by the radio
+  menu** escolhe o banco em que os itens `BANK NAME` e `BANK CH` do rádio mexem.
 - **Memories (FM / AM / HF):** as outras faixas, como no driver de fábrica.
+
+> [!NOTE]
+> Depois de marcar e desmarcar um checkbox, o CHIRP o desenha em cinza e o rótulo em negrito. Isso
+> é só o desenho do CHIRP para "mudou" (acontece com qualquer checkbox, até os do driver de
+> fábrica); o valor gravado é o desmarcado.
 
 **6. Grave e reinicie o rádio.** Menu **Radio** → **Upload to radio...**. Depois de gravar,
 **desligue e ligue o rádio**: o filtro dos bancos é montado na partida.
@@ -225,7 +240,8 @@ funciona com **este** firmware, e assim ninguém com um BJ-8300 de fábrica o us
 deriva do `radtel_rt900.py` do CHIRP, que já trata este rádio como família RT-920/BJ7800, e
 acrescenta:
 
-- A aba **Banks** e o grupo **Settings → Bancos** (acima).
+- A aba **Banks** e o grupo **Settings → Banks** (acima). Banco ativo sem canal gravado nunca
+  sobe para o rádio: o upload o desliga antes de gravar, como o próprio rádio faz.
 - Download e upload da área dos bancos pelo comando estendido, junto com os canais e **numa sessão
   só** (o firmware responde ao `E` de saída com um ACK e só fecha a sessão depois); no upload, só
   os setores que mudaram.

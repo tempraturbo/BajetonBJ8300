@@ -5,6 +5,31 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 24 — all in English, and the banks in blocks under Settings
+
+The firmware is v1.0T's; only `bj8300_v1.0TEMPRA.py` changes.
+
+- **All in English**, because the module is used worldwide: screen texts, notices, error
+  messages, comments and internal names.
+- **Settings → Banks** with one block per bank (**BANK 1** to **BANK 16**), each with **Name**
+  (editable), **Channels** (how many programmed channels it has, read only) and **Enabled**. Until
+  now there was only a list of "Banco N ligado", and the name could only be edited in the Banks
+  tab (double-click the column header, which still works).
+- **A bank with no programmed channel cannot be turned on**, the firmware's own rule. CHIRP unticks
+  the box right away, and the rule is checked on the click, not from the count taken when the page
+  opened. Removing a bank's last channel in the Banks tab turns it off by itself, and the upload
+  turns off any enabled empty bank before writing.
+- **Name and Enabled are only written when they change on this page.** CHIRP builds the page once,
+  so a name given in the Banks tab afterwards is not undone by the page's old value.
+- The checkbox that turns grey after you tick and untick it is CHIRP's, not the module's: the stock
+  driver's "Voice Prompts" does the same, and the stored value comes out right.
+
+Checked in the real CHIRP (with wxPython), reading the radio over the cable, read only: the page
+shows the 16 blocks with the radio's names and counts. Bank 8, empty, did not turn on. Bank 1 did,
+and the name typed under Settings was written to the image. All three tests pass, with the new
+cases (blocks, count, refusal, check on click, turning off by itself, old value not coming back,
+and the upload that turns an empty bank off).
+
 ## v1.0T — Oct 24 — the first stable release ✅
 
 v25 became **v1.0T** ("T" for Tempra), the first stable release. It is the same file, byte for

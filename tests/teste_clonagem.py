@@ -166,28 +166,32 @@ class RadioSimulado(object):
 
 
 def registro_banco(nome, canais):
-    reg = bytearray(bj.MARCA_BANCO + b'\x00' * (bj.TAM_REGISTRO - 4))
+    reg = bytearray(bj.BANK_MAGIC + b'\x00' * (bj.RECORD_LEN - 4))
     reg[4:4 + len(nome)] = nome.encode()
     for c in canais:
         reg[16 + (c >> 3)] |= 1 << (c & 7)
-    reg[136:138] = struct.pack('<H', bj._soma(bytes(reg[:136])))
+    reg[136:138] = struct.pack('<H', bj._checksum(bytes(reg[:136])))
     return bytes(reg)
 
 
 def chip_com_bancos():
     chip = bytearray(b'\xff' * 0x100000)
-    cab = bytearray(bj.MARCA_CAB + struct.pack('<HBB', 0x0005, 2, 0) + b'\x00\x00')
-    cab[8:10] = struct.pack('<H', bj._soma(bytes(cab[:8])))
+    cab = bytearray(bj.HEADER_MAGIC + struct.pack('<HBB', 0x0005, 2, 0) + b'\x00\x00')
+    cab[8:10] = struct.pack('<H', bj._checksum(bytes(cab[:8])))
     chip[0x0C1000:0x0C1000 + 10] = cab
     for n, nome, canais in ((0, 'test', [42]), (2, 'bnk', [41, 100])):
-        chip[0x0C2000 + n * 0x1000:0x0C2000 + n * 0x1000 + bj.TAM_REGISTRO] = \
+        chip[0x0C2000 + n * 0x1000:0x0C2000 + n * 0x1000 + bj.RECORD_LEN] = \
             registro_banco(nome, canais)
     return bytes(chip)
 
 
 def espaco_de_fabrica(zona):
-    """Espaco de 64 KB com um canal valido e o modo de zona pedido em 0x9028."""
+    """Espaco de 64 KB com o modo de zona pedido em 0x9028 e gravados os canais que os bancos usam
+    (42, 43, 101 e 500 = indices 41, 42, 100 e 499): banco ligado sem canal gravado o driver
+    desliga no upload, e o teste 2 espera um upload que nao muda nada."""
     e = bytearray(b'\x00' * 0x10000)
+    for c in (41, 42, 100, 499):
+        e[c * 32:c * 32 + 4] = b'\x00\x20\x65\x14'          # 146.52 MHz em lbcd
     e[0x9028] = zona
     return bytes(e)
 
@@ -220,13 +224,13 @@ def main():
     radio = baixa(sim)
     modelo = radio.get_bank_model()
     confere('1. imagem = parte de fabrica + area dos bancos',
-            len(radio._mmap), bj.BLOB_BASE + bj.TAM_BLOB)
+            len(radio._mmap), bj.BLOB_BASE + bj.BLOB_SIZE)
     confere('1b. nomes dos bancos lidos pelo cabo',
             [b.get_name() for b in modelo.get_mappings()][:3], ['test', 'BANK 2', 'bnk'])
     confere('1c. canais do banco 3 (41 e 100 no radio = 42 e 101 no CHIRP)',
             [m.number for m in modelo.get_mapping_memories(modelo.get_mappings()[2])], [42, 101])
-    confere('1d. bancos ligados e escolhido', (bj._Bancos(radio).ativos(),
-                                              bj._Bancos(radio).escolhido()), (0x0005, 2))
+    confere('1d. bancos ligados e escolhido', (bj._BankStore(radio).enabled_mask(),
+                                              bj._BankStore(radio).selected()), (0x0005, 2))
     confere('1e. download nao grava nada no chip', sim.gravacoes_estendidas, [])
     confere('1f. download inteiro numa sessao so', sim.sessoes, 1)
     # o que derrubou o driver antigo no radio: abrir outra sessao logo depois do 'E'
@@ -248,24 +252,30 @@ def main():
     mem = radio.get_memory(500)
     modelo.add_memory_to_mapping(mem, modelo.get_mappings()[4])
     modelo.get_mappings()[4].set_name('BANDA 2M')
-    bj._Bancos(radio).liga(4, True)
+    bj._BankStore(radio).set_enabled(4, True)
     sim.gravacoes_estendidas = []
     sobe(radio, sim)
     setor4 = 0x0C2000 + 4 * 0x1000
     confere('3. grava so o cabecalho e o banco 5, tres blocos cada',
             sim.gravacoes_estendidas,
             [0x0C1000, 0x0C1040, 0x0C1080, setor4, setor4 + 0x40, setor4 + 0x80])
-    reg = bytes(sim.chip[setor4:setor4 + bj.TAM_REGISTRO])
+    reg = bytes(sim.chip[setor4:setor4 + bj.RECORD_LEN])
     confere('3b. banco 5 no chip: marca, nome, canal 499 e soma',
             (reg[:4], reg[4:12], reg[16 + 499 // 8] >> (499 % 8) & 1,
-             struct.unpack('<H', reg[136:])[0] == bj._soma(reg[:136])),
-            (bj.MARCA_BANCO, b'BANDA 2M', 1, True))
+             struct.unpack('<H', reg[136:])[0] == bj._checksum(reg[:136])),
+            (bj.BANK_MAGIC, b'BANDA 2M', 1, True))
     cab = bytes(sim.chip[0x0C1000:0x0C1000 + 10])
     confere('3c. cabecalho no chip: banco 5 ligado e soma que fecha',
-            (struct.unpack('<H', cab[4:6])[0], struct.unpack('<H', cab[8:10])[0] == bj._soma(cab[:8])),
+            (struct.unpack('<H', cab[4:6])[0], struct.unpack('<H', cab[8:10])[0] == bj._checksum(cab[:8])),
             (0x0015, True))
     confere('3d. o resto do setor fica apagado, como o firmware deixa',
-            set(sim.chip[setor4 + bj.TAM_REGISTRO:setor4 + 0x1000]), {0xFF})
+            set(sim.chip[setor4 + bj.RECORD_LEN:setor4 + 0x1000]), {0xFF})
+    # banco ligado sem nenhum canal gravado nao sobe ligado (o radio tambem recusa)
+    bj._BankStore(radio).set_enabled(8, True)
+    sobe(radio, sim)
+    cab = bytes(sim.chip[0x0C1000:0x0C1000 + 10])
+    confere('3e. banco 9 ligado e vazio sobe desligado; os outros ficam',
+            struct.unpack('<H', cab[4:6])[0], 0x0015)
 
     # ---------- 4. ida e volta: baixar de novo da o mesmo ----------
     radio2 = baixa(sim)
@@ -282,13 +292,13 @@ def main():
         confere('5. download com firmware de fabrica recusado', 'aceitou', 'recusou')
     except errors.RadioError as e:
         confere('5. download com firmware de fabrica recusado com a mensagem certa',
-                'sem a area de bancos' in str(e), True)
+                'not running the banks firmware' in str(e), True)
     try:
         sobe(radio, fab)
         confere('5b. upload com firmware de fabrica recusado', 'aceitou', 'recusou')
     except errors.RadioError as e:
         confere('5b. upload com firmware de fabrica recusado com a mensagem certa',
-                'sem a area de bancos' in str(e), True)
+                'not running the banks firmware' in str(e), True)
     confere('5c. o firmware de fabrica nao recebeu nenhum W estendido',
             sum(1 for _ in fab.gravacoes_estendidas), 0)
     confere('5d. e o cabo so ficou com o ACK do E (sem dessincronizar)', bytes(fab.saida), ACK)

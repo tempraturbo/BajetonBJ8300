@@ -137,11 +137,20 @@ def _stub_chirp():
         def __init__(self, path, shortname, valor):
             super().__init__(path.replace('.', '_'), shortname, valor)
 
+    class RadioSettingSubGroup(RadioSettingGroup):
+        pass
+
+    class RadioSettingValueString(object):
+        def __init__(self, minimo, maximo, atual, autopad=True):
+            self.v = atual
+
     settings.MemSetting = MemSetting
     settings.RadioSetting = RadioSetting
     settings.RadioSettingGroup = RadioSettingGroup
+    settings.RadioSettingSubGroup = RadioSettingSubGroup
     settings.RadioSettingValueBoolean = RadioSettingValueBoolean
     settings.RadioSettingValueList = RadioSettingValueList
+    settings.RadioSettingValueString = RadioSettingValueString
 
     drivers = types.ModuleType('chirp.drivers')
     drivers.__path__ = []
@@ -194,28 +203,32 @@ print('modulo carregado como %s' % _nome)
 # ---------------------------------------------------------------- imagem de teste
 def registro(nome, canais):
     """Monta o registro de um banco como o firmware grava (marca, nome, mapa, soma)."""
-    reg = bytearray(bj8300.MARCA_BANCO + b'\x00' * (bj8300.TAM_REGISTRO - 4))
+    reg = bytearray(bj8300.BANK_MAGIC + b'\x00' * (bj8300.RECORD_LEN - 4))
     reg[4:4 + len(nome)] = nome.encode()
     for c in canais:
         reg[16 + (c >> 3)] |= 1 << (c & 7)
-    reg[136:138] = struct.pack('<H', bj8300._soma(bytes(reg[:136])))
+    reg[136:138] = struct.pack('<H', bj8300._checksum(bytes(reg[:136])))
     return bytes(reg)
 
 
 def imagem_do_radio():
     """A imagem que o radio tinha em 2026-10-24: bancos 1 e 3 ligados, banco 3 escolhido,
     banco 1 = "test" com o canal 43, banco 3 = "bnk" com o canal 42."""
-    cab = bytearray(bj8300.MARCA_CAB + struct.pack('<HBB', 0x0005, 2, 0) + b'\x00\x00')
-    cab[8:10] = struct.pack('<H', bj8300._soma(bytes(cab[:8])))
-    setores = [bytes(cab).ljust(bj8300.TAM_SETOR, b'\xff')]
+    cab = bytearray(bj8300.HEADER_MAGIC + struct.pack('<HBB', 0x0005, 2, 0) + b'\x00\x00')
+    cab[8:10] = struct.pack('<H', bj8300._checksum(bytes(cab[:8])))
+    setores = [bytes(cab).ljust(bj8300.SECTOR_SIZE, b'\xff')]
     conteudo = {0: ('test', [42]), 2: ('bnk', [41])}
-    for b in range(bj8300.NUM_BANCOS):
+    for b in range(bj8300.NUM_BANKS):
         if b in conteudo:
             nome, canais = conteudo[b]
-            setores.append(registro(nome, canais).ljust(bj8300.TAM_SETOR, b'\xff'))
+            setores.append(registro(nome, canais).ljust(bj8300.SECTOR_SIZE, b'\xff'))
         else:
-            setores.append(b'\xff' * bj8300.TAM_SETOR)
-    return MemoryMapBytes(b'\xff' * bj8300.BLOB_BASE + b''.join(setores)), bytes(cab)
+            setores.append(b'\xff' * bj8300.SECTOR_SIZE)
+    # os canais 42 e 43 (indices 41 e 42) gravados, como no radio: e o que conta para "ligado"
+    fabrica = bytearray(b'\xff' * bj8300.BLOB_BASE)
+    for c in (41, 42):
+        fabrica[c * bj8300.CHANNEL_SIZE:c * bj8300.CHANNEL_SIZE + 4] = b'\x00\x20\x65\x14'
+    return MemoryMapBytes(bytes(fabrica) + b''.join(setores)), bytes(cab)
 
 
 class RadioFalso(bj8300.BJ8300):
@@ -236,7 +249,7 @@ def main():
 
     mmap, cab = imagem_do_radio()
     radio = RadioFalso(mmap)
-    bancos = bj8300._Bancos(radio)
+    bancos = bj8300._BankStore(radio)
 
     # 1. a soma do driver bate com a que o RADIO gravou
     confere('1. soma do cabecalho igual a do radio (0x753C)',
@@ -245,24 +258,24 @@ def main():
             struct.unpack('<H', registro('test', [42])[136:138])[0], 0x0000)
 
     # 2. leitura
-    confere('2. bancos ligados', bancos.ativos(), 0x0005)
-    confere('2b. banco escolhido', bancos.escolhido(), 2)
-    confere('2c. nome do banco 1', bancos.nome(0), 'test')
-    confere('2d. nome do banco 3', bancos.nome(2), 'bnk')
-    confere('2e. banco sem nada abre vazio', bancos.nome(5), '')
-    confere('2f. canais do banco 1 (canal 43 = indice 42)', bancos.canais(0), [42])
-    confere('2g. canais do banco 3', bancos.canais(2), [41])
+    confere('2. bancos ligados', bancos.enabled_mask(), 0x0005)
+    confere('2b. banco escolhido', bancos.selected(), 2)
+    confere('2c. nome do banco 1', bancos.name(0), 'test')
+    confere('2d. nome do banco 3', bancos.name(2), 'bnk')
+    confere('2e. banco sem nada abre vazio', bancos.name(5), '')
+    confere('2f. canais do banco 1 (canal 43 = indice 42)', bancos.channels(0), [42])
+    confere('2g. canais do banco 3', bancos.channels(2), [41])
 
     # 3. o ponto da feature: o mesmo canal em mais de um banco
-    modelo = bj8300.ModeloBancosBJ8300(radio, 'Bancos')
+    modelo = bj8300.BJ8300BankModel(radio, 'Banks')
     mem43 = sys.modules['chirp.chirp_common'].Memory(43)
     confere('3. canal 43 aparece so no banco 1',
             [b.get_index() for b in modelo.get_memory_mappings(mem43)], [1])
     modelo.add_memory_to_mapping(mem43, modelo.get_mappings()[2])
     confere('3b. depois de marcar, canal 43 esta nos bancos 1 e 3',
             [b.get_index() for b in modelo.get_memory_mappings(mem43)], [1, 3])
-    confere('3c. o banco 3 manteve o canal que ja tinha', bancos.canais(2), [41, 42])
-    confere('3d. o nome do banco 3 sobreviveu', bancos.nome(2), 'bnk')
+    confere('3c. o banco 3 manteve o canal que ja tinha', bancos.channels(2), [41, 42])
+    confere('3d. o nome do banco 3 sobreviveu', bancos.name(2), 'bnk')
     modelo.remove_memory_from_mapping(mem43, modelo.get_mappings()[0])
     confere('3e. depois de desmarcar, canal 43 so no banco 3',
             [b.get_index() for b in modelo.get_memory_mappings(mem43)], [3])
@@ -272,38 +285,42 @@ def main():
     except Exception as e:
         confere('3f. desmarcar o que nao esta marcado da erro', type(e).__name__,
                 'InvalidDataError')
+    # o banco 1 perdeu o ultimo canal: se desligou sozinho; o 3 (com 42 e 43 gravados) continua
+    confere('3g. banco que fica sem canal se desliga sozinho', bancos.enabled_mask(), 0x0004)
+    confere('3h. contagem de canais gravados (banco 1 e banco 3)',
+            (bancos.programmed_count(0), bancos.programmed_count(2)), (0, 2))
 
     # 4. nome e liga/desliga continuam com marca e soma validas
     modelo.get_mappings()[4].set_name('BANDA 2M')
-    confere('4. nome gravado volta certo', bancos.nome(4), 'BANDA 2M')
-    confere('4b. nome longo e cortado em 12', (bancos.poe_nome(4, 'NOME MUITO COMPRIDO'),
-                                               bancos.nome(4))[1], 'NOME MUITO C')
-    bancos.liga(4, True)
-    bancos.liga(0, False)
-    confere('4c. ligou o 5 e desligou o 1', bancos.ativos(), 0x0014)
-    bancos.escolhe(4)
-    confere('4d. banco escolhido gravado', bancos.escolhido(), 4)
+    confere('4. nome gravado volta certo', bancos.name(4), 'BANDA 2M')
+    confere('4b. nome longo e cortado em 12', (bancos.set_name(4, 'NOME MUITO COMPRIDO'),
+                                               bancos.name(4))[1], 'NOME MUITO C')
+    bancos.set_enabled(4, True)
+    bancos.set_enabled(0, False)
+    confere('4c. ligou o 5 e desligou o 1', bancos.enabled_mask(), 0x0014)
+    bancos.select(4)
+    confere('4d. banco escolhido gravado', bancos.selected(), 4)
     # a soma tem que fechar do jeito que o firmware confere
-    cru = bytes(radio._mmap[bj8300.BLOB_BASE:bj8300.BLOB_BASE + bj8300.TAM_CABECA])
+    cru = bytes(radio._mmap[bj8300.BLOB_BASE:bj8300.BLOB_BASE + bj8300.HEADER_LEN])
     confere('4e. soma do cabecalho fecha depois das mudancas',
-            struct.unpack('<H', cru[8:10])[0], bj8300._soma(cru[:8]))
-    reg5 = bytes(radio._mmap[bj8300.BLOB_BASE + 5 * bj8300.TAM_SETOR:
-                             bj8300.BLOB_BASE + 5 * bj8300.TAM_SETOR + bj8300.TAM_REGISTRO])
+            struct.unpack('<H', cru[8:10])[0], bj8300._checksum(cru[:8]))
+    reg5 = bytes(radio._mmap[bj8300.BLOB_BASE + 5 * bj8300.SECTOR_SIZE:
+                             bj8300.BLOB_BASE + 5 * bj8300.SECTOR_SIZE + bj8300.RECORD_LEN])
     confere('4f. soma do banco 5 fecha e a marca esta la',
             (reg5[:4], struct.unpack('<H', reg5[136:])[0]),
-            (bj8300.MARCA_BANCO, bj8300._soma(reg5[:136])))
+            (bj8300.BANK_MAGIC, bj8300._checksum(reg5[:136])))
     confere('4g. o resto do setor fica apagado, como o firmware deixa',
-            bytes(radio._mmap[bj8300.BLOB_BASE + 5 * bj8300.TAM_SETOR + bj8300.TAM_REGISTRO:
-                              bj8300.BLOB_BASE + 6 * bj8300.TAM_SETOR]),
-            b'\xff' * (bj8300.TAM_SETOR - bj8300.TAM_REGISTRO))
+            bytes(radio._mmap[bj8300.BLOB_BASE + 5 * bj8300.SECTOR_SIZE + bj8300.RECORD_LEN:
+                              bj8300.BLOB_BASE + 6 * bj8300.SECTOR_SIZE]),
+            b'\xff' * (bj8300.SECTOR_SIZE - bj8300.RECORD_LEN))
 
     # 5. o pacote do cabo, igual ao validado no radio
-    confere('5. comando de leitura de 0xC1000', bj8300._comando(b'R', 0x0C1000),
+    confere('5. comando de leitura de 0xC1000', bj8300._command(b'R', 0x0C1000),
             bytes([0x52, 0x10, 0x00, 0x8C]))
     confere('5b. comando de gravacao do setor do banco 16',
-            bj8300._comando(b'W', 0x0D1000), bytes([0x57, 0x10, 0x00, 0x8D]))
-    confere('5c. os 17 enderecos', (bj8300._enderecos()[0], bj8300._enderecos()[1],
-                                    bj8300._enderecos()[-1], len(bj8300._enderecos())),
+            bj8300._command(b'W', 0x0D1000), bytes([0x57, 0x10, 0x00, 0x8D]))
+    confere('5c. os 17 enderecos', (bj8300._sector_addresses()[0], bj8300._sector_addresses()[1],
+                                    bj8300._sector_addresses()[-1], len(bj8300._sector_addresses())),
             (0x0C1000, 0x0C2000, 0x0D1000, 17))
 
     # 6. registro estragado vira banco vazio, nunca lixo.
@@ -311,13 +328,13 @@ def main():
     #    ultimos 16 bytes do registro sao zero - ou seja, em todo banco sem canal acima do 833.
     #    Nos registros de banco quem protege de verdade e a marca; no cabecalho, de 8 bytes, a
     #    soma vale. Os dois casos entram aqui.
-    radio._mmap[bj8300.BLOB_BASE + bj8300._Bancos._onde(2)] = b'XXXX'
-    confere('6. marca estragada -> banco vazio', (bancos.nome(2), bancos.canais(2)), ('', []))
+    radio._mmap[bj8300.BLOB_BASE + bj8300._BankStore._offset(2)] = b'XXXX'
+    confere('6. marca estragada -> banco vazio', (bancos.name(2), bancos.channels(2)), ('', []))
     radio._mmap[bj8300.BLOB_BASE + 8] = b'\x01\x00'
     confere('6b. soma do cabecalho que nao fecha -> cabecalho zerado',
-            (bancos.ativos(), bancos.escolhido()), (0, 0))
+            (bancos.enabled_mask(), bancos.selected()), (0, 0))
     confere('6c. gravar depois disso conserta a soma',
-            (bancos.liga(1, True), bancos.ativos())[1], 0x0002)
+            (bancos.set_enabled(1, True), bancos.enabled_mask())[1], 0x0002)
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')

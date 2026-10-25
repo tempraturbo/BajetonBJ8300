@@ -5,6 +5,31 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 24/10 — todo em inglês, e os bancos em blocos no Settings
+
+O firmware é o mesmo da v1.0T; muda só o `bj8300_v1.0TEMPRA.py`.
+
+- **Todo em inglês**, porque o módulo é usado por gente do mundo todo: os textos da tela, os
+  avisos, as mensagens de erro, os comentários e os nomes internos.
+- **Settings → Banks** com um bloco por banco (**BANK 1** a **BANK 16**), cada um com **Name**
+  (editável), **Channels** (quantos canais gravados ele tem, só leitura) e **Enabled**. Até aqui
+  havia só uma lista de "Banco N ligado", e o nome só se editava na aba Banks (duplo clique no
+  cabeçalho da coluna, que continua valendo).
+- **Banco sem canal gravado não liga**, a mesma regra do firmware. O CHIRP desmarca o checkbox na
+  hora, e a regra é conferida no clique, não pela contagem de quando a página abriu. Tirar o
+  último canal de um banco na aba Banks o desliga sozinho, e o upload desliga qualquer banco
+  ativo e vazio antes de gravar.
+- **Name e Enabled só são gravados quando mudam nesta página.** O CHIRP monta a página uma vez,
+  então um nome dado na aba Banks depois disso não é desfeito pelo valor velho da página.
+- O checkbox que fica cinza depois de marcar e desmarcar é do CHIRP, não do módulo: o "Voice
+  Prompts" do driver de fábrica fica igual, e o valor gravado sai certo.
+
+Conferido no CHIRP de verdade (com o wxPython), lendo o rádio pelo cabo, só leitura: a página
+mostra os 16 blocos com os nomes e as contagens do rádio. O banco 8, vazio, não ligou. O banco 1
+ligou, e o nome digitado no Settings foi gravado na imagem. Os três testes passam, com os casos
+novos (blocos, contagem, recusa, validação no clique, desligar sozinho, valor velho que não volta,
+e o upload que desliga banco vazio).
+
 ## v1.0T — 24/10 — a primeira versão estável ✅
 
 A v25 virou a **v1.0T** ("T" de Tempra), a primeira versão estável. É o mesmo arquivo, byte a

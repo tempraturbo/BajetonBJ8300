@@ -41,21 +41,21 @@ def imagem(ativos=0x0005, escolhido=2, bancos=((0, 'test', [42]), (2, 'bnk', [41
     InternalError antes de chegar no que interessa aqui. Zero e BCD valido e deixa todo ajuste no
     primeiro valor da lista.
     """
-    cab = bytearray(bj.MARCA_CAB + struct.pack('<HBB', ativos, escolhido, 0) + b'\x00\x00')
-    cab[8:10] = struct.pack('<H', bj._soma(bytes(cab[:8])))
-    setores = [bytes(cab).ljust(bj.TAM_SETOR, b'\xff')]
+    cab = bytearray(bj.HEADER_MAGIC + struct.pack('<HBB', ativos, escolhido, 0) + b'\x00\x00')
+    cab[8:10] = struct.pack('<H', bj._checksum(bytes(cab[:8])))
+    setores = [bytes(cab).ljust(bj.SECTOR_SIZE, b'\xff')]
     conteudo = {n: (nome, canais) for n, nome, canais in bancos}
-    for b in range(bj.NUM_BANCOS):
+    for b in range(bj.NUM_BANKS):
         if b not in conteudo:
-            setores.append(b'\xff' * bj.TAM_SETOR)
+            setores.append(b'\xff' * bj.SECTOR_SIZE)
             continue
         nome, canais = conteudo[b]
-        reg = bytearray(bj.MARCA_BANCO + b'\x00' * (bj.TAM_REGISTRO - 4))
+        reg = bytearray(bj.BANK_MAGIC + b'\x00' * (bj.RECORD_LEN - 4))
         reg[4:4 + len(nome)] = nome.encode()
         for c in canais:
             reg[16 + (c >> 3)] |= 1 << (c & 7)
-        reg[136:138] = struct.pack('<H', bj._soma(bytes(reg[:136])))
-        setores.append(bytes(reg).ljust(bj.TAM_SETOR, b'\xff'))
+        reg[136:138] = struct.pack('<H', bj._checksum(bytes(reg[:136])))
+        setores.append(bytes(reg).ljust(bj.SECTOR_SIZE, b'\xff'))
     return memmap.MemoryMapBytes(b'\x00' * bj.BLOB_BASE + b''.join(setores))
 
 
@@ -107,42 +107,85 @@ def main():
     modelo.get_mappings()[4].set_name('BANDA 2M')
     confere('4h. renomear grava na imagem', modelo.get_mappings()[4].get_name(), 'BANDA 2M')
 
-    # 5. os ajustes aplicam pelo caminho do CHIRP: apply_to devolve os nossos, com callback
+    # 5. Settings > Banks: um bloco por banco (Name, Channels, Enabled) e o banco do menu do radio.
+    #    Aplica pelo caminho do CHIRP: apply_to devolve os nossos e os callbacks rodam como no
+    #    set_settings da classe base (so os nossos: o da frequencia do VFO nao funciona com a
+    #    imagem zerada deste teste).
+    radio = bj.BJ8300(imagem())
+    for n in (42, 43):                        # grava os canais que os bancos 1 (43) e 3 (42) tem
+        mem = radio.get_memory(n)
+        mem.empty, mem.freq = False, 146520000 + n * 25000
+        radio.set_memory(mem)
+    modelo = radio.get_bank_model()
+    banco = bj._BankStore(radio)
+
+    def aplica(ajustes):
+        for s in ajustes.apply_to(radio._memobj):
+            if s.has_apply_callback() and s.get_name().startswith('bank_'):
+                s.run_apply_callback()
+
     ajustes = radio.get_settings()
-    grupo = [g for g in ajustes if g.get_name() == 'bancos']
-    confere('5. grupo de bancos nos ajustes', len(grupo), 1)
-    nao_mem = ajustes.apply_to(radio._memobj)
-    meus = [s for s in nao_mem if s.get_name().startswith('banco_')]
-    confere('5b. os nossos ajustes voltam de apply_to com callback',
-            (len(meus), all(s.has_apply_callback() for s in meus)), (17, True))
+    grupos = [g for g in ajustes if g.get_name() == 'banks']
+    confere('5. grupo Banks nos ajustes', [g.get_shortname() for g in grupos], ['Banks'])
+    ajuste = {s.get_name(): s for s in grupos[0].walk()}
+    blocos = [e for e in grupos[0].values() if isinstance(e, settings.RadioSettingSubGroup)]
+    confere('5b. um bloco por banco, de BANK 1 a BANK 16', [b.get_shortname() for b in blocos],
+            ['BANK %i' % i for i in range(1, 17)])
+    confere('5c. cada bloco com Name, Channels e Enabled',
+            {tuple(s.get_shortname() for s in b.values()) for b in blocos},
+            {('Name', 'Channels', 'Enabled')})
+    confere('5d. bancos 1 a 3: nome, canais gravados e ligado',
+            [(str(ajuste['bank_%i_name' % i].value), str(ajuste['bank_%i_channels' % i].value),
+              bool(ajuste['bank_%i_enabled' % i].value)) for i in (1, 2, 3)],
+            [('test', '1', True), ('', '0', False), ('bnk', '1', True)])
+    confere('5e. Channels e so leitura', ajuste['bank_1_channels'].value.get_mutable(), False)
+    confere('5f. banco do menu com os nomes, e o escolhido da imagem',
+            (ajuste['bank_selected'].value.get_options()[:3], str(ajuste['bank_selected'].value)),
+            (['BANK 1 (test)', 'BANK 2', 'BANK 3 (bnk)'], 'BANK 3 (bnk)'))
 
-    ligar = [s for s in meus if s.get_name() == 'banco_on_4'][0]
-    ligar.value.set_value(True)
-    ligar.run_apply_callback()
-    confere('5c. ligar o banco 5 pelo ajuste grava no cabecalho',
-            bj._Bancos(radio).ativos() & (1 << 4), 1 << 4)
+    ajuste['bank_2_name'].value.set_value('REPEATERS')
+    aplica(ajustes)
+    confere('5g. renomear pelo Settings grava na imagem', banco.name(1), 'REPEATERS')
+    modelo.get_mappings()[0].set_name('NOVO')         # renomeado na aba Banks, com a pagina aberta
+    aplica(ajustes)
+    confere('5h. valor antigo da pagina nao desfaz o nome dado na aba Banks', banco.name(0), 'NOVO')
 
-    escolher = [s for s in meus if s.get_name() == 'banco_escolhido'][0]
-    escolher.value.set_value(escolher.value.get_options()[6])
-    escolher.run_apply_callback()
-    confere('5d. escolher o banco 7 grava no cabecalho', bj._Bancos(radio).escolhido(), 6)
+    e2 = ajuste['bank_2_enabled']
+    e2.value.set_value(True)
+    aplica(ajustes)
+    confere('5i. banco sem canal gravado nao liga (o CHIRP desmarca)',
+            (bool(e2.value), banco.enabled_mask() >> 1 & 1), (False, 0))
+    modelo.add_memory_to_mapping(radio.get_memory(42), modelo.get_mappings()[3])
+    e4 = ajuste['bank_4_enabled']                     # a pagina ainda mostra 0 canais nele
+    e4.value.set_value(True)
+    aplica(ajustes)
+    confere('5j. a regra confere na hora: canal posto na aba Banks deixa ligar',
+            (bool(e4.value), banco.enabled_mask() >> 3 & 1), (True, 1))
+    modelo.remove_memory_from_mapping(radio.get_memory(43), modelo.get_mappings()[0])
+    confere('5k. tirar o ultimo canal do banco o desliga sozinho', banco.enabled_mask() & 1, 0)
+    aplica(ajustes)                                   # a pagina ainda tem o banco 1 marcado
+    confere('5l. e o valor antigo da pagina nao o religa', banco.enabled_mask() & 1, 0)
+
+    ajuste['bank_selected'].value.set_value(ajuste['bank_selected'].value.get_options()[6])
+    aplica(ajustes)
+    confere('5m. escolher o banco 7 grava no cabecalho', banco.selected(), 6)
 
     # 6. o que foi mexido esta mesmo nos bytes da imagem, com marca e soma validas
     crua = radio._mmap.get_packed()
-    cab = crua[bj.BLOB_BASE:bj.BLOB_BASE + bj.TAM_CABECA]
+    cab = crua[bj.BLOB_BASE:bj.BLOB_BASE + bj.HEADER_LEN]
     confere('6. cabecalho com marca e soma que fecham',
-            (cab[:4], struct.unpack('<H', cab[8:10])[0]), (bj.MARCA_CAB, bj._soma(cab[:8])))
-    reg5 = crua[bj.BLOB_BASE + 5 * bj.TAM_SETOR:bj.BLOB_BASE + 5 * bj.TAM_SETOR + bj.TAM_REGISTRO]
-    confere('6b. banco 5 com marca e soma que fecham',
-            (reg5[:4], struct.unpack('<H', reg5[136:])[0]), (bj.MARCA_BANCO, bj._soma(reg5[:136])))
+            (cab[:4], struct.unpack('<H', cab[8:10])[0]), (bj.HEADER_MAGIC, bj._checksum(cab[:8])))
+    reg4 = crua[bj.BLOB_BASE + 4 * bj.SECTOR_SIZE:bj.BLOB_BASE + 4 * bj.SECTOR_SIZE + bj.RECORD_LEN]
+    confere('6b. banco 4 (que ganhou canal no 5j) com marca e soma que fecham',
+            (reg4[:4], struct.unpack('<H', reg4[136:])[0]), (bj.BANK_MAGIC, bj._checksum(reg4[:136])))
     confere('6c. tamanho da imagem = fabrica + 17 setores',
-            len(crua), bj.BLOB_BASE + (bj.NUM_BANCOS + 1) * bj.TAM_SETOR)
+            len(crua), bj.BLOB_BASE + (bj.NUM_BANKS + 1) * bj.SECTOR_SIZE)
 
     # 7. os pacotes do cabo (o que o radio vai receber)
-    confere('7. comando de leitura de 0xC1000', bj._comando(b'R', 0x0C1000),
+    confere('7. comando de leitura de 0xC1000', bj._command(b'R', 0x0C1000),
             bytes([0x52, 0x10, 0x00, 0x8C]))
     confere('7b. os 17 enderecos dos setores',
-            (bj._enderecos()[0], bj._enderecos()[-1], len(bj._enderecos())),
+            (bj._sector_addresses()[0], bj._sector_addresses()[-1], len(bj._sector_addresses())),
             (0x0C1000, 0x0D1000, 17))
 
     # 8. roger com o BEEP 2: o valor 3 (que a classe base nao conhece) abre, mostra na ordem do
