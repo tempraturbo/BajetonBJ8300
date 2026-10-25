@@ -5,6 +5,18 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v1.0T — Oct 24 — the first stable release ✅
+
+v25 became **v1.0T** ("T" for Tempra), the first stable release. It is the same file, byte for
+byte (sha256 `e8b18e68…`), now under the version's name: `firmware/releases/BJ8300_BANK_v1.0T.anc`.
+The radio's `VERSION` menu already showed `Firmware: V1.0T` since the texts were revised.
+
+Published in the [v1.0T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T), together with the CHIRP module, the flasher and
+the cable driver. The README now opens with everything that changed since V0.12 and the step by
+step for flashing and for CHIRP (developer mode, loading the module, finding the radio under
+**Baojie** → **BJ8300_v1.0TEMPRA**), with the warning not to use CHIRP's stock models or older
+modules with this firmware.
+
 ## v25 — Oct 24 — scramble from 2700 to 3400 Hz ✅
 
 - **SCRAMBLE with nine options, in ascending order: OFF and 2700 to 3400 Hz in 100 Hz steps.**

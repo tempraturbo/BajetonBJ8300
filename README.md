@@ -1,96 +1,188 @@
-# Baojie BJ-8300 — bancos de canais, driver do CHIRP e ferramentas
+# Baojie BJ-8300 — firmware v1.0T, bancos de canais e driver do CHIRP
 
 > 🇬🇧 **English version: [README.en.md](README.en.md)**
 
-Firmware modificado para o rádio **Baojie/Bajeton BJ-8300** (JieLi AC695X, CPU pi32v2), com
-**16 bancos de canais de verdade**, um **driver do CHIRP** que edita esses bancos e um conjunto de
-ferramentas para falar com o rádio pelo cabo de programação.
+Firmware modificado para o rádio **Baojie/Bajeton BJ-8300** (JieLi AC695X, CPU pi32v2), feito por
+engenharia reversa do firmware de fábrica **V0.12**, sem documentação do fabricante. Traz **16
+bancos de canais de verdade**, scramble compatível com o Baofeng UV-17L, espectro mais rápido e um
+**driver do CHIRP** próprio. O "T" da versão é de **Tempra**.
 
-Tudo aqui foi obtido por engenharia reversa do firmware de fábrica **V0.12**, sem documentação do
-fabricante. O que foi descoberto está em [docs/engenharia-reversa.md](docs/engenharia-reversa.md) —
-inclusive o mapa da memória de dados, o protocolo do cabo e os endereços das rotinas usadas.
-
----
-
-## ⚠️ Antes de qualquer coisa
-
-Gravar firmware modificado tem risco. Este projeto foi feito com duas redes de segurança, e as
-duas foram **testadas no rádio**:
-
-1. **Combo de recuperação** — ligar o rádio segurando **PTT2 + o botão de atalho** mostra `UPDATE`
-   na tela e deixa ele esperando gravação. Esse caminho é lido na inicialização, **antes** de
-   qualquer coisa que a modificação toca (o script de montagem recusa escrever nas funções
-   envolvidas; ver `PROTEGIDAS` em [firmware/scripts/montar.py](firmware/scripts/montar.py)).
-2. **Recuperação pelo bootloader** — o botão *"Click Here If Your Radio Can't Work"* do BinTe ANC
-   Bootloader, que não depende do app estar bom.
-
-Durante o desenvolvimento o rádio entrou em bootloop uma vez (ver
-[docs/historico.md](docs/historico.md)) e voltou pelo combo, sem abrir o aparelho.
-
-**Guarde o firmware de fábrica**: está em
-[firmware/original/BJ8300_V0.12.anc](firmware/original/). É só regravá-lo para voltar ao estado
-original — os canais e a calibração ficam em outro chip e não são tocados.
+> [!TIP]
+> ## 🎉 v1.0T — a primeira versão estável
+>
+> **[⬇️ Baixar a v1.0T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T)**
+>
+> | Arquivo do release | Para que serve |
+> |---|---|
+> | `BJ8300_BANK_v1.0T.anc` | o firmware, para gravar no rádio |
+> | `bj8300_v1.0TEMPRA.py` | o módulo do CHIRP para este firmware |
+> | `BinTalk-V1.1.zip` | o gravador (BinTe ANC Bootloader) |
+> | `CH340-driver.zip` | o driver do cabo de programação USB |
+>
+> Testada no rádio. Para gravar: [passo a passo](#-como-gravar-o-firmware-passo-a-passo). Para o
+> CHIRP: [passo a passo](#-como-usar-o-chirp-com-este-firmware).
 
 ---
 
-## O que o firmware modificado faz
+## ✨ O que mudou da V0.12 de fábrica para a v1.0T
 
-### Bancos de canais (o motivo do projeto)
+### 🆕 Recursos novos
 
-- **16 bancos**, cada um com **nome de 12 caracteres**.
-- Um canal pode estar em **quantos bancos quiser**.
-- **Vários bancos ligados ao mesmo tempo**: o rádio passa a ver a união deles.
-- Com algum banco ligado, **sobe/desce e busca só enxergam os canais dos bancos ligados**; sem
-  nenhum ligado, o rádio funciona exatamente como de fábrica.
-- Os bancos ficam no chip de dados (0xC1000 em diante), **fora** da área de canais: regravar os
-  canais pelo CHIRP ou pelo CPS não apaga banco nenhum.
+| Recurso | Como fica no rádio |
+|---|---|
+| 🗂️ **16 bancos de canais** | Cada banco tem **nome de 12 caracteres**, e um canal pode estar em **quantos bancos quiser**. Dá para ligar **vários bancos ao mesmo tempo**: o sobe/desce e a busca passam a ver só os canais dos bancos ligados. Sem nenhum ligado, o rádio funciona como de fábrica. Menus novos: `BANK`, `BANK NAME` e `BANK CH` ([como usar](#usando-os-bancos-no-rádio)) |
+| 🔐 **Scramble com 8 frequências** | O `SCRAMBLE` passa de OFF/ON para **OFF e de 2700 a 3400 Hz, de 100 em 100**, em ordem crescente. O **3400 Hz** é o ON de fábrica (fala com outros BJ-8300), e os **modos 1, 2 e 3 do Baofeng UV-17L** caem, cada um, numa dessas frequências. Testado com os três modos |
+| 🔔 **Roger BEEP 2** | O `ROGER` ganha uma quarta opção: OFF, BEEP 1 (o de fábrica), **BEEP 2** (quatro tons: 1125, 1857, 1359 e 931 Hz, ~0,4 s no total) e TONE1200 |
+| 📊 **Espectro com 320 e 640 pontos** e **passo de 10 kHz** | Além dos 160 pontos de fábrica, para ver uma faixa maior de uma vez |
+| 📈 **Pico seguro no espectro** | A barra sobe na hora e, quando o sinal some, desce aos poucos |
+| 🔌 **Driver do CHIRP próprio** | Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, numa sessão só pelo cabo. Recusa gravar num rádio com firmware de fábrica ([como usar](#-como-usar-o-chirp-com-este-firmware)) |
+| 🧰 **Comando estendido no cabo** | Leitura do chip de dados inteiro (endereço de 24 bits) e gravação só na área dos bancos. É o que o driver do CHIRP usa |
 
-### Outras correções e melhorias
+### ⚡ Melhorias
 
 | O que | Detalhe |
 |---|---|
-| **Realce do VFO selecionado** | O bloco do lado ativo (nome, frequência e barra de sinal) ganha fundo verde; o outro continua preto |
-| **Setas do menu invertidas** | A seta de cima passa a subir na lista, em vez de avançar o valor |
-| **Roger BEEP 2** | O ROGER ganha uma quarta opção: OFF, BEEP 1 (o de fábrica), **BEEP 2** (quatro tons, 1125/1857/1359/931 Hz) e TONE1200 |
-| **Scramble de 2700 a 3400 Hz** | O SCRAMBLE passa de OFF/ON para **OFF e oito frequências de inversão, de 2700 a 3400 Hz**, de 100 em 100, em ordem crescente. O 3400 Hz é o de fábrica, e os modos 1, 2 e 3 do Baofeng UV-17L caem, cada um, numa delas (testado) |
-| **Espectro melhorado** | Duas vezes mais rápido (160 pontos em ≈ 2,5 s); passo de **10 kHz**; **320 e 640 pontos**; pico seguro (a barra sobe na hora e desce aos poucos); e, parado num sinal achado, a seta segue a varredura sem mexer no limite |
-| **Barra de sinal no scan** | Durante a varredura a barra não fica mais congelada no último canal achado, e o número do canal não descasa do nome |
-| **Textos em inglês revisados** | 25 cadeias corrigidas/padronizadas (ex.: `VOICEPRI` → `ENCRYPT`); versão do menu agora é `V1.0T` |
-| **Editor de nome** | Sair do editor não deixa mais o `abc` do teclado preso no cabeçalho do menu |
-| **Comando estendido no cabo** | Leitura de 24 bits (chip inteiro) e gravação na área dos bancos — é o que o driver do CHIRP usa |
-| **Menus de zona removidos** | `ZONE` e `Zone Or Channel` saíram do menu, por escolha explícita: o banco faz o papel deles, e sem os dois a tabela de menus nova cabe exatamente no lugar da original |
+| 🚀 **Espectro duas vezes mais rápido** | 160 pontos em ≈ 2,5 s. E, parado num sinal achado, a seta continua a varredura sem mexer no limite |
+| 🟩 **Realce do VFO selecionado** | O bloco do lado ativo (nome, frequência e barra de sinal) ganha fundo verde; o outro continua preto |
+| ↕️ **Setas do menu invertidas** | A seta de cima passa a subir na lista, em vez de avançar o valor |
+| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`). O menu `VERSION` mostra `Firmware: V1.0T` |
 
-A **função** de zona continua no firmware; o que saiu foram os dois itens de menu. Para o rádio
-não ficar preso em modo zona, o driver do CHIRP grava **Full Channel** em todo upload.
+### 🐞 Correções
+
+| Problema da V0.12 | Na v1.0T |
+|---|---|
+| Durante o scan, a barra de sinal ficava congelada no último canal achado, e o número do canal descasava do nome | A tela acompanha cada canal da varredura |
+
+### ➖ Removido
+
+| O que | Por quê |
+|---|---|
+| Itens de menu `ZONE` e `Zone Or Channel` | Os bancos fazem o papel das zonas, com mais liberdade. A função de zona continua no firmware, e o driver do CHIRP sempre grava **Full Channel**, para o rádio nunca ficar preso em modo zona |
+
+### 🔒 O que não muda
+
+- **Canais, ajustes e calibração** ficam num chip à parte e **não são tocados** pela gravação do
+  firmware.
+- O **modo de gravação** (`UPDATE`) é lido antes de qualquer parte modificada, e o script de
+  montagem recusa escrever nele.
+- **Voltar ao de fábrica** é só gravar o [firmware original](firmware/original/), do mesmo jeito.
 
 ---
 
-## Como gravar
+## ⚠️ Antes de gravar
 
-1. Abra `tools/anc-bootloader/BinTe ANC Bootloader.exe`.
-2. Escolha o arquivo `.anc`, a porta COM e **115200**.
+Gravar firmware modificado tem risco. Este projeto tem uma rede de segurança, **testada no
+rádio**: ligar o rádio segurando **PTT2 + o botão de atalho** mostra `UPDATE` na tela e deixa ele
+esperando gravação. Esse caminho roda na inicialização, **antes** de qualquer coisa que a
+modificação toca (o script de montagem recusa escrever nas funções envolvidas; ver `PROTEGIDAS` em
+[firmware/scripts/montar.py](firmware/scripts/montar.py)). Durante o desenvolvimento o rádio
+entrou em bootloop uma vez ([histórico](docs/historico.md)) e voltou por esse combo, sem abrir o
+aparelho.
 
-   | Arquivo | Estado |
-   |---|---|
-   | `firmware/releases/BJ8300_BANK_v12.anc` | **recomendado** — testado e íntegro |
-   | `firmware/releases/BJ8300_BANK_v25.anc` | v24 + **scramble de 2700 a 3400 Hz**, de 100 em 100, em ordem crescente no menu; use com o driver do CHIRP desta versão — **testado no rádio** com os três modos do UV-17L |
-   | `firmware/releases/BJ8300_BANK_v24.anc` | v23 + **scramble 2900 Hz** (o do Baofeng UV-17L no modo 3); use com o driver do CHIRP desta versão — **testado no rádio** com o UV-17L |
-   | `firmware/releases/BJ8300_BANK_v23.anc` | v21 + **roger BEEP 2** (100 ms por tom, como o mp3); use com o driver do CHIRP desta versão — **testado no rádio** |
-   | `firmware/releases/BJ8300_BANK_v21.anc` | v19 + **espectro** duas vezes mais rápido, passo de 10 kHz, 320 e 640 pontos e pico seguro; verde do realce mais escuro (é a v20 sem o bootloop; a v20 foi retirada) — **testado no rádio** |
-   | `firmware/releases/BJ8300_BANK_v19.anc` | v18 + **a seta continua o espectro** parado num achado, sem mexer no limite; a tabela de menus passa a ficar no lugar da original (o código ganha 1512 bytes de espaço) — **testado no rádio** |
-   | `firmware/releases/BJ8300_BANK_v18.anc` | v17 com o fundo verde também na caixinha do RX/TX; **ainda não testado no rádio** |
-   | `firmware/releases/BJ8300_BANK_v17.anc` | **realce do bloco do VFO em evidência** sem as faixas pretas e com verde mais escuro ([mapa da tela](docs/mapa-da-tela.md)) — **testado no rádio**; só o RX/TX fica com fundo preto |
-   | `firmware/releases/BJ8300_BANK_v16.anc` | primeiro realce testado e funcionando; sobram faixas finas pretas entre as linhas do bloco |
-   | `firmware/releases/BJ8300_BANK_v14.anc` | tentativa anterior do realce: parou o reset da v13, mas o verde só saía na barra de sinal |
-   | `firmware/original/BJ8300_V0.12.anc` | firmware de fábrica, para voltar atrás |
-3. Ligue o rádio **segurando PTT2 + o botão de atalho** até aparecer `UPDATE` (mais confiável), ou
-   deixe ele na tela normal e clique **Update**.
-4. Clique **Update** e espere terminar.
+O gravador também tem o botão *"Click Here If Your Radio Can't Work"*, que deve servir para quando
+o firmware nem chega a ligar, mas ele **nunca foi testado**.
 
-Se der `Retry1..5 / Failure!`: desligue e ligue o rádio, confira que nenhum outro programa está com
-a porta COM (CHIRP, CPS, scripts deste repositório) e tente de novo. O driver do cabo CH340 está em
-[tools/ch340-driver/](tools/ch340-driver/) — instale com
-`pnputil /add-driver CH341SER.INF /install` num PowerShell **elevado**.
+**Guarde o firmware de fábrica**: [firmware/original/BJ8300_V0.12.anc](firmware/original/).
+
+---
+
+## 📥 Como gravar o firmware, passo a passo
+
+Precisa de um PC com Windows e do **cabo de programação USB** do rádio (o de chip CH340, o mesmo do
+CPS de fábrica).
+
+**1. Baixe os arquivos.** Na [página do release v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T),
+baixe o `BJ8300_BANK_v1.0T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
+o `CH340-driver.zip`. Descompacte os zips. (Os mesmos arquivos estão no repositório, em
+`firmware/releases/`, `tools/anc-bootloader/` e `tools/ch340-driver/`.)
+
+**2. Instale o driver do cabo, se precisar.** Ligue o cabo no PC e abra o **Gerenciador de
+Dispositivos**. Se em **Portas (COM e LPT)** aparece `USB-SERIAL CH340 (COMx)`, está pronto: anote
+o número da COM. Se não aparece, clique com o botão direito no `ch341ser.inf` do `CH340-driver.zip`
+→ **Instalar** (ou, num PowerShell **como administrador**, `pnputil /add-driver ch341ser.inf
+/install`) e desconecte e conecte o cabo.
+
+**3. Abra o gravador.** Rode o `BinTe ANC Bootloader.exe` (a janela se chama **BinTalk V1.1**).
+Feche antes qualquer programa que use a porta COM (CHIRP, CPS).
+
+<p align="center"><img src="docs/imagens/gravador.png" alt="Janela do gravador BinTalk V1.1" width="300"></p>
+
+- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v1.0T.anc`.
+- **Port:** a COM do cabo (a do passo 2).
+- **Baudrate:** **115200** (já vem assim).
+
+**4. Ponha o rádio em modo de gravação.** Com o rádio **desligado** e o cabo conectado nele, ligue
+o rádio **segurando PTT2 + o botão de atalho**, até aparecer `UPDATE` na tela.
+
+**5. Grave.** Clique em **Update** e espere. O log mostra `Update Mode` → `Baudrate OK` →
+`Update 3%` → `Jump To Loader` → `Progress 100%` → `Finish`. Não desconecte nada no meio.
+
+**6. Confira.** Desligue e ligue o rádio. No menu `VERSION` deve aparecer `Firmware: V1.0T`, e os
+itens `BANK`, `BANK NAME` e `BANK CH` aparecem no menu.
+
+**Se der `Retry1..5 / Failure!`:** desligue o rádio, confira que nenhum outro programa está com a
+porta COM, volte ao passo 4 e tente de novo.
+
+---
+
+## 📻 Como usar o CHIRP com este firmware
+
+> [!CAUTION]
+> **Com a v1.0T, use só o módulo `bj8300_v1.0TEMPRA.py` deste release.**
+>
+> - **Não use os modelos de fábrica do CHIRP** que servem para o BJ-8300 de fábrica (**Bajeton
+>   BJ7800** e **Radtel RT-920**). Eles não leem nem gravam os bancos, e não conhecem o roger BEEP
+>   2 nem as frequências novas do scramble: com o BEEP 2 ligado, a tela de ajustes deles nem abre.
+>   O RT-920 ainda oferece o "Zone or Channel", e em modo zona o rádio fica preso, porque o menu
+>   para sair dele foi removido.
+> - **Não use versões antigas deste módulo**: elas não conhecem as opções novas, e um canal com
+>   uma frequência de scramble nova aparece como inválido.
+> - Ao contrário também vale: o módulo **recusa** gravar num rádio com o firmware de fábrica.
+
+**1. Instale o CHIRP mais recente.** Baixe o **CHIRP-next** em
+[chirpmyradio.com](https://chirpmyradio.com/projects/chirp/wiki/Download). O módulo usa o driver
+`radtel_rt900` da versão atual; com um CHIRP antigo, o passo 3 falha com *"Invalid or unsupported
+module file"*.
+
+**2. Ligue o modo desenvolvedor (só uma vez).** Menu **Help** → **Developer Mode**. O CHIRP avisa
+*"Danger Ahead"*: clique **Yes**. Depois avisa *"Restart Required"*: clique **OK**, **feche e abra o
+CHIRP**. O modo fica ligado nas próximas vezes.
+
+**3. Carregue o módulo (toda vez que abrir o CHIRP).** Menu **File** → **Load Module...** (só
+aparece com o modo desenvolvedor). O CHIRP avisa que carregar módulo é perigoso: clique **Yes** e
+escolha o `bj8300_v1.0TEMPRA.py`. A janela fica **vermelha** e o título mostra
+`CHIRP **Module Loaded**`: é o sinal de que o módulo está carregado. Ao fechar o CHIRP, ele é
+descarregado, e na próxima vez é preciso carregar de novo.
+
+**4. Leia o rádio.** Com o rádio ligado normalmente e o cabo conectado, menu **Radio** →
+**Download from radio...**:
+
+| Campo | Escolha |
+|---|---|
+| **Port** | a COM do cabo |
+| **Vendor** | **Baojie** (não é "Bajeton") |
+| **Model** | **BJ8300_v1.0TEMPRA** |
+
+O CHIRP mostra o aviso *"Experimental driver"*, com as instruções do módulo: clique **Yes** e
+depois **OK** para ler.
+
+> [!NOTE]
+> Se o `BJ8300_v1.0TEMPRA` não aparece em **Baojie**, o módulo não está carregado: volte ao passo 3.
+
+**5. Edite.** No lado direito aparece a lista das partes do rádio:
+
+- **Memories (VHF/UHF):** os 960 canais. As colunas **Scramble** e as outras propriedades do canal
+  estão aqui.
+- **Banks (VHF/UHF):** uma coluna por banco; marque em quais bancos cada canal está e renomeie os
+  bancos.
+- **Settings:** os ajustes do rádio, com o roger de 4 opções e o scramble dos VFO A e B. Em
+  **Settings → Bancos**, ligue e desligue cada banco e escolha qual deles os itens do rádio editam.
+- **Memories (FM / AM / HF):** as outras faixas, como no driver de fábrica.
+
+**6. Grave e reinicie o rádio.** Menu **Radio** → **Upload to radio...**. Depois de gravar,
+**desligue e ligue o rádio**: o filtro dos bancos é montado na partida.
+
+Guarde uma cópia do primeiro download (**File** → **Save**) antes de mudar qualquer coisa.
 
 ---
 
@@ -111,6 +203,8 @@ Detalhes de comportamento:
 - Marcar ou desmarcar canal **vale na hora**, sem reiniciar.
 - Gravar bancos **pelo cabo** (CHIRP) exige desligar e ligar o rádio: o filtro é montado na partida.
 - O estado dos bancos fica gravado no chip de dados e **sobrevive a desligar o rádio**.
+- Regravar os canais pelo CHIRP ou pelo CPS **não apaga banco nenhum**: os bancos ficam no chip de
+  dados (0xC1000 em diante), fora da área de canais.
 
 Na tela inicial a aparência não muda: a numeração continua **absoluta, de 1 a 960** (o canal 500
 continua sendo o 500, não "o 3º do banco") e o nome do banco ligado não aparece ali. O que muda é
@@ -119,47 +213,60 @@ marcado para o outro.
 
 ---
 
-## Driver do CHIRP
+## Como o driver do CHIRP funciona
 
 O arquivo é [chirp/bj8300_v1.0TEMPRA.py](chirp/bj8300_v1.0TEMPRA.py). O nome é proposital: só
-funciona com **este** firmware modificado, e assim ninguém com um BJ-8300 de fábrica o usa por
-engano.
+funciona com **este** firmware, e assim ninguém com um BJ-8300 de fábrica o usa por engano. Ele
+deriva do `radtel_rt900.py` do CHIRP, que já trata este rádio como família RT-920/BJ7800, e
+acrescenta:
 
-1. No CHIRP, ligue o **modo desenvolvedor** (`Help` → `Enable Developer Functions`) e reinicie.
-2. `File` → `Load Module...` → escolha o `.py`.
-3. `Radio` → `Download From Radio`, com o modelo **Baojie BJ8300_v1.0TEMPRA**.
-
-O que ele acrescenta ao driver de fábrica (deriva do `radtel_rt900.py`, que já trata este rádio
-como família RT-920/BJ7800):
-
-- Aba **Banks** com uma coluna por banco: marcar e desmarcar canal, e renomear banco.
-- Em **Settings → Bancos**: ligar/desligar cada banco e escolher qual deles os itens do rádio
-  editam.
-- Download e upload da área dos bancos pelo comando estendido, junto com os canais; no upload, só
+- A aba **Banks** e o grupo **Settings → Bancos** (acima).
+- Download e upload da área dos bancos pelo comando estendido, junto com os canais e **numa sessão
+  só** (o firmware responde ao `E` de saída com um ACK e só fecha a sessão depois); no upload, só
   os setores que mudaram.
-- **Sem zonas:** os bancos fazem o papel delas, e o driver não mostra nada de zona. Todo upload
-  grava **Full Channel** (`0x9028` = 1), porque o modo zona continua no firmware e, sem o item de
-  menu, o rádio não teria como sair dele — em modo zona o sobe/desce fica preso em 64 canais.
-- Recusa funcionar se o rádio **não** tiver este firmware, para nunca gravar banco em cima de
-  canal: o firmware dos bancos responde à leitura estendida com tamanho `0x40`, e o de fábrica ecoa
-  o tamanho com o bit 7 ligado e manda mais de 128 bytes — o driver lê o cabeçalho, descarta o
-  resto (o cabo não dessincroniza) e para com a mensagem certa.
+- O roger com as quatro opções do rádio e o scramble com as nove, gravando os mesmos valores que o
+  menu do rádio grava.
+- **Sem zonas:** todo upload grava **Full Channel** (`0x9028` = 1), porque o modo zona continua no
+  firmware e, sem o item de menu, o rádio não teria como sair dele — em modo zona o sobe/desce fica
+  preso em 64 canais.
+- A trava contra firmware de fábrica: o firmware dos bancos responde à leitura estendida com tamanho
+  `0x40`, e o de fábrica ecoa o tamanho com o bit 7 ligado e manda mais de 128 bytes. O driver lê
+  o cabeçalho, descarta o resto (o cabo não dessincroniza) e para **antes de gravar qualquer
+  coisa**.
 
 Três conjuntos de teste, os três sem rádio:
 
-- `python -I tests/teste_bj8300.py` — 27 conferências do miolo (formato gravado, soma batendo com
-  a que o próprio rádio gravou, pertinência múltipla), com o CHIRP stubado;
-- `python -I tests/teste_chirp_real.py` — 20 conferências **contra o CHIRP instalado de verdade**:
-  se a classe encaixa na API (modelo de bancos, `apply_to` + callbacks dos ajustes), se imagem
-  salva pelo driver RT-920 abre sem estourar, e se o que foi editado termina nos bytes da imagem;
-- `python -I tests/teste_clonagem.py` — 16 conferências da **conversa pelo cabo**: `sync_in` e
-  `sync_out` inteiros do CHIRP contra um rádio simulado que responde como o firmware (lido no
-  desmontado), nos dois firmwares — bancos lidos e gravados com marca e soma, só os setores
-  mudados, ida e volta, Full Channel, e o firmware de fábrica recusado sem gravação estendida e sem
-  deixar o cabo dessincronizado.
+- `python -I tests/teste_bj8300.py` — o miolo dos bancos (formato gravado, soma batendo com a que
+  o próprio rádio gravou, pertinência múltipla), com o CHIRP stubado;
+- `python -I tests/teste_chirp_real.py` — **contra o CHIRP instalado de verdade**: se a classe
+  encaixa na API (modelo de bancos, `apply_to` + callbacks dos ajustes), se imagem salva pelo
+  driver RT-920 abre sem estourar, e se roger e scramble terminam nos bytes que o rádio grava;
+- `python -I tests/teste_clonagem.py` — a **conversa pelo cabo**: `sync_in` e `sync_out` inteiros
+  contra um rádio simulado que responde como o firmware (lido no desmontado), nos dois firmwares.
 
 A elétrica do cabo e o tempo de resposta do rádio só o rádio real testa — isso foi validado à mão
 com as ferramentas de `tools/cabo/`.
+
+---
+
+## Versões anteriores
+
+Todas em [firmware/releases/](firmware/releases/). A história completa, com o que quebrou e por
+quê, está no [histórico](docs/historico.md).
+
+| Arquivo | Estado |
+|---|---|
+| `BJ8300_BANK_v1.0T.anc` | **estável** — a v25 com o nome da versão (mesmo arquivo); use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v24.anc` | v23 + scramble 2900 Hz (o do Baofeng UV-17L no modo 3) — testado no rádio |
+| `BJ8300_BANK_v23.anc` | v21 + roger BEEP 2 — testado no rádio |
+| `BJ8300_BANK_v21.anc` | v19 + espectro duas vezes mais rápido, passo de 10 kHz, 320 e 640 pontos e pico seguro; verde do realce mais escuro (a v20 sem o bootloop; a v20 foi retirada) — testado no rádio |
+| `BJ8300_BANK_v19.anc` | v18 + a seta continua o espectro parado num achado; a tabela de menus no lugar da original — testado no rádio |
+| `BJ8300_BANK_v18.anc` | v17 com o fundo verde também na caixinha do RX/TX — não testado no rádio |
+| `BJ8300_BANK_v17.anc` | realce do bloco do VFO sem as faixas pretas ([mapa da tela](docs/mapa-da-tela.md)) — testado no rádio |
+| `BJ8300_BANK_v16.anc` | primeiro realce funcionando; sobram faixas finas pretas entre as linhas do bloco |
+| `BJ8300_BANK_v14.anc` | tentativa anterior do realce: o verde só saía na barra de sinal |
+| `BJ8300_BANK_v12.anc` | bancos, setas, textos, correção do scan e o cabo de 24 bits — testado no rádio |
+| `firmware/original/BJ8300_V0.12.anc` | firmware de fábrica, para voltar atrás |
 
 ---
 
@@ -195,16 +302,17 @@ sh firmware/build.sh
 ```
 
 Ele compila `firmware/src/bancos.c`, monta o `.anc` a partir do original e **confere** o
-resultado: CRCs das 12 entradas, código e tabela presentes nas 6 imagens de flash, itens de menu,
-todos os ganchos, textos, e que nenhum byte foi alterado fora dos remendos previstos — nem perto
-das áreas protegidas. A saída termina em `RESULTADO: tudo certo`.
+resultado: CRCs das 12 entradas, código e tabela de menus presentes e iguais nas 6 imagens de
+flash, itens de menu, todos os ganchos e remendos, textos, e que nenhum byte foi alterado fora dos
+trechos previstos — nem perto das áreas protegidas. A saída termina em `RESULTADO: tudo certo`, e
+o build é reprodutível: o mesmo fonte dá o mesmo `.anc`, byte a byte.
 
 O caminho da toolchain está em `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.3/...`).
 
-**Orçamento de espaço:** a única área livre nas 6 imagens é `0x1E96121..0x1E96DFF` = **3295
-bytes**. Hoje são 1768 de código + 1512 da tabela de menus copiada. Quem mexer aqui vai esbarrar
-nisso — [docs/engenharia-reversa.md](docs/engenharia-reversa.md) explica como medir e onde já foi
-economizado.
+**Orçamento de espaço:** o código novo mora na única área livre das 6 imagens, a partir de
+`0x01E96124`, com **3292 bytes**; a v1.0T usa 3012. A tabela de menus é gravada no lugar da
+original e não ocupa essa área. [docs/engenharia-reversa.md](docs/engenharia-reversa.md) explica
+como medir e onde já foi economizado.
 
 ---
 
@@ -212,20 +320,20 @@ economizado.
 
 ```
 firmware/
-  src/          bancos.c (a feature inteira) e bancos.ld
+  src/          bancos.c (todo o código novo) e bancos.ld
   scripts/      montagem (.anc), conferência, desassemblador, análise
   original/     BJ8300_V0.12.anc — firmware de fábrica
   releases/     .anc prontos para gravar
   build.sh      compila, monta e confere
 chirp/          driver do CHIRP (bj8300_v1.0TEMPRA.py)
 tools/
-  anc-bootloader/  gravador BinTe ANC Bootloader
+  anc-bootloader/  gravador BinTe ANC Bootloader (BinTalk V1.1)
   ch340-driver/    driver do cabo USB
   cabo/            ferramentas PowerShell que falam com o rádio
   ghidra-scripts/  scripts usados na análise
 logo/           imagem de abertura (BMP) e conversor
 tests/          testes do driver do CHIRP
-docs/           documentação (engenharia reversa, histórico) e notas de trabalho
+docs/           engenharia reversa, histórico, mapa da tela, imagens e notas de trabalho
 ```
 
 ---
