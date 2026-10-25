@@ -125,6 +125,13 @@ Extended writes are only accepted in `0xC1000..0xD1FFF`, erasing the sector when
 it. Any other address is ignored without writing anything (proven with
 `tools/cabo/teste_cabo_grava.ps1`).
 
+**Memory read (v31, diagnostic).** In the extended `R`, an address with bit 22 set (`0x400000` and
+up, which the 1 MB chip does not have) returns 64 B of the processor's memory at
+`0x01E00000 + (address − 0x400000)`: what the firmware sees of the internal flash (and of the RAM
+at `0x02000000`). The copy is the chip ROM's `memcpy` (`0x021127A8`, 191 callers in the app,
+destination in r0, source in r1, size in r2). Read only. It is what showed the voice case
+([section 15](#15-voices-removed)).
+
 ## 5. Firmware routines used
 
 | Address | What it is |
@@ -257,6 +264,19 @@ bits).
    address from the ELF and refuses to build if it does not match, and `conferir.py` checks end
    to end (`2c` and `2d`: every firmware branch into the new code, against the bytes actually at
    the target, decrypted, in all 6 images).
+8. **Growing the image breaks the radio** (v28, boot loop). The 6 images grew 8 KB into the
+   unpartitioned range after them, where the disassembly proved nothing in the firmware writes
+   ([section 14](#14-internal-flash-partitions-and-who-writes)). The flasher finished
+   successfully, and the radio kept resetting right after the logo. The uboot and the loader use
+   another cipher, and the cause was not proven; the suspect is PRCT, which holds the image size
+   and kept the old one. Since then `2f` requires the stock size and the uboot and the partition
+   table identical.
+9. **The update skips a resource file whose CRC did not change** (v30). New data inside a file of
+   the `tone` directory, with the old CRC in its entry, never reaches the radio: it keeps the old
+   content. `repack` redoes the directory's CRCs (`refaz_crcs_tone`, v32).
+10. **Three UFW entries are encrypted by their position in the file** (`isd_config.ini`,
+    `script.ver`, `blimit.bin`: the CRC only matches when decrypted with their offset). Changing
+    the size of an earlier entry moves them, and they have to be encrypted again.
 
 ## 10. Why it cannot brick
 
@@ -264,6 +284,11 @@ The app's startup reads the keys (`0x01E56C70/C7E/C8C`) **before** loading confi
 channels; with PTT2 + the shortcut key it draws `UPDATE` and waits for a flash. The build script
 has a guard (`PROTEGIDAS`) that **refuses** any write into those routines and into the UPDATE-mode
 ones, and the final verification repeats that check byte by byte.
+
+Since v29, check `2f` also requires, in the 6 images: the stock size, the uboot and the partition
+table identical, and the last 32 bytes erased (the uboot's `BOOT_START_FIRST` marker). The voice
+patches (section 15) stay off the UPDATE path: its screen is drawn from the key read
+(`0x01E56C9A`), which goes on to `0x01E55AF4`.
 
 ## 11. Spectrum
 
@@ -393,6 +418,30 @@ byte of RAM of our own, and this firmware has no proven-free RAM yet.
   entry `goto` (`4h`), the variable addresses taken from the firmware instructions that use them
   (`4f`), and the arrow's resume (`4i`, now through `gancho_avanca`).
 
+**Current bar, running frequency, peak and dBm (v26–v27).**
+
+- **Current bar in white.** `gancho_coluna` takes the five calls that draw the bars
+  (`0x01E4D600`, `0x01E4D644`, `0x01E4D688`, `0x01E4D6CC`, `0x01E4D710`), in place of
+  `0x01E4AAA8`, which draws an x0..x1 × y0..y1 rectangle with the color as the 5th argument (on the
+  stack, as the firmware passes it). The loop redraws one 32-column strip per turn, at
+  `b[0x14697]` (`4f` takes the address from the `r13 = 0x14680` at `0x01E4B422`), and each bar
+  arrives with x relative to the strip. The column is strip × 32 + x, against
+  `ESP_INDICE × (160 / points)`; the point's columns come out `0xFFFF`, with the top clamped to 61
+  (3 px at least). The threshold line's call (`0x01E4D72E`) does not go through the hook.
+- **Running frequency.** In `gancho_espectro`, the turn that tuned a new point calls
+  `MOSTRA_FREQ(ESP_FREQ)` only when the strip the loop is about to redraw is the point's: the
+  frequency and the white bar change together, every 5 turns. With `b[0x14A35]` non-zero (digits
+  being typed, the same check the firmware does before showing the peak) it does not write.
+- **Peak on the second line.** The end-of-pass call that showed the peak on the top line
+  (`0x01E4AEA4`, to `MOSTRA_FREQ`) goes to `mostra_pico`: window 40..112 × 36..48, 12 px font, in
+  the firmware's format (`"%03d.%05d"` at `0x01E5FF26`, checked by `4f` against the one at
+  `0x01E45DB2`). `gancho_janela` clears it when the window changes.
+- **dBm on the right.** Three immediates of its routine (`0x01E4ADFE`): `r0 = 40 → 112` at
+  `0x01E4AE12` and `r1 = 120 → 160` at `0x01E4AE14` (the window), `r1 = 56 → 116` at `0x01E4AE30`
+  (the text's x). AM/FM has the window 127..159 × 17..49 with its text at y 20, and the dBm starts
+  at y 36.
+- **Step (v27).** The step label is drawn at y 37, the height of the peak and the dBm.
+
 ## 12. Roger
 
 The ROGER menu entry (stock index 20) keeps its value at **`b[0x14B83]`** (offset `0x17` of the
@@ -424,6 +473,14 @@ v23). Checked first: nothing outside branches into the loop, r5 and r6 are
 written before being read from there on, and r0..r3 already arrived there as call garbage. Check
 `4j` in `conferir.py` takes the variable, the BEEP table and the tone and delay routines from the
 stock bytes, and verifies both patches.
+
+**COIN (v26; called BEEP 3 up to v30).** Value 4. The menu has five options (OFF, BEEP 1, BEEP 2,
+COIN, TONE1200) and two tables translate position ↔ value (`roger_valor`, `roger_posicao`). The
+branch at `0x01E4461E` (if 0, skip) already takes 4 to the BEEP path, and 2 branches off earlier,
+at `0x01E4461A` (`if (r0 == 2)`, stock, checked by `4j`). The tones: the Super Mario World coin
+measured from the owner's mp3, 2000 Hz for 70 ms and 2672 Hz for 330 ms (`TOM(20649)`,
+`ESPERA_2MS(35)`, `TOM(27587)`, `ESPERA_2MS(165)`). In CHIRP the value has 3 bits: the roger's 2
+and the low bit of `unused_9017`.
 
 ## 13. Scramble
 
@@ -489,3 +546,87 @@ all talk to the BJ-8300, each on one of these frequencies.
   value round trip, that every value from 0 to 15 shows in the menu with the frequency the radio
   really inverts at, and the 14 patched bytes. It was tested by swapping two positions in the
   blob, and four of those checks failed.
+
+## 14. Internal flash: partitions and who writes
+
+Surveyed on 2026-10-25 from the app directory of each of the 6 images and from the disassembly.
+
+| Range (`flash.bin`, 1 MB) | What it is |
+|---|---|
+| `0x00A0–0x2088` | uboot (encrypted with a cipher that is not the `enc`/`sfc` one) |
+| `0x2088–0x210D` | embedded `isd_config.ini` (SPI, uboot UART, RESET, EOFFSET) |
+| `0x3000` | app directory (`app_dir_head`) |
+| `0x3100–0x7B1DC` | `app.bin` |
+| `0x7B1DC–0x9886C` | `tone` directory: voices and beeps ([section 15](#15-voices-removed)) |
+| `0x9886C–0x99121` | `cfg_tool.bin` and SDK data |
+| `0x99121–0x9A000` | erased slack: our code, up to 32 B before the end |
+| `0x9A000–0xD2000` | no partition (~224 KB) |
+| `0xD2000–0xEE000` | VM (the settings) |
+| `0xEF000` and up | BTIF, USER, USERLOGO and `key_mac` (`0xFF000`) |
+
+The other variants follow the same design: the app at `0x2300` (flash2/4/6) and 2 MB flash
+(flash3/4). For the processor, the address is `0x01E00000 + (position − start of app_dir)`, which
+is why it is the same in all 6. The **PRCT** partition has the image's size (0x9A000 or 0x99000:
+the tool's `CODE_LEN`). The last 32 bytes of each image belong to the uboot's `BOOT_START_FIRST`
+marker (documented for the previous family by kagaimiq), and our code ends before them.
+
+**Who writes to the internal flash.** Every call of the write primitives (`0x01E37A9A`, and
+`0x01E37A28` directly) lands in:
+
+- the VM driver (`0x01E37AB8..`, `0x01E514E0..`): only in the VM's two banks;
+- the **UART update**, which writes a loader (`uart_update.bin`, 21.5 KB, from inside `ota.bin`) as
+  `LOADER.BIN` before rebooting (`0x01E37FB2`, called only from `0x01E69780`). The position comes
+  from the current VM's start and size (read at boot, `0x01E130E4`), from the VM of the incoming
+  firmware (its header, `0x01E696D2`) and from the flash size, aligned to 128 KB: the top of the
+  VM, and the routine refuses (error 255) any position below its start;
+- an 80-byte record at the end of the flash (`0x01E381E4`);
+- the `exif` block (`0x01E50B7A`): the partition does not exist, the base stays 0 and the offsets
+  are 16-bit;
+- the generic file write (`0x01E13492`): only inside the open partition.
+
+Nothing writes to the unpartitioned range — and **still, growing the image into it broke the
+radio** (v28): what the uboot and the loader do with the image size does not show in the app's
+disassembly. The image sizes and the partition table stay as JieLi made them (`2f`).
+
+## 15. Voices removed
+
+The `tone` directory comes right after `app.bin` (for the processor, `0x01E781DC`), with 127 files:
+`index.idx` (signature `TIDX`, at `+0x1000`), the voices **C0–C49** (Chinese, 47.5 KB) and
+**E0–E67** (English, 66 KB), contiguous from `+0x15C0` to `+0x1D514`, and the beeps **B0–B7**
+(272 B). Offsets count from the directory header, and the data is SFC-encrypted like the rest.
+The `md5.bin` named in the strings is read by nobody.
+
+**Who plays them.** Checked against every address load that lands in the path strings, including
+the ones used as a base for an offset:
+
+| Path | What it plays |
+|---|---|
+| sound queue (`0x01E405E2`), the only reader of the 126-path table (`0x01E5E8FC`, read only at `0x01E40634`) | numbers 0–117 = voices, 118–125 = beeps |
+| terminal mode chosen by `main` (`0x01E55AAE`, called at `0x01E57A2E`) | C16, if `b[0x153F3]` |
+| event handler (`0x01E55740`), through the go-between `0x01E555C6` | C1, C2, C3 and C15 (base + 0, 25, 50 and 100) |
+| another terminal mode (`0x01E55A60`) and the end of transmission | B4 and B7 |
+
+**The three patches (v30).** Encodings checked in `llvm-objdump`, and no branch lands inside the
+patched spans:
+
+| Site | Stock | New |
+|---|---|---|
+| `0x01E40628` | `35 e9 76 80` `ifs (r5 >= 118) {` | `85 f9 1c ec` `if (r5 < 118) goto 56` (the return) |
+| `0x01E55ABE` | `01 53` `if (r1 == 0) goto 38` | `04 93` `goto 38` |
+| `0x01E555D6` | `03 50` `if (r3 == 0) goto 32` | `04 90` `goto 32` |
+
+Each one becomes the "no voice" path that already existed there. The VOICE setting lives at
+`b[0x14B73]` (the "say number" routine, `0x01E409A2`, already checks it), and the item left the
+menu.
+
+**The space:** `0x01E797A0..0x01E956F0` (114,512 B), the linker's `.vozes` section, at the same
+address in all 6 images, inside the stock image.
+
+**The update skips a resource whose CRC did not change.** Each entry keeps the CRC16 of the file's
+decrypted content, and the directory header keeps the one of everything after it. In v30 the C0
+content changed with the old CRC in its entry, and the radio kept the original voice: read through
+the cable memory read in v31, only the replaced bytes differed, and their neighbors matched the
+`.anc`. In v32 `repack` redoes the CRCs (`refaz_crcs_tone`), and the data arrived. `2g` checks the
+patches, that the path table is read in one place only, that the `.vozes` block lands inside the
+voices in the 6 images, that the rest of the directory is the stock one except the CRCs, and that
+every CRC matches the content.

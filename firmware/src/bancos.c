@@ -54,6 +54,9 @@ typedef unsigned int u32;
 #define FIRMWARE(nome, endereco)  __asm__(".set " #nome ", " #endereco)
 FIRMWARE(SPRINTF, 0x01E19DCC);      int SPRINTF(char *, const char *, ...);
 FIRMWARE(LE_FLASH, 0x01E390AC);     void LE_FLASH(u32, void *, u32);
+/* O memcpy do firmware, na ROM do chip (191 chamadores no app: destino em r0, origem em r1, tamanho
+ * em r2 - por exemplo 0x01E3B87C, que copia os 48 bytes de um glifo para a pilha). */
+FIRMWARE(COPIA_MEM, 0x021127A8);    void COPIA_MEM(void *, const void *, unsigned);
 FIRMWARE(APAGA_SETOR, 0x01E3A126);  void APAGA_SETOR(u32);
 FIRMWARE(GRAVA_FLASH, 0x01E3A25A);  void GRAVA_FLASH(u32, const void *, u32);
 FIRMWARE(VALIDA_FREQ, 0x01E38C3A);  int VALIDA_FREQ(u32);
@@ -84,6 +87,8 @@ FIRMWARE(JANELA_ESPECTRO, 0x01E4AA3C); void JANELA_ESPECTRO(u32);        /* cent
 FIRMWARE(MOSTRA_FREQ, 0x01E45D96);     void MOSTRA_FREQ(u32);            /* a frequencia grande do topo */
 FIRMWARE(ROTULOS_FREQ, 0x01E4AB2A);    void ROTULOS_FREQ(u32, u32);      /* as do comeco e do fim, embaixo */
 FIRMWARE(JANELA, 0x01E3AD34);          void JANELA(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned);
+/* Retangulo x0..x1, y0..y1 (inclusivos, em qualquer ordem) na janela aberta, na cor do 5o argumento. */
+FIRMWARE(RETANGULO, 0x01E4AAA8);       void RETANGULO(unsigned, unsigned, unsigned, unsigned, unsigned);
 FIRMWARE(ESCREVE, 0x01E3B834);         void ESCREVE(unsigned, unsigned, const char *, unsigned, unsigned);
 /* Roger: as duas rotinas que o laco do BEEP de fabrica usa (0x01E44644 e 0x01E4464A). */
 FIRMWARE(TOM, 0x01E43B4E);             void TOM(unsigned, unsigned);     /* freq. dos 2 geradores, Hz x 10.32444 */
@@ -143,6 +148,8 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 #define ESP_FIM        (*(volatile u32 *)0x000148E8)         /* 84200 */
 #define ESP_INICIO     (*(volatile u32 *)0x000148EC)         /* 84204 */
 #define ALTURAS        ((volatile u8 *)0x0001551B)           /* 87323: 160 colunas do grafico, 0..64 */
+#define ESP_PEDACO     (*(volatile u8 *)0x00014697)          /* 83607: qual das 5 faixas de 32 colunas o laco desenha */
+#define FORMATO_FREQ   ((const char *)0x01E5FF26)            /* "%03d.%05d", o de MOSTRA_FREQ e ROTULOS_FREQ */
 /* Configuracao do espectro (0x6EC0, 73 bytes que o firmware grava na saida e le na partida). */
 #define CFG_PONTOS     (*(volatile u32 *)0x00006EC4)         /* 28356: 0..3 = 160 >> n; nossos 4 = 640, 5 = 320 */
 #define CFG_PASSO      (*(volatile u32 *)0x00006EC8)         /* 28360: 0..4 os de fabrica; nosso 5 = 10 kHz */
@@ -174,6 +181,10 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
  * ganchos passam a cor como valor de 16 bits, entao aqui nao vale o limite de 8 bits do remendo
  * direto. Para mudar o tom, mexer so nesta linha. */
 #define COR_REALCE   0x0240u
+/* Barra do ponto que o espectro esta varrendo: branca, contra o azul das outras (0x3B15), o verde
+ * da linha do limite (0x07E0) e o fundo preto, com 3 px no minimo para aparecer onde nao ha sinal. */
+#define COR_BARRA_ATUAL  0xFFFFu
+#define MINIMO_ATUAL     3
 
 /* ---------- onde os bancos ficam gravados ----------
  * Setores proprios depois da area que o firmware usa em 0xC0000 (64 registros de 60 B, que ele le
@@ -522,24 +533,22 @@ unsigned espectro_passo(void)
     return passo_de[cfg_passo()] * sub_pontos();
 }
 
-/* No lugar de 0x01E4ABDC: os rotulos da quantidade de pontos e do passo, com as mesmas janelas, o
- * mesmo formato e as mesmas posicoes do firmware - so as tabelas sao as nossas. */
+/* No lugar de 0x01E4ABDC: os rotulos da quantidade de pontos e do passo, com as mesmas janelas do
+ * firmware - as tabelas sao as nossas. O firmware copiava o texto com "%s " para um buffer; aqui ele
+ * vai direto, porque a janela ja e limpa de preto e o espaco a mais so pintava preto (e passava da
+ * janela de 32 px: "x160 " + espaco sao 36). O passo desce de y 34 para 37, a altura do pico e do
+ * dBm na segunda linha (o de pontos ja estava na da frequencia, y 20). */
 void espectro_rotulos(unsigned n, unsigned p)
 {
-    char texto[12];
-
     if (n >= LARGURAS)
         n = 0;
     if (p >= PASSOS)
         p = 0;
-    zera(texto, sizeof texto);
     JANELA(0, 32, 17, 33, 1, 0);
-    SPRINTF(texto, "%s ", rotulo_pontos[n]);
-    ESCREVE(20, 1, texto, 12, 0);
+    ESCREVE(20, 1, rotulo_pontos[n], 12, 0);
     ENVIA();
     JANELA(0, 32, 33, 49, 1, 0);
-    SPRINTF(texto, "%s", rotulo_passo[p]);
-    ESCREVE(34, 1, texto, 12, 0);
+    ESCREVE(37, 1, rotulo_passo[p], 12, 0);
     ENVIA();
 }
 
@@ -583,26 +592,83 @@ void gancho_registra(void)
     }
 }
 
+/* Quantas colunas do grafico cada ponto ocupa. */
+static unsigned largura_ponto(void)
+{
+    return 160 / espectro_pontos();
+}
+
+/* A segunda linha do espectro e do pico da passada: ela fica onde o firmware punha o dBm, que foi
+ * para a direita dela (x 112..160, embaixo do AM/FM). Fonte de 12 (6 px por caractere), centrada
+ * embaixo da frequencia grande. A janela da frequencia grande (y 20..38) cobre a primeira linha
+ * desta, que nao tem pixel aceso: e a mesma sobreposicao que o dBm de fabrica ja tinha. */
+static void janela_pico(void)
+{
+    JANELA(40, 112, 36, 48, 1, 0);
+}
+
+/* No lugar da chamada que mostra o pico na volta ao comeco da janela (0x01E4AEA4, que ia para
+ * MOSTRA_FREQ): a frequencia do pico da passada que terminou vai para a segunda linha e fica ate a
+ * passada seguinte terminar. O formato e o do firmware. */
+void mostra_pico(u32 freq)
+{
+    char texto[12];
+
+    janela_pico();
+    SPRINTF(texto, FORMATO_FREQ, freq / 100000, freq % 100000);
+    ESCREVE(37, 51, texto, 12, 0);
+    ENVIA();
+}
+
 /* Nas chamadas que centram a janela pela frequencia digitada (0x01E4C054) e na entrada do
  * espectro (0x01E4CFBC): zera o grafico antes, porque com o pico seguro as barras de outra janela
- * ficariam la, descendo devagar, por cima da nova. */
+ * ficariam la, descendo devagar, por cima da nova. Pelo mesmo motivo apaga o pico. */
 void gancho_janela(u32 centro)
 {
     zera((void *)ALTURAS, 160);
+    janela_pico();
+    ENVIA();
     JANELA_ESPECTRO(centro);
+}
+
+/* Nas cinco chamadas que desenham as barras (0x01E4D600, 0x01E4D644, 0x01E4D688, 0x01E4D6CC,
+ * 0x01E4D710), no lugar de 0x01E4AAA8: o laco principal redesenha uma faixa de 32 colunas por volta
+ * (ESP_PEDACO, 0 a 4), e cada barra chega com x relativo a faixa (x0 = x1), a base e o topo (64 menos
+ * a altura). As colunas do ponto que a varredura esta medindo saem na cor da barra atual. */
+void gancho_coluna(unsigned x0, unsigned x1, unsigned base, unsigned topo, unsigned cor)
+{
+    unsigned largura = largura_ponto();
+
+    if (ESP_PEDACO * 32 + x0 - ESP_INDICE * largura < largura) {
+        cor = COR_BARRA_ATUAL;
+        if (topo > 64 - MINIMO_ATUAL)
+            topo = 64 - MINIMO_ATUAL;
+    }
+    RETANGULO(x0, x1, base, topo, cor);
 }
 
 /* No lugar da chamada da varredura no laco principal (0x01E4D5B2). De fabrica cada ponto custa
  * duas voltas do laco (uma sintoniza, a seguinte mede). Aqui, quando a volta mediu e passou ao
  * ponto seguinte, a mesma volta ja sintoniza esse ponto - e ele so e medido na volta seguinte, como
- * no firmware, entao o chip tem o mesmo tempo para estabilizar. Um ponto por volta: o dobro. */
+ * no firmware, entao o chip tem o mesmo tempo para estabilizar. Um ponto por volta: o dobro.
+ *
+ * A frequencia grande de cima acompanha a varredura. A volta que sintonizou um ponto novo mostra a
+ * frequencia dele, mas so quando o laco vai redesenhar a faixa do grafico em que o ponto esta:
+ * frequencia e barra branca trocam juntas, a cada 5 voltas, e cada troca manda 3 KB ao LCD. Com
+ * digitos sendo digitados (b[0x14A35], o que o firmware confere antes de mostrar o pico) ela nao
+ * escreve por cima. Parado num achado nada e sintonizado, e fica a frequencia do achado, que o
+ * firmware mostra. */
 void gancho_espectro(unsigned arg)
 {
-    unsigned antes = ESPECTRO_ESTADO;
+    unsigned antes = ESPECTRO_ESTADO, sintonizou = antes == 0;
 
     ESPECTRO(arg);
-    if (antes == 1 && ESPECTRO_ESTADO == 0)
+    if (antes == 1 && ESPECTRO_ESTADO == 0) {
         ESPECTRO(arg);
+        sintonizou = 1;
+    }
+    if (sintonizou && EDITOR_TAM == 0 && ESP_PEDACO == ESP_INDICE * largura_ponto() / 32)
+        MOSTRA_FREQ(ESP_FREQ);
 }
 
 /* O que o firmware faz depois de trocar o passo ou a quantidade de pontos (0x01E4C628..0x01E4C664):
@@ -653,37 +719,55 @@ unsigned long long gancho_tecla_espectro(unsigned tecla)
     return (unsigned long long)caso << 32 | tecla;
 }
 
-/* ---------- roger: BEEP 2, o tom de quatro notas ----------
- * O item ROGER do menu passa a ter quatro opcoes, na ordem OFF, BEEP 1, BEEP 2, TONE1200. Os
- * valores gravados continuam os de fabrica (0 OFF, 1 BEEP, 2 TONE1200) e o BEEP 2 fica com o 3,
- * que cabe nos 2 bits do ajuste; o get e o set do item trocam posicao e valor (2 <-> 3).
+/* ---------- roger: BEEP 2 e COIN ----------
+ * O item ROGER do menu passa a ter cinco opcoes, na ordem OFF, BEEP 1, BEEP 2, COIN, TONE1200. Os
+ * valores gravados continuam os de fabrica (0 OFF, 1 BEEP, 2 TONE1200); o BEEP 2 fica com o 3 e o
+ * COIN com o 4. No radio o ajuste e um byte inteiro, e no CHIRP o 0x9017 tem 6 bits sem uso acima
+ * dos 2 do roger. O get e o set do item trocam posicao e valor pelas duas tabelas abaixo.
  *
- * O fim da transmissao (0x01E44604) toca o roger antes de voltar a receber. Um desvio dele foi
- * trocado (0x01E4461E: "se nao for 1, pula" virou "se for 0, pula"), entao o valor 3 entra pelo
- * mesmo caminho do BEEP - liga o gerador, toca, desliga, mesmo final - e o laco dos tons
- * (0x01E44638) virou uma chamada para ca e um desvio por cima dele. */
-const char *const roger_opcoes[4] = {"OFF", "BEEP 1", "BEEP 2", "TONE1200"};
-const char *const roger_opcoes_cn[4] = {(const char *)0x01E5FC88, "BEEP 1", "BEEP 2", "TONE1200"};
-/* Os quatro tons do roger que o dono mandou em mp3, medidos: 1125, 1857, 1359 e 931 Hz, 100 ms
- * cada. Em unidades do gerador (Hz x 10.32444, a mesma conta que da 10324 para os 1000 Hz do BEEP
- * e 12389 para o TONE1200). */
-static const u16 beep2[4] = {11615, 19172, 14031, 9612};
+ * O fim da transmissao (0x01E44604) le o byte inteiro e toca o roger antes de voltar a receber. O 2
+ * desvia logo, para o TONE1200 (0x01E4461A, "se for 2"). O desvio seguinte foi trocado (0x01E4461E:
+ * "se nao for 1, pula" virou "se for 0, pula"), entao o 3 e o 4 entram pelo mesmo caminho do BEEP -
+ * liga o gerador, toca, desliga, mesmo final - e o laco dos tons (0x01E44638) virou uma chamada
+ * para ca e um desvio por cima dele. */
+const char *const roger_opcoes[5] = {"OFF", "BEEP 1", "BEEP 2", "COIN", "TONE1200"};
+const char *const roger_opcoes_cn[5] = {(const char *)0x01E5FC88, "BEEP 1", "BEEP 2", "COIN", "TONE1200"};
+static const u8 roger_valor[5] = {0, 1, 3, 4, 2};      /* posicao no menu -> valor gravado */
+static const u8 roger_posicao[5] = {0, 1, 4, 2, 3};    /* valor gravado -> posicao no menu */
+/* Os tons, em pares (frequencia, espera em unidades de 2 ms), ate o 0. A frequencia vai em unidades
+ * do gerador: Hz x 10.32444, a mesma conta que da 10324 para os 1000 Hz do BEEP e 12389 para o
+ * TONE1200. Os dois sons vieram em mp3 do dono, medidos:
+ *  - BEEP 2: 1125, 1857, 1359 e 931 Hz, 100 ms cada;
+ *  - COIN, a moeda do Super Mario World: 2000 Hz por 70 ms e 2672 Hz por 330 ms. O gerador toca
+ *    com volume constante, e no original a segunda nota cai 22 dB depois de uns 40 ms. */
+static const u16 beep2[] = {11615, 50, 19172, 50, 14031, 50, 9612, 50, 0};
+static const u16 beep3[] = {20649, 35, 27587, 165, 0};
 
-static unsigned troca_roger(unsigned v)
-{
-    return v >= 2 ? v ^ 1 : v;
-}
+/* ---------- canaria na regiao das vozes (v30, v31) ----------
+ * Bytes conhecidos no comeco do espaco que era das vozes (ver bancos.ld). Na v30 o COIN tocava dali
+ * se a assinatura batesse, e no radio saiu o BEEP 2: o processador nao le ali o que esta no .anc.
+ * Na v31 ela fica so como dado, para ler pelo cabo com a leitura de memoria do gancho_cabo: o
+ * radio tinha ali a voz ORIGINAL (o resto do arquivo batia com o .anc). Causa: a entrada do C0 no
+ * diretorio tone continuava com o CRC da voz, e a atualizacao nao regravou o arquivo. A v32 refaz
+ * os CRCs do diretorio (jlfw.refaz_crcs_tone). */
+__attribute__((section(".vozes"), used)) static const struct {
+    char marca[8];
+    u16 beep3[5];
+} canaria = {{'B', 'V', 'O', 'Z', 'T', 'V', '3', '2'}, {20649, 35, 27587, 165, 0}};
+
 
 u16 roger_le(void)
 {
     unsigned v = ROGER;
 
-    return v < 4 ? troca_roger(v) : 0;
+    return v < 5 ? roger_posicao[v] : 0;
 }
 
 void roger_grava(void)
 {
-    ROGER = (u8)troca_roger(VALOR & 3);
+    unsigned p = VALOR;
+
+    ROGER = p < 5 ? roger_valor[p] : 0;
 }
 
 /* ---------- scramble: 8 frequencias de inversao, de 2700 a 3400 Hz ----------
@@ -727,15 +811,15 @@ void scramble_grava(void)
 
 /* No lugar do laco dos tons do BEEP. Com o BEEP de fabrica, faz exatamente o que o laco fazia:
  * os dois pares da tabela, de tras para frente, ESPERA_2MS(40) = 80 ms cada. */
-#define TOM_MS  100            /* cada tom do BEEP 2, como no mp3 */
 void gancho_roger_tons(void)
 {
-    unsigned i;
+    unsigned v = ROGER;
+    const u16 *t;
 
-    if (ROGER == 3) {
-        for (i = 0; i < 4; i++) {
-            TOM(beep2[i], 0);
-            ESPERA_2MS(TOM_MS / 2);
+    if (v == 3 || v == 4) {
+        for (t = v == 3 ? beep2 : beep3; *t; t += 2) {
+            TOM(t[0], 0);
+            ESPERA_2MS(t[1]);
         }
         return;
     }
@@ -762,6 +846,10 @@ void gancho_roger_tons(void)
  * Gravacao estendida **so na area dos bancos** (0xC1000..0xD1FFF), apagando o setor quando o bloco
  * comeca nele; qualquer outro endereco e ignorado sem escrever nada. Quem grava banco pelo cabo tem
  * que desligar e ligar o radio depois: o filtro e montado na partida.
+ *
+ * Leitura com o bit 22 do endereco ligado (0x400000 em diante, que o chip de dados de 1 MB nao tem):
+ * le a memoria do processador a partir de 0x01E00000 - o que o firmware enxerga de fato da flash
+ * interna (e da RAM em 0x02000000). So leitura; e um diagnostico (v31).
  */
 void gancho_cabo(unsigned grava)
 {
@@ -773,8 +861,12 @@ void gancho_cabo(unsigned grava)
         endereco = ((tam & 0x7F) << 16) | ((u32)p[1] << 8) | p[2];
         setor = endereco >> 12;            /* contas por setor: constantes pequenas, codigo menor */
         p[3] = 0x40;                       /* a resposta do 'R' sai com 4 + este tamanho */
-        if (!grava)
-            LE_FLASH(endereco, (void *)(p + 4), 0x40);
+        if (!grava) {
+            if (endereco & 0x400000)
+                COPIA_MEM((void *)(p + 4), (const void *)(endereco + 0x01A00000), 0x40);  /* 0x01E00000 + (endereco - 0x400000) */
+            else
+                LE_FLASH(endereco, (void *)(p + 4), 0x40);
+        }
         /* A faixa 0xC1000..0xD1FFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
          * 2026-10-24 mostra que nada mais mora ali, e o chip de 1 MB nao espelha nesse endereco.
          * Quem grava por aqui e o PC mandando registro de banco; o caminho do menu continua com a

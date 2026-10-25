@@ -277,6 +277,8 @@ quê, está no [histórico](docs/historico.md).
 
 | Arquivo | Estado |
 |---|---|
+| `BJ8300_BANK_v32.anc` | **em teste** — v27 sem as vozes (e sem o item VOICE), roger COIN (a moeda), leitura de memória pelo cabo; abre ~112 KB de espaço para o tema novo da tela — testado no rádio |
+| `BJ8300_BANK_v27.anc` | v1.0T + espectro com a barra atual em branco, a frequência que roda, a linha do pico e o dBm à direita; roger BEEP 3 (a moeda, chamada de COIN desde a v31) — testado no rádio |
 | `BJ8300_BANK_v1.0T.anc` | **estável** — a v25 com o nome da versão (mesmo arquivo); use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v24.anc` | v23 + scramble 2900 Hz (o do Baofeng UV-17L no modo 3) — testado no rádio |
 | `BJ8300_BANK_v23.anc` | v21 + roger BEEP 2 — testado no rádio |

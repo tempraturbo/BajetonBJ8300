@@ -46,7 +46,7 @@ def partes(caminho):
 
 
 dados, entradas, chave, app = partes(novo)
-_, _, _, app_velho = partes(original)
+dados_velhos, entradas_velhas, _, app_velho = partes(original)
 tabela_esperada = montar.monta_tabela(app_velho)      # a copia certa sai do firmware de fabrica
 fonte = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', 'bancos.c'),
              encoding='utf-8').read()
@@ -170,6 +170,106 @@ print(f'2e. app.bin decifrado igual nas {len(imagens)} imagens: '
       + ('ok' if not diferentes else 'FALHOU em ' + ', '.join(diferentes)))
 if diferentes:
     erros.append('app.bin diferente em ' + ', '.join(diferentes))
+
+# 2f. cada imagem do tamanho de fabrica, com o uboot (tudo antes do diretorio do app) e a tabela de
+# particoes iguais aos de fabrica (menos os CRCs do app.bin, que mudam com ele), e os ultimos 32 bytes
+# apagados: ali o uboot guarda o marcador BOOT_START_FIRST. A v28 cresceu as imagens e entrou em
+# bootloop (ver o bancos.ld): o tamanho e a tabela de particoes ficam como a ferramenta da JieLi fez.
+problemas = []
+for e in entradas:
+    if e['type'] not in jlfw.FLASH_TYPES:
+        continue
+    v = next(x for x in entradas_velhas if x['name'] == e['name'])
+    img = dados[e['offset']:e['offset'] + e['size']]
+    velha = dados_velhos[v['offset']:v['offset'] + v['size']]
+    if len(img) != len(velha):
+        problemas.append(f"{e['name']}: {len(img):#x} B, a de fabrica tem {len(velha):#x}")
+        continue
+    _, base, sub = jlfw.app_dir(img, chave)
+    _, base_velha, sub_velha = jlfw.app_dir(velha, chave)
+    if base != base_velha or img[:base] != velha[:base]:
+        problemas.append(f"{e['name']}: uboot ou cabecalho diferente")
+    if ({s['name']: (s['offset'], s['size'], s['attr']) for s in sub if s['name'] not in ('app.bin', 'app_area_head')}
+            != {s['name']: (s['offset'], s['size'], s['attr']) for s in sub_velha
+                if s['name'] not in ('app.bin', 'app_area_head')}):
+        problemas.append(f"{e['name']}: tabela de particoes diferente")
+    if any(b != 0xFF for b in img[-32:]):
+        problemas.append(f"{e['name']}: os ultimos 32 bytes nao estao apagados")
+print(f'2f. {len(imagens)} imagens do tamanho de fabrica, uboot e particoes intactos, ultimos 32 B '
+      'apagados: ' + ('ok' if not problemas else 'FALHOU'))
+for p_ in problemas:
+    print('    ' + p_)
+    erros.append(p_)
+
+# 2g. vozes fora: os tres remendos (de fabrica e novos), a tabela de caminhos lida num lugar so (o
+# remendado), e em cada imagem a regiao das vozes dentro dos arquivos C0..E67 do proprio diretorio
+# "tone", com o bloco .vozes gravado e decifrado certo, e o resto do diretorio (index.idx, bipes,
+# entradas) igual ao de fabrica.
+problemas = []
+for sitio, antes, depois, oque in montar.VOZES_REMENDOS:
+    o = sitio - montar.BASE_APP
+    if bytes(app_velho[o:o + len(antes)]) != antes or bytes(app[o:o + len(antes)]) != depois:
+        problemas.append(f'remendo das vozes em {sitio:#x} ({oque})')
+leituras = [o for o in range(0, len(app_velho) - 5, 2)
+            if app_velho[o + 1] == 0xFF and app_velho[o] & 0xF0 == 0xC0
+            and struct.unpack_from('<I', app_velho, o + 2)[0] == 0x01E5E8FC]
+if [montar.BASE_APP + o for o in leituras] != [0x01E40634]:
+    problemas.append('a tabela de caminhos dos sons e lida fora de 0x01E40634: '
+                     + ', '.join(hex(montar.BASE_APP + o) for o in leituras))
+_, vozes = montar.codigo_ligado(os.path.splitext(codigo)[0] + '.elf', '.vozes')
+for e in entradas:
+    if e['type'] not in jlfw.FLASH_TYPES:
+        continue
+    v = next(x for x in entradas_velhas if x['name'] == e['name'])
+    img = dados[e['offset']:e['offset'] + e['size']]
+    velha = dados_velhos[v['offset']:v['offset'] + v['size']]
+    _, base, sub = jlfw.app_dir(img, chave)
+    a = next(s for s in sub if s['name'] == 'app.bin')
+    tone = base + a['offset'] + a['size']                       # o diretorio vem logo depois do app.bin
+    cab = jlfw.jlfs_entry(jlfw.sfc(img[tone:tone + 32], chave, tone - base))
+    arquivos = []
+    p = tone + 32
+    while True:
+        x = jlfw.jlfs_entry(jlfw.sfc(img[p:p + 32], chave, p - base))
+        if not x['ok']:
+            break
+        arquivos.append(x)
+        p += 32
+    vozes_arq = [x for x in arquivos if x['name'][:1] in 'CE' and x['name'][1:2].isdigit()]
+    ini = tone + min(x['offset'] for x in vozes_arq)
+    fim = tone + max(x['offset'] + x['size'] for x in vozes_arq)
+    em_ini = montar.VOZES - montar.BASE_APP + base + 0x100
+    em_fim = montar.VOZES_FIM - montar.BASE_APP + base + 0x100
+    if cab['name'] != 'tone' or len(vozes_arq) != 118 or not (ini <= em_ini and em_fim <= fim):
+        problemas.append(f"{e['name']}: regiao {em_ini:#x}..{em_fim:#x} fora das vozes {ini:#x}..{fim:#x}")
+    if jlfw.sfc(img[em_ini:em_ini + len(vozes)], chave, em_ini - base) != vozes:
+        problemas.append(f"{e['name']}: bloco .vozes ausente ou diferente")
+    # os dados dos arquivos fora do bloco .vozes iguais aos de fabrica; nas entradas, tudo menos os
+    # CRCs (offset, tamanho, atributo, nome); e todo CRC do diretorio conferindo com o conteudo, para
+    # a atualizacao regravar o que mudou
+    _, cab_v, arq_v = jlfw.tone_dir(velha, chave)
+    _, cab_n, arq_n = jlfw.tone_dir(img, chave)
+    fim_dir = tone + cab['size']
+    fim_ent = tone + 32 + 32 * len(arq_n)
+    if (img[fim_ent:em_ini] != velha[fim_ent:em_ini]
+            or img[em_ini + len(vozes):fim_dir] != velha[em_ini + len(vozes):fim_dir]):
+        problemas.append(f"{e['name']}: dados do diretorio tone mudaram fora do bloco .vozes")
+    chaves = ('offset', 'size', 'attr', 'name')
+    if ([tuple(x[k] for k in chaves) for x in arq_n] != [tuple(x[k] for k in chaves) for x in arq_v]
+            or tuple(cab_n[k] for k in chaves) != tuple(cab_v[k] for k in chaves)):
+        problemas.append(f"{e['name']}: entradas do diretorio tone mudaram alem dos CRCs")
+    ruins = [x['name'] for x in arq_n
+             if jlfw.crc16(jlfw.sfc(img[tone + x['offset']:tone + x['offset'] + x['size']], chave,
+                                    tone + x['offset'] - base)) != x['crc']]
+    if ruins or jlfw.crc16(jlfw.sfc(img[tone + 32:fim_dir], chave, tone + 32 - base)) != cab_n['crc']:
+        problemas.append(f"{e['name']}: CRC que nao confere no diretorio tone: {ruins or 'o do diretorio'}")
+    mudaram = [x['name'] for x, y in zip(arq_n, arq_v) if x['crc'] != y['crc']]
+print(f'2g. vozes fora: {len(montar.VOZES_REMENDOS)} remendos, tabela lida so no remendado, bloco .vozes '
+      f'({len(vozes)} B) dentro das vozes nas {len(imagens)} imagens, CRCs do diretorio tone conferindo '
+      f'(mudaram: {", ".join(mudaram)} e o do diretorio): ' + ('ok' if not problemas else 'FALHOU'))
+for p_ in problemas:
+    print('    ' + p_)
+    erros.append(p_)
 
 # 3. a copia da tabela: nenhum item de fabrica perdido e os dos bancos no lugar certo
 T = montar.TAM_ITEM
@@ -307,6 +407,23 @@ if montar.ESPECTRO_TECLAS:
         print(f'4h. espectro {entrada:#x} trocada por {nova} ({oque}): ' + ('ok' if ok else 'FALHOU'))
         if not ok:
             erros.append(f'rotina do espectro mal trocada em {entrada:#x}')
+    # O dBm na direita da segunda linha: os tres imediatos, de fabrica e novos.
+    for endereco, reg, antes, depois, oque in montar.DBM_IMEDIATOS:
+        o = endereco - montar.BASE_APP
+        ok = (bytes(app_velho[o:o + 2]) == montar.monta_imm8(reg, antes)
+              and bytes(app[o:o + 2]) == montar.monta_imm8(reg, depois))
+        print(f'4h. dBm do espectro {endereco:#x}: {oque} {antes} -> {depois}: ' + ('ok' if ok else 'FALHOU'))
+        if not ok:
+            erros.append(f'dBm do espectro errado em {endereco:#x}')
+    previsto += [(e, e + 1, 'dBm do espectro') for e, _, _, _, _ in montar.DBM_IMEDIATOS]
+    # O formato que o pico empresta e o que a MOSTRA_FREQ carrega (0x01E45DB2), com o texto esperado.
+    formato = int(re.search(r'#define\s+FORMATO_FREQ\s+\(\(const char \*\)(0x[0-9A-Fa-f]+)\)', fonte).group(1), 16)
+    o = formato - montar.BASE_APP
+    ok = formato == imediato(0x01E45DB2) and bytes(app_velho[o:o + 10]) == b'%03d.%05d\0'
+    print(f'4f. FORMATO_FREQ = {formato:#x}, a MOSTRA_FREQ usa {imediato(0x01E45DB2):#x}, '
+          f'texto {bytes(app_velho[o:o + 10])!r}: ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append('FORMATO_FREQ nao e o formato da MOSTRA_FREQ')
     previsto += [(s, s + 3, 'espectro') for s, _, _, _ in montar.ESPECTRO_CHAMADAS]
     previsto += [(e, e + 3, 'espectro') for e, _, _, _ in montar.ESPECTRO_FUNCOES]
     # Os enderecos que os ganchos do espectro usam, tirados das instrucoes do firmware que os usam
@@ -318,7 +435,7 @@ if montar.ESPECTRO_TECLAS:
                                   ('ESP_CENTRO', 0x01E4AA68, 8), ('ESP_FIM', 0x01E4AA68, 12),
                                   ('ESP_INICIO', 0x01E4AA68, 16), ('ALTURAS', 0x01E4AD8E, 3739),
                                   ('CFG_PONTOS', 0x01E4A9C2, 4), ('CFG_PASSO', 0x01E4A99C, 8),
-                                  ('CFG_FILTRO', 0x01E4A99C, 16)):
+                                  ('CFG_FILTRO', 0x01E4A99C, 16), ('ESP_PEDACO', 0x01E4B422, 23)):
         no_c, no_firmware = define(nome), imediato(instrucao) + soma
         ok = no_c == no_firmware
         print(f'4f. {nome} = {no_c:#x}, o firmware usa {no_firmware:#x} ({instrucao:#x} + {soma}): '
@@ -445,7 +562,7 @@ def imediato16(endereco):
     return struct.unpack('<H', app_velho[o + 2:o + 4])[0]
 
 
-# 4j. roger BEEP 2. Os enderecos saem das instrucoes do firmware: a variavel e a que o get do item
+# 4j. roger BEEP 2 e BEEP 3. Os enderecos saem das instrucoes do firmware: a variavel e a que o get do item
 # (0x01E3C91E) e a propria rotina do roger (0x01E44606) leem; a tabela do BEEP e a que o laco
 # de fabrica percorre (r4 de 0x01E44614 + 2051, dois pares de tras para frente); as rotinas de tom e
 # de espera sao as que o laco chama. Os dois remendos: os bytes de fabrica e os novos.
@@ -462,7 +579,9 @@ verificacoes = [
      == montar.monta_call(montar.ROGER_LACO_EM + 0xC, declaradas_por_nome('TOM'))),
     ('ESPERA_2MS e a rotina que o laco chamava', bytes(app_velho[o_laco + 0x12:o_laco + 0x16])
      == montar.monta_call(montar.ROGER_LACO_EM + 0x12, declaradas_por_nome('ESPERA_2MS'))),
-    ('desvio do valor 3', bytes(app_velho[o_desvio:o_desvio + 4]) == montar.ROGER_DESVIO_ANTES
+    ('so o 2 desvia antes, para o TONE1200 ("if (r0 == 2) goto 82")',
+     bytes(app_velho[o_desvio - 4:o_desvio]) == bytes.fromhex('00f82904')),
+    ('desvio dos valores 3 e 4', bytes(app_velho[o_desvio:o_desvio + 4]) == montar.ROGER_DESVIO_ANTES
      and bytes(app[o_desvio:o_desvio + 4]) == montar.ROGER_DESVIO_DEPOIS),
     ('laco dos tons', bytes(app_velho[o_laco:o_laco + 8]) == montar.ROGER_LACO_ANTES
      and bytes(app[o_laco:o_laco + 8]) == montar.monta_call(montar.ROGER_LACO_EM, montar.S['gancho_roger_tons'])
@@ -525,6 +644,7 @@ for oque, ok in verificacoes:
     if not ok:
         erros.append('scramble: ' + oque)
 previsto.append((montar.SCRAMBLE_EM, montar.SCRAMBLE_EM + 13, 'scramble: frequencia pelo valor'))
+previsto += [(s_, s_ + len(a_) - 1, 'vozes: ' + d_) for s_, a_, _, d_ in montar.VOZES_REMENDOS]
 
 if montar.REALCE_DIAG:
     certas = sum(bytes(app[e - montar.BASE_APP:e - montar.BASE_APP + 2])

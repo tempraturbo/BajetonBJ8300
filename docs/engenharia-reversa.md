@@ -126,6 +126,13 @@ byte — o CHIRP não vê diferença. Alcance: 8 MB.
 Gravação estendida só em `0xC1000..0xD1FFF`, apagando o setor quando o bloco começa nele. Qualquer
 outro endereço é ignorado sem escrever nada (provado com `tools/cabo/teste_cabo_grava.ps1`).
 
+**Leitura de memória (v31, diagnóstico).** No `R` estendido, endereço com o bit 22 ligado
+(`0x400000` em diante, que o chip de 1 MB não tem) devolve 64 B da memória do processador em
+`0x01E00000 + (endereço − 0x400000)`: o que o firmware enxerga da flash interna (e da RAM em
+`0x02000000`). A cópia é o `memcpy` da ROM do chip (`0x021127A8`, 191 chamadores no app, destino
+em r0, origem em r1, tamanho em r2). Só leitura. Foi ela que mostrou o caso das vozes
+([seção 15](#15-vozes-fora)).
+
 ## 5. Rotinas do firmware usadas
 
 | Endereço | O que é |
@@ -258,6 +265,19 @@ nos bits altos).
    `.text` no ELF e recusa montar se não bater, e o `conferir.py` confere de ponta a ponta
    (`2c` e `2d`: cada desvio do firmware para o código novo, com os bytes que estão de fato no
    destino, decifrados, nas 6 imagens).
+8. **Crescer a imagem derruba o rádio** (v28, bootloop). As 6 imagens cresceram 8 KB para dentro
+   da faixa sem partição depois delas, onde o desmontado provava que nada do firmware grava
+   ([seção 14](#14-flash-interna-partições-e-quem-grava)). O gravador terminou com sucesso, e o
+   rádio ficou em reset contínuo logo depois do logo. O uboot e o carregador são cifrados com outra
+   cifra, e a causa não foi provada; a suspeita é a PRCT, que guarda o tamanho da imagem e ficou
+   com o antigo. Desde então a `2f` exige o tamanho de fábrica e o uboot e a tabela de partições
+   idênticos.
+9. **A atualização pula arquivo de recurso cujo CRC não mudou** (v30). Dado novo dentro de um
+   arquivo do diretório `tone`, com o CRC velho na entrada, não chega ao rádio: ele fica com o
+   conteúdo antigo. O `repack` refaz os CRCs do diretório (`refaz_crcs_tone`, v32).
+10. **Três entradas do UFW são cifradas pela posição no arquivo** (`isd_config.ini`, `script.ver`,
+    `blimit.bin`: o CRC só bate decifrando com o deslocamento delas). Mudar o tamanho de uma
+    entrada anterior as move, e elas têm de ser cifradas de novo.
 
 ## 10. Prova de que não brica
 
@@ -265,6 +285,11 @@ A inicialização do app lê as teclas (`0x01E56C70/C7E/C8C`) **antes** de carre
 canais; com PTT2 + atalho ela desenha `UPDATE` e fica esperando gravação. O script de montagem tem
 uma trava (`PROTEGIDAS`) que **recusa** qualquer escrita nessas rotinas e nas do modo UPDATE, e a
 conferência final refaz essa checagem byte a byte.
+
+Desde a v29, a conferência `2f` exige ainda, nas 6 imagens: o tamanho de fábrica, o uboot e a
+tabela de partições idênticos e os últimos 32 bytes apagados (o marcador `BOOT_START_FIRST` do
+uboot). Os remendos das vozes (seção 15) ficam fora do caminho do UPDATE: a tela dele é desenhada a
+partir da leitura das teclas (`0x01E56C9A`), que segue para `0x01E55AF4`.
 
 ## 11. Espectro
 
@@ -390,6 +415,29 @@ byte de RAM nosso, e este firmware ainda não tem RAM comprovadamente livre.
   entrada (`4h`), os endereços das variáveis tirados das instruções do firmware que as usam
   (`4f`), e a retomada da seta (`4i`, agora pelo `gancho_avanca`).
 
+**Barra atual, frequência que roda, pico e dBm (v26–v27).**
+
+- **Barra atual em branco.** O `gancho_coluna` entra nas cinco chamadas que desenham as barras
+  (`0x01E4D600`, `0x01E4D644`, `0x01E4D688`, `0x01E4D6CC`, `0x01E4D710`), no lugar de
+  `0x01E4AAA8`, que desenha um retângulo x0..x1 × y0..y1 com a cor no 5º argumento (na pilha, como
+  o firmware a passa). O laço redesenha uma faixa de 32 colunas por volta, em `b[0x14697]`
+  (a `4f` tira o endereço do `r13 = 0x14680` de `0x01E4B422`), e cada barra chega com x relativo à
+  faixa. A coluna é faixa × 32 + x, contra `ESP_INDICE × (160 / pontos)`; as colunas do ponto
+  saem em `0xFFFF`, com o topo limitado a 61 (3 px no mínimo). A chamada da linha do limite
+  (`0x01E4D72E`) não passa pelo gancho.
+- **Frequência que roda.** No `gancho_espectro`, a volta que sintonizou um ponto novo chama
+  `MOSTRA_FREQ(ESP_FREQ)` só quando a faixa que o laço vai redesenhar é a do ponto: a frequência e
+  a barra branca trocam juntas, a cada 5 voltas. Com `b[0x14A35]` diferente de zero (dígitos
+  sendo digitados, a mesma checagem que o firmware faz antes de mostrar o pico) não escreve.
+- **Pico na segunda linha.** A chamada do fim da passada que mostrava o pico na linha de cima
+  (`0x01E4AEA4`, para `MOSTRA_FREQ`) vai para o `mostra_pico`: janela 40..112 × 36..48, fonte de 12,
+  no formato do firmware (`"%03d.%05d"` em `0x01E5FF26`, conferido pela `4f` contra o de
+  `0x01E45DB2`). O `gancho_janela` a apaga quando a janela muda.
+- **dBm à direita.** Três imediatos da rotina dele (`0x01E4ADFE`): `r0 = 40 → 112` em
+  `0x01E4AE12` e `r1 = 120 → 160` em `0x01E4AE14` (a janela), `r1 = 56 → 116` em `0x01E4AE30` (o
+  x do texto). O AM/FM tem a janela 127..159 × 17..49 com o texto em y 20, e o dBm começa em y 36.
+- **Passo (v27).** O rótulo do passo é desenhado em y 37, a altura do pico e do dBm.
+
 ## 12. Roger
 
 O item ROGER do menu (índice 20 de fábrica) guarda o valor em **`b[0x14B83]`** (offset `0x17` do
@@ -422,6 +470,14 @@ cada, porque a espera conta em unidades de 2 ms — corrigido na v23). Conferido
 ninguém de fora desvia para dentro do laço, r5 e r6 são escritos antes de lidos dali em diante, e
 r0..r3 já chegavam ali como lixo de chamada. A verificação `4j` do `conferir.py` tira dos bytes de
 fábrica a variável, a tabela do BEEP e as rotinas de tom e de espera, e confere os dois remendos.
+
+**COIN (v26; chamado de BEEP 3 até a v30).** Valor 4. O menu tem cinco opções (OFF, BEEP 1,
+BEEP 2, COIN, TONE1200) e duas tabelas traduzem posição ↔ valor (`roger_valor`,
+`roger_posicao`). O desvio `0x01E4461E` (se for 0, pula) já leva o 4 ao caminho do BEEP, e o 2
+desvia antes, em `0x01E4461A` (`if (r0 == 2)`, de fábrica, conferido pela `4j`). Os tons: a moeda
+do Super Mario World medida do mp3 do dono, 2000 Hz por 70 ms e 2672 Hz por 330 ms (`TOM(20649)`,
+`ESPERA_2MS(35)`, `TOM(27587)`, `ESPERA_2MS(165)`). No CHIRP o valor tem 3 bits: os 2 do roger e
+o bit baixo do `unused_9017`.
 
 ## 13. Scramble
 
@@ -486,3 +542,85 @@ se entendem com o BJ-8300, cada um numa dessas frequências.
   posição ↔ valor, que todo valor de 0 a 15 aparece no menu com a frequência em que o rádio
   inverte, e os 14 bytes do remendo. Foi testada trocando duas posições no blob, e quatro dessas
   conferências acusaram.
+
+## 14. Flash interna: partições e quem grava
+
+Levantado em 2026-10-25 no diretório do app de cada uma das 6 imagens e no desmontado.
+
+| Faixa (`flash.bin`, 1 MB) | O que é |
+|---|---|
+| `0x00A0–0x2088` | uboot (cifrado com uma cifra que não é a do `enc`/`sfc`) |
+| `0x2088–0x210D` | `isd_config.ini` embutido (SPI, UART do uboot, RESET, EOFFSET) |
+| `0x3000` | diretório do app (`app_dir_head`) |
+| `0x3100–0x7B1DC` | `app.bin` |
+| `0x7B1DC–0x9886C` | diretório `tone`: vozes e bipes ([seção 15](#15-vozes-fora)) |
+| `0x9886C–0x99121` | `cfg_tool.bin` e dados do SDK |
+| `0x99121–0x9A000` | sobra apagada: o nosso código, até 32 B antes do fim |
+| `0x9A000–0xD2000` | sem partição (~224 KB) |
+| `0xD2000–0xEE000` | VM (os ajustes) |
+| `0xEF000` em diante | BTIF, USER, USERLOGO e `key_mac` (`0xFF000`) |
+
+As outras variantes seguem o mesmo desenho: o app em `0x2300` (flash2/4/6) e flash de 2 MB
+(flash3/4). Para o processador, o endereço é `0x01E00000 + (posição − início do app_dir)`, e por
+isso é o mesmo nas 6. A partição **PRCT** tem o tamanho da imagem (0x9A000 ou 0x99000: o
+`CODE_LEN` da ferramenta). Os últimos 32 bytes de cada imagem são do marcador `BOOT_START_FIRST` do
+uboot (documentado para a família anterior por kagaimiq), e o nosso código termina antes deles.
+
+**Quem grava na flash interna.** Todas as chamadas das primitivas de escrita (`0x01E37A9A`, e
+`0x01E37A28` direto) caem em:
+
+- o driver da VM (`0x01E37AB8..`, `0x01E514E0..`): só nos dois bancos da VM;
+- a **atualização pela UART**, que grava um carregador (`uart_update.bin`, 21,5 KB, de dentro do
+  `ota.bin`) como `LOADER.BIN` antes de reiniciar (`0x01E37FB2`, chamada só de `0x01E69780`). A
+  posição sai do início e do tamanho da VM atual (lidos na partida, `0x01E130E4`), da VM do
+  firmware que está chegando (o cabeçalho dele, `0x01E696D2`) e do tamanho da flash, alinhada a
+  128 KB: o topo da VM, e a rotina recusa (erro 255) qualquer posição abaixo do início dela;
+- um registro de 80 bytes no fim da flash (`0x01E381E4`);
+- o bloco `exif` (`0x01E50B7A`): a partição não existe, a base fica 0 e os deslocamentos são de
+  16 bits;
+- a escrita genérica de arquivo (`0x01E13492`): só dentro da partição aberta.
+
+Nada grava na faixa sem partição — e **mesmo assim crescer a imagem para dentro dela derrubou o
+rádio** (v28): o que o uboot e o carregador fazem com o tamanho da imagem não aparece no
+desmontado do app. O tamanho das imagens e a tabela de partições ficam como a JieLi fez (`2f`).
+
+## 15. Vozes fora
+
+O diretório `tone` vem logo depois do `app.bin` (para o processador, `0x01E781DC`), com 127
+arquivos: o `index.idx` (assinatura `TIDX`, em `+0x1000`), as vozes **C0–C49** (chinês, 47,5 KB) e
+**E0–E67** (inglês, 66 KB), contínuas de `+0x15C0` a `+0x1D514`, e os bipes **B0–B7** (272 B). Os
+deslocamentos contam do cabeçalho do diretório, e os dados são cifrados em SFC como o resto. O
+`md5.bin` citado nas strings não é lido por ninguém.
+
+**Quem toca.** Conferido em toda carga de endereço que cai nas strings dos caminhos, inclusive as
+que servem de base para um deslocamento:
+
+| Caminho | O que toca |
+|---|---|
+| fila de sons (`0x01E405E2`), a única que lê a tabela de 126 caminhos (`0x01E5E8FC`, lida só em `0x01E40634`) | números 0–117 = vozes, 118–125 = bipes |
+| modo terminal que o `main` escolhe (`0x01E55AAE`, chamado em `0x01E57A2E`) | C16, se `b[0x153F3]` |
+| tratador de eventos (`0x01E55740`), pela intermediária `0x01E555C6` | C1, C2, C3 e C15 (base + 0, 25, 50 e 100) |
+| outro modo terminal (`0x01E55A60`) e o fim de transmissão | B4 e B7 |
+
+**Os três remendos (v30).** Codificações conferidas no `llvm-objdump`, e nenhum desvio cai no meio
+dos trechos:
+
+| Sítio | De fábrica | Novo |
+|---|---|---|
+| `0x01E40628` | `35 e9 76 80` `ifs (r5 >= 118) {` | `85 f9 1c ec` `if (r5 < 118) goto 56` (o retorno) |
+| `0x01E55ABE` | `01 53` `if (r1 == 0) goto 38` | `04 93` `goto 38` |
+| `0x01E555D6` | `03 50` `if (r3 == 0) goto 32` | `04 90` `goto 32` |
+
+Cada um vira o caminho "sem voz" que já existia ali. O ajuste VOICE fica em `b[0x14B73]` (o "falar
+número", `0x01E409A2`, já o confere), e o item saiu do menu.
+
+**O espaço:** `0x01E797A0..0x01E956F0` (114.512 B), a seção `.vozes` do linker, no mesmo endereço
+nas 6 imagens, dentro da imagem de fábrica.
+
+**A atualização pula recurso com CRC inalterado.** Cada entrada guarda o CRC16 do conteúdo
+decifrado do arquivo, e o cabeçalho do diretório guarda o de tudo depois dele. Na v30 o conteúdo do
+C0 mudou com o CRC velho na entrada, e o rádio ficou com a voz original: lido pela memória do cabo
+na v31, só os bytes trocados diferiam, e os vizinhos batiam com o `.anc`. Na v32 o `repack` refaz
+os CRCs (`refaz_crcs_tone`), e o dado chegou. A `2g` confere os remendos, que a tabela de caminhos
+é lida num lugar só, que o bloco `.vozes` cai dentro das vozes nas 6 imagens, que o resto do
+diretório é o de fábrica menos os CRCs, e que todo CRC confere com o conteúdo.

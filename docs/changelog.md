@@ -5,6 +5,107 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v32 — Oct 25 — the voice space, proven ✅ (in testing)
+
+v31 with a consistent `tone` directory: `repack` redoes the CRC of every file whose content changed
+and the directory's own (`jlfw.refaz_crcs_tone`), the way JieLi's tool writes them. The canary is
+now `BVOZTV32`.
+
+Read over the cable on the radio: it is there, and the `tone` header arrived with the new CRC. That
+was v30's cause: **the update only rewrites a resource file whose CRC changed**. With that, the
+~112 KB of the voices (`0x01E797A0..0x01E956F0`) are ours, read by the processor and written by the
+update, without changing the image size or the partition table. Details in
+[section 15 of the reverse engineering](reverse-engineering.md#15-voices-removed).
+
+## v31 — Oct 25 — diagnostic: memory over the cable, and COIN
+
+- **Memory read over the cable.** In the extended `R`, an address with bit 22 set (0x400000 and up,
+  which the 1 MB data chip does not have) returns what the processor sees from `0x01E00000` on,
+  through the chip ROM's `memcpy` (`0x021127A8`, 191 callers in the app). Read only; cable writes
+  did not change.
+- **COIN.** BEEP 3 is now called COIN in the menu, and the coin plays from the normal table again.
+- **What the read showed:** the start of `app.bin`, our code, the `tone` header and `index.idx`
+  equal to the `.anc`; at `0x01E797A0`, the original C0 voice, and right after the canary's 18
+  bytes the radio and the `.anc` match again. The processor reads the region fine; the update is
+  what did not write it.
+
+## v30 — Oct 25 — voices removed ⚠️ **the canary did not show up**
+
+At the owner's request, no voice plays any more (neither Chinese nor English), so their space can
+become code. Every voice plays through one of three paths, and each one becomes the "no voice"
+path it already has:
+
+- the **sound queue** (`0x01E40628`): `ifs (r5 >= 118) {` becomes `if (r5 < 118) goto` the return —
+  a voice leaves the queue without playing, and the beeps go on as before;
+- the **mode that plays C16** (`0x01E55ABE`, chosen by `main`): the no-voice branch becomes
+  unconditional;
+- the **events** (C1, C2, C3 and C15, `0x01E555D6`): the go-between routine always returns without
+  playing.
+
+The **VOICE** item left the menu (53 items). The beeps (B0–B7), `index.idx` and `cfg_tool.bin`
+stay. On the radio: no voice, key beeps right.
+
+The canary — the BEEP 3 table with a signature, at the start of the voice space — failed: the roger
+played BEEP 2, the safe path. v31 showed why.
+
+## v29 — Oct 25 — back to the stock size (not flashed)
+
+v27 without v28's extension, plus two things:
+
+- **48 bytes less:** the spectrum's point and step labels go straight to the text routine, without
+  the `SPRINTF("%s ")` copy — the window is already cleared to black, and the extra space only
+  painted black.
+- **Code up to 3260 bytes,** ending before the last 32 bytes of the smallest image, where the uboot
+  keeps the `BOOT_START_FIRST` marker (documented for the previous family by
+  [kagaimiq](https://kagaimiq.github.io/jielie/datafmt/br17-fw.html)). In the flash2/4/6 images,
+  v26's and v27's code ended inside them.
+
+Check `2f` now requires, in the 6 images, the stock size, the uboot and the partition table
+identical, and the last 32 bytes erased. Run against v27, it points out exactly the three smaller
+images.
+
+## v28 — Oct 25 — image 8 KB bigger ❌ **boot loop, not kept in releases**
+
+To gain code space, the 6 images grew 8 KB, into the unpartitioned range between the end of the
+image and the VM (~224 KB in the 6 variants). The disassembly showed nothing in the firmware writes
+there ([section 14](reverse-engineering.md#14-internal-flash-partitions-and-who-writes)). The
+flasher finished successfully, and the radio went into a **boot loop**: logo and reset in under
+1 s. It came back through PTT2 + shortcut, with v27.
+
+The boot path was byte-for-byte the same as v27's, so the growth is what broke it. **Cause not
+proven:** the uboot and the UART loader are encrypted with a cipher that is not the `enc`/`sfc` one
+(all 65536 keys of both tried), so what they do with the image size cannot be seen. The suspect is
+the PRCT partition, which JieLi's tool always writes with the image size (`CODE_LEN`) and which kept
+the old one.
+
+The attempt left a format lesson: the UFW entries come one after another, and three of them
+(`isd_config.ini`, `script.ver`, `blimit.bin`) are encrypted **by their position in the file** —
+growing an image moves them, and they have to be encrypted again. Check `1` caught it on the first
+build.
+
+## v27 — Oct 25 — step label aligned with the peak and the dBm ✅
+
+The step label (`25.0k`) moves down from y 34 to 37, the height of the peak and the dBm on the
+second line. Tested on the radio.
+
+## v26 — Oct 25 — spectrum with the current bar and the peak; BEEP 3 roger ✅
+
+- **Current bar in white.** The column of the point being measured is drawn white (the others stay
+  blue), at least 3 px tall so it shows where there is no signal. With 80, 40 or 20 points, the
+  point's 2, 4 or 8 columns.
+- **Running frequency.** The big frequency on top follows the sweep, changing together with the
+  white bar (every 5 loop turns; each change sends 3 KB to the LCD). While digits are being typed,
+  it does not write over them.
+- **Peak line.** The strongest frequency of the last pass goes to the second line, where the dBm
+  used to be, and stays until the next pass ends. It is cleared when the window changes.
+- **dBm on the right**, under AM/FM, with the same content as before.
+- **BEEP 3 roger:** the Super Mario World coin, measured from the owner's mp3 — 2000 Hz for 70 ms
+  and 2672 Hz for 330 ms. The roger menu now has five options, and BEEP 3 stores the value 4 (the
+  radio keeps the roger in a whole byte). In v31 it became **COIN**.
+
+Details in sections [11](reverse-engineering.md#11-spectrum) and
+[12](reverse-engineering.md#12-roger) of the reverse engineering. Tested on the radio.
+
 ## CHIRP driver — Oct 24 — all in English, and the banks in blocks under Settings
 
 The firmware is v1.0T's; only `bj8300_v1.0TEMPRA.py` changes.

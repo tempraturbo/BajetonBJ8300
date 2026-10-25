@@ -5,6 +5,105 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v32 — 25/10 — o espaço das vozes, provado ✅ (em teste)
+
+A v31 com o diretório `tone` consistente: o `repack` refaz o CRC de cada arquivo cujo conteúdo
+mudou e o do próprio diretório (`jlfw.refaz_crcs_tone`), do jeito que a ferramenta da JieLi os
+grava. A canária virou `BVOZTV32`.
+
+Lida pelo cabo no rádio: ela está lá, e o cabeçalho do `tone` chegou com o CRC novo. A causa da
+v30 era essa: **a atualização só regrava arquivo de recurso cujo CRC mudou**. Com isso, os ~112 KB
+das vozes (`0x01E797A0..0x01E956F0`) são espaço nosso, lido pelo processador e gravado pela
+atualização, sem mudar o tamanho da imagem nem a tabela de partições. Detalhes na
+[seção 15 da engenharia reversa](engenharia-reversa.md#15-vozes-fora).
+
+## v31 — 25/10 — diagnóstico: memória pelo cabo, e o COIN
+
+- **Leitura de memória pelo cabo.** No `R` estendido, endereço com o bit 22 ligado (0x400000 em
+  diante, que o chip de dados de 1 MB não tem) devolve o que o processador enxerga a partir de
+  `0x01E00000`, pelo `memcpy` da ROM do chip (`0x021127A8`, 191 chamadores no app). Só leitura; a
+  gravação pelo cabo não mudou.
+- **COIN.** O BEEP 3 passa a se chamar COIN no menu, e a moeda volta a tocar da tabela normal.
+- **O que a leitura mostrou:** o começo do `app.bin`, o nosso código, o cabeçalho do `tone` e o
+  `index.idx` iguais ao `.anc`; em `0x01E797A0`, a voz original do C0, e logo depois dos 18 bytes
+  da canária o rádio e o `.anc` voltam a ser iguais. O processador lê a região certinho; quem não a
+  gravou foi a atualização.
+
+## v30 — 25/10 — vozes fora ⚠️ **a canária não apareceu**
+
+A pedido do dono, nenhuma voz toca mais (nem em chinês nem em inglês), para o espaço delas virar
+código. Toda voz toca por um de três caminhos, e cada um vira o "sem voz" que já existe nele:
+
+- a **fila de sons** (`0x01E40628`): `ifs (r5 >= 118) {` vira `if (r5 < 118) goto` o retorno — voz
+  sai da fila sem tocar, e os bipes seguem como eram;
+- o **modo que toca o C16** (`0x01E55ABE`, escolhido pelo `main`): o desvio do caso sem voz vira
+  incondicional;
+- os **eventos** (C1, C2, C3 e C15, `0x01E555D6`): a rotina intermediária volta sempre sem tocar.
+
+O item **VOICE** saiu do menu (53 itens). Os bipes (B0–B7), o `index.idx` e o `cfg_tool.bin` ficam.
+No rádio: nenhuma voz, os bipes de tecla certos.
+
+A canária — a tabela do BEEP 3 com uma assinatura, no começo do espaço das vozes — falhou: o roger
+tocou o BEEP 2, o caminho de segurança. A v31 mostrou por quê.
+
+## v29 — 25/10 — de volta ao tamanho de fábrica (não gravada)
+
+A v27 sem a extensão da v28, mais duas coisas:
+
+- **48 bytes a menos:** os rótulos de pontos e passo do espectro vão direto para a rotina de texto,
+  sem a cópia com `SPRINTF("%s ")` — a janela já é limpa de preto, e o espaço a mais só pintava
+  preto.
+- **Código até 3260 bytes,** para terminar antes dos últimos 32 bytes da menor imagem, onde o uboot
+  guarda o marcador `BOOT_START_FIRST` (documentado para a família anterior por
+  [kagaimiq](https://kagaimiq.github.io/jielie/datafmt/br17-fw.html)). Nas imagens flash2/4/6 o
+  código da v26 e da v27 terminava dentro deles.
+
+A conferência `2f` passa a exigir, nas 6 imagens, o tamanho de fábrica, o uboot e a tabela de
+partições idênticos e os últimos 32 bytes apagados. Rodada sobre a v27, ela aponta exatamente as
+três imagens menores.
+
+## v28 — 25/10 — imagem 8 KB maior ❌ **bootloop, não fica em releases**
+
+Para ganhar espaço de código, as 6 imagens cresceram 8 KB, para dentro da faixa sem partição entre
+o fim da imagem e a VM (~224 KB nas 6 variantes). O desmontado mostrava que nada do firmware grava
+ali ([seção 14](engenharia-reversa.md#14-flash-interna-partições-e-quem-grava)). O gravador
+terminou com sucesso, e o rádio ficou em **bootloop**: logo e reset em menos de 1 s. Voltou pelo
+PTT2 + atalho, com a v27.
+
+O caminho da partida era idêntico byte a byte ao da v27, então quem quebrou foi o crescimento.
+**Causa não provada:** o uboot e o carregador da UART são cifrados com uma cifra que não é a do
+`enc`/`sfc` (testadas as 65536 chaves dos dois), e não dá para ver o que eles fazem com o tamanho
+da imagem. A suspeita é a partição PRCT, que a ferramenta da JieLi sempre grava com o tamanho da
+imagem (`CODE_LEN`) e que ficou com o antigo.
+
+Da tentativa ficou uma lição de formato: as entradas do UFW vêm uma atrás da outra, e três delas
+(`isd_config.ini`, `script.ver`, `blimit.bin`) são cifradas **pela posição no arquivo** — crescer
+uma imagem as muda de lugar, e elas têm de ser cifradas de novo. A conferência `1` pegou isso na
+primeira montagem.
+
+## v27 — 25/10 — passo alinhado com o pico e o dBm ✅
+
+O rótulo do passo (`25.0k`) desce de y 34 para 37, a altura do pico e do dBm na segunda linha.
+Testada no rádio.
+
+## v26 — 25/10 — espectro com a barra atual e o pico; roger BEEP 3 ✅
+
+- **Barra atual em branco.** A coluna do ponto que a varredura está medindo sai em branco (as outras
+  continuam azuis), com 3 px no mínimo para aparecer onde não há sinal. Com 80, 40 ou 20 pontos,
+  as 2, 4 ou 8 colunas do ponto.
+- **Frequência que roda.** A frequência grande de cima acompanha a varredura, trocando junto com a
+  barra branca (a cada 5 voltas do laço; cada troca manda 3 KB ao LCD). Com dígitos sendo
+  digitados, ela não escreve por cima.
+- **Linha do pico.** A frequência mais forte da última passada vai para a segunda linha, onde ficava
+  o dBm, e fica até a passada seguinte terminar. Some quando a janela muda.
+- **dBm à direita**, embaixo do AM/FM, com o mesmo conteúdo de antes.
+- **Roger BEEP 3:** a moeda do Super Mario World, medida do mp3 do dono — 2000 Hz por 70 ms e
+  2672 Hz por 330 ms. O menu do roger passa a ter cinco opções, e o BEEP 3 grava o valor 4 (o rádio
+  guarda o roger num byte inteiro). Na v31 ele virou **COIN**.
+
+Detalhes nas seções [11](engenharia-reversa.md#11-espectro) e
+[12](engenharia-reversa.md#12-roger) da engenharia reversa. Testada no rádio.
+
 ## Driver do CHIRP — 24/10 — todo em inglês, e os bancos em blocos no Settings
 
 O firmware é o mesmo da v1.0T; muda só o `bj8300_v1.0TEMPRA.py`.

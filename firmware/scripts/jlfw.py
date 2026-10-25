@@ -150,7 +150,58 @@ def unpack(src, outdir):
                     open(os.path.join(outdir, 'app.bin'), 'wb').write(app)
 
 
-def repack(src, new_app, dst, blob=None):
+def tone_dir(img, chipkey):
+    """O diretorio "tone", logo depois do app.bin: (posicao do cabecalho, cabecalho, [entradas]).
+
+    Cada entrada e um JLFS de 32 B, cifrado em SFC pela posicao relativa ao app_dir, com 'pos' = a
+    posicao dela na imagem; o deslocamento de cada arquivo conta a partir do cabecalho do diretorio.
+    """
+    _, base, sub = app_dir(img, chipkey)
+    app = next(s for s in sub if s['name'] == 'app.bin')
+    tone = base + app['offset'] + app['size']
+    cab = jlfs_entry(sfc(img[tone:tone + 32], chipkey, tone - base))
+    if not cab['ok'] or cab['name'] != 'tone':
+        raise SystemExit(f'nao achei o diretorio tone em {tone:#x}')
+    arquivos = []
+    p = tone + 32
+    while True:
+        x = jlfs_entry(sfc(img[p:p + 32], chipkey, p - base))
+        if not x['ok']:
+            break
+        arquivos.append(dict(x, pos=p))
+        p += 32
+    return tone, cab, arquivos
+
+
+def refaz_crcs_tone(img, chipkey):
+    """Os CRCs do diretorio tone conferindo com o conteudo, como a ferramenta da JieLi os grava: o
+    de cada arquivo (crc16 dos dados decifrados) e o do diretorio (crc16 de tudo depois do
+    cabecalho), cada entrada com o crc16 dela mesma nos 2 primeiros bytes. A atualizacao pula
+    arquivo de recurso cujo CRC nao mudou (v30: dado novo num arquivo de voz, CRC velho na entrada -
+    o radio ficou com a voz original). Muda so o que nao confere; devolve quantos arquivos mudaram."""
+    _, base, _ = app_dir(img, chipkey)
+    tone, cab, arquivos = tone_dir(img, chipkey)
+
+    def regrava(pos, dados_crc):
+        raw = bytearray(sfc(img[pos:pos + 32], chipkey, pos - base))
+        struct.pack_into('<H', raw, 2, dados_crc)
+        struct.pack_into('<H', raw, 0, crc16(raw[2:32]))
+        img[pos:pos + 32] = sfc(bytes(raw), chipkey, pos - base)
+
+    mudou = 0
+    for x in arquivos:
+        ini = tone + x['offset']
+        crc = crc16(sfc(img[ini:ini + x['size']], chipkey, ini - base))
+        if crc != x['crc']:
+            regrava(x['pos'], crc)
+            mudou += 1
+    crc = crc16(sfc(img[tone + 32:tone + cab['size']], chipkey, tone + 32 - base))
+    if crc != cab['crc']:
+        regrava(tone, crc)
+    return mudou
+
+
+def repack(src, new_app, dst, blob=None, overwrite=()):
     """Troca o app.bin em todas as imagens de flash e recalcula todos os CRCs.
 
     blob = (endereco, bytes) ou uma lista desses pares: grava tambem blocos no espaco livre do fim
@@ -159,6 +210,9 @@ def repack(src, new_app, dst, blob=None):
     todas, que e o que importa. Cada bloco tem que cair em multiplo de 32 B (o bloco do SFC) e em
     area apagada - os dois sao conferidos. O CRC de app_area_head cobre so os primeiros 0x781dc
     bytes da area, bem antes do fim da imagem, entao o que gravamos ali fica fora dele.
+
+    overwrite = faixas (inicio, fim), em endereco de execucao, onde um bloco pode cair sobre dado que
+    ja existe (as vozes que deixaram de ser tocadas); fora delas, so em area apagada.
     """
     data = bytearray(kdh_scramble(open(src, 'rb').read()))
     hdr, entries = ufw_entries(data)
@@ -197,13 +251,16 @@ def repack(src, new_app, dst, blob=None):
             if pos < 0 or pos + len(codigo) > len(img):
                 raise SystemExit(f"{e['name']}: {len(codigo)} B nao cabem em {pos:#x} "
                                  f"(a imagem acaba em {len(img):#x})")
-            if any(b != 0xFF for b in img[pos:pos + len(codigo)]):
+            autorizado = any(a <= endereco and endereco + len(codigo) <= b for a, b in overwrite)
+            if not autorizado and any(b != 0xFF for b in img[pos:pos + len(codigo)]):
                 raise SystemExit(f"{e['name']}: {pos:#x} nao esta livre")
             # Tudo o que fica depois do diretorio do app e lido pelo SFC, que decifra por
             # endereco; o que gravamos tem que ir cifrado com a mesma regra (offset relativo ao
             # diretorio), senao o processador le lixo. A checagem de area livre acima e nos
             # bytes crus, que e como a flash apagada se apresenta.
             img[pos:pos + len(codigo)] = sfc(codigo, chipkey, pos - base)
+        if overwrite:
+            refaz_crcs_tone(img, chipkey)
 
         data[e['offset']:e['offset'] + e['size']] = img
         struct.pack_into('<H', e['plain'], 4, crc16(img))

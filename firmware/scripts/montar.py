@@ -46,8 +46,29 @@ PROTEGIDAS = [
 # secao 2 bytes adiante e o radio entrou em bootloop.
 ENDERECO_CODIGO = 0x01E96124
 
+# Vozes fora (v30, a pedido do dono). Os sons moram no diretorio "tone" logo depois do app.bin:
+# index.idx, as vozes C0..C49 (chines) e E0..E67 (ingles) e os bipes B0..B7. Toda voz toca por um de
+# tres caminhos (mapeados em docs/engenharia-reversa.md, secao 14), e cada um vira o "sem voz" que ja
+# existe nele (sitio, bytes de fabrica, bytes novos, o que e):
+#  - a fila de sons (0x01E405E2), a unica que le a tabela de caminhos (0x01E5E8FC, lida so em
+#    0x01E40634): "ifs (r5 >= 118) {" vira "if (r5 < 118) goto" o retorno - numero de voz (0..117)
+#    sai da fila sem tocar; os bipes (118..125) seguem como eram, inclusive o bloco que o ifs guardava;
+#  - a rotina terminal que o main escolhe (0x01E55AAE) e toca o C16 se b[0x153F3]: o desvio do caso
+#    "sem voz" vira incondicional;
+#  - a intermediaria dos eventos (0x01E555C6, chamada so pelo tratador 0x01E55740 com C1, C2, C3 e
+#    C15): o desvio que volta sem tocar vira incondicional.
+# Codificacoes conferidas no llvm-objdump; nenhum desvio cai no meio dos trechos.
+VOZES_REMENDOS = (
+    (0x01E40628, bytes.fromhex('35e97680'), bytes.fromhex('85f91cec'), 'fila de sons: voz sai sem tocar'),
+    (0x01E55ABE, bytes.fromhex('0153'), bytes.fromhex('0493'), 'C16 do main: sempre sem voz'),
+    (0x01E555D6, bytes.fromhex('0350'), bytes.fromhex('0490'), 'vozes dos eventos: sempre volta sem tocar'),
+)
+# O espaco dos arquivos de voz, do C0 (0x01E7979C, alinhado a 4) ate o fim do E67. Mesmo endereco nas
+# 6 imagens (o diretorio "tone" vem logo depois do app.bin, que tem o mesmo tamanho em todas).
+VOZES, VOZES_FIM = 0x01E797A0, 0x01E956F0
+
 PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho_tecla_espectro',
-           'gancho_espectro', 'gancho_registra', 'gancho_avanca', 'gancho_janela',
+           'gancho_espectro', 'gancho_registra', 'gancho_avanca', 'gancho_janela', 'gancho_coluna', 'mostra_pico',
            'espectro_pontos', 'espectro_passo', 'espectro_rotulos',
            'roger_le', 'roger_grava', 'roger_opcoes', 'roger_opcoes_cn', 'gancho_roger_tons',
            'scramble_le', 'scramble_grava', 'scramble_freqs', 'scramble_valor', 'scramble_posicao',
@@ -56,17 +77,26 @@ PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho
            'titulo_bank', 'titulo_nome', 'titulo_canal')
 
 
-def codigo_ligado(elf):
-    """(endereco, conteudo) da secao .text do bancos.elf, lidos do cabecalho de secoes do ELF32."""
+def codigo_ligado(elf, secao='.text'):
+    """(endereco, conteudo) de uma secao do bancos.elf, lidos do cabecalho de secoes do ELF32."""
     e = open(elf, 'rb').read()
     shoff = struct.unpack_from('<I', e, 0x20)[0]
     tam, quantas, nomes = struct.unpack_from('<HHH', e, 0x2E)
     secoes = [struct.unpack_from('<10I', e, shoff + i * tam) for i in range(quantas)]
     base_nomes = secoes[nomes][4]
     for nome, _, _, endereco, deslocamento, tamanho, *_ in secoes:
-        if e[base_nomes + nome:e.index(b'\0', base_nomes + nome)] == b'.text':
+        if e[base_nomes + nome:e.index(b'\0', base_nomes + nome)] == secao.encode():
             return endereco, e[deslocamento:deslocamento + tamanho]
-    raise SystemExit(f'{elf} nao tem secao .text')
+    raise SystemExit(f'{elf} nao tem secao {secao}')
+
+
+def vozes_ligadas(codigo):
+    """A secao .vozes do bancos.elf, conferida: ligada para VOZES e cabendo ate VOZES_FIM."""
+    endereco, conteudo = codigo_ligado(os.path.splitext(codigo)[0] + '.elf', '.vozes')
+    if endereco != VOZES or endereco + len(conteudo) > VOZES_FIM:
+        raise SystemExit(f'.vozes ligada para {endereco:#x}..{endereco + len(conteudo):#x}, fora de '
+                         f'{VOZES:#x}..{VOZES_FIM:#x}. Recusado.')
+    return conteudo
 
 
 def confere_ligacao(codigo, blob):
@@ -143,9 +173,11 @@ ZONE, ZONA_OU_CANAL, CH_NAME = 11, 10, 19
 # Itens de fabrica que NAO entram na copia, a pedido do usuario: o ZONE e o "Zone Or Channel"
 # (escolher entre navegar por zona ou por canal cheio), que sem o ZONE nao tem mais serventia. Com
 # eles fora, os 54 itens da tabela nova cabem exatamente nas 54 vagas da original (ver VAGAS).
-ITENS_FORA = (ZONA_OU_CANAL, ZONE)
-# Itens de fabrica que ficam, mas com campos trocados na tabela nova. O ROGER (indice 20) ganha a
-# quarta opcao, BEEP 2: quantidade de opcoes 4 (o "maximo" de um item de lista e a quantidade de
+# O VOICE (indice 21, liga e desliga as vozes) sai tambem (v30): as vozes nao tocam mais.
+VOICE_ITEM = 21
+ITENS_FORA = (ZONA_OU_CANAL, ZONE, VOICE_ITEM)
+# Itens de fabrica que ficam, mas com campos trocados na tabela nova. O ROGER (indice 20) ganha o
+# BEEP 2 e o BEEP 3: quantidade de opcoes 5 (o "maximo" de um item de lista e a quantidade de
 # opcoes - era 3), get e set nossos (posicao no menu <-> valor gravado) e as duas tabelas de nomes
 # das opcoes, em ingles e chines (as de fabrica moram na RAM, em 0x6E3C/0x6E30, com outros dados
 # colados depois - nao crescem no lugar). Detalhes no bancos.c.
@@ -153,7 +185,7 @@ ROGER_ITEM = 20
 # O SCRAMBLE (indice 47) passa a ter 9 opcoes, OFF e de 2700 a 3400 Hz em ordem crescente, com get
 # e set nossos (posicao no menu <-> valor gravado; o set grava pelo de fabrica). Detalhes no bancos.c.
 SCRAMBLE_ITEM = 47
-ITENS_MUDADOS = {ROGER_ITEM: dict(maximo=4, get='roger_le', set='roger_grava',
+ITENS_MUDADOS = {ROGER_ITEM: dict(maximo=5, get='roger_le', set='roger_grava',
                                   exibe='roger_opcoes', opcoes_cn='roger_opcoes_cn'),
                  SCRAMBLE_ITEM: dict(maximo=9, get='scramble_le', set='scramble_grava',
                                      exibe='scramble_opcoes', opcoes_cn='scramble_opcoes_cn')}
@@ -264,10 +296,26 @@ ESPECTRO_CHAMADAS = (
     (0x01E4C6B8, 0x01E4AE44, 'gancho_avanca', 'proximo ponto depois da tecla 2'),
     (0x01E4C054, 0x01E4AA3C, 'gancho_janela', 'janela pela frequencia digitada'),
     (0x01E4CFBC, 0x01E4AA3C, 'gancho_janela', 'janela na entrada do espectro'),
+    (0x01E4AEA4, 0x01E45D96, 'mostra_pico', 'pico da passada, na segunda linha'),
+    (0x01E4D600, 0x01E4AAA8, 'gancho_coluna', 'barras da faixa 0 do grafico'),
+    (0x01E4D644, 0x01E4AAA8, 'gancho_coluna', 'barras da faixa 1 do grafico'),
+    (0x01E4D688, 0x01E4AAA8, 'gancho_coluna', 'barras da faixa 2 do grafico'),
+    (0x01E4D6CC, 0x01E4AAA8, 'gancho_coluna', 'barras da faixa 3 do grafico'),
+    (0x01E4D710, 0x01E4AAA8, 'gancho_coluna', 'barras da faixa 4 do grafico'),
 )
-# Roger BEEP 2, na rotina de fim de transmissao 0x01E44604 (sitio, bytes de fabrica, o que vira):
+# O dBm (0x01E4ADFE) sai do meio da segunda linha do espectro, que passa a ser do pico da passada,
+# para a direita dela, embaixo do AM/FM (que vai ate y 31: janela 127..159 x 17..49, texto em y 20).
+# A janela vai de x 40..120 para 112..160, na mesma altura (36..48), e o texto de x 56 para 116:
+# "-111dBm", 7 caracteres de 6 px, termina em 158. Tres "rX = imm8" de 2 bytes (sitio, registrador,
+# de fabrica, novo, o que e).
+DBM_IMEDIATOS = (
+    (0x01E4AE12, 0, 40, 112, 'x0 da janela'),
+    (0x01E4AE14, 1, 120, 160, 'x1 da janela'),
+    (0x01E4AE30, 1, 56, 116, 'x do texto'),
+)
+# Roger BEEP 2 e BEEP 3, na rotina de fim de transmissao 0x01E44604 (sitio, bytes de fabrica, o que vira):
 #  - 0x01E4461E: "if (r0 != 1) goto 388" vira "if (r0 == 0) goto 388" (mesmo destino, 0x01E447A6):
-#    o valor 3 passa a entrar no caminho do BEEP; o 2 ja foi desviado antes, para o TONE1200.
+#    os valores 3 e 4 passam a entrar no caminho do BEEP; o 2 ja foi desviado antes, para o TONE1200.
 #    Codificacao conferida no llvm-objdump ("00 f8 c2 00" = if (r0 == 0) goto 388).
 #  - 0x01E44638: "r5 = r4 + 2051; r6 = 17; goto 18" (o comeco do laco dos dois tons) vira
 #    "call gancho_roger_tons; goto 0x01E44656" (o fim do laco). Ninguem de fora desvia para dentro
@@ -465,7 +513,9 @@ def main():
         escritas.append((ESPECTRO_EM, len(ESPECTRO_ANTES), 'gancho das teclas do espectro'))
         escritas += [(s, 4, f'espectro: {d}') for s, _, _, d in ESPECTRO_CHAMADAS]
         escritas += [(e, 4, f'espectro: {d}') for e, _, _, d in ESPECTRO_FUNCOES]
-    escritas += [(ROGER_DESVIO_EM, 4, 'roger: valor 3 no caminho do BEEP'),
+    escritas += [(e, 2, f'dBm: {d}') for e, _, _, _, d in DBM_IMEDIATOS]
+    escritas += [(s, len(a), f'vozes: {d}') for s, a, _, d in VOZES_REMENDOS]
+    escritas += [(ROGER_DESVIO_EM, 4, 'roger: valores 3 e 4 no caminho do BEEP'),
                  (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
                  (SCRAMBLE_EM, len(SCRAMBLE_ANTES), 'scramble: frequencia pelo valor')]
     if CABO_ESTENDIDO:
@@ -532,7 +582,23 @@ def main():
             app[o:o + 4] = monta_goto(entrada, S[nova])
             print(f'  espectro {entrada:#x}: rotina trocada por {nova} ({oque})')
 
-    # 3c. roger BEEP 2: o valor 3 entra no caminho do BEEP, e o laco dos tons passa a ser nosso
+    # 3b. o dBm vai para a direita da segunda linha do espectro
+    for endereco, reg, antes, depois, oque in DBM_IMEDIATOS:
+        o = endereco - BASE_APP
+        if bytes(app[o:o + 2]) != monta_imm8(reg, antes):
+            raise SystemExit(f'{endereco:#x} nao e "r{reg} = {antes}": {bytes(app[o:o + 2]).hex()}')
+        app[o:o + 2] = monta_imm8(reg, depois)
+        print(f'  dBm do espectro {endereco:#x}: {oque} {antes} -> {depois}')
+
+    # 3b2. vozes fora: os tres caminhos que tocam voz viram o "sem voz" de cada um
+    for sitio, antes, depois, oque in VOZES_REMENDOS:
+        o = sitio - BASE_APP
+        if bytes(app[o:o + len(antes)]) != antes:
+            raise SystemExit(f'{sitio:#x} nao e o esperado: {bytes(app[o:o + len(antes)]).hex()}')
+        app[o:o + len(antes)] = depois
+        print(f'  vozes {sitio:#x}: {oque} ({antes.hex()} -> {depois.hex()})')
+
+    # 3c. roger BEEP 2 e 3: os valores 3 e 4 entram no caminho do BEEP, e o laco dos tons e nosso
     o = ROGER_DESVIO_EM - BASE_APP
     if bytes(app[o:o + 4]) != ROGER_DESVIO_ANTES:
         raise SystemExit(f'{ROGER_DESVIO_EM:#x} nao e o desvio esperado: {bytes(app[o:o + 4]).hex()}')
@@ -542,7 +608,7 @@ def main():
         raise SystemExit(f'{ROGER_LACO_EM:#x} nao e o laco esperado: {bytes(app[o:o + 8]).hex()}')
     app[o:o + 8] = (monta_call(ROGER_LACO_EM, S['gancho_roger_tons'])
                     + monta_goto(ROGER_LACO_EM + 4, ROGER_LACO_FIM))
-    print(f"  roger: valor 3 no caminho do BEEP ({ROGER_DESVIO_EM:#x}) e laco dos tons -> "
+    print(f"  roger: valores 3 e 4 no caminho do BEEP ({ROGER_DESVIO_EM:#x}) e laco dos tons -> "
           f"gancho_roger_tons ({ROGER_LACO_EM:#x}, depois desvia para {ROGER_LACO_FIM:#x})")
 
     # 3d. scramble: a frequencia de inversao sai da nossa tabela, pelo valor gravado
@@ -638,7 +704,10 @@ def main():
     # 6. codigo novo e CRCs (a tabela ja esta dentro do app.bin)
     print(f'codigo novo: {len(blob)} B em {ENDERECO_CODIGO:#x} (ultimo byte '
           f'{ENDERECO_CODIGO + len(blob) - 1:#x})')
-    jlfw.repack(origem, bytes(app), destino, blob=[(ENDERECO_CODIGO, blob)])
+    vozes = vozes_ligadas(codigo)
+    print(f'regiao das vozes: {len(vozes)} B em {VOZES:#x} (cabem {VOZES_FIM - VOZES} B)')
+    jlfw.repack(origem, bytes(app), destino, blob=[(ENDERECO_CODIGO, blob), (VOZES, vozes)],
+                overwrite=[(VOZES, VOZES_FIM)])
     print(f'gerado: {destino}')
 
 

@@ -279,6 +279,8 @@ the [changelog](docs/changelog.md).
 
 | File | Status |
 |---|---|
+| `BJ8300_BANK_v32.anc` | **in testing** — v27 without the voices (and without the VOICE item), COIN roger (the coin), memory read over the cable; frees ~112 KB for the new screen theme — tested on the radio |
+| `BJ8300_BANK_v27.anc` | v1.0T + spectrum with the current bar in white, the running frequency, the peak line and the dBm on the right; BEEP 3 roger (the coin, called COIN since v31) — tested on the radio |
 | `BJ8300_BANK_v1.0T.anc` | **stable** — v25 under the version's name (same file); use with the CHIRP driver from the same release |
 | `BJ8300_BANK_v24.anc` | v23 + 2900 Hz scramble (the Baofeng UV-17L's mode 3) — tested on the radio |
 | `BJ8300_BANK_v23.anc` | v21 + BEEP 2 roger — tested on the radio |
