@@ -347,8 +347,8 @@ docs/           reverse engineering, changelog, screen map, images and working n
 ## 💚 Support the project
 
 v1.0T came out of many hours of reverse engineering: the stock firmware opened byte by byte, with
-no vendor documentation at all, every routine mapped in the disassembly, and each of the 25
-versions flashed and tested on a real radio, until a stable release was reached. Everything here
+no vendor documentation at all, every routine mapped in the disassembly, and 25 versions, nearly
+all of them flashed and tested on a real radio, until a stable release was reached. Everything here
 is, and will stay, **free**, to use, study and modify.
 
 If your BJ-8300 got better — the banks sorted out your channels, the scramble now talks to your

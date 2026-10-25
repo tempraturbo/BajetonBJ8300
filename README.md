@@ -346,8 +346,8 @@ docs/           engenharia reversa, histórico, mapa da tela, imagens e notas de
 ## 💚 Apoie o projeto
 
 A v1.0T nasceu de muitas horas de engenharia reversa: o firmware de fábrica aberto byte a byte, sem
-nenhuma documentação do fabricante, cada rotina mapeada no desmontado e cada uma das 25 versões
-gravada e testada num rádio de verdade, até chegar a uma versão estável. Tudo aqui é e vai
+nenhuma documentação do fabricante, cada rotina mapeada no desmontado e 25 versões, quase todas
+gravadas e testadas num rádio de verdade, até chegar a uma versão estável. Tudo aqui é e vai
 continuar **livre e gratuito**, para usar, estudar e modificar.
 
 Se o seu BJ-8300 ficou melhor — os bancos organizaram seus canais, o scramble passou a falar com o
