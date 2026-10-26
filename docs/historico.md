@@ -5,6 +5,97 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v45 — 26/10 — a tela acompanha a tecla A/B até a C ✔️ testada
+
+Testada no rádio: "agora tá ok". O teste da v44 mostrou que, no TRIPLE, a segunda tecla A/B
+seguida deixava o B na tela. Por dentro a C já estava no lado B: mudando o canal, ela aparecia em
+evidência, no canal seguinte ao dela, e funcionava.
+
+- **A causa.** O caminho das setas (`0x01E40B9E`), que põe a C no lado B, carrega o canal e não
+  redesenha. Quem o chama é que redesenha: a seta (`0x01E453E0`), a digitação do número
+  (`0x01E4DDD0` → `0x01E41486`, os dois lados) e o retorno à tela principal (`0x01E4BDBE`, logo
+  depois de `0x01E40B9E(0, 1)`, chama `0x01E3C290`). A troca de lados de fábrica (`0x01E40E52`)
+  termina na mesma `0x01E3C290` (`0x01E40EF4`), e por isso a volta ao A aparecia.
+- **A correção.** Depois de pôr a C no lado B, o `gancho_ab` chama `0x01E3C290`, que limpa, refaz a
+  barra e a tela inteira (`0x01E3C132(0)`). O redesenho é o inteiro, e não o dos dois lados, porque
+  no TRIPLE a C em evidência muda a disposição: o cartão desce para y 59 e o B vira faixa em 38. O
+  mesmo vale no caminho raro em que o B volta ao lado B depois de a tecla ir do A para o B.
+- **Por que só a tela.** Na v44 a tecla já levava a C ao lado B, mudava o canal dela e voltava ao A
+  com o B no lugar. O que faltava era o desenho.
+
+## v44 — 26/10 — a C como um lado a mais ✔️ testada, a tela não acompanhava a tecla A/B
+
+O teste da v43 mostrou o rodízio ouvindo as três frequências, e o dono pediu três coisas. A tecla
+A/B tinha de chegar à C, e a C tinha de funcionar "igualzinho" à A e à B. O MDF-C tinha de vir na
+sequência do MDF-A e do MDF-B. E as três tinham de ter o mesmo tempo de escuta.
+
+- **A tecla A/B passa por A → B → C → A.** A tecla é o código 18 sem dígitos: o caso 18 do `tbh`
+  das ações (`0x01E4BE28`) vai a `0x01E4CC10` e a `0x01E4D44A`, que faz `r0 = 1` e chama a troca
+  de lados de fábrica (`0x01E40E52`) em `0x01E4D44C`. Essa chamada passa pelo `gancho_ab`:
+  - A → B: a troca de fábrica;
+  - B → C: guarda o canal do B e põe o da C no lado B pelo caminho das setas (`0x01E40B9E(0, 1)`:
+    carrega o canal por `0x01E3A650` e grava o canal do lado e o log da flash por `0x01E3A42A`).
+    Assim a C transmite, muda de canal pelas setas e pela digitação, e continua lá depois de
+    desligar;
+  - C → A: guarda o canal em que a C ficou (o CH-C passa a valer esse), devolve o B ao lado B e faz
+    a troca de fábrica.
+
+  Só com o B num canal: com o B num VFO, a tecla fica no A e no B. Mudar o CH-C com a C em
+  evidência carrega o canal novo nela.
+- **O mesmo tempo para as três.** Na v43 a ida ao outro lado alternava entre o B e a C, e o ciclo
+  era A, B, A, C: o lado em evidência ficava com metade do tempo. Agora o gancho entra na volta
+  (`0x01E481CC`, a chamada de `0x01E3FD9E` logo depois de `b[0x15378] = 0`). Voltando do outro lado,
+  a dupla escuta vai à terceira em vez de voltar ao lado em evidência, e só na volta seguinte a de
+  fábrica o restaura. O ciclo vira A → B → C → A, cada um com os mesmos 50 tiques do firmware. Com a
+  C em evidência, a terceira é o B.
+- **O MDF-C logo depois do MDF-B.** A montagem ganhou os itens que entram depois de um item de
+  fábrica (`ITENS_DEPOIS` do `montar.py`). O WATCH e o CH-C continuam antes do BANK.
+- **A tela com a C em evidência:** A e B em faixas em cima e o cartão da C embaixo (y 59). Cada um
+  tem a letra e o lugar dele: o cartão em 18, 39 ou 59, conforme a letra, e as faixas de 20 em 20,
+  a partir de 18 acima do cartão e de 88 abaixo.
+- **O registro do WATCH ganhou o canal do B e se a C está no lado B** (14 bytes). O de 10 bytes da
+  v43 deixa de valer, e o rádio volta ao DUAL: depois de gravar, o WATCH, o CH-C e o MDF-C se
+  escolhem de novo.
+- **O código do WATCH e do TRIPLE foi para a faixa livre** (`.livre.bancos`), porque a área do fim
+  da imagem (`.text`, 3260 bytes) tinha estourado por 24. Ela fica com 2248.
+
+## v43 — 26/10 — TRIPLE: a C vigiada pela dupla escuta ✔️ testada
+
+Testada no rádio: "ele ouviu as 3 frequências". Os dois problemas do teste (a tecla A/B não chegava
+à C, e o MDF-C fora da sequência) e o pedido de tempo igual foram para a v44.
+
+- **TRIPLE:** a C é um canal da memória, escolhido no item novo **CH-C** (de 1 a 960, como o
+  BANK CH; canal vazio com ` -`), e aparece como o **MDF-C** pede: nome, frequência ou número, com
+  as opções do MDF-A.
+- **A tela:** o lado em evidência no cartão de sempre, e os outros dois em faixas de 19 px, cada uma
+  com a letra, o texto e o canal. Recebendo, a faixa fica em âmbar escuro com o texto âmbar, como a
+  etiqueta do RX.
+- **O rodízio** entrava na ida da dupla escuta ao outro lado (`0x01E4826E`, a chamada da
+  decodificação `0x01E3900A`): uma vez o B, outra a C, com o canal cru da C (20 B) lido da memória
+  como o carregador de canal de fábrica lê. O estado fica em `b[0x14BD0]`, que nada no firmware lê
+  ou grava fora das cópias do bloco de ajustes.
+- **O registro do WATCH num setor só dele**, `0xD2000`, logo depois dos 16 bancos e fora da janela
+  que o cabo grava. Marca `WTC1` e soma, como os bancos. Sem registro válido, DUAL. Na v42 o valor
+  ficava no byte reservado do cabeçalho dos bancos, que não cabia o canal da C.
+- **A tabela do menu saiu do lugar da original** para a faixa livre, num vetor de 64 vagas: a
+  original tem 54, e o WATCH, o CH-C e o MDF-C não cabiam. O ponteiro em `0x01E4CBB2` passa de
+  "r0 = 13368; r5 = r6 + r0" para "r5 = menu_tabela", nos mesmos 6 bytes. A original fica intacta.
+
+## v42 — 26/10 — WATCH: SINGLE e DUAL (não gravada; a v43 a inclui)
+
+- **O item WATCH** (SINGLE, DUAL e TRIPLE), no molde do TDR, antes do BANK. O nome e as opções
+  foram escolhidos pelo dono.
+- **SINGLE:** só o lado em evidência, da barra ao pé da tela. A frequência em 3x (em 2x se não
+  couber) com os dois últimos dígitos em 2x, as etiquetas, um medidor de 12 px e, com deslocamento,
+  a frequência de transmissão embaixo.
+- **A dupla escuta segue a regra do dono.** No SINGLE fica desligada, e só a frequência mostrada
+  recebe: o WATCH em SINGLE zera o TDR, o set do TDR (item 7, agora `tdr_grava`) o mantém em 0 e a
+  partida o zera de novo, para o caso de um upload do CHIRP o ter religado. No DUAL e no TRIPLE, o
+  TDR ligado escuta todas, e desligado só a que está em evidência.
+- **Uma armadilha de pilha.** Chamar as etiquetas de dentro do cartão do SINGLE somava os quadros, e
+  a pilha passava 28 bytes da de fábrica. Elas vêm da cena, como no DUAL. A vista entrou no byte que
+  sobrava dos dígitos, e a estrutura do estado não cresceu.
+
 ## V2.0T — 26/10 — a tela nova ✅
 
 A v41 virou a **V2.0T**, a segunda versão estável. É o mesmo arquivo, byte a byte (sha256

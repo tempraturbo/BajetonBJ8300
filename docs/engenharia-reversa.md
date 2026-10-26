@@ -72,6 +72,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | `0x20000–0x99FFF` | fontes e textos em chinês (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 registros de 60 B que o firmware usa |
 | **`0xC1000–0xD1FFF`** | **os bancos** (cabeçalho + 16 setores de 4 KB) |
+| **`0xD2000–0xD2FFF`** | **o registro do WATCH** (v43, [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v45)) |
 | `0xFA000` | 4 KB de uso do firmware |
 | livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -194,8 +195,17 @@ flags(1) | máximo(u16) | get(4) | set(4) | nome_en(4) | nome_cn(4) | exibe|opç
 - `flags` 0x80 = item numérico com função de exibição própria; 0x07 = abre o editor de texto.
 - O byte `id` **não** é o número mostrado na tela (os valores se repetem e vários são 0).
 - O ponteiro da tabela é montado em `0x01E4CBB2` e a contagem vem de `FUN_01E4A81A`, fixada em
-  `0x01E4CBE8`. A tabela nova é gravada por cima da original (que tem as mesmas 54 vagas, contando
-  o item zerado) e a contagem vira a constante 54, porque a vaga do item zerado passa a ter item.
+  `0x01E4CBE8`. Até a v42 a tabela nova era gravada por cima da original (que tem 54 vagas,
+  contando o item zerado). Desde a v43 ela fica na faixa livre, no vetor `menu_tabela` de 64 vagas
+  do `tela.c`, porque o WATCH, o CH-C e o MDF-C não cabiam mais. O cálculo do ponteiro em
+  `0x01E4CBB2` ("r0 = 13368; r5 = r6 + r0") vira "r5 = menu_tabela" (`c5 ff` + 32 bits), nos mesmos
+  6 bytes. O r0 que sobrava não é lido (a chamada seguinte, `0x01E3AC52`, o escreve antes de ler),
+  e o r6 é sobrescrito em `0x01E4CBC0`. O resto do firmware acha a tabela pelo ponteiro que esse
+  trecho guarda em `[0x14BF4]` (`0x01E4CBC4`), e a original fica intacta. A contagem é uma
+  constante: 55 desde a v43.
+- Um item novo entra no lugar dos de zona (o WATCH, o CH-C e os do BANK) ou logo depois de um de
+  fábrica (o MDF-C, depois do MDF-B: `ITENS_DEPOIS` do `montar.py`), e copia o resto do item que
+  serve de molde.
 - **O motor não tem submenu.** O nibble baixo das `flags` escolhe entre 7 tipos de tela (0 =
   lista/valor, 2 = CTCSS, 3 = frequência, 4 = MEMCH/DELCH, 7 = editor de texto, 8 = VERSION, 10 =
   DCS) e nenhum abre uma lista dentro de outra. Dois níveis (BANK → banco → renomear/canais) seriam
@@ -862,3 +872,87 @@ O rádio fica sempre em inglês, a pedido do dono:
 
 O driver do CHIRP esconde o ajuste de idioma. O `conferir.py` confere na `4o` que o byte que o
 gancho zera é o que o get do LANGUAGE lê e que o item saiu da tabela.
+
+## 18. A dupla escuta e o TRIPLE (v42 a v45)
+
+O firmware só tem dois lados, A e B. O WATCH escolhe quantas frequências a tela principal mostra
+(SINGLE, DUAL ou TRIPLE), e o TRIPLE põe uma terceira, a C, sem mexer no motor da dupla escuta:
+são ganchos em três chamadas e um registro próprio no chip de dados.
+
+**O motor de fábrica** é o laço do sinal (`0x01E4622A`):
+
+| Endereço | O que é |
+|---|---|
+| `b[0x14B70]` | o TDR: a dupla escuta ligada. O laço o lê na hora, e o set de fábrica do item (`0x01E3957C`) só grava o byte |
+| `b[0x15367]` | o estado da recepção: 0 e 1 sintoniza, 2 espera, 3 vigia, 4 recebendo, 5 MO (o `tbh` de `0x01E467A6`) |
+| `b[0x15378]` | 1 = a dupla escuta está fora do lado em evidência |
+| `b[0x1537A]` | os tiques que faltam para trocar: 50 sem sinal num lado e ela vai ao próximo |
+| `b[0x15E04]` | o lado em evidência (0 A, 1 B) |
+| `0x01E48220` | a ida ao outro lado: copia a sombra do "outro" para a "corrente" (canal cru `0x15E6C` → `0x15E44`, 20 B; VFO cru `0x15EC8` → `0x15E80`, 36 B; modo `b[0x15E14]` → `b[0x15E12]`; canal `h[0x15E40]` → `h[0x15E3C]`; zona `b[0x15E17]` → `b[0x15E15]`), põe `b[0x15378] = 1` e decodifica (`0x01E3900A`, chamada em `0x01E4826E`) com o lado em evidência invertido em volta da chamada. A sintonia lê o que foi decodificado |
+| `0x01E481C6` | a volta: `b[0x15378] = 0` e `0x01E3FD9E` (a sombra do lado em evidência → corrente, e decodifica), chamada em `0x01E481CC` |
+| `0x01E3FDE4` | desarma a dupla escuta no lado em evidência. A transmissão a chama antes (`0x01E41022`), e por isso o TX sai sempre do lado em evidência |
+
+Nada disso grava na flash, nem mexe no registro da tela (`0x14DC4` + lado × 31).
+
+**O rodízio** (`gancho_volta_dw`, na chamada de `0x01E481CC`). No TRIPLE, voltando do outro lado,
+a dupla escuta vai à terceira em vez de voltar ao lado em evidência: põe `b[0x15378]` de novo em
+1, lê o canal cru da terceira da memória (20 B de canal × 32, como o carregador de canal de fábrica
+`0x01E3A650` lê), marca canal no modo `b[0x15E12]` e no número `h[0x15E3C]`, e decodifica como a
+ida. A decodificação grava a potência do lado invertido (`0x01E38F34`, com `b[0x153A1] = 165`), e o
+gancho devolve a que estava. Na volta seguinte, a de fábrica restaura o lado em evidência. O ciclo
+é A → B → C → A, cada um com os 50 tiques. A terceira é a C, ou o B quando a C está no lado B. A
+ida (`gancho_troca_dw`, na chamada de `0x01E4826E`) só marca que não está na terceira e decodifica.
+
+O estado do rodízio fica em `b[0x14BD0]` (2 = na terceira), o `0x9024` do bloco de ajustes, que no
+RT-900 BT é o "Single Mode" e que este firmware não usa: fora as cópias do bloco (gravar ajustes,
+padrão, partida e cabo), nada o lê nem o grava, conferido no desmontado inteiro. Gravar ajustes o
+leva junto para o chip de dados, e um upload do CHIRP o sobrescreve: os dois só mudam quem vem
+primeiro no rodízio.
+
+**A tecla A/B** é o código 18 sem dígitos: o caso 18 do `tbh` das ações (`0x01E4BE28`) vai a
+`0x01E4CC10` e a `0x01E4D44A`, que faz `r0 = 1` e chama a troca de lados de fábrica (`0x01E40E52`)
+em `0x01E4D44C`. Depois da chamada o trecho só chama `0x01E3AC52`, que escreve o r0 antes de ler.
+O `gancho_ab` entra no lugar:
+
+- A → B: a troca de fábrica;
+- B → C (TRIPLE, com o B num canal e a C num canal gravado): guarda o canal do B no registro e põe o
+  da C no lado B pelo caminho das setas, `0x01E40B9E(0, 1)`. Ele copia o canal para `h[0x15E3E]`,
+  limpa os dígitos (`0x01E3AC52`), carrega o canal (`0x01E3A650`: o registro do flash, a potência
+  `b[0x15E30 + lado]`, a sombra do lado em evidência, a decodificação, o registro da tela e o
+  silêncio) e grava o canal do lado e o log da flash em `0xE000` (`0x01E3A42A`). Ele **não
+  redesenha**: quem o chama é que redesenha (a seta em `0x01E453E0`, a digitação do número por
+  `0x01E41486`, o retorno à tela principal em `0x01E4BDBE` com `0x01E3C290`). O gancho chama
+  `0x01E3C290`, que limpa e refaz a barra e a tela inteira (`0x01E3C132(0)`), como a troca de
+  fábrica faz no fim (`0x01E40EF4`). Sem isso, na v44, a tela ficava no B até a próxima seta;
+- C → A: guarda o canal em que a C ficou (as setas e a digitação a mudam como a qualquer lado),
+  devolve o B ao lado B pelo mesmo caminho e faz a troca de fábrica, que redesenha.
+
+A troca de lados de fábrica (`0x01E40E52`) desarma a dupla escuta, inverte `b[0x15E04]`, troca as
+sombras dos dois lados, decodifica, refaz o registro da tela (`0x01E39128`) e a barra
+(`0x01E3B05C`), grava os ajustes (`0x01E3AB36`, com r0 ≠ 0), redesenha (`0x01E3C290`) e silencia
+(`0x01E39F20`).
+
+**O registro do WATCH** fica num setor só dele, `0xD2000`, logo depois dos 16 bancos, com 14 bytes:
+
+| Bytes | Campo |
+|---|---|
+| 0–3 | a marca `WTC1` |
+| 4 | o modo: 0 DUAL, 1 SINGLE, 2 TRIPLE |
+| 5 | o MDF-C: 0 nome, 1 frequência, 2 número |
+| 6–7 | o canal da C (0 a 959) |
+| 8 | 1 = a C está no lado B |
+| 9 | reservado |
+| 10–11 | o canal do B, guardado enquanto a C está no lado B |
+| 12–13 | a soma dos bytes 0 a 11, a mesma dos bancos |
+
+Sem registro válido (marca ou soma errada), o rádio fica em DUAL. A v43 tinha 10 bytes, sem os
+campos 8 a 11, e o registro dela deixou de valer na v44. A tela B lê o registro a cada desenho.
+
+**A regra do TDR**, do dono: no SINGLE a dupla escuta fica desligada, e só a frequência mostrada
+recebe. O WATCH em SINGLE zera o TDR, o set do item TDR (o 7, `tdr_grava` no lugar de
+`0x01E3957C`) o mantém em 0, e a partida o zera de novo. No DUAL e no TRIPLE, ligada escuta todas,
+e desligada só a que está em evidência.
+
+**Conferido no build** (`conferir.py`): a `4r` confere os três pontos de troca byte a byte
+(`0x01E4826E`, `0x01E481CC` e `0x01E4D44C`: a chamada de fábrica antes, a do gancho depois); a `4b`
+confere o ponteiro da tabela do menu; a pilha com os ganchos é a de fábrica nas três raízes.

@@ -55,6 +55,7 @@ SECTIONS
 
     .livre : {
         *tela.o(.text* .rodata*)
+        *(.livre.*)
     } > livre
 
     .vozes : {

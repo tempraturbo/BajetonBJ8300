@@ -59,6 +59,41 @@ void LE_FLASH(u32 a, void *p, unsigned n)
     memcpy(p, chip + a, n);
 }
 
+/* O WATCH (bancos.c le do cabecalho dos bancos): aqui cada cenario escolhe. */
+static unsigned previa_vista, previa_canal_c, previa_mdf_c, previa_c_no_lugar, previa_outro_rx;
+unsigned watch_vista(void)
+{
+    return previa_vista;
+}
+
+u32 watch_le_tudo(void)
+{
+    return previa_vista | previa_mdf_c << 8 | previa_canal_c << 16;
+}
+
+/* o modo para a tela (3 = TRIPLE com a C no lado B) | MDF-C << 8, e a terceira: canal | MDF << 16 */
+unsigned watch_tela(void)
+{
+    return previa_vista | previa_mdf_c << 8;
+}
+
+static unsigned previa_terceira, previa_mdf_terceira;
+u32 terceira(void)
+{
+    return previa_terceira | previa_mdf_terceira << 16;
+}
+
+/* o rodizio do TRIPLE (bancos.c): a C no lugar do outro lado, e o outro lado recebendo */
+unsigned c_no_lugar(void)
+{
+    return previa_c_no_lugar;
+}
+
+unsigned outro_recebendo(void)
+{
+    return previa_outro_rx;
+}
+
 #include "../src/tela.c"
 
 static const char *pasta;
@@ -197,6 +232,95 @@ int main(int argc, char **argv)
     tela_b();
     tela_b_digitando();
     grava("7-digitando-canal");
+
+    /* WATCH em SINGLE (v42): so o lado em evidencia, em tela cheia */
+    previa_vista = 1;
+    limpa();
+    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    memoria[0x14DC4 + 4] = 1;          /* CT */
+    memoria[0x14BDE] = 1;              /* NR */
+    tela_b();
+    tela_b_medidor(0, 7, 0);
+    grava("33-single-canal-recebendo");
+
+    limpa();
+    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+    lado(1, 14652000, 14712000, "", 0, 1, 0);
+    memoria[0x14DC4 + 31 + 10] = 1;    /* + */
+    memoria[0x15E04] = 1;
+    tela_b();
+    grava("34-single-vfo-com-deslocamento");
+
+    limpa();
+    lado(0, 14612500, 14672500, "REPETIDORA", 25, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    memoria[0x14DC4 + 10] = 1;         /* + */
+    memoria[0x14685] = 2;              /* transmitindo */
+    tela_b();
+    grava("35-single-transmitindo");
+
+    /* WATCH em TRIPLE (v42): a C e o canal 5 da memoria, gravado no chip imitado como o radio grava
+     * (32 B por canal, RX em BCD com o byte baixo primeiro, nome em +20) */
+    previa_vista = 2;
+    previa_canal_c = 4;
+    previa_mdf_c = 0;
+    previa_terceira = 4;               /* a C, fora dos dois lados */
+    previa_mdf_terceira = 0;
+    {
+        static const u8 canal5[32] = {0x00, 0x25, 0x56, 0x14, 0x00, 0x25, 0x56, 0x14};
+        memset(&chip[4 * 32], 0xFF, 32);
+        memcpy(&chip[4 * 32], canal5, 8);           /* 145.62500 */
+        memcpy(&chip[4 * 32 + 20], "APRS 2M", 7);
+    }
+    limpa();
+    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    memoria[0x14B70] = 1;              /* TDR: as tres vigiadas */
+    tela_b();
+    tela_b_medidor(0, 6, 0);
+    grava("36-triple-a-recebendo");
+
+    limpa();
+    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    memoria[0x14B70] = 1;
+    previa_c_no_lugar = 1;
+    previa_outro_rx = 1;               /* a dupla escuta parou na C */
+    tela_b();
+    grava("37-triple-c-recebendo");
+    previa_c_no_lugar = 0;
+
+    limpa();
+    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    memoria[0x14B70] = 1;
+    memoria[0x15E04] = 1;              /* B em evidencia: a faixa do A em cima, a C embaixo */
+    previa_mdf_terceira = 1;           /* a C pela frequencia */
+    tela_b();
+    grava("38-triple-b-em-evidencia-a-recebendo");
+    previa_outro_rx = 0;
+
+    /* a C em evidencia (tecla A/B): ela no lado B, e o B (canal 10) fora, como terceira */
+    {
+        static const u8 canal10[32] = {0x50, 0x62, 0x25, 0x46, 0x50, 0x62, 0x25, 0x46};
+        memset(&chip[9 * 32], 0xFF, 32);
+        memcpy(&chip[9 * 32], canal10, 8);          /* 462.56250 */
+        memcpy(&chip[9 * 32 + 20], "BF888-10", 8);
+    }
+    limpa();
+    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+    lado(1, 14562500, 14562500, "APRS 2M", 5, 0, 0);
+    memoria[0x14B70] = 1;
+    memoria[0x15E04] = 1;
+    previa_vista = 3;
+    previa_mdf_c = 0;
+    previa_terceira = 9;
+    previa_mdf_terceira = 0;
+    tela_b();
+    tela_b_medidor(0, 4, 1);
+    grava("39-triple-c-em-evidencia");
+    previa_vista = 0;
 
     /* as outras telas (v37 e v38), com o estado das fotos do dono (PIGAO 2 no canal 101) posto na
      * RAM nos enderecos que o firmware usa, e lido pelo mesmo le_telas() do radio */

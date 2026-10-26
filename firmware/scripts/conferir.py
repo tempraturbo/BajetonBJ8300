@@ -89,9 +89,11 @@ print(f'1. CRCs das {len(entradas)} entradas: ' + ('ok' if not erros else 'FALHO
 # 2. codigo novo e tabela presentes, decifrados, nas 6 imagens
 elf = os.path.splitext(codigo)[0] + '.elf'
 livre_em, tela = montar.codigo_ligado(elf, '.livre')
-blocos = [('codigo', montar.ENDERECO_CODIGO, blob), ('tela B', livre_em, tela)]
+# v43: a tabela do menu mora no vetor menu_tabela do .livre - o que vai a flash e o .livre com ela
+tela_gravada = montar.livre_com_tabela(tela, tabela_esperada) if montar.MENU_NOVO else tela
+blocos = [('codigo', montar.ENDERECO_CODIGO, blob), ('tela B', livre_em, tela_gravada)]
 if montar.MENU_NOVO:
-    blocos.append(('tabela', montar.TABELA, tabela_esperada))
+    blocos.append(('tabela', montar.S[montar.TABELA_SIMBOLO], tabela_esperada))
 for nome, endereco, esperado in blocos:
     copias = 0
     for e in entradas:
@@ -169,7 +171,8 @@ sitios_vozes = ({montar.ESPECTRO_EM} | {s for s, _, _, _ in montar.ESPECTRO_CHAM
                 | {e for e, _, _, _ in montar.ESPECTRO_FUNCOES})
 sitios_livre = ({s for s, _ in montar.REALCE_SITIOS_GANCHO} | {s for s, _ in montar.LIMPA_SITIOS} | {s_ for s_, _, _ in montar.ENVIA_SITIOS}
                | {e for e, _, _, _, _ in montar.TELA_DESVIOS} | {s for s, _, _, _ in montar.ESPECTRO_B_CHAMADAS}
-               | {e for e, _, _, _ in montar.ESPECTRO_B_FUNCOES})
+               | {e for e, _, _, _ in montar.ESPECTRO_B_FUNCOES}
+               | {s for s, _, _, _ in montar.TRIPLE_CHAMADAS})
 imagens = []
 for e in entradas:
     if e['type'] in jlfw.FLASH_TYPES:
@@ -341,7 +344,7 @@ for reg, tipo, entradas_dec, oque in montar.DECODIFICADORES:
             or app[o + 4:o + montar.TAM_REGISTRO] != app_velho[o + 4:o + montar.TAM_REGISTRO]):
         problemas.append(f'registro do {oque} em {reg:#x} diferente do previsto')
 o = montar.LIVRE - montar.BASE_APP
-if bytes(app[o:o + len(tela)]) != tela:
+if bytes(app[o:o + len(tela_gravada)]) != tela_gravada:
     problemas.append('tela B ausente do app.bin no lugar dos decodificadores')
 excecoes = {}
 for endereco, codificacao, oque in montar.CODIFICACOES_FORA:
@@ -358,6 +361,11 @@ for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
         if dentro(onde) or registro(onde):
             continue
         v = struct.unpack_from('<I', binario, o)[0]
+        # v43: o ponteiro da tabela do menu ("r5 = menu_tabela", os 32 bits em PONTEIRO_EM + 2) e a unica
+        # porta nova, e de dado: o firmware le a tabela, nao executa
+        if (binario is app and montar.MENU_NOVO and onde == montar.PONTEIRO_EM + 2
+                and v == montar.S[montar.TABELA_SIMBOLO]):
+            continue
         if dentro(v & ~1) and excecoes.get(onde) != bytes(binario[o:o + 4]):
             problemas.append(f'{nome_app}: valor {v:#x} em {onde:#x} aponta para dentro da faixa')
         if binario[o + 1] == 0xEA and binario[o] & 0x80:
@@ -413,12 +421,16 @@ for pos, quem in enumerate(montar.ordem_da_copia() if montar.MENU_NOVO else []):
     o = pos * T
     flags = tabela_esperada[o]
     maximo = struct.unpack_from('<H', tabela_esperada, o + 1)[0]
-    campos = {c: struct.unpack_from('<I', tabela_esperada, o + montar.CAMPO[c])[0]
-              for c in ('get', 'set', 'nome', 'nome_cn', 'exibe')}     # os campos que os itens dos bancos definem
+    molde = velha[quem['molde'] * T:(quem['molde'] + 1) * T]
+    nomes = ('get', 'set', 'nome', 'nome_cn', 'exibe', 'opcoes_cn')
+    campos = {c: struct.unpack_from('<I', tabela_esperada, o + montar.CAMPO[c])[0] for c in nomes}
     esperado = {'get': montar.S[quem['get']], 'set': montar.S[quem['set']],
-                'nome': montar.S[quem['titulo']], 'nome_cn': montar.S[quem['titulo']],
-                'exibe': montar.S[quem['exibe']]}
-    bate = flags == quem['flags'] and maximo == quem['maximo'] and campos == esperado
+                'nome': montar.S[quem['titulo']], 'nome_cn': montar.S[quem['titulo']]}
+    # exibir e opcoes em chines: as nossas, ou as do molde (o MDF-C usa as do MDF-A)
+    for c in ('exibe', 'opcoes_cn'):
+        esperado[c] = montar.S[quem[c]] if quem.get(c) else struct.unpack_from('<I', molde, montar.CAMPO[c])[0]
+    flags_esperadas = molde[0] if quem['flags'] is None else quem['flags']
+    bate = flags == flags_esperadas and maximo == quem['maximo'] and campos == esperado
     print(f"   item {pos:2d} {quem['nome']:10s} flags={flags:#04x} max={maximo:4d} -> "
           + ('ok' if bate else 'FALHOU'))
     if not bate:
@@ -463,6 +475,17 @@ if montar.CABO_ESTENDIDO:
         if not ok:
             erros.append(f'gancho do cabo errado em {sitio:#x}')
 
+# 4r. TRIPLE (v42, v44): a ida e a volta da dupla escuta e a tecla A/B passam pelos ganchos da C
+previsto_tripla = []
+for sitio, era, gancho, oque in montar.TRIPLE_CHAMADAS:
+    o = sitio - montar.BASE_APP
+    ok = (bytes(app_velho[o:o + 4]) == montar.monta_call(sitio, era)
+          and bytes(app[o:o + 4]) == montar.monta_call(sitio, montar.S[gancho]))
+    print(f'4r. TRIPLE em {sitio:#x}: {era:#x} -> {gancho} ({oque}): ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append(f'gancho do TRIPLE errado em {sitio:#x}')
+    previsto_tripla.append((sitio, sitio + 3, f'TRIPLE: {oque}'))
+
 if montar.SCAN_REDESENHA:
     o = montar.SCAN_EM - montar.BASE_APP
     ok = bytes(app[o:o + 4]) == montar.monta_call(montar.SCAN_EM, montar.S['gancho_scan'])
@@ -472,14 +495,15 @@ if montar.SCAN_REDESENHA:
 
 o = montar.PONTEIRO_EM - montar.BASE_APP
 atual = bytes(app[o:o + len(montar.PONTEIRO_ANTES)])
-ok = atual == montar.PONTEIRO_ANTES
-print(f'4b. ponteiro da tabela em {montar.PONTEIRO_EM:#x} intacto (continua em {montar.TABELA:#x}): '
-      + ('ok' if ok else f'FALHOU ({atual.hex()})'))
+esperado = montar.monta_ponteiro() if montar.MENU_NOVO else montar.PONTEIRO_ANTES
+ok = bytes(app_velho[o:o + len(montar.PONTEIRO_ANTES)]) == montar.PONTEIRO_ANTES and atual == esperado
+print(f'4b. ponteiro da tabela em {montar.PONTEIRO_EM:#x}: de fabrica "r0 = 13368; r5 = r6 + r0", agora '
+      f'"r5 = {montar.S[montar.TABELA_SIMBOLO]:#x}" (menu_tabela, no .livre): ' + ('ok' if ok else f'FALHOU ({atual.hex()})'))
 if not ok:
-    erros.append('ponteiro da tabela mudou')
+    erros.append('ponteiro da tabela errado')
 
 # 5. nada escrito fora dos trechos previstos - e nada em area protegida
-previsto = ([(montar.TABELA, montar.TABELA + len(tabela_esperada) - 1, 'tabela'),
+previsto = ([(montar.PONTEIRO_EM, montar.PONTEIRO_EM + len(montar.PONTEIRO_ANTES) - 1, 'ponteiro da tabela'),
              (montar.CONTAGEM_EM, montar.CONTAGEM_EM + len(montar.CONTAGEM_ANTES) - 1, 'contagem')]
             if montar.MENU_NOVO else [])
 previsto += [(e, e + len(v), f'texto {v}') for e, v, _ in (montar.TEXTOS if montar.TEXTOS_REVISADOS else ())]
@@ -487,6 +511,7 @@ previsto += [(sitio, sitio + 3, 'setas') for sitio, _ in (montar.SETAS if montar
 previsto += [(montar.GANCHO_EM, montar.GANCHO_EM + 3, 'gancho')]
 if montar.SCAN_REDESENHA:
     previsto += [(montar.SCAN_EM, montar.SCAN_EM + 3, 'gancho do scan')]
+previsto += previsto_tripla
 if montar.ESPECTRO_TECLAS:
     o = montar.ESPECTRO_EM - montar.BASE_APP
     ok = (bytes(app_velho[o:o + 4]) == montar.ESPECTRO_ANTES
@@ -820,6 +845,8 @@ radio_ram = [
     ('RADIO_ITEM', imediato(0x01E49344) + (imediato16(0x01E49340) << 2)),
     ('DIGITA_MODO', imediato(0x01E49094) + imediato16(0x01E4909C)),
     ('EDITOR_MODO', imediato(0x01E48728) + imediato16(0x01E48724)),
+    # v42: a dupla escuta, que o set do TDR e o WATCH mantem em 0 no SINGLE: o get do item TDR
+    ('TDR', imediato(0x01E39570) + imediato16(0x01E3956C)),
     # v40, a conferencia dos ajustes do radio
     ('RADIO_MEM_FM', imediato(0x01E49186) + deslocamento(0x01E4923A)),
     ('RADIO_MEM_AM', imediato(0x01E49186) + deslocamento(0x01E491A8)),

@@ -519,3 +519,56 @@ main screen's deepest path.
   pointer: the set on OK (`0x01E49996`) at 144 B, the get and exibe in the engine at 296 B. A set
   that redraws the screen (Modulation's, CH-NAME's through the editor exit `0x01E3C7AA`) falls into
   that; measured at the call site, they all stay at up to 652 B, under the stock 740 B.
+
+## 14. The WATCH views (v42 to v45)
+
+WATCH picks how many frequencies the main screen shows. Screen B reads its record
+([reverse engineering, section 18](reverse-engineering.md#18-dual-watch-and-triple-v42-to-v45)) on
+every draw and keeps the view in the byte left over from the digits of the state structure: the
+digits went from 8 to 7 bytes (up to 6 digits and the zero), and the structure did not grow,
+because it sits on the deepest stack path.
+
+| View | Value | What the screen shows |
+|---|---|---|
+| DUAL | 0 | the usual screen: the side in focus on the card and the other one compact |
+| SINGLE | 1 | only the side in focus, on a card from the bar to the bottom of the screen |
+| TRIPLE | 2 | A or B in focus on the card, and the other two as thin strips |
+| TRIPLE with C on side B | 3 | C in focus on the card, and A and B as strips |
+
+**SINGLE.** The card runs from y 18 to 126. The big line (the frequency, or the name with the name
+MDF) at 3x, at 2x when it does not fit, with the frequency's last two digits at 2x; the chips
+below, drawn by the scene, as in DUAL (called from inside the card, the frames added up and the
+stack went 28 B past stock); the meter at y 88, 12 px tall; and, with an offset, the transmit
+frequency at the bottom (`TX 147.12000`). The other side does not show, and its meter is not even
+drawn.
+
+**TRIPLE.** Each side has a letter: A, B and C, with side B showing C in view 3. The position comes
+from the letter:
+
+- the card of the one in focus at y 18 (A), 39 (B) or 59 (C), with the usual 68 px;
+- the strips, 19 px tall, 20 apart: the ones before the card from 18, and the ones after it from
+  88 (letter 1 at 88, letter 2 at 108).
+
+| In focus | y 18 | y 38/39 | y 58/59 | y 88 | y 108 |
+|---|---|---|---|---|---|
+| A | card A | | | strip B | strip C |
+| B | strip A | card B | | | strip C |
+| C | strip A | strip B | card C | | |
+
+Each strip has the letter badge, the text its MDF asks for (the name, the frequency or the number)
+and the channel on a chip (`VFO` on the VFO). The third one, the one on neither side, is read from
+the data chip: the channel record, with MDF-C (or MDF-B, when it is B). An empty channel shows as
+`EMPTY CH`. **While receiving**, the strip turns dark amber (`#3b2a0b`, the amber chip's
+background) with the badge and the text in amber (`#fbbf24`). The side out of focus is receiving
+when it has signal, or when dual watch is on it with state 4, and the one receiving is the third
+one when the round-robin is on it.
+
+Only the card has a meter. The meter redraw (`b_medidor`) draws the card's meter and, for the side
+out of focus, the two strips that may be receiving; the redraw of one side (`desenha_lado`) and the
+DTMF box follow the same geometry. The strips check by themselves whether they cross the open
+window and whether they are receiving, and the strip drawing is inlined into both callers: it is
+the end of the deepest path of the screen in TRIPLE, and one more frame went past the stock stack.
+
+**In the preview**, scenes 33 to 35 are SINGLE (channel receiving, VFO with an offset, and
+transmitting) and 36 to 39 are TRIPLE (A receiving, C receiving, B in focus with A receiving, and C
+in focus).

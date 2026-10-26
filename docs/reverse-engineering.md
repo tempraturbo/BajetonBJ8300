@@ -72,6 +72,7 @@ by looking for where content starts mirroring address 0:
 | `0x20000–0x99FFF` | fonts and Chinese text (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 records of 60 B used by the firmware |
 | **`0xC1000–0xD1FFF`** | **the banks** (header + 16 sectors of 4 KB) |
+| **`0xD2000–0xD2FFF`** | **the WATCH record** (v43, [section 18](#18-dual-watch-and-triple-v42-to-v45)) |
 | `0xFA000` | 4 KB used by the firmware |
 | free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -193,9 +194,17 @@ flags(1) | max(u16) | get(4) | set(4) | name_en(4) | name_cn(4) | show|options(4
 - `flags` 0x80 = numeric entry with its own display function; 0x07 = opens the text editor.
 - The `id` byte is **not** the number shown on screen (values repeat and several are 0).
 - The table pointer is built at `0x01E4CBB2` and the count comes from `FUN_01E4A81A`, pinned at
-  `0x01E4CBE8`. The new table is written over the original (which has the same 54 slots, counting
-  the zero item) and the count becomes the constant 54, because the zero item's slot now holds an
-  item.
+  `0x01E4CBE8`. Up to v42 the new table was written over the original (which has 54 slots,
+  counting the zero item). Since v43 it lives in the free range, in the 64-slot `menu_tabela`
+  array of `tela.c`, because WATCH, CH-C and MDF-C no longer fitted. The pointer computation at
+  `0x01E4CBB2` ("r0 = 13368; r5 = r6 + r0") becomes "r5 = menu_tabela" (`c5 ff` + 32 bits), in the
+  same 6 bytes. The leftover r0 is not read (the next call, `0x01E3AC52`, writes it before reading
+  it), and r6 is overwritten at `0x01E4CBC0`. The rest of the firmware finds the table through the
+  pointer this code stores at `[0x14BF4]` (`0x01E4CBC4`), and the original stays intact. The count
+  is a constant: 55 since v43.
+- A new item goes in place of the zone ones (WATCH, CH-C and the BANK ones) or right after a stock
+  one (MDF-C, after MDF-B: `ITENS_DEPOIS` in `montar.py`), and copies the rest of the item it is
+  modelled on.
 - **The engine has no submenus.** The low nibble of `flags` picks one of 7 screen types (0 =
   list/value, 2 = CTCSS, 3 = frequency, 4 = MEMCH/DELCH, 7 = text editor, 8 = VERSION, 10 = DCS)
   and none of them opens a list inside another. Two levels (BANK → bank → rename/channels) would be
@@ -874,3 +883,89 @@ The radio always runs in English, as the owner asked:
 
 The CHIRP driver hides the language setting. `conferir.py` checks in `4o` that the byte the hook
 zeroes is the one LANGUAGE's get reads and that the item left the table.
+
+## 18. Dual watch and TRIPLE (v42 to v45)
+
+The firmware only has two sides, A and B. WATCH picks how many frequencies the main screen shows
+(SINGLE, DUAL or TRIPLE), and TRIPLE adds a third one, C, without touching the dual watch engine:
+hooks on three calls and a record of its own in the data chip.
+
+**The stock engine** is the signal loop (`0x01E4622A`):
+
+| Address | What it is |
+|---|---|
+| `b[0x14B70]` | TDR: dual watch on. The loop reads it live, and the item's stock setter (`0x01E3957C`) only writes the byte |
+| `b[0x15367]` | the receive state: 0 and 1 tune, 2 wait, 3 watch, 4 receiving, 5 MO (the `tbh` at `0x01E467A6`) |
+| `b[0x15378]` | 1 = dual watch is off the side in focus |
+| `b[0x1537A]` | ticks left before switching: 50 with no signal on a side and it moves to the next |
+| `b[0x15E04]` | the side in focus (0 A, 1 B) |
+| `0x01E48220` | the trip to the other side: copies the "other" shadow into the "current" one (raw channel `0x15E6C` → `0x15E44`, 20 B; raw VFO `0x15EC8` → `0x15E80`, 36 B; mode `b[0x15E14]` → `b[0x15E12]`; channel `h[0x15E40]` → `h[0x15E3C]`; zone `b[0x15E17]` → `b[0x15E15]`), sets `b[0x15378] = 1` and decodes (`0x01E3900A`, called at `0x01E4826E`) with the side in focus inverted around the call. Tuning reads what was decoded |
+| `0x01E481C6` | the way back: `b[0x15378] = 0` and `0x01E3FD9E` (the shadow of the side in focus → current, and decode), called at `0x01E481CC` |
+| `0x01E3FDE4` | disarms dual watch on the side in focus. Transmit calls it first (`0x01E41022`), which is why TX always goes out on the side in focus |
+
+None of this writes to flash, or touches the screen record (`0x14DC4` + side × 31).
+
+**The round-robin** (`gancho_volta_dw`, on the call at `0x01E481CC`). In TRIPLE, coming back from
+the other side, dual watch goes to the third one instead of returning to the side in focus: it sets
+`b[0x15378]` back to 1, reads the third one's raw channel from memory (20 B at channel × 32, as the
+stock channel loader `0x01E3A650` reads it), marks channel in the mode `b[0x15E12]` and the number
+`h[0x15E3C]`, and decodes like the trip out. Decoding writes the power of the inverted side
+(`0x01E38F34`, with `b[0x153A1] = 165`), and the hook puts back the one that was there. On the next
+return, the stock code restores the side in focus. The cycle is A → B → C → A, each with the 50
+ticks. The third one is C, or B when C is on side B. The trip out (`gancho_troca_dw`, on the call
+at `0x01E4826E`) only marks that it is not on the third one and decodes.
+
+The round-robin state lives at `b[0x14BD0]` (2 = on the third one), the `0x9024` of the settings
+block, which on the RT-900 BT is "Single Mode" and which this firmware does not use: apart from the
+block copies (save settings, defaults, power-up and cable), nothing reads or writes it, checked
+over the whole disassembly. Saving settings takes it along to the data chip, and a CHIRP upload
+overwrites it: both only change who comes first in the round-robin.
+
+**The A/B key** is code 18 with no digits: case 18 of the actions `tbh` (`0x01E4BE28`) goes to
+`0x01E4CC10` and `0x01E4D44A`, which sets `r0 = 1` and calls the stock side swap (`0x01E40E52`) at
+`0x01E4D44C`. After the call the code only calls `0x01E3AC52`, which writes r0 before reading it.
+`gancho_ab` takes its place:
+
+- A → B: the stock swap;
+- B → C (TRIPLE, with B on a channel and C on a programmed channel): saves B's channel in the
+  record and puts C's on side B through the arrow path, `0x01E40B9E(0, 1)`. It copies the channel
+  to `h[0x15E3E]`, clears the digits (`0x01E3AC52`), loads the channel (`0x01E3A650`: the record
+  from flash, the power `b[0x15E30 + side]`, the shadow of the side in focus, the decode, the
+  screen record and the mute) and writes the side's channel and the flash log at `0xE000`
+  (`0x01E3A42A`). It **does not redraw**: its callers do (the arrow at `0x01E453E0`, number entry
+  through `0x01E41486`, the return to the main screen at `0x01E4BDBE` with `0x01E3C290`). The hook
+  calls `0x01E3C290`, which clears and redraws the bar and the whole screen (`0x01E3C132(0)`), as
+  the stock swap does at its end (`0x01E40EF4`). Without it, in v44, the screen stayed on B until
+  the next arrow;
+- C → A: saves the channel C ended on (the arrows and number entry change it as on any side), gives
+  side B back to B the same way and does the stock swap, which redraws.
+
+The stock side swap (`0x01E40E52`) disarms dual watch, flips `b[0x15E04]`, swaps the two sides'
+shadows, decodes, rebuilds the screen record (`0x01E39128`) and the bar (`0x01E3B05C`), saves the
+settings (`0x01E3AB36`, with r0 ≠ 0), redraws (`0x01E3C290`) and mutes (`0x01E39F20`).
+
+**The WATCH record** lives in a sector of its own, `0xD2000`, right after the 16 banks, 14 bytes:
+
+| Bytes | Field |
+|---|---|
+| 0–3 | the `WTC1` magic |
+| 4 | the mode: 0 DUAL, 1 SINGLE, 2 TRIPLE |
+| 5 | MDF-C: 0 name, 1 frequency, 2 number |
+| 6–7 | C's channel (0 to 959) |
+| 8 | 1 = C is on side B |
+| 9 | reserved |
+| 10–11 | B's channel, kept while C is on side B |
+| 12–13 | the checksum of bytes 0 to 11, the same as the banks |
+
+With no valid record (wrong magic or checksum), the radio stays in DUAL. v43's record had 10
+bytes, without fields 8 to 11, and stopped being valid in v44. Screen B reads the record on every
+draw.
+
+**The TDR rule**, the owner's: in SINGLE dual watch is off, and only the frequency shown receives.
+WATCH set to SINGLE clears TDR, the TDR item's setter (item 7, `tdr_grava` instead of
+`0x01E3957C`) keeps it at 0, and power-up clears it again. In DUAL and TRIPLE, on listens to all of
+them, and off only to the one in focus.
+
+**Checked at build time** (`conferir.py`): `4r` checks the three swapped call sites byte by byte
+(`0x01E4826E`, `0x01E481CC` and `0x01E4D44C`: the stock call before, the hook's after); `4b` checks
+the menu table pointer; the stack with the hooks is the stock one at all three roots.

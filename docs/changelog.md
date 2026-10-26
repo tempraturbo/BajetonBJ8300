@@ -5,6 +5,99 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v45 — Oct 26 — the screen follows the A/B key to C ✔️ tested
+
+Tested on the radio: "it's fine now". Testing v44 showed that, in TRIPLE, the second A/B press in a
+row left B on the screen. Inside, C was already on side B: changing the channel brought it up in
+focus, on the channel after its own, and it worked.
+
+- **The cause.** The arrow path (`0x01E40B9E`), which puts C on side B, loads the channel and does
+  not redraw. Its callers redraw: the arrow (`0x01E453E0`), number entry (`0x01E4DDD0` →
+  `0x01E41486`, both sides) and the return to the main screen (`0x01E4BDBE`, right after
+  `0x01E40B9E(0, 1)`, calls `0x01E3C290`). The stock side swap (`0x01E40E52`) ends in the same
+  `0x01E3C290` (`0x01E40EF4`), which is why going back to A showed up.
+- **The fix.** After putting C on side B, `gancho_ab` calls `0x01E3C290`, which clears and redraws
+  the bar and the whole screen (`0x01E3C132(0)`). It is the full redraw and not the two sides,
+  because in TRIPLE having C in focus changes the layout: the card moves down to y 59 and B becomes
+  a strip at 38. The same goes for the rare path where B goes back to side B after the key moved
+  from A to B.
+- **Why only the screen.** In v44 the key already took C to side B, changed its channel and went
+  back to A with B in place. What was missing was the drawing.
+
+## v44 — Oct 26 — C as one more side ✔️ tested, the screen did not follow the A/B key
+
+Testing v43 showed the round-robin listening to all three frequencies, and the owner asked for
+three things. The A/B key had to reach C, and C had to work "exactly like" A and B. MDF-C had to
+come right after MDF-A and MDF-B. And all three had to get the same listening time.
+
+- **The A/B key goes A → B → C → A.** The key is code 18 with no digits: case 18 of the actions
+  `tbh` (`0x01E4BE28`) goes to `0x01E4CC10` and `0x01E4D44A`, which sets `r0 = 1` and calls the
+  stock side swap (`0x01E40E52`) at `0x01E4D44C`. That call goes through `gancho_ab`:
+  - A → B: the stock swap;
+  - B → C: saves B's channel and puts C's on side B through the arrow path (`0x01E40B9E(0, 1)`:
+    loads the channel through `0x01E3A650` and writes the side's channel and the flash log through
+    `0x01E3A42A`). So C transmits, changes channel with the arrows and with number entry, and is
+    still there after power-off;
+  - C → A: saves the channel C ended on (CH-C takes that value), gives side B back to B and does
+    the stock swap.
+
+  Only with B on a channel: with B on a VFO, the key stays on A and B. Changing CH-C with C in
+  focus loads the new channel into it.
+- **The same time for all three.** In v43 the trip to the other side alternated between B and C,
+  and the cycle was A, B, A, C: the side in focus got half the time. Now the hook sits on the way
+  back (`0x01E481CC`, the call to `0x01E3FD9E` right after `b[0x15378] = 0`). Coming back from the
+  other side, dual watch goes to the third one instead of returning to the side in focus, and only
+  on the next return does the stock code restore it. The cycle becomes A → B → C → A, each with the
+  firmware's same 50 ticks. With C in focus, the third one is B.
+- **MDF-C right after MDF-B.** The build gained items that go after a stock item (`ITENS_DEPOIS` in
+  `montar.py`). WATCH and CH-C stay before BANK.
+- **The screen with C in focus:** A and B as strips on top and C's card below (y 59). Each one has
+  its letter and its place: the card at 18, 39 or 59, by letter, and the strips 20 apart, from 18
+  above the card and from 88 below.
+- **The WATCH record gained B's channel and whether C is on side B** (14 bytes). v43's 10-byte
+  record is no longer valid, and the radio goes back to DUAL: after flashing, WATCH, CH-C and MDF-C
+  have to be set again.
+- **The WATCH and TRIPLE code moved to the free range** (`.livre.bancos`), because the area at the
+  end of the image (`.text`, 3260 bytes) had overflowed by 24. It now holds 2248.
+
+## v43 — Oct 26 — TRIPLE: C watched by dual watch ✔️ tested
+
+Tested on the radio: "it listened to all 3 frequencies". The two problems from the test (the A/B
+key did not reach C, and MDF-C out of sequence) and the request for equal time went into v44.
+
+- **TRIPLE:** C is a memory channel, picked in the new **CH-C** item (1 to 960, like BANK CH; an
+  empty channel shows ` -`), and shown as **MDF-C** asks: name, frequency or number, with MDF-A's
+  options.
+- **The screen:** the side in focus on the usual card, and the other two as 19 px strips, each with
+  its letter, its text and its channel. While receiving, the strip turns dark amber with amber
+  text, like the RX chip.
+- **The round-robin** sat on dual watch's trip to the other side (`0x01E4826E`, the call to the
+  decoder `0x01E3900A`): once B, once C, with C's raw channel (20 B) read from memory the way the
+  stock channel loader reads it. Its state lives at `b[0x14BD0]`, which nothing in the firmware
+  reads or writes outside the settings block copies.
+- **The WATCH record in a sector of its own**, `0xD2000`, right after the 16 banks and outside the
+  window the cable writes. `WTC1` magic and checksum, like the banks. With no valid record, DUAL.
+  In v42 the value lived in the reserved byte of the banks header, which had no room for C's
+  channel.
+- **The menu table left the original's place** for the free range, in a 64-slot array: the
+  original has 54, and WATCH, CH-C and MDF-C did not fit. The pointer at `0x01E4CBB2` goes from
+  "r0 = 13368; r5 = r6 + r0" to "r5 = menu_tabela", in the same 6 bytes. The original stays intact.
+
+## v42 — Oct 26 — WATCH: SINGLE and DUAL (not flashed; v43 includes it)
+
+- **The WATCH item** (SINGLE, DUAL and TRIPLE), modelled on TDR, before BANK. The owner chose the
+  name and the options.
+- **SINGLE:** only the side in focus, from the bar to the bottom of the screen. The frequency at 3x
+  (2x if it does not fit) with the last two digits at 2x, the chips, a 12 px meter and, with an
+  offset, the transmit frequency below.
+- **Dual watch follows the owner's rule.** In SINGLE it is off, and only the frequency shown
+  receives: WATCH set to SINGLE clears TDR, the TDR setter (item 7, now `tdr_grava`) keeps it at 0,
+  and power-up clears it again, in case a CHIRP upload turned it back on. In DUAL and TRIPLE, TDR
+  on listens to all of them, and off only to the one in focus.
+- **A stack trap.** Calling the chips from inside the SINGLE card added the frames up, and the
+  stack went 28 bytes past stock. They come from the scene, as in DUAL. The view went into the byte
+  left over from the digits, and the state structure did not grow.
+
 ## V2.0T — Oct 26 — the new screen ✅
 
 v41 became **V2.0T**, the second stable release. It is the same file, byte for byte (sha256

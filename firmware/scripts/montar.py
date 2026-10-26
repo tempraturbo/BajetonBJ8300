@@ -202,6 +202,10 @@ PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho
            'gancho_espectro', 'gancho_registra', 'gancho_avanca', 'gancho_janela', 'gancho_coluna', 'mostra_pico',
            'espectro_pontos', 'espectro_passo', 'espectro_rotulos',
            'roger_le', 'roger_grava', 'roger_opcoes', 'gancho_roger_tons',
+           'watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
+           'canal_c_le', 'canal_c_grava', 'canal_c_exibe', 'titulo_canal_c',
+           'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'menu_tabela', 'gancho_troca_dw',
+           'gancho_volta_dw', 'gancho_ab',
            'scramble_le', 'scramble_grava', 'scramble_freqs', 'scramble_valor', 'scramble_posicao',
            'scramble_opcoes', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
            'gancho_partida', 'canal_exibe', 'canal_le', 'canal_grava',
@@ -287,6 +291,14 @@ TAM_ITEM = 0x1C
 VAGAS = ITENS_ORIGINAIS + 1                        # os itens de fabrica + o item zerado do fim
 PONTEIRO_EM = 0x01E4CBB2
 PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
+# v43: a tabela nova sai do lugar da original e vai para a faixa livre, no vetor menu_tabela do
+# tela.c (64 vagas): a original tinha 54, e o WATCH, o CH-C e o MDF-C nao cabiam. O ponteiro vira
+# "r5 = menu_tabela" (c5 ff + 32 bits), os mesmos 6 bytes. O r0 que o calculo deixava nao e lido:
+# a chamada seguinte (0x01E3AC52) o sobrescreve antes de ler, e o r6 e sobrescrito em 0x01E4CBC0.
+# Mais nada le a tabela original (ver acima): o resto do firmware a acha pelo ponteiro que este
+# trecho guarda em [0x14BF4] (0x01E4CBC4).
+MENU_VAGAS = 64
+TABELA_SIMBOLO = 'menu_tabela'
 
 # Como o firmware conta os itens varrendo a tabela ate o item zerado, e a tabela nova ocupa a vaga
 # dele, a contagem e trocada por uma constante na propria chamada que a pedia (4 bytes, no lugar
@@ -319,8 +331,13 @@ ROGER_ITEM = 20
 # O SCRAMBLE (indice 47) passa a ter 9 opcoes, OFF e de 2700 a 3400 Hz em ordem crescente, com get
 # e set nossos (posicao no menu <-> valor gravado; o set grava pelo de fabrica). Detalhes no bancos.c.
 SCRAMBLE_ITEM = 47
+# O TDR (indice 7, a dupla escuta) ganha o set nosso (v42): no WATCH em SINGLE ele fica em 0. O de
+# fabrica (0x01E3957C) so grava o byte. O MDF-A (indice 42) e o molde do MDF-C.
+TDR_ITEM = 7
+MDF_A_ITEM = 42
 ITENS_MUDADOS = {ROGER_ITEM: dict(maximo=5, get='roger_le', set='roger_grava',
                                   exibe='roger_opcoes', opcoes_cn='roger_opcoes'),
+                 TDR_ITEM: dict(set='tdr_grava'),
                  SCRAMBLE_ITEM: dict(maximo=9, get='scramble_le', set='scramble_grava',
                                      exibe='scramble_opcoes', opcoes_cn='scramble_opcoes')}
 
@@ -342,6 +359,13 @@ def monta_scramble():
     """Os 14 bytes novos do trecho que escolhe a frequencia de inversao."""
     return bytes.fromhex('4016' '60e10f00' '0000' 'c1ff') + struct.pack('<I', S['scramble_freqs'])
 ITENS = [
+    # v42: quantas frequencias a tela principal mostra (bancos.c), uma lista no molde do TDR - as
+    # opcoes vao no campo de exibir e no das opcoes em chines, como as do ROGER -; e o canal da C no
+    # TRIPLE, um numero como o BANK CH (a exibicao da C, o MDF-C, fica depois do MDF-B: ITENS_DEPOIS)
+    dict(nome='WATCH', molde=TDR_ITEM, flags=0, maximo=3, get='watch_le', set='watch_grava',
+         titulo='titulo_watch', exibe='watch_opcoes', opcoes_cn='watch_opcoes'),
+    dict(nome='CH-C', molde=ZONE, flags=FLAGS_NUMERO, maximo=960,
+         get='canal_c_le', set='canal_c_grava', titulo='titulo_canal_c', exibe='canal_c_exibe'),
     dict(nome='BANK', molde=ZONE, flags=FLAGS_NUMERO, maximo=16,
          get='bank_le', set='bank_grava', titulo='titulo_bank', exibe='bank_exibe'),
     dict(nome='BANK NAME', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0,
@@ -349,6 +373,12 @@ ITENS = [
     dict(nome='BANK CH', molde=ZONE, flags=FLAGS_NUMERO, maximo=960,
          get='canal_le', set='canal_grava', titulo='titulo_canal', exibe='canal_exibe'),
 ]
+
+# Itens nossos logo depois de um de fabrica (indice original -> itens): o MDF-C na sequencia do MDF-A e
+# do MDF-B, no molde do MDF-A, com as opcoes dele (v44, pedido do dono).
+MDF_B_ITEM = 43
+ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, maximo=3,
+                                  get='mdf_c_le', set='mdf_c_grava', titulo='titulo_mdf_c')]}
 
 # ---- revisao dos textos em ingles do menu (ver notas/textos-revisao.md) ----
 # As cadeias vem coladas na flash, sem folga: trocar no lugar so pode ter tamanho igual ou menor
@@ -409,6 +439,25 @@ CABO_ERA = 0x01E43970
 SCAN_REDESENHA = True
 SCAN_EM = 0x01E46EB6
 SCAN_ERA = 0x01E458E4
+
+# v42, TRIPLE: o rodizio da C na dupla escuta (bancos.c, gancho_troca_dw). Na ida do laco do sinal ao
+# outro lado (0x01E48220..0x01E48280), a chamada da decodificacao (0x01E3900A, que nao recebe
+# argumento: escreve r0 e r1 antes de ler) passa pelo gancho, que na vez da C poe o canal dela na
+# corrente antes de decodificar. Depois da chamada o trecho so usa r5, r6 e r8, que o gancho preserva.
+DW_TROCA_EM = 0x01E4826E
+DW_TROCA_ERA = 0x01E3900A
+# v44: a volta do outro lado (0x01E481C6: b[0x15378] = 0 e 0x01E3FD9E, que nao recebe argumento -
+# escreve r0 antes de ler -, chamada em 0x01E481CC; depois o trecho so poe o estado em 1, com r0 e r1
+# novos) passa pelo gancho, que no TRIPLE vai a terceira antes de voltar; e a tecla A/B (codigo 18
+# sem digitos: o caso 18 do tbh das acoes 0x01E4BE28 -> 0x01E4CC10 -> 0x01E4D44A, "r0 = 1" e a troca
+# 0x01E40E52 em 0x01E4D44C; depois so 0x01E3AC52, que escreve r0 antes de ler) passa por gancho_ab.
+DW_VOLTA_EM = 0x01E481CC
+DW_VOLTA_ERA = 0x01E3FD9E
+AB_EM = 0x01E4D44C
+AB_ERA = 0x01E40E52
+TRIPLE_CHAMADAS = ((DW_TROCA_EM, DW_TROCA_ERA, 'gancho_troca_dw', 'ida da dupla escuta ao outro lado'),
+                   (DW_VOLTA_EM, DW_VOLTA_ERA, 'gancho_volta_dw', 'volta da dupla escuta (a terceira)'),
+                   (AB_EM, AB_ERA, 'gancho_ab', 'tecla A/B: A, B e C'))
 
 # Gancho das teclas do espectro: parado num sinal achado, a seta continua a varredura em vez de
 # mexer no limite. Entra no lugar do "r1 = r0 - 16" que escolhe o caso do tbh das teclas do modo
@@ -487,6 +536,11 @@ ESPECTRO_B_FUNCOES = (
 ESPECTRO_B = (tuple(sorted({g for _, _, g, _ in ESPECTRO_B_CHAMADAS}))
               + tuple(n for _, _, n, _ in ESPECTRO_B_FUNCOES))
 NA_LIVRE += ESPECTRO_B
+NA_LIVRE += (TABELA_SIMBOLO,)              # v43: a tabela do menu, dado no .livre
+# v44: o WATCH e o TRIPLE do bancos.c tambem moram no .livre (a area do fim da imagem nao os cabia)
+NA_LIVRE += ('watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
+             'canal_c_le', 'canal_c_grava', 'canal_c_exibe', 'titulo_canal_c',
+             'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'gancho_troca_dw', 'gancho_volta_dw', 'gancho_ab')
 PRECISA += ESPECTRO_B
 
 # Realce do bloco do VFO em evidencia na tela principal. O gancho entra no ENVIO do pedaco para o
@@ -622,7 +676,12 @@ def ordem_da_copia():
     firmware; o que sai sao os itens de menu delas.
     """
     de_fabrica = [i for i in range(ITENS_ORIGINAIS) if i not in ITENS_FORA]
-    return de_fabrica[:ZONA_OU_CANAL] + list(ITENS) + de_fabrica[ZONA_OU_CANAL:]
+    ordem = []
+    for i in de_fabrica[:ZONA_OU_CANAL] + list(ITENS) + de_fabrica[ZONA_OU_CANAL:]:
+        ordem.append(i)
+        if isinstance(i, int):
+            ordem += ITENS_DEPOIS.get(i, [])
+    return ordem
 
 
 def monta_tabela(app):
@@ -642,12 +701,35 @@ def monta_tabela(app):
             continue
         o = len(tabela)
         tabela += original[quem['molde'] * TAM_ITEM:(quem['molde'] + 1) * TAM_ITEM]
-        tabela[o] = quem['flags']
+        if quem['flags'] is not None:      # None: as do molde (o MDF-C, uma lista como o MDF-A)
+            tabela[o] = quem['flags']
         struct.pack_into('<H', tabela, o + 1, quem['maximo'])
         for campo, chave in (('get', quem['get']), ('set', quem['set']), ('nome', quem['titulo']),
-                             ('nome_cn', quem['titulo']), ('exibe', quem['exibe'])):
-            struct.pack_into('<I', tabela, o + CAMPO[campo], S[chave])
+                             ('nome_cn', quem['titulo']), ('exibe', quem.get('exibe')),
+                             ('opcoes_cn', quem.get('opcoes_cn'))):
+            if chave:
+                struct.pack_into('<I', tabela, o + CAMPO[campo], S[chave])
     return bytes(tabela)
+
+
+def livre_com_tabela(tela, tabela):
+    """O .livre com a tabela do menu dentro do vetor menu_tabela (v43), como o montar grava e o
+    conferir espera. O vetor sai do compilador com 0xFF no primeiro byte e zero no resto (o 0xFF o
+    mantem no .rodata): qualquer outra coisa ali e recusada."""
+    o = S[TABELA_SIMBOLO] - LIVRE
+    vazio = b'\xff' + bytes(MENU_VAGAS * TAM_ITEM - 1)
+    if bytes(tela[o:o + len(vazio)]) != vazio:
+        raise SystemExit(f'{S[TABELA_SIMBOLO]:#x} nao e o vetor vazio da tabela do menu')
+    if len(tabela) > len(vazio):
+        raise SystemExit(f'a tabela tem {len(tabela) // TAM_ITEM} itens e o vetor so tem {MENU_VAGAS} vagas')
+    tela = bytearray(tela)
+    tela[o:o + len(tabela)] = tabela
+    return bytes(tela)
+
+
+def monta_ponteiro():
+    """"r5 = menu_tabela" (c5 ff + 32 bits), no lugar de "r0 = 13368; r5 = r6 + r0"."""
+    return b'\xc5\xff' + struct.pack('<I', S[TABELA_SIMBOLO])
 
 
 def monta_contagem(itens):
@@ -675,8 +757,10 @@ def main():
     blob = open(codigo, 'rb').read()
     print(f'  .text ligado para {confere_ligacao(codigo, blob):#x} = onde o codigo e gravado: ok')
     tela = secao_ligada(codigo, '.livre', LIVRE, LIVRE_FIM)
-    vozes = secao_ligada(codigo, '.vozes', VOZES, VOZES_ACEITAS_FIM)
     tabela = monta_tabela(app)
+    if MENU_NOVO:
+        tela = livre_com_tabela(tela, tabela)
+    vozes = secao_ligada(codigo, '.vozes', VOZES, VOZES_ACEITAS_FIM)
 
     # Monta a lista de escritas no app.bin e passa pela trava antes de tocar em qualquer byte.
     escritas = [(GANCHO_EM, 4, 'gancho do filtro na partida')]
@@ -695,7 +779,7 @@ def main():
     if CABO_ESTENDIDO:
         escritas += [(s, 4, f'gancho do cabo ({p})') for s, p in CABO_SITIOS]
     if MENU_NOVO:
-        escritas += [(TABELA, len(tabela), 'tabela de menus, no lugar da original'),
+        escritas += [(PONTEIRO_EM, len(PONTEIRO_ANTES), 'ponteiro da tabela de menus, para a faixa livre'),
                      (CONTAGEM_EM, len(CONTAGEM_ANTES), 'quantidade de itens do menu')]
     if SETAS_INVERTIDAS:
         escritas += [(s, 4, 'sentido das setas no menu') for s, _ in SETAS]
@@ -707,6 +791,7 @@ def main():
     escritas += [(s_, 4, o_) for s_, _, o_ in ENVIA_SITIOS]
     escritas += [(s_, 4, o_) for s_, o_ in NOP_SITIOS]
     escritas += [(s_, 4, 'espera da troca de banda do radio') for s_ in ESPERAS_RADIO]
+    escritas += [(s_, 4, f'TRIPLE: {o_}') for s_, _, _, o_ in TRIPLE_CHAMADAS]
     escritas += [(LIVRE, len(tela), 'tela B no lugar dos decodificadores G.729 e MP3')]
     escritas += [(r, 4, f'tipo do {d} no registro dos decodificadores') for r, _, _, d in DECODIFICADORES]
     if TEXTOS_REVISADOS:
@@ -739,6 +824,14 @@ def main():
         app[o:o + 4] = monta_call(SCAN_EM, S['gancho_scan'])
         print(f"  gancho do scan {SCAN_EM:#x}: chamada para {SCAN_ERA:#x} -> {S['gancho_scan']:#x} "
               '(pede redesenho a cada canal da varredura)')
+
+    for sitio, era, gancho, oque in TRIPLE_CHAMADAS:
+        o = sitio - BASE_APP
+        antes = bytes(app[o:o + 4])
+        if antes != monta_call(sitio, era):
+            raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {era:#x}: {antes.hex()}')
+        app[o:o + 4] = monta_call(sitio, S[gancho])
+        print(f"  TRIPLE {sitio:#x}: {era:#x} -> {gancho} {S[gancho]:#x} ({oque})")
 
     if ESPECTRO_TECLAS:
         o = ESPECTRO_EM - BASE_APP
@@ -792,7 +885,7 @@ def main():
     print(f"  scramble: frequencia de inversao pelo valor, de scramble_freqs ({S['scramble_freqs']:#x}), "
           f'em {SCRAMBLE_EM:#x}')
 
-    # 2 e 3. tabela de menus no lugar da original, e a quantidade de itens fixa.
+    # 2 e 3. o ponteiro da tabela de menus (a tabela ja foi para o .livre), e a quantidade fixa.
     # Com MENU_NOVO desligado nada disso entra: o menu fica o de fabrica (sem os itens BANK), o
     # que serve de corte de diagnostico - o gancho, o filtro, as setas e os textos continuam.
     itens = len(tabela) // TAM_ITEM
@@ -800,19 +893,14 @@ def main():
         o = PONTEIRO_EM - BASE_APP
         if bytes(app[o:o + len(PONTEIRO_ANTES)]) != PONTEIRO_ANTES:
             raise SystemExit(f'{PONTEIRO_EM:#x} nao e o calculo esperado do endereco da tabela')
-        if itens > VAGAS:
-            raise SystemExit(f'a tabela tem {itens} itens e a original so tem {VAGAS} vagas')
-        o = TABELA - BASE_APP
-        fim = o + ITENS_ORIGINAIS * TAM_ITEM
-        if any(app[fim:fim + TAM_ITEM]):
-            raise SystemExit(f'{BASE_APP + fim:#x} nao e o item zerado que encerra a tabela')
-        app[o:o + len(tabela)] = tabela
-        print(f'  tabela de menus em {TABELA:#x}, no lugar da original ({itens} itens: os '
-              f'{ITENS_ORIGINAIS - len(ITENS_FORA)} de fabrica que ficam e os {len(ITENS)} dos bancos)')
+        app[o:o + len(PONTEIRO_ANTES)] = monta_ponteiro()
+        print(f'  tabela de menus em {S[TABELA_SIMBOLO]:#x}, na faixa livre ({itens} de {MENU_VAGAS} vagas: '
+              f'os {ITENS_ORIGINAIS - len(ITENS_FORA)} de fabrica que ficam e os '
+              f'{sum(isinstance(q, dict) for q in ordem_da_copia())} nossos); '
+              f'ponteiro em {PONTEIRO_EM:#x} trocado')
         for pos, quem in enumerate(ordem_da_copia()):
             if not isinstance(quem, int):
-                print(f"    item {pos:2d}: \"{quem['nome']}\" (max {quem['maximo']}, "
-                      f"flags {quem['flags']:#04x}, no lugar dos itens {ZONA_OU_CANAL} e {ZONE} de fabrica)")
+                print(f"    item {pos:2d}: \"{quem['nome']}\" (max {quem['maximo']}, molde {quem['molde']})")
 
         o = CONTAGEM_EM - BASE_APP
         antes = bytes(app[o:o + len(CONTAGEM_ANTES)])

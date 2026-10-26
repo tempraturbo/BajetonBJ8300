@@ -93,6 +93,21 @@ FIRMWARE(ENVIA, 0x01E3ADBC);   void ENVIA(void);
 #define ALTURA_COMPACTO 38
 #define TOPO_CARTAO(lado)   ((lado) ? 58u : 18u)
 #define TOPO_COMPACTO(lado) ((lado) ? 89u : 19u)
+/* WATCH em SINGLE (v42): so o lado em evidencia, num cartao da barra ao pe da tela. */
+#define TOPO_UNICO      18u
+#define ALTURA_UNICO    108u
+#define MEDIDOR_UNICO   (TOPO_UNICO + 70)
+#define ALTURA_MED_UNICO 12u
+/* WATCH em TRIPLE (v42): o cartao de sempre (o do B desce para 39) e duas faixas finas, a do outro
+ * lado e a da C, sempre na ordem A, B, C (ver faixa, mais abaixo). */
+#define ALTURA_FAIXA     19u
+/* A letra de cada lado do firmware - o lado B mostra a C quando ela esta nele (VISTA_TRIPLE_C) - e,
+ * pela letra (A 0, B 1, C 2), onde fica: o cartao da que esta em evidencia em 18, 39 ou 59, e as
+ * faixas acima dele de 20 em 20 a partir de 18, e abaixo, de 20 em 20 a partir de 88. */
+#define LETRA(e, lado)       ((lado) == 0 ? 0u : (e)->vista == VISTA_TRIPLE_C ? 2u : 1u)
+#define Y_FAIXA(e, j)        ((j) < LETRA(e, (e)->evidencia) ? 18u + 20u * (j) : 68u + 20u * (j))
+#define TOPO_CARTAO_V(e, i)  ((e)->vista >= VISTA_TRIPLE && (i) ? ((e)->vista == VISTA_TRIPLE ? 39u : 59u) \
+                                                                : TOPO_CARTAO(i))
 
 /* Pilha. A tela B roda no meio das chamadas de desenho do firmware, sem saber o tamanho da pilha de
  * quem chama; por isso o caminho mais fundo dela nao passa do que o proprio firmware de fabrica ja usa
@@ -113,7 +128,9 @@ struct lado {
 struct estado {
     struct lado lado[2];
     u8 evidencia, tx, rx;
-    char digitos[8];       /* o que se esta digitando no lado em evidencia, "" se nada */
+    char digitos[7];       /* o que se esta digitando no lado em evidencia, "" se nada (ate 6) */
+    u8 vista;              /* WATCH (v42): 0 DUAL, 1 SINGLE - no byte que sobrou dos digitos, para a
+                            * estrutura nao crescer (ela esta no caminho mais fundo da pilha) */
     u8 vox, dw, mo, dtmf, nr, bt, trava;
     u8 tensao;             /* decimos de volt */
     u8 bateria;            /* 0..3 = 1..4 tracos, 4 = so o contorno vermelho, 255 = sem pilha */
@@ -151,6 +168,14 @@ static void le_lado(struct lado *l, unsigned i, unsigned tx)
  * 0x01E40F1C); fora disso, vazio. O nivel do sinal so chega pelo gancho do medidor (tela_b_medidor),
  * quando o degrau muda - a tela inteira de fabrica tambem desenha as barras vazias. 20 segmentos =
  * 2 por nivel. */
+unsigned watch_vista(void);         /* bancos.c: o WATCH, do registro proprio dele */
+u32 watch_le_tudo(void);            /* modo | mdf_c << 8 | canal_c << 16 */
+#define VISTA_SINGLE 1
+#define VISTA_TRIPLE 2
+#define VISTA_TRIPLE_C 3                /* TRIPLE com a C no lado B, em evidencia */
+unsigned watch_tela(void);          /* bancos.c: o modo (3 = TRIPLE com a C no lado B) | MDF-C << 8 */
+u32 terceira(void);                 /* bancos.c: canal | exibicao << 16 da que esta fora dos dois lados */
+
 static void le_estado(struct estado *e)
 {
     unsigned i, v = NIVEL_BATERIA;
@@ -172,6 +197,10 @@ static void le_estado(struct estado *e)
     e->trava = TRAVA != 0;
     e->tensao = TENSAO_BRUTA * 444u / 1000;
     e->bateria = v > 6 ? 3 : v >= 4 ? 4 : v;      /* a conta de 0x01E3B044 */
+    v = watch_tela();
+    e->vista = v & 0xFF;
+    if (e->vista == VISTA_TRIPLE_C)     /* a C no lado B aparece como o MDF-C pede, nao o MDF-B */
+        e->lado[1].exibicao = v >> 8;
 }
 
 /* ---------- desenho ---------- */
@@ -357,13 +386,13 @@ static void texto_canal(char *s, unsigned canal)
  * sinal; transmitindo, todos no vermelho do TX (v38; ate a v37, ambar). */
 static void medidor(unsigned x, unsigned y, unsigned altura, unsigned sinal, unsigned tx, unsigned apagado)
 {
-    unsigned i;
+    unsigned i, passo = altura > 9 ? 7 : 5;     /* o do SINGLE (12 de altura) e mais largo, 140 px */
 
     for (i = 0; i < 20; i++) {
         unsigned cor = i >= sinal ? apagado : tx ? COR_SEG_VERMELHO : i < 9 ? COR_SEG_VERDE
                                                              : i < 14 ? COR_SEG_AMARELO : COR_SEG_VERMELHO;
 
-        pinta(x + i * 5, y, x + i * 5 + 4, y + altura, cor);
+        pinta(x + i * passo, y, x + i * passo + passo - 1, y + altura, cor);
     }
 }
 
@@ -432,14 +461,14 @@ static char *nome_ou_sem(char *s, unsigned lado)
 SEPARADA static void cartao(const struct estado *e, unsigned i)
 {
     const struct lado *l = &e->lado[i];
-    unsigned y = TOPO_CARTAO(i), x, digitando = e->digitos[0] && i == e->evidencia;
+    unsigned y = TOPO_CARTAO_V(e, i), x, digitando = e->digitos[0] && i == e->evidencia;
     unsigned frequencia_grande = !l->canal || l->exibicao == 1;
     char s[16];
 
     pinta(3, y, 157, y + ALTURA_CARTAO, COR_VERDE);
     pinta(4, y + 1, 156, y + ALTURA_CARTAO - 1, COR_CARTAO);
     pinta(8, y + 4, 19, y + 15, COR_VERDE);
-    letra(11, y + 6, 'A' + i, 1, COR_FUNDO);
+    letra(11, y + 6, 'A' + LETRA(e, i), 1, COR_FUNDO);
 
     /* linha pequena: o nome em cima da frequencia, ou a frequencia inteira em cima do nome */
     if (l->canal && l->exibicao == 1)
@@ -475,6 +504,159 @@ SEPARADA static void cartao(const struct estado *e, unsigned i)
         texto(x, y + 27, s, 1, COR_CINZA);
     }
     medidor(8, y + 54, 9, l->sinal, e->tx && i == e->evidencia, COR_SEG_FUNDO);
+}
+
+/* WATCH em SINGLE (v42): o lado em evidencia sozinho, da barra ao pe da tela. O mesmo cartao, maior:
+ * a linha grande em 3x (em 2x se nao couber), com os dois ultimos digitos em 2x; o medidor mais alto;
+ * e, com deslocamento, a frequencia de transmissao embaixo. As etiquetas vem da cena, ao lado, como
+ * no DUAL: chamadas daqui, os quadros se somavam e a pilha passava 28 B da de fabrica. */
+SEPARADA static void cartao_unico(const struct estado *e, unsigned i)
+{
+    const struct lado *l = &e->lado[i];
+    unsigned y = TOPO_UNICO, x, g, digitando = e->digitos[0] != 0;
+    unsigned frequencia_grande = !l->canal || l->exibicao == 1;
+    char s[16];
+
+    pinta(3, y, 157, y + ALTURA_UNICO, COR_VERDE);
+    pinta(4, y + 1, 156, y + ALTURA_UNICO - 1, COR_CARTAO);
+    pinta(8, y + 4, 19, y + 15, COR_VERDE);
+    letra(11, y + 6, 'A' + i, 1, COR_FUNDO);
+    /* linha pequena e etiqueta, como no cartao */
+    if (l->canal && l->exibicao == 1)
+        texto(24, y + 6, nome(s, i), 1, COR_CINZA);
+    else if (l->canal && l->exibicao == 0) {
+        frequencia(s, l->freq, 5);
+        texto(24, y + 6, s, 1, COR_CINZA);
+    }
+    if (!l->canal)
+        etiqueta(152, y + 4, "VFO", COR_CHIP_CANAL, COR_TEXTO, 1);
+    else if (digitando || l->exibicao != 2) {
+        if (digitando)
+            digitados(junta(s, "CH "), "---", e->digitos);
+        else
+            texto_canal(s, l->canal);
+        etiqueta(152, y + 4, s, COR_CHIP_CANAL, COR_TEXTO, 1);
+    }
+    /* linha grande: 3x se couber, e os dois ultimos digitos um tamanho abaixo, pelo pe */
+    if (digitando && !l->canal)
+        digitados(s, "---.---", e->digitos);
+    else if (frequencia_grande)
+        frequencia(s, l->freq, 3);
+    else if (l->exibicao == 0)
+        nome_ou_sem(s, i);
+    else
+        texto_canal(s, l->canal);
+    g = largura(s, 3) <= 112 ? 3 : 2;
+    x = texto(8, y + 22, s, g, COR_BRANCO) + 2;
+    if (digitando && !l->canal)
+        junta(s, "--");
+    else if (frequencia_grande)
+        numero(s, l->freq % 100, 2);
+    if ((digitando && !l->canal) || frequencia_grande)
+        texto(x, y + 22 + FONTE_B_ALTURA, s, g - 1, COR_CINZA);    /* 7 x g contra 7 x (g - 1): pelo pe */
+    medidor(10, MEDIDOR_UNICO, ALTURA_MED_UNICO, l->sinal, e->tx, COR_SEG_FUNDO);
+    /* com deslocamento, a frequencia em que ele transmite */
+    if (!e->tx && (l->desloc == 1 || l->desloc == 2)) {
+        frequencia(junta(s, "TX "), le32(VFO(i) + 5), 5);
+        texto(10, y + 92, s, 1, COR_CINZA);
+    }
+}
+
+/* WATCH em TRIPLE (v42): o lado em evidencia no cartao de sempre, e o outro lado e a C em faixas
+ * finas de 19 px, sem medidor, sempre na ordem A, B, C: com o A em evidencia, cartao em 18 e as
+ * faixas do B e da C em 88 e 108; com o B, a faixa do A em 18, o cartao em 39 e a C em 108. Faixa
+ * que esta recebendo fica ambar escuro com a letra forte, como o chip de TX da barra de cima. */
+
+unsigned c_no_lugar(void);          /* bancos.c: 1 enquanto o rodizio poe a C no lugar do outro lado */
+unsigned outro_recebendo(void);     /* bancos.c: o outro lado (o B ou a C) esta recebendo */
+void LE_FLASH(u32, void *, unsigned);   /* o endereco vem do FIRMWARE() do telas.c, incluido depois */
+
+/* O canal da C, lido do chip de dados: 32 B por canal, a frequencia de RX em BCD com o byte menos
+ * significativo primeiro (+0) e o nome em +20 (o formato do driver do CHIRP; e a mesma leitura de 4
+ * bytes da partida, existe_no_registro do bancos.c). Canal vazio (primeiro byte 0xFF) devolve 0.
+ * Separada: o buffer de 32 B fica no quadro dela, e nao no da faixa, que desenha. */
+SEPARADA static u32 le_canal_c(unsigned canal, char *nome12)
+{
+    u8 r[32];
+    u32 f = 0;
+    int k;
+
+    LE_FLASH((u32)canal * 32, r, sizeof r);
+    if (r[0] == 0xFF || r[3] == 0)
+        return 0;
+    for (k = 3; k >= 0; k--)
+        f = f * 100 + (r[k] >> 4) * 10 + (r[k] & 15);
+    for (k = 0; k < 12 && r[20 + k] != 0 && r[20 + k] != 0xFF; k++)
+        nome12[k] = r[20 + k];
+    nome12[k] = 0;
+    return f;
+}
+
+/* Uma faixa: selo, o texto da exibicao e o canal (ou VFO). Embutida nas duas que a chamam, e com o
+ * canal escrito no mesmo buffer depois de o texto ja estar desenhado: e o fim do caminho mais fundo
+ * da tela no TRIPLE, e um quadro a mais (ou um buffer a mais) passava da pilha de fabrica. */
+static inline __attribute__((always_inline)) void faixa(unsigned y, unsigned selo, char *s, unsigned canal,
+                                                        unsigned rx)
+{
+    unsigned cor = rx ? COR_TEXTO_AMBAR : COR_CINZA;
+
+    pinta(3, y, 157, y + ALTURA_FAIXA - 1, rx ? COR_CHIP_AMBAR : COR_FUNDO);
+    pinta(8, y + 4, 19, y + 15, rx ? COR_TEXTO_AMBAR : COR_SELO_B);
+    letra(11, y + 6, selo, 1, rx ? COR_CHIP_AMBAR : COR_CINZA);
+    texto(24, y + 6, s, 1, cor);
+    if (canal != 0xFFFF) {
+        if (canal)
+            texto_canal(s, canal);
+        etiqueta(152, y + 4, canal ? s : "VFO", rx ? COR_CHIP_AMBAR : COR_CHIP_CANAL_B, cor, 1);
+    }
+}
+
+/* A faixa do lado fora de evidencia, com os dados dele (os da RAM, os mesmos do compacto), se ela
+ * cruza a janela aberta. Recebendo: o outro lado tem sinal e nao e a terceira que esta no lugar dele. */
+SEPARADA static void faixa_lado(const struct estado *e, unsigned i)
+{
+    const struct lado *l = &e->lado[i];
+    unsigned y = Y_FAIXA(e, LETRA(e, i));
+    char s[16];
+
+    if (JAN_Y0 >= y + ALTURA_FAIXA || JAN_Y1 <= y)
+        return;
+    if (!l->canal || l->exibicao == 1)
+        frequencia(s, l->freq, 5);
+    else if (l->exibicao == 0)
+        nome_ou_sem(s, i);
+    else
+        texto_canal(s, l->canal);
+    faixa(y, 'A' + LETRA(e, i), s, l->canal && l->exibicao == 2 ? 0xFFFF : l->canal,
+          (l->sinal || outro_recebendo()) && !c_no_lugar());
+}
+
+/* A faixa da terceira - a que esta fora dos dois lados: a C, ou o B quando a C esta no lado B -,
+ * lida do chip de dados e mostrada como o MDF dela pede (0 nome, 1 frequencia, 2 numero). Recebendo:
+ * o outro lado tem sinal com a terceira no lugar dele. */
+SEPARADA static void faixa_terceira(const struct estado *e)
+{
+    u32 t, f = 0;
+    unsigned canal, mdf, j = 3 - LETRA(e, 1), y = Y_FAIXA(e, j);
+    char s[16];
+
+    if (JAN_Y0 >= y + ALTURA_FAIXA || JAN_Y1 <= y)
+        return;
+    t = terceira();
+    canal = t & 0xFFFF;
+    mdf = t >> 16;
+    if (canal != 0xFFFF)
+        f = le_canal_c(canal, s);          /* o nome, em s; trocado abaixo se o MDF pede outra coisa */
+    if (!f)
+        junta(s, "EMPTY CH");
+    else if (mdf == 1)
+        frequencia(s, f, 5);
+    else if (mdf == 2)
+        texto_canal(s, canal + 1);
+    else if (!s[0])
+        junta(s, "UNNAMED CH");
+    faixa(y, 'A' + j, s, !f || mdf == 2 ? 0xFFFF : canal + 1,
+          (e->lado[!e->evidencia].sinal || outro_recebendo()) && c_no_lugar());
 }
 
 /* O outro lado, compacto: selo, o texto da exibicao (no VFO, a frequencia inteira), o canal e um
@@ -557,13 +739,13 @@ SEPARADA static void barra_estado(const struct estado *e)
  * digitos sao os de 0x14A3A (quantos em b[0x14A35], ate 10), completados com '-', como na de fabrica.
  * Faz parte da cena enquanto o modo for 7, entao qualquer redesenho do cartao a mantem; a saida do
  * modo zera o modo antes do redesenho inteiro (0x01E3C29C, 0x01E40D68). */
-#define TOPO_DTMF(lado) TOPO_CARTAO(lado)
+#define TOPO_DTMF(e)    ((e)->vista == VISTA_SINGLE ? TOPO_UNICO : TOPO_CARTAO_V(e, (e)->evidencia))
 #define ALTURA_DTMF     ALTURA_CARTAO
 
-SEPARADA static void caixa_dtmf(unsigned lado)
+SEPARADA static void caixa_dtmf(unsigned y)
 {
     static const char titulo[] = "DTMF";
-    unsigned y = TOPO_DTMF(lado), i;
+    unsigned i;
     char s[11];
 
     pinta(3, y, 157, y + ALTURA_DTMF, COR_TEXTO_AMBAR);
@@ -582,14 +764,28 @@ static void cena(const struct estado *e)
 
     if (y0 < ALTURA_ESTADO)
         barra_estado(e);
-    if (y0 < TOPO_CARTAO(i) + ALTURA_CARTAO && y1 > TOPO_CARTAO(i)) {
-        cartao(e, i);
-        informacoes(&e->lado[i], TOPO_CARTAO(i) + 38);
+    if (e->vista == VISTA_SINGLE) {
+        if (y0 < TOPO_UNICO + ALTURA_UNICO && y1 > TOPO_UNICO) {
+            cartao_unico(e, i);
+            informacoes(&e->lado[i], TOPO_UNICO + 52);
+        }
+    } else if (e->vista >= VISTA_TRIPLE) {  /* as faixas conferem a janela sozinhas */
+        if (y0 < TOPO_CARTAO_V(e, i) + ALTURA_CARTAO && y1 > TOPO_CARTAO_V(e, i)) {
+            cartao(e, i);
+            informacoes(&e->lado[i], TOPO_CARTAO_V(e, i) + 38);
+        }
+        faixa_lado(e, !i);
+        faixa_terceira(e);
+    } else {
+        if (y0 < TOPO_CARTAO(i) + ALTURA_CARTAO && y1 > TOPO_CARTAO(i)) {
+            cartao(e, i);
+            informacoes(&e->lado[i], TOPO_CARTAO(i) + 38);
+        }
+        if (y0 < TOPO_COMPACTO(!i) + ALTURA_COMPACTO && y1 > TOPO_COMPACTO(!i))
+            compacto(e, !i);
     }
-    if (y0 < TOPO_COMPACTO(!i) + ALTURA_COMPACTO && y1 > TOPO_COMPACTO(!i))
-        compacto(e, !i);
-    if (MODO_TELA == 7 && y0 < TOPO_DTMF(i) + ALTURA_DTMF && y1 > TOPO_DTMF(i))
-        caixa_dtmf(i);
+    if (MODO_TELA == 7 && y0 < TOPO_DTMF(e) + ALTURA_DTMF && y1 > TOPO_DTMF(e))
+        caixa_dtmf(TOPO_DTMF(e));
 }
 
 /* As linhas [y0, y1) da tela, em janelas de ate 32 linhas (32 x 160 x 2 = 10240 B, o buffer todo). */
@@ -624,9 +820,23 @@ static inline __attribute__((always_inline)) void medidor_b(unsigned estado, uns
     e.lado[lado].sinal = nivel < 10 ? nivel * 2 : 20;
     e.tx = estado == 1;
     e.rx = !e.tx && nivel != 0;
-    y = lado == e.evidencia ? TOPO_CARTAO(lado) + 54 : TOPO_COMPACTO(lado) + 24;
-    if (!so_barra)                  /* nas outras telas (v37) nao ha medidor dos lados: so a barra */
+    if (e.vista == VISTA_SINGLE) {       /* so o lado em evidencia tem medidor (o outro nem recebe) */
+        if (!so_barra && lado == e.evidencia)
+            desenha(&e, MEDIDOR_UNICO, MEDIDOR_UNICO + ALTURA_MED_UNICO);
+    } else if (e.vista >= VISTA_TRIPLE) { /* o medidor do cartao, ou as duas faixas (o outro lado ou a terceira) */
+        if (!so_barra && lado == e.evidencia) {
+            y = TOPO_CARTAO_V(&e, lado) + 54;
+            desenha(&e, y, y + 9);
+        } else if (!so_barra) {
+            y = Y_FAIXA(&e, LETRA(&e, lado));
+            desenha(&e, y, y + ALTURA_FAIXA);
+            y = Y_FAIXA(&e, 3 - LETRA(&e, 1));
+            desenha(&e, y, y + ALTURA_FAIXA);
+        }
+    } else if (!so_barra) {         /* nas outras telas (v37) nao ha medidor dos lados: so a barra */
+        y = lado == e.evidencia ? TOPO_CARTAO(lado) + 54 : TOPO_COMPACTO(lado) + 24;
         desenha(&e, y, y + (lado == e.evidencia ? 9 : 4));
+    }
     desenha(&e, 0, ALTURA_ESTADO);
 }
 
@@ -642,6 +852,16 @@ static void desenha_lado(const struct estado *e, unsigned lado)
 {
     unsigned y = lado == e->evidencia ? TOPO_CARTAO(lado) : TOPO_COMPACTO(lado);
 
+    if (e->vista == VISTA_SINGLE) {      /* no SINGLE o outro lado nao aparece */
+        if (lado == e->evidencia)
+            desenha(e, TOPO_UNICO, TOPO_UNICO + ALTURA_UNICO);
+        return;
+    }
+    if (e->vista >= VISTA_TRIPLE) {      /* o cartao, ou a faixa do outro lado */
+        y = lado == e->evidencia ? TOPO_CARTAO_V(e, lado) : Y_FAIXA(e, LETRA(e, lado));
+        desenha(e, y, y + (lado == e->evidencia ? ALTURA_CARTAO : ALTURA_FAIXA));
+        return;
+    }
     desenha(e, y, y + (lado == e->evidencia ? ALTURA_CARTAO : ALTURA_COMPACTO));
 }
 
@@ -736,6 +956,12 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
 }
 
 #ifndef PREVIA
+/* A tabela do menu principal (v43): o montar.py a preenche aqui, na faixa livre, e troca o ponteiro
+ * do firmware (0x01E4CBB2) para ca. A original tinha 54 vagas, e o WATCH, o CH-C e o MDF-C nao
+ * cabiam. Sai do compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e
+ * zero no resto, e o montar so escreve aqui se achar exatamente isso. */
+const unsigned char menu_tabela[64 * 28] __attribute__((aligned(4))) = {0xFF};
+
 /* ---------- ligacao com o firmware ----------
  * Treze rotinas que desenham a tela de dois VFOs ganham um desvio na entrada (DESVIO, abaixo). O
  * gancho de cada uma recebe os argumentos dela e devolve 1 quando desenhou a tela B no lugar - a
@@ -974,7 +1200,7 @@ void gancho_dtmf(void)
         return;
     }
     le_estado(&e);
-    desenha(&e, TOPO_DTMF(e.evidencia), TOPO_DTMF(e.evidencia) + ALTURA_DTMF);
+    desenha(&e, TOPO_DTMF(&e), TOPO_DTMF(&e) + ALTURA_DTMF);
 }
 
 /* No lugar do envia() da tensao na partida (0x01E55F40): a tela B inteira, com a tensao lida como a

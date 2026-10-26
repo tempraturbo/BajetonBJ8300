@@ -515,3 +515,56 @@ junto da `letra()` o quadro dela crescia, e ela está no fim do caminho mais fun
   set no OK (`0x01E49996`) a 144 B, o get e o exibe no motor a 296 B. Um set que redesenha a tela
   (o do Modulation, o CH-NAME pela saída do editor `0x01E3C7AA`) entra nisso; medidos no ponto da
   chamada, todos ficam em até 652 B, abaixo dos 740 B de fábrica.
+
+## 14. As vistas do WATCH (v42 a v45)
+
+O WATCH escolhe quantas frequências a tela principal mostra. A tela B lê o registro dele
+([engenharia reversa, seção 18](engenharia-reversa.md#18-a-dupla-escuta-e-o-triple-v42-a-v45)) a
+cada desenho e guarda a vista no byte que sobrava dos dígitos da estrutura do estado: os dígitos
+passaram de 8 para 7 bytes (até 6 dígitos e o zero), e a estrutura não cresceu, porque ela está no
+caminho mais fundo da pilha.
+
+| Vista | Valor | O que a tela mostra |
+|---|---|---|
+| DUAL | 0 | a tela de sempre: o lado em evidência no cartão e o outro compacto |
+| SINGLE | 1 | só o lado em evidência, num cartão da barra ao pé da tela |
+| TRIPLE | 2 | o A ou o B em evidência no cartão, e os outros dois em faixas finas |
+| TRIPLE com a C no lado B | 3 | a C em evidência no cartão, e o A e o B em faixas |
+
+**SINGLE.** O cartão vai de y 18 a 126. A linha grande (a frequência, ou o nome no MDF de nome) em
+3x, em 2x quando não cabe, com os dois últimos dígitos da frequência em 2x; as etiquetas abaixo,
+desenhadas pela cena, como no DUAL (chamadas de dentro do cartão, os quadros se somavam e a pilha
+passava 28 B da de fábrica); o medidor em y 88 com 12 px de altura; e, com deslocamento, a
+frequência de transmissão embaixo (`TX 147.12000`). O outro lado não aparece, e o medidor dele nem
+é desenhado.
+
+**TRIPLE.** Cada lado tem uma letra: A, B e C, com o lado B mostrando a C na vista 3. A posição sai
+da letra:
+
+- o cartão da que está em evidência em y 18 (A), 39 (B) ou 59 (C), com os 68 px de sempre;
+- as faixas de 19 px de altura, de 20 em 20: as que vêm antes do cartão a partir de 18, e as que
+  vêm depois a partir de 88 (letra 1 em 88, letra 2 em 108).
+
+| Em evidência | y 18 | y 38/39 | y 58/59 | y 88 | y 108 |
+|---|---|---|---|---|---|
+| A | cartão A | | | faixa B | faixa C |
+| B | faixa A | cartão B | | | faixa C |
+| C | faixa A | faixa B | cartão C | | |
+
+Cada faixa tem o selo da letra, o texto que o MDF dela pede (o nome, a frequência ou o número) e o
+canal numa etiqueta (`VFO` no VFO). A terceira, a que não está em nenhum dos dois lados, é lida do
+chip de dados: o registro do canal, com o MDF-C (ou o MDF-B, quando ela é o B). Canal vazio
+aparece como `EMPTY CH`. **Recebendo**, a faixa fica em âmbar escuro (`#3b2a0b`, o fundo da
+etiqueta âmbar) com o selo e o texto em âmbar (`#fbbf24`). O lado fora de evidência recebe quando
+tem sinal, ou quando a dupla escuta está nele com o estado em 4, e o que recebe é a terceira quando
+o rodízio está nela.
+
+Só o cartão tem medidor. O redesenho do medidor (`b_medidor`) desenha o medidor do cartão e, para o
+lado fora de evidência, as duas faixas que podem estar recebendo; o redesenho de um lado
+(`desenha_lado`) e a caixa do DTMF seguem a mesma geometria. As faixas conferem sozinhas se cruzam
+a janela aberta e se estão recebendo, e o desenho da faixa é embutido nas duas que a chamam: esse é
+o fim do caminho mais fundo da tela no TRIPLE, e um quadro a mais passava da pilha de fábrica.
+
+**Na prévia**, as cenas 33 a 35 são o SINGLE (canal recebendo, VFO com deslocamento e
+transmitindo) e as 36 a 39 o TRIPLE (o A recebendo, a C recebendo, o B em evidência com o A
+recebendo e a C em evidência).
