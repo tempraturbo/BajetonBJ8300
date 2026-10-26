@@ -72,7 +72,7 @@ by looking for where content starts mirroring address 0:
 | `0x20000–0x99FFF` | fonts and Chinese text (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 records of 60 B used by the firmware |
 | **`0xC1000–0xD1FFF`** | **the banks** (header + 16 sectors of 4 KB) |
-| **`0xD2000–0xD2FFF`** | **the WATCH record** (v43, [section 18](#18-dual-watch-and-triple-v42-to-v45)) |
+| **`0xD2000–0xD2FFF`** | **the WATCH record** (v43; the cable writes it since v46; [section 18](#18-dual-watch-and-triple-v42-to-v45)) |
 | `0xFA000` | 4 KB used by the firmware |
 | free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -122,9 +122,9 @@ It fits in the same 4 bytes: **bit 7 of the size byte set** means a 24-bit addre
 7 bits carrying the third address byte; the block is always 64 B. Bit 7 clear is byte-for-byte
 stock behaviour — CHIRP sees no difference. Reach: 8 MB.
 
-Extended writes are only accepted in `0xC1000..0xD1FFF`, erasing the sector when the block starts
-it. Any other address is ignored without writing anything (proven with
-`tools/cabo/teste_cabo_grava.ps1`).
+Extended writes are only accepted in `0xC1000..0xD2FFF` (up to v45, `0xD1FFF`; v46 added the
+WATCH record), erasing the sector when the block starts it. Any other address is ignored without
+writing anything (proven with `tools/cabo/teste_cabo_grava.ps1`), and the ACK goes out anyway.
 
 **Memory read (v31, diagnostic).** In the extended `R`, an address with bit 22 set (`0x400000` and
 up, which the 1 MB chip does not have) returns 64 B of the processor's memory at
@@ -959,7 +959,7 @@ settings (`0x01E3AB36`, with r0 ≠ 0), redraws (`0x01E3C290`) and mutes (`0x01E
 
 With no valid record (wrong magic or checksum), the radio stays in DUAL. v43's record had 10
 bytes, without fields 8 to 11, and stopped being valid in v44. Screen B reads the record on every
-draw.
+draw. Since v46 the cable write window includes it, and CHIRP writes WATCH, CH-C and MDF-C.
 
 **The TDR rule**, the owner's: in SINGLE dual watch is off, and only the frequency shown receives.
 WATCH set to SINGLE clears TDR, the TDR item's setter (item 7, `tdr_grava` instead of

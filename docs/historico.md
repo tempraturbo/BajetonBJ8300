@@ -5,6 +5,18 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v46 — 26/10 — o cabo grava o registro do WATCH ⏳ em teste
+
+- **A janela de gravação do cabo inclui o setor do WATCH.** A gravação estendida só aceitava
+  `0xC1000..0xD1FFF` (o cabeçalho e os 16 bancos), e o registro do WATCH fica logo depois, em
+  `0xD2000`: o CHIRP não tinha como gravá-lo. O `gancho_cabo` passa a aceitar até `0xD2FFF`, um
+  setor a mais na mesma comparação (no compilado, `if (r1 > 17)`).
+- **Fora da janela, nada muda:** o bloco é ignorado e o ACK sai do mesmo jeito, porque quem o manda
+  é o tratador de fábrica, depois do gancho. É por isso que o driver lê o bloco de volta depois de
+  gravar.
+- Do resto, a v46 é a v45: a imagem tem o mesmo tamanho, a pilha é a de fábrica nas três raízes, e
+  as 78 telas da prévia saem iguais.
+
 ## v45 — 26/10 — a tela acompanha a tecla A/B até a C ✔️ testada
 
 Testada no rádio: "agora tá ok". O teste da v44 mostrou que, no TRIPLE, a segunda tecla A/B

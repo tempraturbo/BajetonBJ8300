@@ -5,6 +5,18 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v46 — Oct 26 — the cable writes the WATCH record ⏳ in test
+
+- **The cable write window includes the WATCH sector.** The extended write only accepted
+  `0xC1000..0xD1FFF` (the header and the 16 banks), and the WATCH record sits right after it, at
+  `0xD2000`: CHIRP had no way to write it. `gancho_cabo` now accepts up to `0xD2FFF`, one sector
+  more in the same comparison (compiled, `if (r1 > 17)`).
+- **Outside the window, nothing changes:** the block is ignored and the ACK goes out anyway,
+  because the stock handler sends it, after the hook. That is why the driver reads the block back
+  after writing it.
+- Otherwise v46 is v45: the image is the same size, the stack is the stock one at all three roots,
+  and the preview's 78 screens come out the same.
+
 ## v45 — Oct 26 — the screen follows the A/B key to C ✔️ tested
 
 Tested on the radio: "it's fine now". Testing v44 showed that, in TRIPLE, the second A/B press in a

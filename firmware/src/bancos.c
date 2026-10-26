@@ -214,9 +214,9 @@ unsigned watch_vista(void);
  */
 #define SETOR_CAB      0x000C1000u
 #define SETOR_BANCO(n) (0x000C2000u + ((u32)(n) << 12))
-/* O WATCH (v42) num setor so dele, logo depois dos 16 bancos: na faixa que o levantamento pelo cabo
- * achou livre (docs/engenharia-reversa.md, secao 3), e fora da janela que o cabo grava (0xC1000..
- * 0xD1FFF), entao nem o CHIRP o apaga. */
+/* O WATCH (v43) num setor so dele, logo depois dos 16 bancos: na faixa que o levantamento pelo cabo
+ * achou livre (docs/engenharia-reversa.md, secao 3). Desde a v46 a janela que o cabo grava o inclui
+ * (gancho_cabo), para o CHIRP gravar o WATCH, o CH-C e o MDF-C. */
 #define SETOR_WATCH    0x000D2000u
 
 /* A marca fica em dois u16 em vez de quatro u8: conferir e gravar a marca passa a ser dois acessos
@@ -1155,9 +1155,10 @@ void gancho_roger_tons(void)
  * O 'W' de fabrica tambem e de 64 B (0x01E4C0E8 espera 68 bytes no buffer), entao o pacote
  * estendido de gravacao tem exatamente o tamanho do de fabrica.
  *
- * Gravacao estendida **so na area dos bancos** (0xC1000..0xD1FFF), apagando o setor quando o bloco
- * comeca nele; qualquer outro endereco e ignorado sem escrever nada. Quem grava banco pelo cabo tem
- * que desligar e ligar o radio depois: o filtro e montado na partida.
+ * Gravacao estendida **so na area dos bancos e no WATCH** (0xC1000..0xD2FFF; ate a v45, 0xD1FFF),
+ * apagando o setor quando o bloco comeca nele; qualquer outro endereco e ignorado sem escrever nada.
+ * Quem grava banco pelo cabo tem que desligar e ligar o radio depois: o filtro e montado na
+ * partida.
  *
  * Leitura com o bit 22 do endereco ligado (0x400000 em diante, que o chip de dados de 1 MB nao tem):
  * le a memoria do processador a partir de 0x01E00000 - o que o firmware enxerga de fato da flash
@@ -1179,11 +1180,11 @@ void gancho_cabo(unsigned grava)
             else
                 LE_FLASH(endereco, (void *)(p + 4), 0x40);
         }
-        /* A faixa 0xC1000..0xD1FFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
+        /* A faixa 0xC1000..0xD2FFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
          * 2026-10-24 mostra que nada mais mora ali, e o chip de 1 MB nao espelha nesse endereco.
          * Quem grava por aqui e o PC mandando registro de banco; o caminho do menu continua com a
          * trava do setor_livre. */
-        else if (setor - (SETOR_CAB >> 12) < NUM_BANCOS + 1u) {
+        else if (setor - (SETOR_CAB >> 12) < NUM_BANCOS + 2u) {   /* o cabecalho, os bancos e o WATCH */
             if (endereco == (u32)setor << 12)   /* bloco que abre o setor: apaga antes */
                 APAGA_SETOR(endereco);
             GRAVA_FLASH(endereco, (void *)(p + 4), 0x40);

@@ -72,7 +72,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | `0x20000–0x99FFF` | fontes e textos em chinês (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 registros de 60 B que o firmware usa |
 | **`0xC1000–0xD1FFF`** | **os bancos** (cabeçalho + 16 setores de 4 KB) |
-| **`0xD2000–0xD2FFF`** | **o registro do WATCH** (v43, [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v45)) |
+| **`0xD2000–0xD2FFF`** | **o registro do WATCH** (v43; o cabo o grava desde a v46; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v45)) |
 | `0xFA000` | 4 KB de uso do firmware |
 | livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -124,8 +124,9 @@ Cabe nos mesmos 4 bytes: **bit 7 do tamanho ligado** = endereço de 24 bits, com
 valendo o terceiro byte; o bloco é sempre de 64 B. Bit 7 em zero = comportamento de fábrica, byte a
 byte — o CHIRP não vê diferença. Alcance: 8 MB.
 
-Gravação estendida só em `0xC1000..0xD1FFF`, apagando o setor quando o bloco começa nele. Qualquer
-outro endereço é ignorado sem escrever nada (provado com `tools/cabo/teste_cabo_grava.ps1`).
+Gravação estendida só em `0xC1000..0xD2FFF` (até a v45, `0xD1FFF`; a v46 incluiu o registro do
+WATCH), apagando o setor quando o bloco começa nele. Qualquer outro endereço é ignorado sem escrever
+nada (provado com `tools/cabo/teste_cabo_grava.ps1`), e o ACK sai do mesmo jeito.
 
 **Leitura de memória (v31, diagnóstico).** No `R` estendido, endereço com o bit 22 ligado
 (`0x400000` em diante, que o chip de 1 MB não tem) devolve 64 B da memória do processador em
@@ -947,6 +948,7 @@ sombras dos dois lados, decodifica, refaz o registro da tela (`0x01E39128`) e a 
 
 Sem registro válido (marca ou soma errada), o rádio fica em DUAL. A v43 tinha 10 bytes, sem os
 campos 8 a 11, e o registro dela deixou de valer na v44. A tela B lê o registro a cada desenho.
+Desde a v46 a janela de gravação do cabo o inclui, e o CHIRP grava o WATCH, o CH-C e o MDF-C.
 
 **A regra do TDR**, do dono: no SINGLE a dupla escuta fica desligada, e só a frequência mostrada
 recebe. O WATCH em SINGLE zera o TDR, o set do item TDR (o 7, `tdr_grava` no lugar de
