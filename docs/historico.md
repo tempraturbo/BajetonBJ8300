@@ -5,6 +5,14 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 26/10 — o nome da V2.6T
+
+- O módulo virou `chirp/bj8300_v2.6TEMPRA.py`, e o modelo no CHIRP, `Baojie → BJ8300_v2.6TEMPRA`. O
+  `bj8300_v2.5TEMPRA.py` só existiu no repositório (a V2.5T não foi lançada), mas uma imagem salva com
+  ele abre neste também: o `MODEL_COMPAT` registra os três nomes antigos. O `teste_chirp_real` ganhou
+  a `2c3`.
+- O texto de ajuda do TX-A/B/C e o aviso de rádio sem o firmware dos bancos citam a V2.6T.
+
 ## v51 — 26/10 — a terceira em evidência enquanto o PTT está apertado ✅ (é a V2.6T)
 
 Testada no rádio: "agora funcionou tudo". O teste da v50 mostrou que, com o TX-A/B/C em C, a TX saía
