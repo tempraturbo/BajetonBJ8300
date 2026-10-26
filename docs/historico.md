@@ -5,6 +5,26 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 26/10 — WATCH, CH-C e MDF-C
+
+- **Settings → Watch**, com os três itens do menu do rádio: o WATCH (SINGLE, DUAL e TRIPLE), o
+  canal da C (CH-C, de 1 a 960) e o MDF-C (Name, Frequency e Channel, como o MDF-A e o MDF-B).
+- **No `.img`, o bloco do WATCH (64 bytes) vai logo depois dos bancos.** O download o lê junto com
+  os bancos, pelo comando estendido. Uma imagem salva antes ganha o bloco apagado, e o upload dela
+  não toca no WATCH do rádio.
+- **O upload grava o bloco só quando ele muda, e o lê de volta.** O firmware até a v45 ignora a
+  gravação fora dos bancos e responde ACK assim mesmo. Nesse caso o upload termina com um aviso de
+  que o WATCH precisa da v46, depois de já ter gravado canais, ajustes e bancos.
+- **O que é do rádio vem do rádio.** Se a C está no lado B, e o canal que o B tinha, o upload tira
+  do registro que está no rádio na hora, e não da imagem: uma tecla A/B apertada entre o download
+  e o upload não é desfeita. Da imagem vêm só o WATCH, o CH-C e o MDF-C.
+- **Com a C em evidência no rádio, o CH-C fica só de leitura**, porque o rádio grava por cima dele o
+  canal em que a C estiver quando sair do lado B.
+- **SINGLE desliga o TDR no upload**, a mesma regra do firmware.
+- Testes novos: no `teste_chirp_real`, do 10 ao 10j (o registro na imagem e a página Watch); no
+  `teste_clonagem`, o 1h e do 6 ao 6h (o cabo, com um rádio simulado com a janela da v46 e com a
+  de antes).
+
 ## v46 — 26/10 — o cabo grava o registro do WATCH ⏳ em teste
 
 - **A janela de gravação do cabo inclui o setor do WATCH.** A gravação estendida só aceitava

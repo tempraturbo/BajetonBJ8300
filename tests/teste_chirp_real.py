@@ -60,6 +60,33 @@ def imagem(ativos=0x0005, escolhido=2, bancos=((0, 'test', [42]), (2, 'bnk', [41
     return memmap.MemoryMapBytes(b'\x00' * bj.BLOB_BASE + b''.join(setores))
 
 
+def registro_watch(modo, mdf, canal, c_no_b=0, canal_b=0):
+    """O bloco do WATCH como o firmware grava (struct vigia, grava_registro): 14 bytes e o resto apagado."""
+    reg = bytearray(bj.WATCH_MAGIC + struct.pack('<BBHBBH', modo, mdf, canal, c_no_b, 0, canal_b) + b'\x00\x00')
+    reg[12:14] = struct.pack('<H', bj._checksum(bytes(reg[:12])))
+    return bytes(reg) + b'\xff' * (bj.EXT_BLOCK - bj.WATCH_LEN)
+
+
+def watch_de(radio):
+    """WATCH, CH-C e MDF-C como a pagina Settings > Watch mostra, e se o CH-C aceita mudanca."""
+    w = {s.get_name(): s for s in radio.get_settings().walk()}
+    return (str(w['watch_mode'].value), int(w['watch_channel_c'].value), str(w['watch_mdf_c'].value),
+            w['watch_channel_c'].value.get_mutable())
+
+
+def muda_watch(radio, **valores):
+    """Muda ajustes da pagina Watch e aplica como o set_settings da base: os MemSetting na memoria e,
+    dos outros, os callbacks - so os da pagina Watch, porque os das frequencias dos VFO nao leem a
+    imagem zerada dos testes (como o aplica() dos bancos faz com os bank_)."""
+    ajustes = radio.get_settings()
+    w = {s.get_name(): s for s in ajustes.walk()}
+    for nome, valor in valores.items():
+        w[nome].value.set_value(valor)
+    for s in ajustes.apply_to(radio._memobj):
+        if s.has_apply_callback() and s.get_name().startswith('watch_'):
+            s.run_apply_callback()
+
+
 def main():
     falhas = []
 
@@ -203,8 +230,8 @@ def main():
     reg4 = crua[bj.BLOB_BASE + 4 * bj.SECTOR_SIZE:bj.BLOB_BASE + 4 * bj.SECTOR_SIZE + bj.RECORD_LEN]
     confere('6b. banco 4 (que ganhou canal no 5j) com marca e soma que fecham',
             (reg4[:4], struct.unpack('<H', reg4[136:])[0]), (bj.BANK_MAGIC, bj._checksum(reg4[:136])))
-    confere('6c. tamanho da imagem = fabrica + 17 setores',
-            len(crua), bj.BLOB_BASE + (bj.NUM_BANKS + 1) * bj.SECTOR_SIZE)
+    confere('6c. tamanho da imagem = fabrica + 17 setores + o bloco do WATCH',
+            len(crua), bj.BLOB_BASE + (bj.NUM_BANKS + 1) * bj.SECTOR_SIZE + bj.EXT_BLOCK)
 
     # 7. os pacotes do cabo (o que o radio vai receber)
     confere('7. comando de leitura de 0xC1000', bj._command(b'R', 0x0C1000),
@@ -307,6 +334,32 @@ def main():
             gravados, [(v << 4 | 0x0E, 0x11) for v in valor])
     confere('9f. o mapa da classe base nao mudou', radtel_rt900.RT900BT._scramble_map,
             [('Off', 0x00), ('On', 0x04)])
+
+    # 10. WATCH, CH-C e MDF-C (firmware v46): o registro WTC1, no bloco depois dos bancos
+    r = bj.BJ8300(imagem())
+    confere('10. imagem sem WATCH ganha o bloco apagado depois dos bancos',
+            (len(r._mmap), bytes(r._mmap[bj.WATCH_BASE:bj.IMAGE_SIZE])),
+            (bj.BLOB_BASE + 17 * bj.SECTOR_SIZE + 64, b'\xff' * 64))
+    confere('10b. sem registro: DUAL, a C no canal 1, MDF-C Name', watch_de(r), ('DUAL', 1, 'Name', True))
+    confere('10c. grupo Watch depois do Banks', [g.get_shortname() for g in r.get_settings()][-2:],
+            ['Banks', 'Watch'])
+    muda_watch(r, watch_mode='TRIPLE', watch_channel_c=5, watch_mdf_c='Frequency')
+    bloco = bytes(r._mmap[bj.WATCH_BASE:bj.IMAGE_SIZE])
+    confere('10d. TRIPLE, canal 5 e Frequency no registro, como o firmware le', bloco,
+            registro_watch(2, 1, 4))
+    confere('10e. e lidos de volta pela pagina', watch_de(r), ('TRIPLE', 5, 'Frequency', True))
+    muda_watch(r, watch_mode='SINGLE')
+    confere('10f. mudar so o WATCH deixa o resto do registro', r._mmap[bj.WATCH_BASE:bj.IMAGE_SIZE],
+            registro_watch(1, 1, 4))
+    r._mmap[bj.WATCH_BASE] = registro_watch(2, 0, 9, 1, 3)    # a C esta no lado B, no radio
+    confere('10g. com a C no lado B, o CH-C e so leitura', watch_de(r), ('TRIPLE', 10, 'Name', False))
+    muda_watch(r, watch_mode='DUAL', watch_mdf_c='Channel')
+    confere('10h. e mudar o WATCH e o MDF-C nao mexe na C no lado B nem no canal do B',
+            r._mmap[bj.WATCH_BASE:bj.IMAGE_SIZE], registro_watch(0, 2, 9, 1, 3))
+    r._mmap[bj.WATCH_BASE] = registro_watch(7, 5, 2000)
+    confere('10i. valores fora da faixa leem o padrao, como o firmware', watch_de(r), ('DUAL', 1, 'Name', True))
+    r._mmap[bj.WATCH_BASE] = registro_watch(2, 1, 4)[:12] + b'\x00\x00' + b'\xff' * 50
+    confere('10j. soma errada: registro invalido, DUAL', watch_de(r), ('DUAL', 1, 'Name', True))
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')

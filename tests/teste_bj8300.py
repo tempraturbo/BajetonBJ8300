@@ -144,6 +144,10 @@ def _stub_chirp():
         def __init__(self, minimo, maximo, atual, autopad=True):
             self.v = atual
 
+    class RadioSettingValueInteger(object):
+        def __init__(self, minimo, maximo, atual):
+            self.v = atual
+
     settings.MemSetting = MemSetting
     settings.RadioSetting = RadioSetting
     settings.RadioSettingGroup = RadioSettingGroup
@@ -151,6 +155,7 @@ def _stub_chirp():
     settings.RadioSettingValueBoolean = RadioSettingValueBoolean
     settings.RadioSettingValueList = RadioSettingValueList
     settings.RadioSettingValueString = RadioSettingValueString
+    settings.RadioSettingValueInteger = RadioSettingValueInteger
 
     drivers = types.ModuleType('chirp.drivers')
     drivers.__path__ = []

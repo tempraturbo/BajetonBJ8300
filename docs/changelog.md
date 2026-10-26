@@ -5,6 +5,27 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 26 — WATCH, CH-C and MDF-C
+
+- **Settings → Watch**, with the radio's three menu items: WATCH (SINGLE, DUAL and TRIPLE), C's
+  channel (CH-C, 1 to 960) and MDF-C (Name, Frequency and Channel, like MDF-A and MDF-B).
+- **In the `.img`, the WATCH block (64 bytes) goes right after the banks.** The download reads it
+  along with the banks, through the extended command. An image saved before gets the block erased,
+  and uploading it leaves the radio's WATCH alone.
+- **The upload writes the block only when it changes, and reads it back.** Firmware up to v45
+  ignores writes outside the banks and acknowledges them anyway. In that case the upload ends with
+  a warning that WATCH needs v46, after channels, settings and banks have been written.
+- **What belongs to the radio comes from the radio.** Whether C is on side B, and the channel B
+  had, the upload takes from the record in the radio at that moment, not from the image: an A/B
+  press between the download and the upload is not undone. Only WATCH, CH-C and MDF-C come from
+  the image.
+- **With C in focus on the radio, CH-C is read only**, because the radio writes over it the channel
+  C is on when it leaves side B.
+- **SINGLE turns TDR off on upload**, the firmware's own rule.
+- New tests: in `teste_chirp_real`, 10 to 10j (the record in the image and the Watch page); in
+  `teste_clonagem`, 1h and 6 to 6h (the cable, against a simulated radio with v46's window and with
+  the earlier one).
+
 ## v46 — Oct 26 — the cable writes the WATCH record ⏳ in test
 
 - **The cable write window includes the WATCH sector.** The extended write only accepted

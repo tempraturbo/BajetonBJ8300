@@ -236,6 +236,9 @@ CHIRP shows the *"Experimental driver"* notice, with the module's instructions: 
   A bank with no programmed channel **cannot be turned on**: if you tick it, CHIRP unticks it right
   away. And removing a bank's last channel turns it off by itself. At the end of the page, **Bank
   edited by the radio menu** picks the bank the radio's `BANK NAME` and `BANK CH` items work on.
+- **Settings → Watch** (firmware v46 on): **WATCH** (SINGLE, DUAL or TRIPLE), C's channel
+  (**CH-C**) and **MDF-C**, like the radio's menu items. With C in focus on the radio, CH-C is read
+  only: change it with the radio's arrows, or press A/B on it and download again.
 - **Memories (FM / AM / HF):** the other bands, as in the stock driver.
 
 > [!NOTE]
@@ -291,6 +294,10 @@ family, and adds:
   session afterwards); on upload, only the sectors that changed.
 - The roger with the radio's four options and the scramble with its nine, writing the same values
   the radio's menu writes.
+- The **Settings → Watch** group, written to the WATCH record (`0xD2000`). The upload only writes
+  the record when it changes and checks it by reading it back, and the radio's state (C on side B
+  and B's channel) comes from the radio, not from the image. SINGLE turns TDR off, as in the
+  firmware.
 - **No zones:** every upload writes **Full Channel** (`0x9028` = 1), because zone mode is still in
   the firmware and, without the menu item, the radio would have no way out of it — in zone mode
   up/down is stuck within 64 channels.

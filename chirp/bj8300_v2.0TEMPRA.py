@@ -24,13 +24,18 @@
 # of the address; the block is always 64 bytes. With bit 7 clear nothing changes - which is why
 # the stock driver keeps working on this radio.
 #
-# The firmware only accepts the extended write inside 0xC1000..0xD1FFF (header + the 16 banks)
-# and only erases a sector that is empty or already its own: no channel, calibration or boot
-# image address is at risk through this path.
+# The firmware only accepts the extended write inside 0xC1000..0xD1FFF (header + the 16 banks;
+# from v46 on, up to 0xD2FFF, with the WATCH record) and only erases a sector that is empty or
+# already its own: no channel, calibration or boot image address is at risk through this path.
+#
+#   0xD2000            WATCH (firmware v43 on): "WTC1" magic, how many frequencies the main
+#                      screen shows (SINGLE, DUAL, TRIPLE), MDF-C, C's channel, whether C is on
+#                      side B right now and B's channel meanwhile, checksum - 14 bytes
 #
 # In the CHIRP image (.img) the banks area goes right after the stock part, at 0xF250, as 17
-# sectors of 192 bytes - the same three 64-byte blocks that travel over the cable. That way the
-# banks survive saving and reopening the .img, like any other radio data.
+# sectors of 192 bytes - the same three 64-byte blocks that travel over the cable - and the WATCH
+# block (64 bytes) right after it. That way they survive saving and reopening the .img, like any
+# other radio data.
 # ---------------------------------------------------------------------------------------------
 
 import logging
@@ -39,7 +44,7 @@ import struct
 from chirp import chirp_common, directory, errors, memmap
 from chirp.drivers import radtel_rt900
 from chirp.settings import MemSetting, RadioSetting, RadioSettingGroup, RadioSettingSubGroup, \
-    RadioSettingValueBoolean, RadioSettingValueList, RadioSettingValueString
+    RadioSettingValueBoolean, RadioSettingValueInteger, RadioSettingValueList, RadioSettingValueString
 
 LOG = logging.getLogger(__name__)
 
@@ -60,6 +65,16 @@ HEADER_MAGIC = b'BNK3'
 BANK_MAGIC = b'BCO1'
 
 BLOB_BASE = 0xF250                             # where the banks area goes in the .img
+
+# --- WATCH (the same values as struct vigia in bancos.c) ---
+WATCH_SECTOR = 0x0D2000
+WATCH_MAGIC = b'WTC1'
+WATCH_LEN = 14                                 # magic, mode, MDF-C, C channel, C on B, -, B channel, sum
+WATCH_BASE = BLOB_BASE + BLOB_SIZE             # one 64-byte block in the .img, after the banks
+IMAGE_SIZE = WATCH_BASE + EXT_BLOCK
+WATCH_OPTIONS = ['SINGLE', 'DUAL', 'TRIPLE']   # the radio's menu order
+WATCH_VALUES = [1, 0, 2]                       # list position -> value in the record (0 DUAL)
+WATCH_SINGLE = 1
 NUM_CHANNELS = 960
 CHANNEL_SIZE = 32                              # channel records start at 0x0000 of the image
 ACK = b'\x06'
@@ -201,6 +216,77 @@ class _BankStore(object):
         return [self._read(i * SECTOR_SIZE, SECTOR_SIZE) for i in range(NUM_BANKS + 1)]
 
 
+class _WatchStore(object):
+    """The WATCH record inside the image, read and written the firmware's way (le_registro and
+    grava_registro in bancos.c): an invalid record reads as DUAL, MDF-C Name and C on channel 1,
+    and a value out of range reads as its default (watch_le_tudo).
+
+    Only mode, MDF-C and C's channel are CHIRP's. Whether C is on side B, and B's channel while it
+    is, belong to the radio: the upload takes them from the radio, not from the image (merged()).
+    """
+
+    def __init__(self, radio):
+        self._radio = radio
+
+    def block(self):
+        return bytes(self._radio._mmap[WATCH_BASE:WATCH_BASE + EXT_BLOCK])
+
+    @staticmethod
+    def valid(block):
+        return (block[:4] == WATCH_MAGIC and _checksum(block[:WATCH_LEN - 2]) ==
+                struct.unpack('<H', block[WATCH_LEN - 2:WATCH_LEN])[0])
+
+    @staticmethod
+    def _record(block):
+        if _WatchStore.valid(block):
+            return bytearray(block[:WATCH_LEN])
+        return bytearray(WATCH_MAGIC + b'\x00' * (WATCH_LEN - 4))
+
+    @staticmethod
+    def _block(rec):
+        rec[WATCH_LEN - 2:WATCH_LEN] = struct.pack('<H', _checksum(bytes(rec[:WATCH_LEN - 2])))
+        return bytes(rec) + b'\xff' * (EXT_BLOCK - WATCH_LEN)   # the rest of the sector stays erased
+
+    def _set(self, offset, data):
+        rec = self._record(self.block())
+        rec[offset:offset + len(data)] = data
+        self._radio._mmap[WATCH_BASE] = self._block(rec)
+
+    def mode(self):
+        m = self._record(self.block())[4]
+        return m if m <= 2 else 0
+
+    def mdf_c(self):
+        m = self._record(self.block())[5]
+        return m if m <= 2 else 0
+
+    def channel_c(self):
+        c = struct.unpack('<H', self._record(self.block())[6:8])[0]
+        return c if c < NUM_CHANNELS else 0
+
+    def c_on_side_b(self):
+        return self._record(self.block())[8] != 0
+
+    def set_mode(self, mode):
+        self._set(4, bytes([mode]))
+
+    def set_mdf_c(self, mdf):
+        self._set(5, bytes([mdf]))
+
+    def set_channel_c(self, channel):
+        self._set(6, struct.pack('<H', channel))
+
+    def merged(self, in_radio):
+        """The block to upload: this image's mode, MDF-C and C channel over the radio's current
+        record (C on side B and B's channel). None if the image has no record of its own."""
+        if not self.valid(self.block()):
+            return None
+        mine = self._record(self.block())
+        rec = self._record(in_radio)
+        rec[4:8] = mine[4:8]
+        return self._block(rec)
+
+
 class BJ8300Bank(chirp_common.NamedBank):
     """One of the 16 banks: the name lives in the bank's own sector, in the radio."""
 
@@ -330,6 +416,24 @@ class _BankCableMixin(object):
             for block in range(BLOCKS_PER_SECTOR):
                 self._write_extended(address + block * EXT_BLOCK,
                                      data[block * EXT_BLOCK:(block + 1) * EXT_BLOCK])
+
+    def _upload_watch(self):
+        """Writes the WATCH record only when this image has one and it changes the radio's.
+
+        An image with no record of its own (saved before this driver read WATCH) leaves the
+        radio's alone. The block is read back: up to v45 the firmware ignores an extended write
+        outside the banks (and still acknowledges it), so without this the upload would look fine
+        and WATCH would not change.
+        """
+        in_radio = self._read_extended(WATCH_SECTOR)
+        data = _WatchStore(self).merged(in_radio)
+        if data is None or data == in_radio:
+            return
+        self._write_extended(WATCH_SECTOR, data)
+        if self._read_extended(WATCH_SECTOR) != data:
+            raise errors.RadioError(
+                'The radio did not keep WATCH, CH-C and MDF-C: they need the BJ8300_BANK firmware '
+                'v46 or later. Channels, settings and banks were written.')
 
 
 # --- roger: the banks firmware adds BEEP 2 and COIN ---
@@ -482,6 +586,8 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             'many banks as you like. Double-click a bank\'s column header to rename it. Each\n'
             'bank\'s name, channel count and on/off switch are also in Settings > Banks.\n'
             '\n'
+            'WATCH, CH-C and MDF-C are in Settings > Watch (they need firmware v46 or later).\n'
+            '\n'
             'Keep a copy of your first download before changing anything.')
         rp.pre_upload = (
             'The upload rewrites the radio\'s 16 bank sectors from this image: a bank that is\n'
@@ -495,10 +601,11 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         return rp
 
     def process_mmap(self):
-        # An image that does not have the banks area yet (e.g. saved by the RT-920 driver) gets
-        # the space, erased: that way the bank editor opens empty instead of blowing up.
-        if self._mmap is not None and len(self._mmap) < BLOB_BASE + BLOB_SIZE:
-            missing = BLOB_BASE + BLOB_SIZE - len(self._mmap)
+        # An image that does not have the banks area or the WATCH block yet (e.g. saved by the
+        # RT-920 driver, or by this one before WATCH) gets the space, erased: that way the bank
+        # editor opens empty instead of blowing up, and the upload leaves the radio's WATCH alone.
+        if self._mmap is not None and len(self._mmap) < IMAGE_SIZE:
+            missing = IMAGE_SIZE - len(self._mmap)
             self._mmap = memmap.MemoryMapBytes(self._mmap.get_packed() + b'\xff' * missing)
         super().process_mmap()
 
@@ -514,7 +621,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         try:
             data = radtel_rt900.do_download(self)      # opens the session; stock channels/settings
             self._check_firmware()
-            blob = self._download_banks()
+            blob = self._download_banks() + self._read_extended(WATCH_SECTOR)
         except errors.RadioError:
             raise
         except Exception:
@@ -539,12 +646,15 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
 
     def sync_out(self):
         self._memobj.settings.zone_or_channel = 1  # Full Channel: no zones (see the class top)
+        if _WatchStore(self).mode() == WATCH_SINGLE:
+            self._memobj.settings.tdr = 0          # the firmware's rule: no dual watch in SINGLE
         _BankStore(self).disable_empty()           # never upload an enabled bank with no channel
         try:
             radtel_rt900._enter_programming_mode(self)
             self._check_firmware()                 # before writing anything
             self._upload_stock()
             self._upload_banks()
+            self._upload_watch()
         except errors.RadioError:
             raise
         except Exception:
@@ -578,7 +688,57 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         if not _remove_setting(settings, 'settings_language'):
             LOG.warning('language setting not found in the base class')
         settings.append(self._bank_settings())
+        settings.append(self._watch_settings())
         return settings
+
+    def _watch_settings(self):
+        """Settings > Watch: WATCH, CH-C and MDF-C, as the radio's menu items. Each one is only
+        written when it was changed on this page, like the bank settings."""
+        store = _WatchStore(self)
+        group = RadioSettingGroup('watch', 'Watch')
+
+        rs = RadioSetting('watch_mode', 'Watch (WATCH)', RadioSettingValueList(
+            WATCH_OPTIONS, current_index=WATCH_VALUES.index(store.mode())))
+        rs.set_doc('How many frequencies the main screen shows. SINGLE: only the one in focus, full '
+                   'screen, and dual watch stays off (the upload turns TDR off). DUAL: A and B, as '
+                   'stock. TRIPLE: A, B and a third one, C (the channel below); the A/B key goes '
+                   'A, B, C. In DUAL and TRIPLE, TDR on listens to all of them, each for the same '
+                   'time, and TDR off only to the one in focus. Needs firmware v46 or later.')
+        rs.set_apply_callback(self._apply_watch_mode)
+        group.append(rs)
+
+        value = RadioSettingValueInteger(1, NUM_CHANNELS, store.channel_c() + 1)
+        if store.c_on_side_b():
+            value.set_mutable(False)
+            doc = ('C is in focus on the radio right now (TRIPLE, on side B), and the radio keeps '
+                   'the channel it ends on there. Change it with the radio\'s arrows, or press A/B '
+                   'on the radio to move on to A and download again.')
+        else:
+            doc = ('The memory channel shown and watched as C in TRIPLE. An empty channel is '
+                   'skipped: TRIPLE then works as DUAL.')
+        rs = RadioSetting('watch_channel_c', 'C channel (CH-C)', value)
+        rs.set_doc(doc)
+        rs.set_apply_callback(self._apply_watch_channel_c)
+        group.append(rs)
+
+        rs = RadioSetting('watch_mdf_c', 'Memory Display Format C (MDF-C)', RadioSettingValueList(
+            radtel_rt900.MDF_LIST, current_index=store.mdf_c()))
+        rs.set_doc('How C is shown in TRIPLE, like MDF-A and MDF-B.')
+        rs.set_apply_callback(self._apply_watch_mdf_c)
+        group.append(rs)
+        return group
+
+    def _apply_watch_mode(self, setting):
+        if setting.value.changed():
+            _WatchStore(self).set_mode(WATCH_VALUES[WATCH_OPTIONS.index(str(setting.value))])
+
+    def _apply_watch_channel_c(self, setting):
+        if setting.value.changed() and setting.value.get_mutable():
+            _WatchStore(self).set_channel_c(int(setting.value) - 1)
+
+    def _apply_watch_mdf_c(self, setting):
+        if setting.value.changed():
+            _WatchStore(self).set_mdf_c(radtel_rt900.MDF_LIST.index(str(setting.value)))
 
     def _bank_settings(self):
         """Settings > Banks: one block per bank (Name, Channels, Enabled) and the selected bank.

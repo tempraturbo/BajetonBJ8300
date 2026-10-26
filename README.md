@@ -236,6 +236,9 @@ depois **OK** para ler.
   Banco sem nenhum canal gravado **não liga**: se você marcar, o CHIRP desmarca na hora. E tirar
   o último canal de um banco o desliga sozinho. No fim da página, **Bank edited by the radio
   menu** escolhe o banco em que os itens `BANK NAME` e `BANK CH` do rádio mexem.
+- **Settings → Watch** (firmware v46 em diante): o **WATCH** (SINGLE, DUAL ou TRIPLE), o canal da C
+  (**CH-C**) e o **MDF-C**, como os itens do menu do rádio. Com a C em evidência no rádio, o CH-C
+  fica só de leitura: mude pelas setas do rádio, ou aperte A/B nele e baixe de novo.
 - **Memories (FM / AM / HF):** as outras faixas, como no driver de fábrica.
 
 > [!NOTE]
@@ -291,6 +294,9 @@ acrescenta:
   os setores que mudaram.
 - O roger com as quatro opções do rádio e o scramble com as nove, gravando os mesmos valores que o
   menu do rádio grava.
+- O grupo **Settings → Watch**, gravado no registro do WATCH (`0xD2000`). O upload só grava o
+  registro quando ele muda e confere lendo de volta, e o estado do rádio (a C no lado B e o canal
+  do B) vem do rádio, não da imagem. SINGLE desliga o TDR, como no firmware.
 - **Sem zonas:** todo upload grava **Full Channel** (`0x9028` = 1), porque o modo zona continua no
   firmware e, sem o item de menu, o rádio não teria como sair dele — em modo zona o sobe/desce fica
   preso em 64 canais.

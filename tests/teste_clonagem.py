@@ -12,8 +12,9 @@ um radio que responde do jeito que o firmware responde, lido no desmontado:
     fabrica responde com (tam + 4) & 0xFF bytes: 0x01E4BB6E..0x01E4BB78);
   - 'W' end16 tam + 64 bytes: grava (decifrando abaixo de 0xF000) e responde ACK;
   - FIRMWARE DOS BANCOS: tam com o bit 7 ligado = endereco de 24 bits, bloco de 64 bytes crus, e a
-    resposta sai com tam = 0x40 (o gancho do cabo troca o byte); gravacao so em 0xC1000..0xD1FFF,
-    apagando o setor quando o bloco o abre;
+    resposta sai com tam = 0x40 (o gancho do cabo troca o byte); gravacao so em 0xC1000..0xD2FFF
+    (ate a v45, 0xD1FFF: fora dela o bloco e ignorado e o ACK sai assim mesmo), apagando o setor
+    quando o bloco o abre;
   - FIRMWARE DE FABRICA: o mesmo comando vira endereco truncado em 16 bits, e a resposta tem
     4 + tam bytes (mais de 128) - 64 de dados e o resto do que estiver no buffer;
   - 'E' (os dois firmwares): responde ACK (0x01E4C0D0 -> 0x01E416C4) e poe a sessao no estado 3,
@@ -33,7 +34,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RAIZ, 'tests'))
 
 try:
-    from chirp import errors
+    from chirp import errors, memmap
     from chirp.drivers import baofeng_uv17Pro, radtel_rt900
 except ImportError:
     print('chirp nao instalado - nada a testar aqui (o teste_bj8300.py cobre o resto)')
@@ -48,8 +49,9 @@ ACK = b'\x06'
 class RadioSimulado(object):
     """O lado do radio no cabo. Guarda o espaco de 64 KB do protocolo e o chip de dados de 1 MB."""
 
-    def __init__(self, bancos, espaco=None, chip=None):
+    def __init__(self, bancos, espaco=None, chip=None, fim_gravacao=0x0D3000):
         self.bancos = bancos                       # True = firmware BJ8300_BANK
+        self.fim_gravacao = fim_gravacao           # v46: 0xD3000 (com o WATCH); ate a v45, 0xD2000
         self.espaco = bytearray(espaco or b'\x00' * 0x10000)
         self.chip = bytearray(chip or b'\xff' * 0x100000)
         self.saida = bytearray()
@@ -150,7 +152,7 @@ class RadioSimulado(object):
         if tam & 0x80 and self.bancos:
             self.comandos_estendidos += 1
             endereco = ((tam & 0x7F) << 16) | end16
-            if 0x0C1000 <= endereco < 0x0D2000:
+            if 0x0C1000 <= endereco < self.fim_gravacao:
                 if endereco & 0xFFF == 0:
                     self.chip[endereco:endereco + 0x1000] = b'\xff' * 0x1000
                 self.chip[endereco:endereco + 64] = dados
@@ -182,6 +184,7 @@ def chip_com_bancos():
     for n, nome, canais in ((0, 'test', [42]), (2, 'bnk', [41, 100])):
         chip[0x0C2000 + n * 0x1000:0x0C2000 + n * 0x1000 + bj.RECORD_LEN] = \
             registro_banco(nome, canais)
+    chip[0x0D2000:0x0D2040] = real.registro_watch(2, 1, 4)      # TRIPLE, a C no canal 5, Frequency
     return bytes(chip)
 
 
@@ -223,8 +226,9 @@ def main():
     sim = RadioSimulado(True, espaco_de_fabrica(0), chip_com_bancos())
     radio = baixa(sim)
     modelo = radio.get_bank_model()
-    confere('1. imagem = parte de fabrica + area dos bancos',
-            len(radio._mmap), bj.BLOB_BASE + bj.BLOB_SIZE)
+    confere('1. imagem = parte de fabrica + area dos bancos + o bloco do WATCH',
+            len(radio._mmap), bj.BLOB_BASE + bj.BLOB_SIZE + 64)
+    confere('1h. WATCH, CH-C e MDF-C lidos pelo cabo', real.watch_de(radio), ('TRIPLE', 5, 'Frequency', True))
     confere('1b. nomes dos bancos lidos pelo cabo',
             [b.get_name() for b in modelo.get_mappings()][:3], ['test', 'BANK 2', 'bnk'])
     confere('1c. canais do banco 3 (41 e 100 no radio = 42 e 101 no CHIRP)',
@@ -284,6 +288,46 @@ def main():
             (m2.get_mappings()[4].get_name(),
              [m.number for m in m2.get_mapping_memories(m2.get_mappings()[4])]),
             ('BANDA 2M', [500]))
+
+    # ---------- 6. WATCH (v46): so o bloco que muda, com o que e do radio vindo do radio ----------
+    radio3 = baixa(sim)
+    # depois do download, a C vai para o lado B no radio (tecla A/B): isso e do radio, nao da imagem
+    sim.chip[0x0D2000:0x0D2040] = real.registro_watch(2, 1, 4, 1, 7)
+    real.muda_watch(radio3, watch_mode='SINGLE')
+    radio3._memobj.settings.tdr = 1
+    sim.gravacoes_estendidas = []
+    sobe(radio3, sim)
+    confere('6. upload com o WATCH mudado grava so o bloco dele', sim.gravacoes_estendidas, [0x0D2000])
+    confere('6b. SINGLE da imagem, a C no lado B e o canal do B vindos do radio',
+            bytes(sim.chip[0x0D2000:0x0D2040]), real.registro_watch(1, 1, 4, 1, 7))
+    confere('6c. SINGLE desliga o TDR no upload (0x9004 bit 0)', sim.espaco[0x9004] & 1, 0)
+    sim.gravacoes_estendidas = []
+    sobe(radio3, sim)
+    confere('6d. de novo, sem mudanca: nada gravado', sim.gravacoes_estendidas, [])
+
+    # firmware ate a v45: a janela do cabo para em 0xD1FFF, o bloco e ignorado com ACK
+    velho = RadioSimulado(True, espaco_de_fabrica(0), chip_com_bancos(), fim_gravacao=0x0D2000)
+    radio4 = baixa(velho)
+    real.muda_watch(radio4, watch_mode='DUAL')
+    try:
+        sobe(radio4, velho)
+        confere('6e. firmware ate a v45: o upload do WATCH avisa', 'aceitou', 'avisou')
+    except errors.RadioError as e:
+        confere('6e. firmware ate a v45: o upload do WATCH avisa que precisa da v46', 'v46' in str(e), True)
+    confere('6f. e os canais e ajustes foram gravados antes', velho.gravacoes_normais > 0, True)
+    confere('6g. e o WATCH do radio ficou como estava', bytes(velho.chip[0x0D2000:0x0D2040]),
+            real.registro_watch(2, 1, 4))
+
+    # imagem salva antes do WATCH (sem o bloco): o upload nao toca no do radio
+    radio5 = bj.BJ8300(memmap.MemoryMapBytes(radio.get_mmap().get_packed()[:bj.WATCH_BASE]))
+    radio5.status_fn = lambda s: None
+    real.muda_watch(radio5)                                     # a pagina aberta e aplicada sem mudanca
+    antes = bytes(sim.chip[0x0D2000:0x0D2040])
+    sim.gravacoes_estendidas = []
+    sobe(radio5, sim)
+    confere('6h. imagem sem o bloco do WATCH: o do radio fica', (0x0D2000 in sim.gravacoes_estendidas,
+                                                              bytes(sim.chip[0x0D2000:0x0D2040]) == antes),
+            (False, True))
 
     # ---------- 5. firmware de fabrica: recusa com a mensagem certa, sem gravar estendido ----------
     fab = RadioSimulado(False, espaco_de_fabrica(1))
