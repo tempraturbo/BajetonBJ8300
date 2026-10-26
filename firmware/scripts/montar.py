@@ -14,8 +14,8 @@ O que faz:
   3. troca as chamadas (e a instrucao do espectro) em que os ganchos entram: partida, scan, cabo,
      realce, limpeza e teclas do espectro; desvia a entrada das treze rotinas da tela principal para
      a tela B (TELA_DESVIOS); inverte as setas do menu e revisa os textos;
-  4. grava o espectro no espaco das vozes (so no C0 e no C1) e a tela B no lugar do decodificador
-     G.729, dentro do app.bin, zerando o tipo dele no registro dos decodificadores;
+  4. grava o espectro no espaco das vozes (so no C0 e no C1) e a tela B no lugar dos decodificadores
+     G.729 e MP3, dentro do app.bin, zerando o tipo dos dois no registro dos decodificadores;
   5. recalcula todos os CRCs e escreve o .anc.
 
 Dentro do app.bin so muda o que esta na lista de escritas, que passa pela trava antes; o
@@ -79,27 +79,37 @@ NAS_VOZES = ('gancho_tecla_espectro', 'gancho_espectro', 'gancho_registra', 'gan
              'espectro_rotulos')
 VOZES_ACEITAS_FIM = 0x01E79BCA          # o fim do C1: o .vozes nao passa dele
 
-# O decodificador G.729 (v36): o das vozes .wtg, que nao tocam mais. Codigo e tabelas dele ocupam
-# G729..G729_FIM, dentro do app.bin, e ali mora o tela.o (secao .g729 do bancos.ld). Provado no
-# desmontado de fabrica (docs/engenharia-reversa.md, secao 16):
-#  - a unica porta e o registro dos decodificadores (G729_REGISTRO, 3 de 68 B), lido so pelas duas
-#    buscas 0x01E2F1D2 (tipo exato) e 0x01E2F2CE (mascara), que so chamam um decodificador cujo
-#    tipo bate com o pedido;
-#  - o tipo 0x40 so e pedido pelo tocador de sons (0x01E40318) para arquivo que nao e .sin: a
-#    extensao vira tipo pela tabela 0x01E60D40 (wtg = 0x40), e o .sin vai ao decodificador 0x100;
-#    no diretorio de sons, os unicos que nao sao .sin sao as vozes;
+# Os decodificadores G.729 e MP3 (v36 e v37). O G.729 e o das vozes .wtg, que nao tocam mais; o MP3
+# nao tem arquivo nenhum para tocar. Codigo e tabelas dos dois ocupam, colados, LIVRE..LIVRE_FIM,
+# dentro do app.bin, e ali mora o tela.o (secao .livre do bancos.ld). Provado no desmontado de
+# fabrica (docs/engenharia-reversa.md, secao 16):
+#  - a unica porta e o registro dos decodificadores (3 de 68 B a partir de 0x01E34838), lido so
+#    pelas duas buscas 0x01E2F1D2 (tipo exato) e 0x01E2F2CE (mascara), que so chamam um
+#    decodificador cujo tipo bate com o pedido;
+#  - o tipo e pedido so pelo tocador de sons (0x01E40318): o .sin vai ao decodificador 0x100, e
+#    qualquer outro arquivo pelo tipo da extensao, na tabela 0x01E60D40 (wtg = 0x40, mp3 = 0x01;
+#    extensao desconhecida = 0x40). No diretorio de sons, os unicos que nao sao .sin sao as vozes;
 #  - nenhum desvio, imediato ou valor de 32 bits de fora da faixa aponta para dentro dela, a nao
-#    ser o registro (os dez "desvios" que o desmontador mostra sao tabela que nada alcanca).
-# A trava a mais: o tipo do G.729 no registro vira 0, que nenhuma das buscas casa (a exata recebe
-# sempre um bit so; a de mascara exige tipo & mascara != 0). Assim ele nao e escolhido nem por um
-# caminho que tenha escapado do mapa - um pedido de .wtg sai pelo "sem decodificador" de fabrica.
-G729, G729_FIM = 0x01E257E0, 0x01E278C8
-G729_REGISTRO = 0x01E34838
-G729_TIPO_ANTES, G729_TIPO_DEPOIS = bytes.fromhex('40000000'), bytes(4)
-G729_ENTRADAS = (0x01E257E0, 0x01E25838, 0x01E2587E, 0x01E258C8)   # os 4 primeiros ponteiros do registro
+#    ser o registro. Os "desvios" que o desmontador mostra la de fora sao tabela que nada alcanca, e
+#    o valor que cai dentro, em 0x01E05AD4, e uma instrucao (CODIFICACOES_FORA).
+# A trava a mais: o tipo dos dois no registro vira 0, que nenhuma das buscas casa (a exata recebe
+# sempre um bit so; a de mascara exige tipo & mascara != 0). Assim eles nao sao escolhidos nem por
+# um caminho que tenha escapado do mapa - um pedido de .wtg ou .mp3 sai pelo "sem decodificador" de
+# fabrica.
+LIVRE, LIVRE_FIM = 0x01E257E0, 0x01E2EFC4
+# (registro, tipo de fabrica, os 4 primeiros ponteiros, o que e). O primeiro ponteiro do G.729 e a
+# entrada da faixa; o MP3 comeca em 0x01E278C8, logo depois do G.729.
+DECODIFICADORES = (
+    (0x01E34838, 0x40, (0x01E257E0, 0x01E25838, 0x01E2587E, 0x01E258C8), 'G.729 (wtg)'),
+    (0x01E3487C, 0x01, (0x01E2EC52, 0x01E2ECBE, 0x01E2ED60, 0x01E2ED9A), 'MP3'),
+)
+TAM_REGISTRO = 68
+# Bytes de fora da faixa que, lidos como 32 bits, caem dentro dela sem serem ponteiro: (endereco,
+# bytes, o que e). O conferir.py exige os bytes exatos, para a excecao nao esconder ponteiro nenhum.
+CODIFICACOES_FORA = ((0x01E05AD4, bytes.fromhex('87e8e201'), 'a instrucao "if (r0 != r7) goto -60"'),)
 
 # A tela principal B (v35, src/tela.c): treze rotinas de fabrica que desenham a tela de dois VFOs
-# ganham um desvio de 4 bytes na entrada (goto para o desvio_* do tela.c, no lugar do G.729). O
+# ganham um desvio de 4 bytes na entrada (goto para o desvio_* do tela.c, na faixa .livre). O
 # desvio chama o gancho em C (b_*) com os argumentos da rotina; se ele desenhou a tela B, volta a quem
 # chamou com r0..r3 intactos; se nao, refaz as instrucoes de fabrica que o goto cobriu e segue a
 # rotina. (entrada, bytes de fabrica cobertos - instrucoes inteiras, sem nada relativo ao endereco -,
@@ -119,19 +129,76 @@ TELA_DESVIOS = (
     (0x01E3B2C4, bytes.fromhex('7a04e29c'), 'desvio_informacoes', 'b_lado', 'a linha de informacoes'),
     (0x01E3B592, bytes.fromhex('7c04e29c'), 'desvio_medidor', 'b_medidor', 'o medidor (RX)'),
     (0x01E40F1C, bytes.fromhex('7604e29e'), 'desvio_transmissao', 'b_transmissao', 'a transmissao (inicio e fim)'),
+    # v37, as outras telas (src/telas.c): o radio (modo de tela 2) - o redesenho inteiro, a
+    # frequencia, o nome, o medidor S e os ajustes - e o scan QT (modo 17)
+    (0x01E44FB0, bytes.fromhex('7704e29b'), 'desvio_radio', 'b_radio', 'o radio inteiro'),
+    (0x01E449BA, bytes.fromhex('7904e29a'), 'desvio_radio_freq', 'b_radio_freq', 'a frequencia do radio'),
+    (0x01E44B28, bytes.fromhex('7504e295'), 'desvio_radio_nome', 'b_radio_nome', 'o nome da memoria do radio'),
+    (0x01E45198, bytes.fromhex('7b04e29c'), 'desvio_radio_sinal', 'b_radio_sinal', 'o medidor S do radio'),
+    (0x01E44C68, bytes.fromhex('7d04e299'), 'desvio_radio_ajustes', 'b_radio_ajustes', 'a seta e os ajustes do radio'),
+    (0x01E45A82, bytes.fromhex('7604e29a'), 'desvio_scanqt', 'b_scanqt', 'o scan QT (titulo e estado)'),
+    # v38: a frequencia do radio sendo digitada (os digitos e o MHz de fabrica ficavam por cima)
+    (0x01E49078, bytes.fromhex('7704e29b'), 'desvio_radio_digita', 'b_radio_digita', 'a frequencia digitada no radio'),
+    # v38: o editor de nome (tipo 7 editando) - o indicador do modo, que desenha o editor inteiro, e a
+    # moldura direto no LCD (0x01E4865C le a cor da pilha de quem chama: o desvio so a le se voltar a
+    # rotina de fabrica, com a pilha ja como estava)
+    (0x01E48720, bytes.fromhex('7604e29c'), 'desvio_editor_modo', 'b_editor_modo', 'o editor de nome (indicador do modo)'),
+    (0x01E4865C, bytes.fromhex('7e042916'), 'desvio_editor_quadro', 'b_editor_quadro', 'a moldura do editor (direto no LCD)'),
 )
+# Os ajustes do radio (0x01E44C68) gravam o valor alem de desenhar: o gancho chama a de fabrica
+# inteira por aqui (os bytes que o desvio cobre e a volta) e depois desenha.
+AJUSTES_FABRICA = ('radio_ajustes_fabrica', 0x01E44C68)
+
+# Chamadas do envia() de fabrica (0x01E3ADBC) que passam a chamar um gancho da tela B (src/tela.c),
+# que desenha a faixa dela no lugar ou, fora da tela dela, chama o envia() como antes. (sitio,
+# gancho, o que e.) Todas conferidas no desmontado de fabrica: 4 bytes de "call envia".
+ENVIA_ERA = 0x01E3ADBC
+ENVIA_SITIOS = (
+    # v37: o motor de menus (0x01E489E0), o titulo e cada linha
+    (0x01E48E82, 'gancho_menu_titulo', 'menu: titulo do item'),
+    (0x01E48ECA, 'gancho_menu_linha', 'menu: cada linha de opcao'),
+    # v37: "Radio Initialization / Please Wait..." na partida do radio (0x01E4A780..0x01E4A7D4, com o
+    # modo de tela ja em 2, gravado em 0x01E4A612)
+    (0x01E4A7D4, 'gancho_radio_inicio', 'espera da partida do radio'),
+    # v38: a piscada do menu no laco do sinal - o numero do item e, editando, a linha do cursor na
+    # fonte de fabrica (0x01E47062, 0x01E47290, 0x01E472EA, 0x01E47332 e o cursor do editor de nome)
+    (0x01E476E4, 'gancho_menu_pisca', 'menu: piscada do laco do sinal'),
+    # v38: os dois envia() dos ajustes do radio (0x01E44C68), que o gancho dela roda e depois redesenha
+    (0x01E44CA8, 'gancho_radio_mudo', 'radio: a seta dos ajustes de fabrica'),
+    (0x01E44FA8, 'gancho_radio_mudo', 'radio: a fileira dos ajustes de fabrica'),
+    # v38: o "SEEK..." que a interface escreve no lugar da frequencia (0x01E4D3D4..0x01E4D3F8)
+    (0x01E4D3F8, 'gancho_radio_seek', 'radio: SEEK...'),
+    # v38: a troca de modulacao (set do item Modulation do menu do radio, 0x01E3DE52): o titulo em
+    # chines e em ingles; o "Please Wait..." depois dele vira nop (NOP_SITIOS)
+    (0x01E3DEBE, 'gancho_radio_inicio', 'radio: troca de modulacao (chines)'),
+    (0x01E3DEEA, 'gancho_radio_inicio', 'radio: troca de modulacao'),
+    # v38: a caixa do DTMF (tecla #, modo de tela 7): abrindo, nos dois lados, e a cada digito
+    (0x01E4DA88, 'gancho_dtmf', 'DTMF: a caixa'),
+    (0x01E4A93C, 'gancho_dtmf', 'DTMF: os digitos'),
+    # v38: a tensao na partida (0x01E55E9C, mensagem de partida em tensao)
+    (0x01E55F40, 'gancho_tensao', 'tensao na partida'),
+    # v38: a linha do texto do editor de nome ("%15s" em y 110), que o desvio do indicador ja desenhou
+    (0x01E48FE0, 'gancho_editor_linha', 'editor de nome: a linha do texto'),
+)
+# Chamadas do envia() de fabrica que viram dois nop (00 00, o de 0x01E0019A): o que elas mandariam
+# ja esta na tela B. (sitio, o que e.)
+NOP_SITIOS = (
+    (0x01E3DF10, 'radio: o "Please Wait..." da troca de modulacao, ja na espera da tela B'),
+)
+NOP = bytes.fromhex('00000000')
+ENVIA_GANCHOS = tuple(sorted({g for _, g, _ in ENVIA_SITIOS}))
 TELA_SIMBOLOS = tuple(d for _, _, d, _, _ in TELA_DESVIOS) + tuple(sorted({g for _, _, _, g, _ in TELA_DESVIOS}))
 # O que o firmware chama no tela.o: os desvios, os ganchos e o envio e a limpeza da tela principal.
-NO_G729 = TELA_SIMBOLOS + ('gancho_envia', 'gancho_limpa')
+NA_LIVRE = TELA_SIMBOLOS + ('gancho_envia', 'gancho_limpa', 'radio_ajustes_fabrica') + ENVIA_GANCHOS
 
 PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho_tecla_espectro',
            'gancho_espectro', 'gancho_registra', 'gancho_avanca', 'gancho_janela', 'gancho_coluna', 'mostra_pico',
            'espectro_pontos', 'espectro_passo', 'espectro_rotulos',
-           'roger_le', 'roger_grava', 'roger_opcoes', 'roger_opcoes_cn', 'gancho_roger_tons',
+           'roger_le', 'roger_grava', 'roger_opcoes', 'gancho_roger_tons',
            'scramble_le', 'scramble_grava', 'scramble_freqs', 'scramble_valor', 'scramble_posicao',
-           'scramble_opcoes', 'scramble_opcoes_cn', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
+           'scramble_opcoes', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
            'gancho_partida', 'canal_exibe', 'canal_le', 'canal_grava',
-           'titulo_bank', 'titulo_nome', 'titulo_canal') + TELA_SIMBOLOS
+           'titulo_bank', 'titulo_nome', 'titulo_canal') + TELA_SIMBOLOS + ('radio_ajustes_fabrica',) + ENVIA_GANCHOS
 
 
 def codigo_ligado(elf, secao='.text'):
@@ -230,22 +297,25 @@ ZONE, ZONA_OU_CANAL, CH_NAME = 11, 10, 19
 # Itens de fabrica que NAO entram na copia, a pedido do usuario: o ZONE e o "Zone Or Channel"
 # (escolher entre navegar por zona ou por canal cheio), que sem o ZONE nao tem mais serventia. Com
 # eles fora, os 54 itens da tabela nova cabem exatamente nas 54 vagas da original (ver VAGAS).
-# O VOICE (indice 21, liga e desliga as vozes) sai tambem (v30): as vozes nao tocam mais.
-VOICE_ITEM = 21
-ITENS_FORA = (ZONA_OU_CANAL, ZONE, VOICE_ITEM)
+# O VOICE (indice 21, liga e desliga as vozes) sai tambem (v30): as vozes nao tocam mais. E o
+# LANGUAGE (indice 22, get 0x01E3C9A8 e set 0x01E3C9B8) sai na v37: o radio fica sempre em ingles, e
+# o gancho da partida zera o idioma (bancos.c).
+VOICE_ITEM, LANGUAGE_ITEM = 21, 22
+ITENS_FORA = (ZONA_OU_CANAL, ZONE, VOICE_ITEM, LANGUAGE_ITEM)
 # Itens de fabrica que ficam, mas com campos trocados na tabela nova. O ROGER (indice 20) ganha o
 # BEEP 2 e o BEEP 3: quantidade de opcoes 5 (o "maximo" de um item de lista e a quantidade de
-# opcoes - era 3), get e set nossos (posicao no menu <-> valor gravado) e as duas tabelas de nomes
-# das opcoes, em ingles e chines (as de fabrica moram na RAM, em 0x6E3C/0x6E30, com outros dados
-# colados depois - nao crescem no lugar). Detalhes no bancos.c.
+# opcoes - era 3), get e set nossos (posicao no menu <-> valor gravado) e a tabela de nomes das
+# opcoes (as de fabrica moram na RAM, em 0x6E3C/0x6E30, com outros dados colados depois - nao
+# crescem no lugar). Sem o chines (v37), o campo das opcoes em chines aponta a mesma tabela inglesa.
+# Detalhes no bancos.c.
 ROGER_ITEM = 20
 # O SCRAMBLE (indice 47) passa a ter 9 opcoes, OFF e de 2700 a 3400 Hz em ordem crescente, com get
 # e set nossos (posicao no menu <-> valor gravado; o set grava pelo de fabrica). Detalhes no bancos.c.
 SCRAMBLE_ITEM = 47
 ITENS_MUDADOS = {ROGER_ITEM: dict(maximo=5, get='roger_le', set='roger_grava',
-                                  exibe='roger_opcoes', opcoes_cn='roger_opcoes_cn'),
+                                  exibe='roger_opcoes', opcoes_cn='roger_opcoes'),
                  SCRAMBLE_ITEM: dict(maximo=9, get='scramble_le', set='scramble_grava',
-                                     exibe='scramble_opcoes', opcoes_cn='scramble_opcoes_cn')}
+                                     exibe='scramble_opcoes', opcoes_cn='scramble_opcoes')}
 
 # Na rotina que aplica o scramble (0x01E408E2), o trecho que escolhe a frequencia de inversao:
 #   0x01E4092E  40 21              r0 = 1
@@ -305,7 +375,11 @@ TEXTOS = [
     (0x01E5A60F, 'All', 'ALL'),
     (0x01E5AA81, 'RX Modulation', 'RX MODULATION'),
     # versao do firmware, que o item VERSION mostra (o hardware V01T32 fica como esta)
-    (0x01E5FD10, 'V0.12', 'V1.0T'),
+    (0x01E5FD10, 'V0.12', 'V2.0T'),
+    # a tensao de fora da tela B (0x01E4CEB8..0x01E4CF1C, depois da tela de um VFO de fabrica): o
+    # firmware escreve a tensao a partir da 8a posicao desta cadeia, e "   Voltage" perdia o "ge"
+    # ("   Volta8.1V"); com " VOLTAGE" a tensao entra depois do espaco (v38)
+    (0x01E60302, '   Voltage      ', ' VOLTAGE'),
     # o nome chines do item e 语音加密 (criptografia de voz): VOICEPRI engana
     (0x01E5A82F, 'VOICEPRI', 'ENCRYPT'),
 ]
@@ -563,7 +637,7 @@ def main():
 
     blob = open(codigo, 'rb').read()
     print(f'  .text ligado para {confere_ligacao(codigo, blob):#x} = onde o codigo e gravado: ok')
-    tela = secao_ligada(codigo, '.g729', G729, G729_FIM)
+    tela = secao_ligada(codigo, '.livre', LIVRE, LIVRE_FIM)
     vozes = secao_ligada(codigo, '.vozes', VOZES, VOZES_ACEITAS_FIM)
     tabela = monta_tabela(app)
 
@@ -592,8 +666,10 @@ def main():
     if REALCE:
         escritas += [(e, 4, f'gancho do realce ({o})') for e, o in REALCE_SITIOS_GANCHO]
     escritas += [(e, 4, f'tela B: {o}') for e, _, _, _, o in TELA_DESVIOS]
-    escritas += [(G729, len(tela), 'tela B no lugar do G.729'),
-                 (G729_REGISTRO, len(G729_TIPO_ANTES), 'tipo do G.729 no registro dos decodificadores')]
+    escritas += [(s_, 4, o_) for s_, _, o_ in ENVIA_SITIOS]
+    escritas += [(s_, 4, o_) for s_, o_ in NOP_SITIOS]
+    escritas += [(LIVRE, len(tela), 'tela B no lugar dos decodificadores G.729 e MP3')]
+    escritas += [(r, 4, f'tipo do {d} no registro dos decodificadores') for r, _, _, d in DECODIFICADORES]
     if TEXTOS_REVISADOS:
         escritas += [(e, len(v) + 1, f'texto "{v}"') for e, v, _ in TEXTOS]
     confere_trava(escritas)
@@ -752,20 +828,34 @@ def main():
             raise SystemExit(f'{entrada:#x} nao comeca com {antes.hex()}: {bytes(app[o:o + len(antes)]).hex()}')
         app[o:o + 4] = monta_goto(entrada, S[desvio])
         print(f'  tela B {entrada:#x} -> {desvio} ({S[desvio]:#x}): {oque}')
+    for sitio, gancho, oque in ENVIA_SITIOS:
+        o = sitio - BASE_APP
+        if bytes(app[o:o + 4]) != monta_call(sitio, ENVIA_ERA):
+            raise SystemExit(f'{sitio:#x} nao e a chamada do envia(): {bytes(app[o:o + 4]).hex()}')
+        app[o:o + 4] = monta_call(sitio, S[gancho])
+        print(f'  {sitio:#x}: envia() -> {gancho} ({oque})')
+    for sitio, oque in NOP_SITIOS:
+        o = sitio - BASE_APP
+        if bytes(app[o:o + 4]) != monta_call(sitio, ENVIA_ERA):
+            raise SystemExit(f'{sitio:#x} nao e a chamada do envia(): {bytes(app[o:o + 4]).hex()}')
+        app[o:o + 4] = NOP
+        print(f'  {sitio:#x}: envia() -> nop ({oque})')
 
-    # 4b3. o tela.o no lugar do G.729, e o G.729 fora do registro dos decodificadores. Antes, confere
-    # que a faixa e o registro sao os de fabrica: o registro comeca com o tipo 0x40 e as quatro
-    # primeiras rotinas dele, e a primeira e a entrada da faixa.
-    o = G729_REGISTRO - BASE_APP
-    registro = struct.unpack_from('<5I', app, o)
-    if bytes(app[o:o + 4]) != G729_TIPO_ANTES or registro[1:] != G729_ENTRADAS or G729_ENTRADAS[0] != G729:
-        raise SystemExit(f'{G729_REGISTRO:#x} nao e o registro do G.729 de fabrica: '
-                         + ' '.join(f'{x:#x}' for x in registro))
-    app[o:o + 4] = G729_TIPO_DEPOIS
-    o = G729 - BASE_APP
+    # 4b3. o tela.o na faixa dos decodificadores G.729 e MP3, e os dois fora do registro. Antes,
+    # confere que cada registro e o de fabrica: o tipo e as quatro primeiras rotinas.
+    for registro, tipo, entradas, oque in DECODIFICADORES:
+        o = registro - BASE_APP
+        campos = struct.unpack_from('<5I', app, o)
+        if campos != (tipo,) + entradas:
+            raise SystemExit(f'{registro:#x} nao e o registro do {oque} de fabrica: '
+                             + ' '.join(f'{x:#x}' for x in campos))
+        app[o:o + 4] = bytes(4)
+        print(f'  tipo do {oque} no registro {registro:#x}: {tipo:#x} -> 0')
+    if DECODIFICADORES[0][2][0] != LIVRE:
+        raise SystemExit(f'a faixa livre nao comeca na entrada do G.729 ({DECODIFICADORES[0][2][0]:#x})')
+    o = LIVRE - BASE_APP
     app[o:o + len(tela)] = tela
-    print(f'  tela B: {len(tela)} B em {G729:#x} (cabem {G729_FIM - G729} no lugar do G.729); tipo do '
-          f'G.729 no registro {G729_REGISTRO:#x}: {G729_TIPO_ANTES.hex()} -> {G729_TIPO_DEPOIS.hex()}')
+    print(f'  tela B: {len(tela)} B em {LIVRE:#x} (cabem {LIVRE_FIM - LIVRE} no lugar do G.729 e do MP3)')
 
     # 4c. diagnostico das faixas: so a cor do preenchimento, 2 bytes por sitio
     if REALCE_DIAG:

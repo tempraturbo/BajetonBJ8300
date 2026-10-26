@@ -5,6 +5,83 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v39 — 26/10 — o editor de nome na tela B, âmbar e TX vermelho 🧪 **em teste**
+
+O que o teste da v38 mostrou, corrigido. O menu `VERSION` mostra `Firmware: V2.0T`, a pedido do
+dono, desde a v38.
+
+- **O editor de nome (BANK NAME e CH-NAME) na tela B.** O título fica em cima, e à direita vai um
+  chip âmbar com o modo (`abc`, `ABC` ou `123`, trocado pelo `#`). O texto aparece num cartão de
+  borda verde, em 2x se couber, com o cursor âmbar no fim e quantos caracteres de quantos. O motor
+  de menus chama o indicador do modo (`0x01E48720`) em toda passada do editor, e é ele que desenha o
+  editor inteiro: ao abrir, a limpeza de fábrica (`0x01E49B1C`) acabou de apagar tudo. A moldura
+  que o firmware desenha direto no LCD (`0x01E4865C`) e a linha do texto (`0x01E48FE0`) não vão
+  mais à tela. Detalhes na [seção 13 do mapa da tela](mapa-da-tela.md#13-as-outras-telas-v37-a-v39).
+- **Banco ligado e canal no banco em âmbar**, no lugar do verde, que mal se via. O " IN" do
+  BANK CH saiu, como o " ON" do BANK já tinha saído.
+- **TX:** o chip da barra de cima ganhou a bolinha, como o RX, em vermelho, e a barra de sinal
+  inteira fica nesse vermelho durante a transmissão (era âmbar).
+- **`conferir.py`:** a `4g` só lê instrução dentro das funções (o tamanho de cada uma vem da
+  tabela de símbolos do ELF) e dos desvios. A `.rodata` do `tela.o` fica intercalada com o código,
+  e a cadeia dos ícones `abc` aparecia como um `goto` para fora.
+
+**Ainda aberto:** o rádio trava ao trocar a modulação de AM ou FM para USB ou LSB, e é preciso
+desligar. O que foi descartado está na v38.
+
+## v38 — 26/10 — o que a v37 mostrou ✔️ testada, com defeitos
+
+Testada no rádio. As correções funcionaram. Ficaram de fora o editor de nome, ainda o de fábrica,
+o verde do banco ligado, pouco visível, e o travamento na troca para USB/LSB.
+
+- **Seis endereços de RAM do rádio estavam errados na v37.** O desmontado escreve `h[base+i<<1]`
+  para base + i × 2, e eles foram lidos como base + i: a frequência é `h[0x14CA6]` (não
+  `0x14993`), a banda `b[0x12A1B]`, o modo memória `b[0x129F9]`, os passos `b[0x12A6F]` e
+  `b[0x12A6E]` e o BFO `h[0x14CBC]`. A prévia não pegava, porque imita a RAM com os mesmos
+  endereços. O `conferir.py` ganhou a `4p`, que refaz cada endereço dos bytes de fábrica da rotina
+  que o lê.
+- **Menu:** a piscada de fábrica (o número do item em (133, 57) e, em edição, a linha do cursor na
+  fonte antiga) sai toda por um `envia()` do laço do sinal (`0x01E476E4`), que a tela B cala; o
+  valor em edição fica parado, com a borda verde e as setas. O marcador da linha
+  (`02 10`, dois espaços ou nada) é lido do conteúdo: o nome (tipo 7) e o "NONE" não têm, e o
+  BANK NAME perdia as duas primeiras letras ("MOTOROLA" virava "TOROLA").
+- **A fonte média**, de 9 px, no menu inteiro: a mesma letra, com cada coluna de haste ou vazia em
+  2 px e as outras em 1, e a 2ª e a 6ª linha em 2 px. "NOISE REDUCTION" cabe inteiro.
+- **Rádio:** a digitação da frequência (`0x01E49078`), o "SEEK..." (`0x01E4D3F8`) e a espera da
+  troca de modulação (o set do item Modulation, `0x01E3DE52`) na tela B. Os dois `envia()` dos
+  ajustes de fábrica ficam calados no modo rádio, e a fileira de fábrica parou de piscar.
+- **DTMF** (tecla `#`, modo de tela 7): uma caixa com contorno e texto âmbar no lugar do cartão
+  do lado em uso.
+- **Tensão na partida:** um cartão "VOLTAGE" no lugar de "Volta 8.1V". O firmware escrevia a tensão
+  sobre a 8ª posição de "   Voltage" e comia o "ge"; o texto de fábrica que sobra em outro lugar
+  virou " VOLTAGE".
+- **Os dois lados no banco:** desligar ou ligar um banco põe os dois lados num canal que vale, como
+  o DELCH de fábrica faz (`0x01E3C5D6..`: o canal de cada lado que saiu do mapa pula para o próximo,
+  e `0x01E3A812` recarrega os dois). Antes só o lado em evidência mudava.
+- **A pilha das chamadas por ponteiro.** Os get/set/exibe dos menus são chamados por ponteiro, e a
+  análise de pilha não os seguia. Medidos agora no ponto da chamada, ficam em até 652 B, abaixo dos
+  740 B de fábrica. Salvar um BANK NAME passava em 40 B desde a v35, porque a saída do editor
+  redesenha a tela inteira com a estrutura do banco ainda na pilha; a gravação foi separada.
+
+**Travamento na troca para USB/LSB** (já na v37): o patch do SSB que o rádio manda ao chip
+receptor (`0x01E64D40..0x01E68B18`, 15.832 B, enviado em `0x01E3DC42`) está igual ao de fábrica.
+O laço do sinal roda dentro da interface, sem concorrência com a carga. A causa não está provada,
+e o próximo passo é testar a v36, que não mexia no rádio.
+
+## v37 — 25/10 — as outras telas no tema B, sem chinês ✔️ testada, com defeitos
+
+Testada no rádio. O scan QT ficou bom; o menu, o rádio e a espera do rádio mostraram os defeitos
+corrigidos na v38.
+
+- **Menu, rádio, scan QT e espera do rádio no tema B**, desenhados pelo `firmware/src/telas.c` a
+  partir das rotinas de fábrica de cada um, sem gancho no `envia()` geral: assim avisos como
+  "Sure to Reset?" passam como os de fábrica.
+- **Sem chinês:** o item LANGUAGE saiu do menu, o gancho da partida põe o idioma em inglês, e as
+  opções em chinês dos itens apontam as tabelas em inglês.
+- **A faixa livre cresceu:** o decodificador de MP3 sai junto com o G.729
+  (`0x01E257E0..0x01E2EFC4`, 38.884 B; [seção 16](engenharia-reversa.md#16-o-g729-e-o-mp3-fora-v36-e-v37)).
+- **O medidor apagado mais claro**, para não se confundir com o preto, também no medidor S do
+  rádio.
+
 ## v36 — 25/10 — a tela B no lugar do G.729 ✅
 
 **Testada no rádio: gravou inteira e "funcionou tudo, perfeito".** O roteiro de teste foi o da
@@ -15,7 +92,7 @@ mesmo, ligado em outro endereço.
 
 - **A tela B mora no lugar do decodificador G.729**, o das vozes `.wtg`, que não tocam desde a
   v30: `0x01E257E0..0x01E278C8`, 8.424 B dentro do `app.bin`, dos quais a tela usa 5.636. A prova
-  de que ele nunca roda está na [seção 16](engenharia-reversa.md#16-o-g729-fora-v36).
+  de que ele nunca roda está na [seção 16](engenharia-reversa.md#16-o-g729-e-o-mp3-fora-v36-e-v37).
 - **O G.729 sai do registro dos decodificadores:** o tipo dele vai de `0x40` para 0, que nenhuma
   busca casa. Assim ele não é escolhido nem por um caminho que tenha escapado do mapa.
 - **Nas vozes fica só o espectro**, no C0 e no C1, byte a byte igual ao da v34. Em relação ao rádio

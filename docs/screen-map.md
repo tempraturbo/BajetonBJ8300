@@ -358,7 +358,7 @@ and the end of reception does not call the meter. While transmitting it is full 
 ## 12. Screen B (v35)
 
 Drawn by `firmware/src/tela.c`. Since v36 the code lives in place of the G.729 decoder, inside
-`app.bin` ([reverse engineering, section 16](reverse-engineering.md#16-g729-out-v36)); in v35 it was
+`app.bin` ([reverse engineering, section 16](reverse-engineering.md#16-g729-and-mp3-out-v36-and-v37)); in v35 it was
 in the voice space, and the loader refused to flash it. From the firmware it only uses
 `janela()` and `envia()`; rectangles and letters it writes into the video buffer of the open window
 itself. The whole scene is drawn in bands of up to 32 rows, and whatever falls outside the window is
@@ -372,8 +372,9 @@ a `goto` to a detour in `tela.c`. The detour:
 3. if the hook drew screen B, returns to the caller with r0..r3 untouched;
 4. if not, redoes the stock instructions the `goto` covered and carries on with the routine.
 
-Screen B only draws when `layout()` is not 0 and outside the Chinese language, which the font does
-not have. In the menus, the single-VFO screen and the spectrum the routines run as always.
+Screen B only draws when `layout()` is not 0. Up to v36 it also stayed out of the Chinese language,
+which the font does not have; since v37 the radio is always in English. The other screens are in
+section 13. On the single-VFO screen and the spectrum, the routines run as always.
 
 | Routine | Hook | What screen B redraws |
 |---|---|---|
@@ -398,8 +399,8 @@ not have. In the menus, the single-VFO screen and the spectrum the routines run 
 
 The stock screen's send and clear hooks (section 7) moved to `tela.c` too. With screen B active, the
 send hook redraws from screen B the side the window belongs to, and the clear does not run, because
-the whole screen follows right after. Without screen B (Chinese language) the old green highlight
-stays.
+the whole screen follows right after. Without screen B (`layout()` at 0) both do what the stock call
+did; the old green highlight, which only showed in the Chinese language, left in v37.
 
 **PC preview.** `firmware/previa/` compiles the same `tela.c` with the RAM, `janela()` and `envia()`
 imitated and saves the screen as PNG: `python -I previa/previa.py <folder>` (needs zig, from
@@ -409,3 +410,98 @@ imitated and saves the screen as PNG: `python -I previa/previa.py <folder>` (nee
 **Checked in the build** (`conferir.py`): 2b, 2d and 4g as before, now with the screen sites; 4m
 checks the 13 detours byte by byte (stock bytes, `goto`, detour and return); 4n, that there is no
 RAM section.
+
+## 13. The other screens (v37 to v39)
+
+Drawn by `firmware/src/telas.c`, which `tela.c` includes (the same `tela.o`, in the free range). The
+screen mode is `b[0x1533D]`: 0, 3 and 5 the two-VFO screen, 1 the menu, 2 the radio, 7 DTMF, 17 the
+QT scan and 20 the spectrum.
+
+**Each part comes in through the stock routine that draws it, never through the general
+`envia()`.** Prompts and confirmations ("Sure to Reset?") go through like the stock ones, and screen
+B's deep drawing only runs at those points. Where the stock routine both draws and stores state, the
+hook runs it whole and silences its `envia()`, instead of repeating the logic.
+
+| Where | How | Hook | What screen B does |
+|---|---|---|---|
+| `0x01E48E82`, `0x01E48ECA` (menu engine `0x01E489E0`) | `envia()` replaced | `gancho_menu_titulo`, `gancho_menu_linha` | the band of the title or of the row the engine built |
+| `0x01E476E4` (signal loop) | `envia()` replaced | `gancho_menu_pisca` | nothing in the menu: all of the stock blinking goes out through it |
+| `0x01E3B2C4`, the info line | detour | `b_lado` | in the menu and the QT scan, the summary of the highlighted side |
+| `0x01E48720`, the editor's mode indicator | detour | `b_editor_modo` | the whole name editor |
+| `0x01E4865C`, a frame straight to the LCD | detour | `b_editor_quadro` | nothing in the menu (it reads the color from the caller's stack: only the stock routine, with the stack restored, reads it) |
+| `0x01E48FE0`, the editor's text line | `envia()` replaced | `gancho_editor_linha` | nothing: the indicator detour already drew the text |
+| `0x01E44FB0`, the whole radio | detour | `b_radio` | the radio screen, after setting band > 4 and AM band > 3 to 0, as it does |
+| `0x01E449BA`, `0x01E44B28`, `0x01E45198` | detour | `b_radio_freq`, `b_radio_nome`, `b_radio_sinal` | the frequency, the memory name and the S-meter |
+| `0x01E44C68(item, value)`, the settings | detour | `b_radio_ajustes` | runs the stock one (it stores the value) and redraws; its two `envia()` calls (`0x01E44CA8`, `0x01E44FA8`) are silenced in mode 2 |
+| `0x01E49078`, the typed frequency | detour | `b_radio_digita` | the mask with the digits in place of the frequency |
+| `0x01E4D3F8`, "SEEK..." | `envia()` replaced | `gancho_radio_seek` | "SEEK..." in amber in place of the frequency |
+| `0x01E4A7D4` (entering the radio), `0x01E3DEBE` and `0x01E3DEEA` (modulation change) | `envia()` replaced | `gancho_radio_inicio` | the wait screen, full screen; the change's "Please Wait..." (`0x01E3DF10`) becomes a nop |
+| `0x01E45A82(running)`, the QT scan | detour | `b_scanqt` | the title and the state |
+| `0x01E4DA88`, `0x01E4A93C` (DTMF) | `envia()` replaced | `gancho_dtmf` | the DTMF box, in place of the card of the side in use |
+| `0x01E55F40` (power-on) | `envia()` replaced | `gancho_tensao` | the voltage card |
+
+**Menu.** The engine `0x01E489E0` builds the title at `0x15494` (26 B) and three rows at `0x154AF`
+(27 B each). Each row goes through `0x01E487BC(row, text, marker)`, which puts in front `02 10` (the
+stored value, marker 2), two spaces (another option, 1) or nothing (0: the type-7 name and "NONE");
+type 8 never has a marker. Screen B recognizes the marker by the content. The other data: item
+number `b[0x14BFA]`, cursor `b[0x14C10]`, editing `b[0x14BF9]` and type `b[0x14C00]` (0 and 4 to 6
+list, 2 tone with typing, 3 frequency, 7 name, 8 no marker, 13 signed number). BANK and BANK CH mark
+the option that is on with a `0x01` byte at the end, which screen B paints amber.
+
+**The blinking.** In the menu, the signal loop (`0x01E4622A`) counts `b[0x14C1A]` from 0 to 7, once
+per pass. At 4 it draws, at 0 it erases. Outside editing it blinks the item number at (133, 57)
+(`0x01E47062`, `0x01E47290`); while editing, the cursor row in the stock font (`0x01E472EA`,
+`0x01E47332`); in the name editor, the text line with a `_` (`0x01E476B2`). All of it goes out
+through the same `envia()` at `0x01E476E4`.
+
+**The name editor** (type 7 being edited). The text is at `0x14A3A`, the length at `b[0x14A35]`, the
+maximum at `b[0x14A36]` (written by the item's get) and the mode at `b[0x14A38]`: 0 `abc`, 1 `ABC`,
+2 `123`. 3, pinyin, exists only in Chinese (`0x01E4A59C`). On opening, the OK handler calls the stock
+clear (`0x01E49B1C`), and after every key the engine runs whole (`0x01E4A0FE` ends in
+`goto 0x01E489E0`). The already-drawn mode (`b[0x14686]`) does not go back to `0xFF` on that path, so
+it cannot tell whether the editor just opened: the detour draws the whole editor on every pass.
+
+**Radio.** The addresses, each one rebuilt from the stock bytes by `conferir.py`'s `4p`:
+
+| Data | Where | Read at |
+|---|---|---|
+| band: 0 FM, 1 AM, 2 LSB, 3 USB, 4 CW | `b[0x12A1B]` | `0x01E44FCE` |
+| AM band: LW, MW, SW, USW | `b[0x14CA5]` | `0x01E45016` |
+| frequency: FM in 10 kHz, the rest in kHz | `h[0x14CA6]` | `0x01E449DA` |
+| browsing memories (1) and the memory | `b[0x129F9]`, `b[0x14CB4]` | `0x01E44AD2`, `0x01E44AE2` |
+| signal and the level already drawn (signal / 6) | `b[0x14CCF]`, `b[0x14CCE]` | `0x01E451A6` |
+| AM and SSB step | `b[0x12A6F]`, `b[0x12A6E]` | `0x01E44D22`, `0x01E44D30` |
+| bandwidth, LNA | `b[0x14CBA]`, `b[0x14CBB]` | `0x01E44DC6`, `0x01E44E4E` |
+| BFO, signed | `h[0x14CBC]` | `0x01E44F16` |
+| setting being edited (0 = the frequency) | `[0x14CD4]` | `0x01E4934A` |
+| zeros in front of what is typed | `b[0x14A36]` | `0x01E490A0` |
+
+The modulation change goes through the radio's own menu: the tables `0x01E61168` (FM and AM) and
+`0x01E6137C` (SSB), and the Modulation item's set is `0x01E3DE52`. It redraws the stock single-VFO
+screen and writes "Radio Initialization / Please Wait..." before starting the chip (`0x01E3DDBA`);
+in SSB, the receiver chip's patch runs from `0x01E64D40` to `0x01E68B18` (`0x01E3DC42`).
+
+**DTMF** (the `#` key). The mode becomes 7 (`0x01E4CD06`), and the stock box opens at `0x01E4DA54`
+(on side A at y 28..68, on B at y 83..124); the digits are redrawn at `0x01E4A8D4`, from `0x14A3A`,
+how many in `b[0x14A35]`, up to 10. In screen B the box is part of the scene while the mode is 7: the
+exit zeroes the mode before the full redraw (`0x01E3C29C`, `0x01E40D68`).
+
+**Voltage at power-on** (`0x01E55E9C`, with the power-on message set to voltage): boot reads the
+ADC at `0x01E45FB0` and does × 444 / 1000, in tenths of a volt. The stock text is "   Voltage" with
+the voltage written over the 8th position, and the "ge" was lost.
+
+**The medium font.** The same 5×7 letter, with each stem column (4 or more lit dots) and each empty
+column 2 px wide and the others 1 px, and rows 2 and 6 2 px tall: 9 tall, the vertical stroke of 2x
+and the horizontal stroke of 1x, 1 px between letters. It lives in a separate `letra_media()`,
+because next to `letra()` it made that function's frame grow, and `letra()` is at the end of the
+main screen's deepest path.
+
+**Two traps that cost versions:**
+
+- in the disassembly, `h[r13+r0<<1]` and `[r13+r0<<2]` are base + index × 2 and × 4. Read as base +
+  index, six radio addresses came out wrong in v37, and the preview does not catch it, because it
+  fakes the RAM with the same addresses;
+- the stack analysis does not follow `call rN`. The menu get/set/exibe routines are called through a
+  pointer: the set on OK (`0x01E49996`) at 144 B, the get and exibe in the engine at 296 B. A set
+  that redraws the screen (Modulation's, CH-NAME's through the editor exit `0x01E3C7AA`) falls into
+  that; measured at the call site, they all stay at up to 652 B, under the stock 740 B.

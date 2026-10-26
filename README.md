@@ -277,7 +277,8 @@ quê, está no [histórico](docs/historico.md).
 
 | Arquivo | Estado |
 |---|---|
-| `BJ8300_BANK_v36.anc` | **a mais nova** — v34 + a tela principal nova (tema B): cartão do lado em evidência com a frequência grande e o medidor, etiquetas coloridas de potência, modulação e tons, e a barra de cima só com o que está ligado; no idioma chinês a tela fica a de fábrica — testado no rádio |
+| `BJ8300_BANK_v39.anc` | **a mais nova, em teste** — v36 + as outras telas no tema B (menu com a fonte média, editor de nome, rádio, scan QT, DTMF e a tensão na partida), sem o idioma chinês, os dois lados no banco e o menu `VERSION` em `V2.0T`; o rádio ainda trava ao trocar a modulação para USB/LSB ([histórico](docs/historico.md)) |
+| `BJ8300_BANK_v36.anc` | v34 + a tela principal nova (tema B): cartão do lado em evidência com a frequência grande e o medidor, etiquetas coloridas de potência, modulação e tons, e a barra de cima só com o que está ligado; no idioma chinês a tela fica a de fábrica — testado no rádio |
 | `BJ8300_BANK_v34.anc` | v32 + o espectro no espaço das vozes, o pico em verde e o dBm inteiro na troca de AM/FM; a última com a tela principal de fábrica — testado no rádio |
 | `BJ8300_BANK_v32.anc` | v27 sem as vozes (e sem o item VOICE), roger COIN (a moeda), leitura de memória pelo cabo; abre ~112 KB de espaço para o tema novo da tela — testado no rádio |
 | `BJ8300_BANK_v27.anc` | v1.0T + espectro com a barra atual em branco, a frequência que roda, a linha do pico e o dBm à direita; roger BEEP 3 (a moeda, chamada de COIN desde a v31) — testado no rádio |
@@ -336,11 +337,11 @@ O caminho da toolchain está em `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.
 
 **Orçamento de espaço:** o código novo mora em três lugares, todos no mesmo endereço nas 6 imagens:
 
-- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a v36 usa 2144);
+- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a v39 usa 2176);
 - **o espaço que era das vozes**, com o espectro, mas só dentro dos arquivos C0 e C1 (1066 bytes),
   porque o carregador do rádio recusa a imagem que muda mais arquivos de voz;
-- **o lugar do decodificador G.729**, dentro do `app.bin`, com a tela principal B (8424 bytes, dos
-  quais ela usa 5636).
+- **o lugar dos decodificadores G.729 e MP3**, dentro do `app.bin`, com as telas B (38884 bytes, dos
+  quais elas usam 11650 na v39).
 
 A tabela de menus é gravada no lugar da original. [docs/engenharia-reversa.md](docs/engenharia-reversa.md)
 explica como medir, onde já foi economizado e por que esses lugares são seguros.

@@ -355,7 +355,7 @@ vazias, e o fim da recepção não chama o medidor. Na transmissão ele fica che
 ## 12. A tela B (v35)
 
 Desenhada por `firmware/src/tela.c`. Desde a v36 o código mora no lugar do decodificador G.729,
-dentro do `app.bin` ([engenharia reversa, seção 16](engenharia-reversa.md#16-o-g729-fora-v36)); na
+dentro do `app.bin` ([engenharia reversa, seção 16](engenharia-reversa.md#16-o-g729-e-o-mp3-fora-v36-e-v37)); na
 v35 ficava no espaço das vozes, e o carregador recusou gravar. Do firmware ela usa só a
 `janela()` e o `envia()`; retângulo e letra ela escreve no buffer de vídeo da janela aberta. A cena
 inteira é desenhada em faixas de até 32 linhas, e o que cai fora da janela é cortado.
@@ -368,8 +368,9 @@ entrada, um `goto` para um desvio no `tela.c`. O desvio:
 3. se o gancho desenhou a tela B, volta a quem chamou com r0..r3 intactos;
 4. se não desenhou, refaz as instruções de fábrica que o `goto` cobriu e segue a rotina.
 
-A tela B só desenha com `layout()` diferente de 0 e fora do idioma chinês, porque a fonte não tem os
-ideogramas. Nos menus, na tela de um VFO e no espectro, as rotinas rodam como sempre.
+A tela B só desenha com `layout()` diferente de 0. Até a v36 também ficava fora do idioma chinês,
+porque a fonte não tem os ideogramas; desde a v37 o rádio é sempre em inglês. As outras telas estão
+na seção 13. Na tela de um VFO e no espectro, as rotinas rodam como sempre.
 
 | Rotina | Gancho | O que a tela B redesenha |
 |---|---|---|
@@ -394,7 +395,8 @@ ideogramas. Nos menus, na tela de um VFO e no espectro, as rotinas rodam como se
 
 O envio e a limpeza da tela de fábrica (seção 7) também foram para o `tela.c`. Com a tela B ativa,
 o envio redesenha da tela B o lado a que a janela pertence, e a limpeza não roda, porque a tela
-inteira vem logo depois. Sem a tela B (idioma chinês) fica o realce verde de antes.
+inteira vem logo depois. Sem a tela B (`layout()` em 0) os dois fazem o que a chamada de fábrica
+fazia; o realce verde de antes, que só aparecia no idioma chinês, saiu na v37.
 
 **Prévia no PC.** `firmware/previa/` compila o mesmo `tela.c` com a RAM, a `janela()` e o `envia()`
 imitados e grava a tela em PNG: `python -I previa/previa.py <pasta>` (precisa do zig, por
@@ -404,3 +406,98 @@ imitados e grava a tela em PNG: `python -I previa/previa.py <pasta>` (precisa do
 **Conferido no build** (`conferir.py`): a 2b, a 2d e a 4g como antes, agora com os sítios da tela; a
 4m confere os 13 desvios byte a byte (bytes de fábrica, `goto`, desvio e volta); a 4n, que não há
 seção em RAM.
+
+## 13. As outras telas (v37 a v39)
+
+Desenhadas por `firmware/src/telas.c`, que o `tela.c` inclui (o mesmo `tela.o`, na faixa livre). O
+modo de tela é `b[0x1533D]`: 0, 3 e 5 a tela de dois VFOs, 1 o menu, 2 o rádio, 7 o DTMF, 17 o
+scan QT e 20 o espectro.
+
+**Cada parte entra pela rotina de fábrica que a desenha, nunca pelo `envia()` geral.** Avisos e
+confirmações ("Sure to Reset?") passam como os de fábrica, e o desenho fundo da tela B só roda
+nesses pontos. Onde a rotina de fábrica desenha e também grava estado, o gancho a roda inteira e
+cala o `envia()` dela, em vez de repetir a lógica.
+
+| Onde | Como | Gancho | O que a tela B faz |
+|---|---|---|---|
+| `0x01E48E82`, `0x01E48ECA` (motor de menus `0x01E489E0`) | `envia()` trocado | `gancho_menu_titulo`, `gancho_menu_linha` | a faixa do título ou da linha que o motor montou |
+| `0x01E476E4` (laço do sinal) | `envia()` trocado | `gancho_menu_pisca` | nada no menu: é por ele que sai toda a piscada de fábrica |
+| `0x01E3B2C4`, a linha de informações | desvio | `b_lado` | no menu e no scan QT, o resumo do lado em evidência |
+| `0x01E48720`, o indicador do modo do editor | desvio | `b_editor_modo` | o editor de nome inteiro |
+| `0x01E4865C`, moldura direto no LCD | desvio | `b_editor_quadro` | nada no menu (lê a cor da pilha de quem chama: só a rotina de fábrica, com a pilha refeita, a lê) |
+| `0x01E48FE0`, a linha do texto do editor | `envia()` trocado | `gancho_editor_linha` | nada: o desvio do indicador já desenhou o texto |
+| `0x01E44FB0`, o rádio inteiro | desvio | `b_radio` | a tela do rádio, depois de pôr banda > 4 e faixa do AM > 3 em 0, como ela |
+| `0x01E449BA`, `0x01E44B28`, `0x01E45198` | desvio | `b_radio_freq`, `b_radio_nome`, `b_radio_sinal` | a frequência, o nome da memória e o medidor S |
+| `0x01E44C68(item, valor)`, os ajustes | desvio | `b_radio_ajustes` | roda a de fábrica (grava o valor) e redesenha; os dois `envia()` dela (`0x01E44CA8`, `0x01E44FA8`) ficam calados no modo 2 |
+| `0x01E49078`, a frequência digitada | desvio | `b_radio_digita` | a máscara com os dígitos no lugar da frequência |
+| `0x01E4D3F8`, o "SEEK..." | `envia()` trocado | `gancho_radio_seek` | "SEEK..." em âmbar no lugar da frequência |
+| `0x01E4A7D4` (entrada no rádio), `0x01E3DEBE` e `0x01E3DEEA` (troca de modulação) | `envia()` trocado | `gancho_radio_inicio` | a espera, na tela inteira; o "Please Wait..." da troca (`0x01E3DF10`) vira nop |
+| `0x01E45A82(rodando)`, o scan QT | desvio | `b_scanqt` | o título e o estado |
+| `0x01E4DA88`, `0x01E4A93C` (DTMF) | `envia()` trocado | `gancho_dtmf` | a caixa do DTMF, no lugar do cartão do lado em uso |
+| `0x01E55F40` (partida) | `envia()` trocado | `gancho_tensao` | o cartão da tensão |
+
+**Menu.** O motor `0x01E489E0` monta o título em `0x15494` (26 B) e três linhas em `0x154AF`
+(27 B cada). Cada linha passa por `0x01E487BC(linha, texto, marcador)`, que põe na frente `02 10`
+(o valor gravado, marcador 2), dois espaços (outra opção, 1) ou nada (0: o nome do tipo 7 e o
+"NONE"); o tipo 8 nunca tem marcador. A tela B reconhece o marcador pelo conteúdo. Os outros dados:
+número do item `b[0x14BFA]`, cursor `b[0x14C10]`, editando `b[0x14BF9]` e tipo `b[0x14C00]`
+(0 e 4 a 6 lista, 2 tom com digitação, 3 frequência, 7 nome, 8 sem marcador, 13 número com sinal).
+O BANK e o BANK CH marcam a opção ligada com um byte `0x01` no fim, que a tela B pinta de âmbar.
+
+**A piscada.** No menu, o laço do sinal (`0x01E4622A`) conta `b[0x14C1A]` de 0 a 7, uma vez por
+volta. Em 4 ele desenha, em 0 apaga. Fora da edição, pisca o número do item em (133, 57)
+(`0x01E47062`, `0x01E47290`); editando, a linha do cursor na fonte de fábrica (`0x01E472EA`,
+`0x01E47332`); no editor de nome, a linha do texto com um `_` (`0x01E476B2`). Tudo sai pelo mesmo
+`envia()` de `0x01E476E4`.
+
+**O editor de nome** (tipo 7 editando). O texto fica em `0x14A3A`, o tamanho em `b[0x14A35]`, o
+máximo em `b[0x14A36]` (gravado pelo get do item) e o modo em `b[0x14A38]`: 0 `abc`, 1 `ABC`,
+2 `123`. O 3, pinyin, só existe em chinês (`0x01E4A59C`). Ao abrir, o tratador do OK chama a
+limpeza de fábrica (`0x01E49B1C`), e depois de cada tecla o motor roda inteiro (`0x01E4A0FE`
+termina em `goto 0x01E489E0`). O modo já desenhado (`b[0x14686]`) não volta a `0xFF` nesse caminho,
+então não serve para saber se o editor acabou de abrir: o desvio desenha o editor inteiro em toda
+passada.
+
+**Rádio.** Os endereços, cada um refeito dos bytes de fábrica pela `4p` do `conferir.py`:
+
+| Dado | Onde | Lido em |
+|---|---|---|
+| banda: 0 FM, 1 AM, 2 LSB, 3 USB, 4 CW | `b[0x12A1B]` | `0x01E44FCE` |
+| faixa do AM: LW, MW, SW, USW | `b[0x14CA5]` | `0x01E45016` |
+| frequência: FM em 10 kHz, o resto em kHz | `h[0x14CA6]` | `0x01E449DA` |
+| navegando pelas memórias (1) e a memória | `b[0x129F9]`, `b[0x14CB4]` | `0x01E44AD2`, `0x01E44AE2` |
+| sinal e o nível já desenhado (sinal / 6) | `b[0x14CCF]`, `b[0x14CCE]` | `0x01E451A6` |
+| passo do AM e do SSB | `b[0x12A6F]`, `b[0x12A6E]` | `0x01E44D22`, `0x01E44D30` |
+| largura, LNA | `b[0x14CBA]`, `b[0x14CBB]` | `0x01E44DC6`, `0x01E44E4E` |
+| BFO, com sinal | `h[0x14CBC]` | `0x01E44F16` |
+| ajuste em edição (0 = a frequência) | `[0x14CD4]` | `0x01E4934A` |
+| zeros na frente do que se digita | `b[0x14A36]` | `0x01E490A0` |
+
+A troca de modulação passa pelo menu do próprio rádio: as tabelas `0x01E61168` (FM e AM) e
+`0x01E6137C` (SSB), e o set do item Modulation é `0x01E3DE52`. Ele redesenha a tela de um VFO de
+fábrica e escreve "Radio Initialization / Please Wait..." antes de iniciar o chip
+(`0x01E3DDBA`); no SSB, o patch do chip receptor vai de `0x01E64D40` a `0x01E68B18` (`0x01E3DC42`).
+
+**DTMF** (tecla `#`). O modo vira 7 (`0x01E4CD06`), e a caixa de fábrica abre em `0x01E4DA54` (no
+lado A em y 28..68, no B em y 83..124); os dígitos são redesenhados em `0x01E4A8D4`, os de
+`0x14A3A`, quantos em `b[0x14A35]`, até 10. Na tela B a caixa faz parte da cena enquanto o modo for
+7: a saída zera o modo antes do redesenho inteiro (`0x01E3C29C`, `0x01E40D68`).
+
+**A tensão na partida** (`0x01E55E9C`, com a mensagem de partida em tensão): a partida lê o ADC em
+`0x01E45FB0` e faz × 444 / 1000, em décimos de volt. O texto de fábrica é "   Voltage" com a tensão
+escrita sobre a 8ª posição, e o "ge" se perdia.
+
+**A fonte média.** A mesma letra 5×7, com cada coluna de haste (4 pontos acesos ou mais) e cada
+coluna vazia com 2 px e as outras com 1, e a 2ª e a 6ª linha com 2 px: 9 de altura, o traço
+vertical do 2x e o horizontal do 1x, 1 px entre letras. Fica numa `letra_media()` separada, porque
+junto da `letra()` o quadro dela crescia, e ela está no fim do caminho mais fundo da tela principal.
+
+**Duas armadilhas que custaram versões:**
+
+- no desmontado, `h[r13+r0<<1]` e `[r13+r0<<2]` são base + índice × 2 e × 4. Lidos como base +
+  índice, seis endereços do rádio saíram errados na v37, e a prévia não pega, porque imita a RAM
+  com os mesmos endereços;
+- a análise de pilha não segue `call rN`. Os get/set/exibe dos menus são chamados por ponteiro: o
+  set no OK (`0x01E49996`) a 144 B, o get e o exibe no motor a 296 B. Um set que redesenha a tela
+  (o do Modulation, o CH-NAME pela saída do editor `0x01E3C7AA`) entra nisso; medidos no ponto da
+  chamada, todos ficam em até 652 B, abaixo dos 740 B de fábrica.

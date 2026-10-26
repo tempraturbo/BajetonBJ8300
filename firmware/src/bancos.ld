@@ -33,16 +33,16 @@
  * pelo cabo. Mudar so o C0 e o C1 (o espectro, v33 e v34) passa, e mudar o app.bin sempre passou.
  * Por isso o .vozes fica so com o espectro, dentro do C0 e do C1.
  *
- * O G.729 (v36): o decodificador das vozes .wtg, 0x01E257E0..0x01E278C8 (8424 B, dentro do
- * app.bin), nunca roda desde que as vozes sairam: ele so e escolhido para um arquivo que nao e .sin,
- * aberto pelo tocador de sons, e nada de fora aponta para a faixa alem do registro do decodificador,
- * cujo tipo o montar.py zera (prova em docs/engenharia-reversa.md, secao 16). O tela.o inteiro (a
- * tela principal B) mora ali. Ele nao pode ter .data nem .bss (nao ha RAM nossa): o conferir.py
- * confere. */
+ * Os decodificadores G.729 e MP3 (v36 e v37): o das vozes .wtg e o de MP3, colados, 0x01E257E0..
+ * 0x01E2EFC4 (38884 B, dentro do app.bin). Nunca rodam: o tocador de sons so os escolhe para um
+ * arquivo .wtg ou .mp3, as vozes sairam e MP3 nao ha nenhum, e nada de fora aponta para a faixa
+ * alem do registro dos decodificadores, cujo tipo o montar.py zera nos dois (prova em
+ * docs/engenharia-reversa.md, secao 16). O tela.o inteiro (a tela principal B) mora ali. Ele nao
+ * pode ter .data nem .bss (nao ha RAM nossa): o conferir.py confere. */
 MEMORY
 {
     novo (rx) : ORIGIN = 0x01E96124, LENGTH = 3260
-    g729 (rx) : ORIGIN = 0x01E257E0, LENGTH = 8424
+    livre (rx) : ORIGIN = 0x01E257E0, LENGTH = 38884
     vozes (rx) : ORIGIN = 0x01E797A0, LENGTH = 0x1BF50
 }
 
@@ -53,9 +53,9 @@ SECTIONS
         *(EXCLUDE_FILE(*tela.o) .rodata*)
     } > novo
 
-    .g729 : {
+    .livre : {
         *tela.o(.text* .rodata*)
-    } > g729
+    } > livre
 
     .vozes : {
         *(.vozes*)

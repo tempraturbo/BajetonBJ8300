@@ -52,6 +52,13 @@ void ENVIA(void)
             tela[y][x] = memoria[VIDEO + o] << 8 | memoria[VIDEO + o + 1];
 }
 
+/* le_flash() 0x01E390AC: le do chip de dados (aqui, imitado). */
+static u8 chip[0x10000];
+void LE_FLASH(u32 a, void *p, unsigned n)
+{
+    memcpy(p, chip + a, n);
+}
+
 #include "../src/tela.c"
 
 static const char *pasta;
@@ -191,6 +198,205 @@ int main(int argc, char **argv)
     tela_b_digitando();
     grava("7-digitando-canal");
 
+    /* as outras telas (v37 e v38), com o estado das fotos do dono (PIGAO 2 no canal 101) posto na
+     * RAM nos enderecos que o firmware usa, e lido pelo mesmo le_telas() do radio */
+    {
+        static const char *const roger[3] = {"BEEP 2", "COIN", "TONE1200"};
+        unsigned i;
+
+#define BASE_TELAS()                                                            \
+        limpa();                                                                \
+        lado(0, 44062500, 44062500, "PIGAO 2", 101, 0, 0);                       \
+        lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);                       \
+        memoria[0x14B70] = 1;                                                   \
+        memoria[0x14BDE] = 1;                                                   \
+        memoria[0x14B75] = 1
+/* uma linha de opcao como 0x01E487BC a monta: marca 2 = valor gravado (02 10), 1 = outra opcao
+ * (dois espacos), 0 = sem marcador (o nome, tipo 7) */
+#define LINHA(r, marca, texto)                                                  \
+        do {                                                                    \
+            u8 *l_ = &memoria[0x154AF + (r) * 27];                              \
+            memset(l_, 0, 27);                                                  \
+            if ((marca) == 2) { l_[0] = 2; l_[1] = 0x10; l_ += 2; }             \
+            else if ((marca) == 1) { l_[0] = ' '; l_[1] = ' '; l_ += 2; }       \
+            strcpy((char *)l_, texto);                                          \
+        } while (0)
+#define RADIO_EM(f)                                                             \
+        do { memoria[0x14CA6] = (f) & 0xFF; memoria[0x14CA7] = (f) >> 8; } while (0)
+
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "ROGER");
+        memoria[0x14BFA] = 21;
+        for (i = 0; i < 3; i++)
+            LINHA(i, i == 1 ? 2 : 1, roger[i]);
+        memoria[0x14C10] = 1;
+        telas_b(1, 0);
+        grava("9-menu-roger");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "SQL");
+        memoria[0x14BFA] = 0;
+        LINHA(0, 2, "1");
+        LINHA(1, 1, "2");
+        LINHA(2, 1, "3");
+        memoria[0x14C10] = 1;
+        memoria[0x14BF9] = 1;
+        telas_b(1, 0);
+        grava("10-menu-sql-mudando-o-valor");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "NOISE REDUCTION");
+        memoria[0x14BFA] = 48;
+        LINHA(0, 1, "OFF");
+        LINHA(1, 2, "ON");
+        memoria[0x14C10] = 1;
+        telas_b(1, 0);
+        grava("11-menu-titulo-longo");
+
+        /* o BANK (bancos.c, bank_exibe): o banco ligado vem com o byte 0x01 no fim */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "BANK");
+        memoria[0x14BFA] = 10;
+        memoria[0x14C00] = 0;
+        LINHA(0, 2, "1 BAOFENG\x01");
+        LINHA(1, 1, "2 MOTOROLA");
+        LINHA(2, 1, "3 ESPECIAL\x01");
+        memoria[0x14C10] = 1;
+        telas_b(1, 0);
+        grava("18-menu-bank");
+
+        /* o BANK NAME e o CH-NAME (tipo 7): uma linha so, sem marcador, e o cursor do motor parado em
+         * outra linha (o tipo 7 nao mexe nele) */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "BANK NAME");
+        memoria[0x14BFA] = 11;
+        memoria[0x14C00] = 7;
+        LINHA(0, 0, "MOTOROLA");
+        memoria[0x14C10] = 2;
+        telas_b(1, 0);
+        grava("19-menu-bank-name");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "CH-NAME");
+        memoria[0x14BFA] = 20;
+        memoria[0x14C00] = 7;
+        LINHA(0, 0, "BF888-01");
+        telas_b(1, 0);
+        grava("20-menu-ch-name");
+
+        /* o editor de nome (tipo 7 editando): o texto em 0x14A3A, o tamanho em b[0x14A35], o maximo
+         * em b[0x14A36] e o modo em b[0x14A38] (1 = ABC); um nome curto em 2x e um longo no medio */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "BANK NAME");
+        memoria[0x14BFA] = 11;
+        memoria[0x14C00] = 7;
+        memoria[0x14BF9] = 1;
+        digitando("MOTOR");
+        memoria[0x14A36] = 12;
+        memoria[0x14A38] = 1;
+        telas_b(1, 0);
+        grava("27-editor-de-nome");
+        digitando("REPETIDORA 2");
+        memoria[0x14A38] = 0;
+        telas_b(1, 0);
+        grava("28-editor-de-nome-longo");
+
+        /* o OFFSET sendo digitado (tipo 3, 0x01E4881A): a linha 0 com os digitos sobre "----.----" */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "OFFSET");
+        memoria[0x14BFA] = 28;
+        memoria[0x14C00] = 3;
+        LINHA(0, 1, "123.4---");
+        memoria[0x14BF9] = 1;
+        telas_b(1, 0);
+        grava("21-menu-offset-digitando");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 17;
+        telas_b(17, 1);
+        grava("12-scanqt-rodando");
+        telas_b(17, 0);
+        grava("13-scanqt-parado");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 2;
+        RADIO_EM(10210);                          /* 102,10 MHz */
+        memoria[0x14CCF] = 30;                    /* nivel 5 */
+        telas_b(2, 0);
+        grava("14-radio-fm");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 2;
+        memoria[0x12A1B] = 1;                     /* AM */
+        memoria[0x14CA5] = 1;                     /* MW */
+        RADIO_EM(540);                            /* abaixo de 1000 sai em kHz */
+        memoria[0x129F9] = 1;                     /* memorias */
+        memoria[0x14CB4] = 2;                     /* a terceira */
+        strcpy((char *)&chip[0xC110 + 2 * 16], "RADIO BAND");
+        memoria[0x14CCF] = 45;                    /* nivel 7 */
+        memoria[0x12A6F] = 2;                     /* passo 10K */
+        memoria[0x14CD4] = 2;                     /* mudando o BW */
+        telas_b(2, 0);
+        grava("15-radio-am-mudando-bw");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 2;
+        memoria[0x12A1B] = 2;                     /* LSB */
+        RADIO_EM(7074);                           /* 7,074 MHz */
+        memoria[0x14CCF] = 75;                    /* S9 + 20 */
+        memoria[0x12A6E] = 0;                     /* passo 1K */
+        memoria[0x14CBA] = 3;                     /* 2.2K */
+        memoria[0x14CBB] = 1;                     /* LNA 0 */
+        memoria[0x14CBC] = (u8)-300;              /* BFO -300 */
+        memoria[0x14CBD] = (u16)-300 >> 8;
+        memoria[0x14CD4] = 4;                     /* mudando o BFO */
+        telas_b(2, 0);
+        grava("16-radio-lsb-mudando-bfo");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 2;
+        RADIO_EM(10210);
+        memoria[0x14CCF] = 30;
+        digitando("98");                          /* 0x01E49078: "98-.--" MHz */
+        telas_b(2, RADIO_DIGITANDO);
+        grava("22-radio-digitando");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 2;
+        RADIO_EM(10210);
+        memoria[0x14CCF] = 30;
+        telas_b(2, RADIO_BUSCANDO);
+        grava("23-radio-seek");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 2;
+        telas_b(TELA_INICIO_RADIO, 0);
+        grava("17-radio-iniciando");
+
+        /* o DTMF (modo 7) sobre o lado em evidencia, A e depois B */
+        limpa();
+        lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+        lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+        memoria[0x1533D] = 7;
+        digitando("123*5666");
+        tela_b();
+        grava("24-dtmf-no-a");
+        memoria[0x15E04] = 1;
+        tela_b();
+        grava("25-dtmf-no-b");
+
+        tensao_b(81);
+        grava("26-tensao-na-partida");
+    }
+
     /* a fonte inteira: as 64 letras e os icones em 1x, e os digitos em 2x */
     for (unsigned y = 0; y < 128; y += 32) {
         janela_b(0, 160, y, y + 32, COR_FUNDO);
@@ -202,6 +408,8 @@ int main(int argc, char **argv)
         texto(4, 58, "01234", 2, COR_BRANCO);
         texto(4, 78, "56789", 2, COR_BRANCO);
         texto(4, 100, "2 5 2.5 25", 2, COR_VERDE);
+        texto(80, 58, "MEDIA 0123", MEDIA, COR_BRANCO);
+        texto(80, 72, "NOISE RED.", MEDIA, COR_TEXTO_AMBAR);
         ENVIA();
     }
     grava("8-fonte");

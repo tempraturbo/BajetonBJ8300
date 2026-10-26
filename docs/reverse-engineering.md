@@ -213,6 +213,15 @@ To undo it, the bitmaps are rebuilt from scratch with the same criteria the star
 per channel, BCD, `VALIDA_FREQ`) instead of keeping a copy: that way no state of ours lives in RAM,
 and a channel stored or deleted through MEMCH/DELCH counts immediately.
 
+After the filter changes through the menu (BANK and BANK CH), **both sides** move to a valid
+channel (v38), as the stock DELCH does after deleting a channel (`0x01E3C5D6..0x01E3C6C4`): in full
+channel mode, each side's channel (`h[0x15E0C]`, `h[0x15E10]`) that left the bitmap jumps to the
+next valid one (`0x01E3C4C0`), and `0x01E3A812` reloads both sides, revalidating each. Up to v37
+only `REVALIDA()` ran, and it looks only at the highlighted side. At power-on it is still only
+that, because boot already reloaded both sides (`0x01E56A9E`) before the hook, and a second reload
+would request a redraw over the logo. In zone mode, which the CHIRP driver turns off on every
+upload, it also stays `REVALIDA()` only.
+
 ### Stored format
 
 ```
@@ -606,7 +615,7 @@ read. What was measured on the radio ([changelog](changelog.md), v35):
 - changing `app.bin` always went through.
 
 Why (number of files, of sectors or of bytes) cannot be known without reading the loader. The large
-new code went inside `app.bin` ([section 16](#16-g729-out-v36)), and `2g` refuses to build if any
+new code went inside `app.bin` ([section 16](#16-g729-and-mp3-out-v36-and-v37)), and `2g` refuses to build if any
 voice file other than C0 and C1 changes.
 
 ## 15. Voices removed
@@ -708,9 +717,9 @@ stock branch leads to the new code:
 **Main screen B (v35, moved out in v36).** In v35 the whole `tela.o` lived here too (6.6 KB counting
 the spectrum), and the loader refused the image, because it changed the files C0..C11
 ([section 14](#14-internal-flash-partitions-and-who-writes)). Since v36 the screen lives in place of
-G.729 ([section 16](#16-g729-out-v36)), and only the spectrum stays here, inside C0 and C1.
+G.729 ([section 16](#16-g729-and-mp3-out-v36-and-v37)), and only the spectrum stays here, inside C0 and C1.
 
-## 16. G.729 out (v36)
+## 16. G.729 and MP3 out (v36 and v37)
 
 Screen B (5,636 B) went inside `app.bin`, in place of the G.729 decoder, the one for the `.wtg`
 voices, which have not played since v30.
@@ -787,9 +796,42 @@ frames. It is in use.
 
 **In the build:**
 
-- `2b` requires `tela.o` in `.g729`, and only it;
+- `2b` requires `tela.o` in `.livre` (`.g729` up to v36), and only it;
 - `2h` checks the registry and the place, and that nothing from outside points into the range, in
   the stock firmware and the new one, apart from screen B's sites. That covers 32-bit values and
   4-byte `call`/`goto`, the latter by the flash address and by the RAM one. It was tested with the
   range 8 B wider, when it flags the neighboring structures and MP3, and without excluding the
   registry, when it flags the 6 pointers.
+
+**MP3 too (v37).** The MP3 decoder starts right after G.729, at `0x01E278C8`, and has no file to
+play: in the sound directory, what is not `.sin` is the `.wtg` voices and `index.idx`. It goes out
+the same way, and the range becomes `0x01E257E0..0x01E2EFC4`, 38,884 B, with the code and tables of
+both side by side:
+
+- its type in the registry (`0x01E3487C`, the second 68 B entry) also becomes 0;
+- the only thing pointing into MP3 from outside the new range is the registry. The call from
+  `0x01E2ECAA` and the table `0x01E2C084` are inside the range;
+- the one exception is `0x01E05AD4`: the bytes `87 e8 e2 01`, read as 32 bits, fall in the range, but
+  they are the instruction `if (r0 != r7) goto -60`. `conferir.py` only accepts the exception with
+  those exact bytes.
+
+In v39 screen B uses 11,650 B of the 38,884.
+
+## 17. No Chinese (v37)
+
+The radio always runs in English, as the owner asked:
+
+- **the LANGUAGE item leaves the menu** (stock item 22, get `0x01E3C9A8` and set `0x01E3C9B8`),
+  together with ZONE, "Zone Or Channel" and VOICE;
+- **the power-on hook zeroes the language** (`b[0x14B74]`, which LANGUAGE's get reads) right after the
+  settings come from the data chip. A Chinese language written by another program turns into
+  English before the home screen, and the first saved setting (`0x01E3AB36`) writes the 0 to the
+  chip. Elsewhere only LANGUAGE's set wrote the language, and the reset to factory settings
+  (`0x01E4842E`) keeps it;
+- **the Chinese options of the changed items** (the `+0x17` field of ROGER and SCRAMBLE) point at the
+  English tables;
+- **the name editor's pinyin mode is gone**: the mode switch (`0x01E4A59C`) cycles 3 modes in English
+  and 4 in Chinese.
+
+`conferir.py` checks in `4o` that the byte the hook
+zeroes is the one LANGUAGE's get reads and that the item left the table.

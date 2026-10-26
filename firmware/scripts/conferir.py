@@ -51,7 +51,7 @@ dados, entradas, chave, app = partes(novo)
 dados_velhos, entradas_velhas, _, app_velho = partes(original)
 tabela_esperada = montar.monta_tabela(app_velho)      # a copia certa sai do firmware de fabrica
 fonte = ''.join(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', f),
-                     encoding='utf-8').read() for f in ('bancos.c', 'tela.c'))
+                     encoding='utf-8').read() for f in ('bancos.c', 'tela.c', 'telas.c'))
 declaradas = {int(e, 16): n for n, e in re.findall(r'^FIRMWARE\((\w+), (0x[0-9A-Fa-f]+)\)', fonte, re.M)}
 
 
@@ -88,8 +88,8 @@ print(f'1. CRCs das {len(entradas)} entradas: ' + ('ok' if not erros else 'FALHO
 
 # 2. codigo novo e tabela presentes, decifrados, nas 6 imagens
 elf = os.path.splitext(codigo)[0] + '.elf'
-g729_em, tela = montar.codigo_ligado(elf, '.g729')
-blocos = [('codigo', montar.ENDERECO_CODIGO, blob), ('tela B', g729_em, tela)]
+livre_em, tela = montar.codigo_ligado(elf, '.livre')
+blocos = [('codigo', montar.ENDERECO_CODIGO, blob), ('tela B', livre_em, tela)]
 if montar.MENU_NOVO:
     blocos.append(('tabela', montar.TABELA, tabela_esperada))
 for nome, endereco, esperado in blocos:
@@ -110,34 +110,35 @@ for nome, endereco, esperado in blocos:
     print(f'2. {nome} ({len(esperado)} B) em {endereco:#x}, decifrado: {copias}/6 imagens')
 
 # 2b. os simbolos caem todos dentro do codigo novo: o .text no fim da imagem, o .vozes no espaco que
-# era das vozes (v33) ou o .g729 no lugar do decodificador G.729 (v36). Das rotinas que o firmware
-# chama, no .vozes so as do espectro (montar.NAS_VOZES), no .g729 so as da tela B (montar.NO_G729), e
+# era das vozes (v33) ou o .livre no lugar dos decodificadores G.729 e MP3 (v36, v37). Das rotinas que
+# o firmware chama, no .vozes so as do espectro (montar.NAS_VOZES), no .livre so as da tela B
+# (montar.NA_LIVRE), e
 # as outras - a partida, o cabo, os menus - no .text. O .vozes nao passa do fim do C1: o carregador
 # recusa a imagem inteira se mais arquivos de voz mudam (v35).
 fim_codigo = montar.ENDERECO_CODIGO + len(blob)
 vozes_em, vozes = montar.codigo_ligado(elf, '.vozes')
 fim_vozes = vozes_em + len(vozes)
-fim_g729 = g729_em + len(tela)
+fim_livre = livre_em + len(tela)
 no_texto = lambda a: montar.ENDERECO_CODIGO <= a < fim_codigo
 nas_vozes = lambda a: vozes_em <= a < fim_vozes
-no_g729 = lambda a: g729_em <= a < fim_g729
-fora = {n: a for n, a in montar.S.items() if not no_texto(a) and not nas_vozes(a) and not no_g729(a)}
+na_livre = lambda a: livre_em <= a < fim_livre
+fora = {n: a for n, a in montar.S.items() if not no_texto(a) and not nas_vozes(a) and not na_livre(a)}
 trocados = sorted(n for n in montar.PRECISA if nas_vozes(montar.S[n]) != (n in montar.NAS_VOZES)
-                  or no_g729(montar.S[n]) != (n in montar.NO_G729))
+                  or na_livre(montar.S[n]) != (n in montar.NA_LIVRE))
 lugares = (vozes_em == montar.VOZES and fim_vozes <= montar.VOZES_ACEITAS_FIM
-           and g729_em == montar.G729 and fim_g729 <= montar.G729_FIM)
+           and livre_em == montar.LIVRE and fim_livre <= montar.LIVRE_FIM)
 print(f'2b. simbolos dentro de {montar.ENDERECO_CODIGO:#x}..{fim_codigo:#x}, {vozes_em:#x}..{fim_vozes:#x} '
-      f'(ate o fim do C1, {montar.VOZES_ACEITAS_FIM:#x}) ou {g729_em:#x}..{fim_g729:#x} (o G.729 vai ate '
-      f'{montar.G729_FIM:#x}); nas vozes so os {len(montar.NAS_VOZES)} do espectro, no G.729 so os '
-      f'{len(montar.NO_G729)} da tela B: '
+      f'(ate o fim do C1, {montar.VOZES_ACEITAS_FIM:#x}) ou {livre_em:#x}..{fim_livre:#x} (a faixa do G.729 '
+      f'e do MP3 vai ate {montar.LIVRE_FIM:#x}); nas vozes so os {len(montar.NAS_VOZES)} do espectro, na '
+      f'faixa livre so os {len(montar.NA_LIVRE)} da tela B: '
       + ('ok' if not fora and not trocados and lugares else 'FALHOU ' + str({n: hex(a) for n, a in fora.items()})
          + (f' fora do lugar: {trocados}' if trocados else '')))
 if fora:
     erros.append('simbolo fora do codigo novo: ' + ', '.join(fora))
 if trocados:
-    erros.append('rotina no lugar errado (.text x .vozes x .g729): ' + ', '.join(trocados))
+    erros.append('rotina no lugar errado (.text x .vozes x .livre): ' + ', '.join(trocados))
 if not lugares:
-    erros.append('.vozes ou .g729 fora do lugar aceito')
+    erros.append('.vozes ou .livre fora do lugar aceito')
 
 # 2c. o codigo foi gravado exatamente onde o linker o ligou. Na v20 o .text saiu ligado para
 # 0x01E96124 (o linker alinhou a secao a 4 por causa de uma tabela de ponteiros) e foi gravado em
@@ -153,9 +154,9 @@ if not ok:
 # 2d. de ponta a ponta: todo call/goto do app.bin remendado que vai para o codigo novo tem de cair
 # no inicio de uma funcao nossa, e os bytes que estao LA na flash, decifrados, nas 6 imagens, tem de
 # ser os do ELF. E a conferencia que teria pego a v20 sozinha. Para o .vozes, so dos sitios que o
-# montar.py poe la: os do espectro. Para o .g729, os do envio e da limpeza da tela principal e as
+# montar.py poe la: os do espectro. Para o .livre, os do envio e da limpeza da tela principal e as
 # entradas das treze rotinas da tela B.
-# Contam os desvios que nos gravamos (bytes diferentes dos de fabrica), fora do proprio .g729 - as
+# Contam os desvios que nos gravamos (bytes diferentes dos de fabrica), fora do proprio .livre - as
 # chamadas de dentro do codigo novo sao a 4g. Os 4 bytes lidos em cada
 # deslocamento par tambem casam com o fim de uma instrucao e o comeco da seguinte - 0x01E16A12, o
 # meio da chamada em 0x01E16A10, "vai" para 0x01E79878 -, e nenhum desvio de fabrica de verdade
@@ -166,7 +167,7 @@ funcoes = {a: n for n, a in montar.le_simbolos(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), '..', 'build', 'simbolos.txt')).items()}
 sitios_vozes = ({montar.ESPECTRO_EM} | {s for s, _, _, _ in montar.ESPECTRO_CHAMADAS}
                 | {e for e, _, _, _ in montar.ESPECTRO_FUNCOES})
-sitios_g729 = ({s for s, _ in montar.REALCE_SITIOS_GANCHO} | {s for s, _ in montar.LIMPA_SITIOS}
+sitios_livre = ({s for s, _ in montar.REALCE_SITIOS_GANCHO} | {s for s, _ in montar.LIMPA_SITIOS} | {s_ for s_, _, _ in montar.ENVIA_SITIOS}
                | {e for e, _, _, _, _ in montar.TELA_DESVIOS})
 imagens = []
 for e in entradas:
@@ -176,15 +177,15 @@ for e in entradas:
 desvios_novos, ruins = 0, []
 for o in range(0, len(app) - 3, 2):
     if (app[o + 1] != 0xEA or not app[o] & 0x80 or app[o:o + 4] == app_velho[o:o + 4]
-            or no_g729(montar.BASE_APP + o)):
+            or na_livre(montar.BASE_APP + o)):
         continue
     d22 = ((app[o] & 0x3F) << 16) | (app[o + 3] << 8) | app[o + 2]
     destino = montar.BASE_APP + o + 4 + 2 * (d22 - 0x400000 if d22 & 0x200000 else d22)
     if no_texto(destino):
         secao, inicio = conteudo, ligado
-    elif nas_vozes(destino) or no_g729(destino):
+    elif nas_vozes(destino) or na_livre(destino):
         secao, inicio, sitios, nome_secao = ((vozes, vozes_em, sitios_vozes, '.vozes') if nas_vozes(destino)
-                                             else (tela, g729_em, sitios_g729, '.g729'))
+                                             else (tela, livre_em, sitios_livre, '.livre'))
         if montar.BASE_APP + o not in sitios:
             ruins.append(f'{montar.BASE_APP + o:#x} -> {destino:#x} (vai para o {nome_secao} de um sitio que o '
                          'montar nao poe la)')
@@ -199,7 +200,7 @@ for o in range(0, len(app) - 3, 2):
         if jlfw.sfc(img[pos:pos + 16], chave, pos - base) != secao[destino - inicio:destino - inicio + 16]:
             ruins.append(f'{montar.BASE_APP + o:#x} -> {funcoes[destino]}: bytes diferentes em {nome_img}')
 print(f'2d. {desvios_novos} desvios do firmware para o codigo novo, destino conferido na flash das '
-      f'{len(imagens)} imagens, os que vao para o .vozes e o .g729 so dos sitios previstos: '
+      f'{len(imagens)} imagens, os que vao para o .vozes e o .livre so dos sitios previstos: '
       + ('ok' if not ruins else 'FALHOU'))
 for r in ruins:
     print('    ' + r)
@@ -323,42 +324,50 @@ for p_ in problemas:
     print('    ' + p_)
     erros.append(p_)
 
-# 2h. a tela B no lugar do G.729 (v36). O registro dos decodificadores (3 de 68 B) muda so no tipo do
-# G.729, de 0x40 para 0; o tela.o esta gravado no comeco da faixa; e a faixa e fechada no firmware de
-# fabrica e no novo: nenhum valor de 32 bits (ponteiro ou imediato) de fora dela e do registro cai
-# dentro, nem call/goto de 4 bytes - os da flash pelo endereco dela, os da copia que roda na RAM pelo
-# endereco de la (0x02000000). A prova inteira, com o desmontado (os desvios curtos e condicionais, as
-# tabelas de casos, o alcance), esta em docs/engenharia-reversa.md, secao 16; isto aqui confere que
-# nada mudou nela e que o nosso codigo nao abriu porta nova.
+# 2h. a tela B no lugar dos decodificadores G.729 e MP3 (v36 e v37). O registro dos decodificadores
+# (3 de 68 B) muda so no tipo dos dois, que vai a 0; o tela.o esta gravado no comeco da faixa; e a
+# faixa e fechada no firmware de fabrica e no novo: nenhum valor de 32 bits (ponteiro ou imediato) de
+# fora dela e dos dois registros cai dentro, nem call/goto de 4 bytes - os da flash pelo endereco
+# dela, os da copia que roda na RAM pelo endereco de la (0x02000000). A unica excecao e uma instrucao
+# cujos bytes, lidos como 32 bits, caem na faixa (montar.CODIFICACOES_FORA), e ela so vale com os bytes
+# exatos. A prova inteira, com o desmontado (os desvios curtos e condicionais, as tabelas de casos, o
+# alcance), esta em docs/engenharia-reversa.md, secao 16; isto aqui confere que nada mudou nela e que
+# o nosso codigo nao abriu porta nova.
 problemas = []
-o = montar.G729_REGISTRO - montar.BASE_APP
-if (bytes(app_velho[o:o + 4]) != montar.G729_TIPO_ANTES or bytes(app[o:o + 4]) != montar.G729_TIPO_DEPOIS
-        or app[o + 4:o + 68] != app_velho[o + 4:o + 68]
-        or struct.unpack_from('<4I', app_velho, o + 4) != montar.G729_ENTRADAS):
-    problemas.append(f'registro do G.729 em {montar.G729_REGISTRO:#x} diferente do previsto')
-o = montar.G729 - montar.BASE_APP
+for reg, tipo, entradas_dec, oque in montar.DECODIFICADORES:
+    o = reg - montar.BASE_APP
+    if (struct.unpack_from('<5I', app_velho, o) != (tipo,) + entradas_dec or bytes(app[o:o + 4]) != bytes(4)
+            or app[o + 4:o + montar.TAM_REGISTRO] != app_velho[o + 4:o + montar.TAM_REGISTRO]):
+        problemas.append(f'registro do {oque} em {reg:#x} diferente do previsto')
+o = montar.LIVRE - montar.BASE_APP
 if bytes(app[o:o + len(tela)]) != tela:
-    problemas.append('tela B ausente do app.bin no lugar do G.729')
+    problemas.append('tela B ausente do app.bin no lugar dos decodificadores')
+excecoes = {}
+for endereco, codificacao, oque in montar.CODIFICACOES_FORA:
+    o = endereco - montar.BASE_APP
+    if bytes(app_velho[o:o + 4]) != codificacao or bytes(app[o:o + 4]) != codificacao:
+        problemas.append(f'{endereco:#x} nao e mais {oque} ({codificacao.hex()})')
+    excecoes[endereco] = codificacao
 SEG2_OFF, RAM = 0x6AC0C, 0x02000000      # o que roda na RAM: app.bin + 0x6AC0C em diante, la em 0x02000000
-dentro = lambda a: montar.G729 <= a < montar.G729_FIM
-registro = lambda a: montar.G729_REGISTRO <= a < montar.G729_REGISTRO + 68
+dentro = lambda a: montar.LIVRE <= a < montar.LIVRE_FIM
+registro = lambda a: any(r <= a < r + montar.TAM_REGISTRO for r, _, _, _ in montar.DECODIFICADORES)
 for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
     for o in range(0, len(binario) - 3, 2):
         onde = montar.BASE_APP + o
         if dentro(onde) or registro(onde):
             continue
         v = struct.unpack_from('<I', binario, o)[0]
-        if dentro(v & ~1):
-            problemas.append(f'{nome_app}: valor {v:#x} em {onde:#x} aponta para dentro do G.729')
+        if dentro(v & ~1) and excecoes.get(onde) != bytes(binario[o:o + 4]):
+            problemas.append(f'{nome_app}: valor {v:#x} em {onde:#x} aponta para dentro da faixa')
         if binario[o + 1] == 0xEA and binario[o] & 0x80:
             d22 = ((binario[o] & 0x3F) << 16) | (binario[o + 3] << 8) | binario[o + 2]
             pc = (onde if o < SEG2_OFF else RAM + o - SEG2_OFF) + 4
-            if dentro(pc + 2 * (d22 - 0x400000 if d22 & 0x200000 else d22)) and onde not in sitios_g729:
-                problemas.append(f'{nome_app}: call/goto em {onde:#x} cai dentro do G.729')
-print(f'2h. tela B ({len(tela)} B) em {montar.G729:#x}, no lugar do G.729 (ate {montar.G729_FIM:#x}); tipo '
-      f'do G.729 no registro {montar.G729_REGISTRO:#x} de 0x40 para 0, o resto do registro intacto; nada '
-      'de fora aponta para a faixa, nem no de fabrica nem no novo (fora os sitios da tela B): '
-      + ('ok' if not problemas else 'FALHOU'))
+            if dentro(pc + 2 * (d22 - 0x400000 if d22 & 0x200000 else d22)) and onde not in sitios_livre:
+                problemas.append(f'{nome_app}: call/goto em {onde:#x} cai dentro da faixa')
+print(f'2h. tela B ({len(tela)} B) em {montar.LIVRE:#x}, no lugar do G.729 e do MP3 (ate '
+      f'{montar.LIVRE_FIM:#x}); tipo dos dois no registro de fabrica para 0, o resto dos registros intacto; '
+      f'nada de fora aponta para a faixa, nem no de fabrica nem no novo (fora os sitios da tela B e '
+      f'{len(excecoes)} instrucao conferida byte a byte): ' + ('ok' if not problemas else 'FALHOU'))
 for p_ in problemas[:20]:
     print('    ' + p_)
 erros += problemas
@@ -580,7 +589,7 @@ if montar.REALCE:
 # declarada em FIRMWARE() no bancos.c. As rotinas viraram simbolos absolutos e a chamada e
 # relativa, resolvida pelo linker: aqui o destino de cada uma e recalculado do proprio deslocamento
 # que esta nos bytes (com ou sem rotulo no desmontado), e chamada por registrador e recusada,
-# porque o destino dela nao se confere. E nada do .text nem do .g729 chama o .vozes: o que roda na
+# porque o destino dela nao se confere. E nada do .text nem do .livre chama o .vozes: o que roda na
 # partida, no cabo, nos menus e na tela principal nunca chega ao espaco que era das vozes. Os desvios
 # da tela B voltam para dentro da rotina de fabrica, logo depois dos bytes cobertos; esse goto e
 # conferido na 4m.
@@ -588,11 +597,39 @@ voltas = {e + len(c) for e, c, _, _, _ in montar.TELA_DESVIOS}
 usadas, estranhas = {}, []
 desmontado = open(os.path.join(os.path.dirname(codigo), 'bancos.dis'), encoding='utf-8',
                   errors='replace').read().splitlines()
+
+
+def faixas_de_codigo(elf):
+    """[inicio, fim) de cada funcao do ELF (simbolo FUNC com tamanho, da .symtab). O desmontado le
+    tudo como instrucao, e a .rodata do tela.o fica intercalada com o codigo na faixa .livre (o
+    linker poe as secoes na ordem do arquivo): uma cadeia como "\\x85\\x86\\x87" sai como um goto."""
+    e = open(elf, 'rb').read()
+    shoff = struct.unpack_from('<I', e, 0x20)[0]
+    tam_sh, n_sh, _ = struct.unpack_from('<HHH', e, 0x2E)
+    faixas = []
+    for i in range(n_sh):
+        sh = struct.unpack_from('<10I', e, shoff + i * tam_sh)
+        if sh[1] != 2:                                  # SHT_SYMTAB
+            continue
+        for o in range(sh[4], sh[4] + sh[5], sh[9]):
+            _, valor, tamanho, info, _, _ = struct.unpack_from('<IIIBBH', e, o)
+            if info & 0xF == 2 and tamanho:              # STT_FUNC
+                faixas.append((valor, valor + tamanho))
+    return faixas
+
+
+# o codigo: as funcoes em C e os desvios em assembly da tela B (sem tamanho no ELF; a 4m os confere
+# byte a byte: a ida, o caminho de fabrica com os bytes cobertos e o goto de volta)
+codigo_em = faixas_de_codigo(os.path.splitext(codigo)[0] + '.elf')
+codigo_em += [(montar.S[d], montar.S[d + '_fabrica'] + 4 + len(c) + 4) for _, c, d, _, _ in montar.TELA_DESVIOS]
+codigo_em.append((montar.S[montar.AJUSTES_FABRICA[0]], montar.S[montar.AJUSTES_FABRICA[0]] + 8))
 for linha in desmontado:
     m = re.match(r'\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+)\s*(call|goto)\s+(\S+)', linha)
     if not m:
         continue
     onde, tam, alvo = int(m.group(1), 16), len(m.group(2).split()), m.group(4)
+    if not any(a <= onde < b for a, b in codigo_em):
+        continue                                        # dado (.rodata) lido como instrucao
     if not re.fullmatch(r'-?\d+', alvo):
         estranhas.append(f'{onde:#x} {m.group(3)} {alvo} (por registrador)')
         continue
@@ -600,7 +637,7 @@ for linha in desmontado:
     if not nas_vozes(onde) and nas_vozes(destino):
         estranhas.append(f'{onde:#x} {m.group(3)} -> {destino:#x} (de fora do .vozes para o .vozes)')
         continue
-    if no_texto(destino) or nas_vozes(destino) or no_g729(destino) or (no_g729(onde) and destino in voltas):
+    if no_texto(destino) or nas_vozes(destino) or na_livre(destino) or (na_livre(onde) and destino in voltas):
         continue
     if destino in declaradas:
         usadas[declaradas[destino]] = usadas.get(declaradas[destino], 0) + 1
@@ -613,7 +650,7 @@ for e in estranhas:
     erros.append('chamada com destino nao conferido: ' + e)
 
 # 4m. a tela B. Cada uma das treze entradas tem de fabrica os bytes que o montar cobre e, remendada,
-# um goto para o desvio dela. E o desvio, no .g729, e exatamente: guarda rets e r0..r3 (10 04 60 04,
+# um goto para o desvio dela. E o desvio, no .livre, e exatamente: guarda rets e r0..r3 (10 04 60 04,
 # as formas de 0x01E3C290 e 0x01E51358), chama o gancho em C, desvia para o caminho de fabrica se ele
 # devolver 0 (00 43: "if (r0 == 0) goto" 6 adiante), senao restaura (40 04 88 04) e volta (80 00). O
 # caminho de fabrica restaura, refaz os bytes cobertos, iguais aos de fabrica, e desvia de volta para
@@ -621,10 +658,10 @@ for e in estranhas:
 problemas = []
 for entrada, cobertos, desvio, gancho, oque in montar.TELA_DESVIOS:
     o, d = entrada - montar.BASE_APP, montar.S[desvio]
-    v, fab = d - g729_em, montar.S[desvio + '_fabrica'] - g729_em
+    v, fab = d - livre_em, montar.S[desvio + '_fabrica'] - livre_em
     volta = montar.S[desvio + '_fabrica'] + 4 + len(cobertos)
     certo = (bytes(app_velho[o:o + len(cobertos)]) == cobertos
-             and bytes(app[o:o + 4]) == montar.monta_goto(entrada, d) and no_g729(d)
+             and bytes(app[o:o + 4]) == montar.monta_goto(entrada, d) and na_livre(d)
              and tela[v:v + 4] == bytes.fromhex('10046004')
              and tela[v + 4:v + 8] == montar.monta_call(d + 4, montar.S[gancho])
              and tela[v + 8:v + 16] == bytes.fromhex('0043400488048000') and fab == v + 16
@@ -638,7 +675,32 @@ print(f'4m. tela B: {len(montar.TELA_DESVIOS)} desvios de entrada, bytes de fabr
 for p_ in problemas:
     print('    ' + p_)
     erros.append('desvio da tela B errado: ' + p_)
+# Os ajustes do radio de fabrica chamados como rotina (radio_ajustes_fabrica): exatamente os bytes que
+# o desvio dela cobre e um goto para logo depois deles. E as chamadas trocadas (ENVIA_SITIOS), todas
+# antes chamadas do envia() de fabrica, e as que viram nop (NOP_SITIOS).
+nome_fab, entrada_fab = montar.AJUSTES_FABRICA
+cobertos_fab = next(c for e, c, _, _, _ in montar.TELA_DESVIOS if e == entrada_fab)
+c = montar.S[nome_fab]
+v = c - livre_em
+certo = (na_livre(c) and tela[v:v + len(cobertos_fab)] == cobertos_fab
+         and tela[v + len(cobertos_fab):v + len(cobertos_fab) + 4]
+         == montar.monta_goto(c + len(cobertos_fab), entrada_fab + len(cobertos_fab)))
+for sitio, gancho, _ in montar.ENVIA_SITIOS:
+    o = sitio - montar.BASE_APP
+    certo = (certo and bytes(app_velho[o:o + 4]) == montar.monta_call(sitio, montar.ENVIA_ERA)
+             and bytes(app[o:o + 4]) == montar.monta_call(sitio, montar.S[gancho]))
+for sitio, _ in montar.NOP_SITIOS:
+    o = sitio - montar.BASE_APP
+    certo = (certo and bytes(app_velho[o:o + 4]) == montar.monta_call(sitio, montar.ENVIA_ERA)
+             and bytes(app[o:o + 4]) == montar.NOP)
+print(f'4m. {nome_fab}: os {len(cobertos_fab)} bytes de fabrica e o goto para {entrada_fab + len(cobertos_fab):#x}; '
+      f'{len(montar.ENVIA_SITIOS)} chamadas do envia() trocadas pelos ganchos e {len(montar.NOP_SITIOS)} por nop: '
+      + ('ok' if certo else 'FALHOU'))
+if not certo:
+    erros.append('radio_ajustes_fabrica ou chamada trocada errados')
 previsto_tela = [(e, e + 3, 'tela B') for e, _, _, _, _ in montar.TELA_DESVIOS]
+previsto_tela += [(s_, s_ + 3, o_) for s_, _, o_ in montar.ENVIA_SITIOS]
+previsto_tela += [(s_, s_ + 3, o_) for s_, o_ in montar.NOP_SITIOS]
 
 # 4n. o codigo novo nao tem dados em RAM (.data, .bss): nao ha RAM nossa, e o bancos.ld so poe codigo e
 # tabelas na flash. Uma variavel global sem const viraria uma dessas secoes e cairia num lugar qualquer.
@@ -711,6 +773,59 @@ def imediato16(endereco):
     return struct.unpack('<H', app_velho[o + 2:o + 4])[0]
 
 
+def campo_do_item(get, campo):
+    """Um campo de 32 bits do item da tabela nova cujo get e a rotina nossa dada."""
+    for o in range(0, len(tabela_esperada), montar.TAM_ITEM):
+        if struct.unpack_from('<I', tabela_esperada, o + montar.CAMPO['get'])[0] == montar.S[get]:
+            return struct.unpack_from('<I', tabela_esperada, o + montar.CAMPO[campo])[0]
+
+
+# 4o. sem o chines (v37). O IDIOMA que o gancho da partida zera e o byte que o get do item LANGUAGE de
+# fabrica le (0x01E3C9A8: "r0 = 1268; r1 = 83584; r0 = b[r1+r0]"), e o item saiu da tabela (ITENS_FORA).
+idioma_get = imediato(0x01E3C9AC) + imediato16(0x01E3C9A8)
+ok = (define('IDIOMA') == idioma_get and montar.LANGUAGE_ITEM in montar.ITENS_FORA
+      and struct.unpack_from('<I', app_velho, montar.TABELA - montar.BASE_APP
+                             + montar.LANGUAGE_ITEM * montar.TAM_ITEM + montar.CAMPO['get'])[0] == 0x01E3C9A8)
+print(f"4o. IDIOMA = {define('IDIOMA'):#x}, o get do LANGUAGE le {idioma_get:#x}, e o item "
+      f'{montar.LANGUAGE_ITEM} (o LANGUAGE) saiu do menu: ' + ('ok' if ok else 'FALHOU'))
+if not ok:
+    erros.append('IDIOMA nao e o byte do LANGUAGE, ou o item ficou no menu')
+
+
+def deslocamento(endereco):
+    """O deslocamento de um "rX = b[rY+imm]" (50 ee + 2 bytes: rY no nibble alto do 3o byte, o
+    deslocamento no 4o e no nibble baixo do 3o) do firmware de fabrica."""
+    o = endereco - montar.BASE_APP
+    assert app_velho[o:o + 2] == b'\x50\xee', hex(endereco)
+    return app_velho[o + 3] << 4 | app_velho[o + 2] & 0x0F
+
+
+# 4p. os enderecos de RAM do radio (e do editor de nome) no telas.c (v38; na v37 seis sairam errados, lidos sem o indice
+# x 2 do desmontado). Cada um e refeito dos bytes de fabrica da rotina que o le: a base carregada em
+# 32 bits e o indice de 16 bits (deslocado como no acesso, h[] x 2 e [] x 4) ou o deslocamento do
+# proprio acesso. O RADIO_NIVEL e o byte antes do RADIO_SINAL (0x01E451AA: r1 += -1).
+radio_ram = [
+    ('RADIO_BANDA', imediato(0x01E44FC8) + deslocamento(0x01E44FCE)),
+    ('RADIO_MEMORIAS', imediato(0x01E449D0) + deslocamento(0x01E44AD2)),
+    ('RADIO_PASSO_AM', imediato(0x01E44CBC) + deslocamento(0x01E44D22)),
+    ('RADIO_PASSO_SSB', imediato(0x01E44CBC) + deslocamento(0x01E44D30)),
+    ('RADIO_FAIXA_AM', imediato(0x01E45010) + imediato16(0x01E4500C)),
+    ('RADIO_FREQ', imediato(0x01E449CA) + (imediato16(0x01E449C6) << 1)),
+    ('RADIO_MEMORIA', imediato(0x01E449CA) + imediato16(0x01E44ADE)),
+    ('RADIO_SINAL', imediato(0x01E451A0) + imediato16(0x01E4519C)),
+    ('RADIO_NIVEL', imediato(0x01E451A0) + imediato16(0x01E4519C) - 1),
+    ('RADIO_LARGURA', imediato(0x01E44D6E) + imediato16(0x01E44DC2)),
+    ('RADIO_LNA', imediato(0x01E44D6E) + imediato16(0x01E44E4A)),
+    ('RADIO_BFO', imediato(0x01E44D6E) + (imediato16(0x01E44F12) << 1)),
+    ('RADIO_ITEM', imediato(0x01E49344) + (imediato16(0x01E49340) << 2)),
+    ('DIGITA_MODO', imediato(0x01E49094) + imediato16(0x01E4909C)),
+    ('EDITOR_MODO', imediato(0x01E48728) + imediato16(0x01E48724)),
+]
+errados = [f'{n} {define(n):#x} (o firmware le {a:#x})' for n, a in radio_ram if define(n) != a]
+print(f'4p. {len(radio_ram)} enderecos de RAM do radio refeitos dos bytes de fabrica: '
+      + ('ok' if not errados else 'FALHOU ' + ', '.join(errados)))
+erros += ['endereco do radio errado: ' + e for e in errados]
+
 # 4j. roger BEEP 2 e BEEP 3. Os enderecos saem das instrucoes do firmware: a variavel e a que o get do item
 # (0x01E3C91E) e a propria rotina do roger (0x01E44606) leem; a tabela do BEEP e a que o laco
 # de fabrica percorre (r4 de 0x01E44614 + 2051, dois pares de tras para frente); as rotinas de tom e
@@ -719,8 +834,6 @@ roger_get = imediato(0x01E3C922) + imediato16(0x01E3C91E)
 roger_rotina = imediato(0x01E4460A) + imediato16(0x01E44606)
 beep_tabela = imediato(0x01E44614) + 2051 - 6
 o_laco, o_desvio = montar.ROGER_LACO_EM - montar.BASE_APP, montar.ROGER_DESVIO_EM - montar.BASE_APP
-cn = struct.unpack_from('<I', blob, montar.S['roger_opcoes_cn'] - montar.ENDERECO_CODIGO)[0]
-cn_fabrica = struct.unpack_from('<I', app_velho, 0x6AC0C + 0x6E30)[0]      # tabela chinesa, RAM 0x6E30
 verificacoes = [
     ('ROGER e a variavel do item e da rotina', define('ROGER') == roger_get == roger_rotina),
     ('tabela do BEEP de fabrica', define('BEEP_FABRICA') == beep_tabela),
@@ -735,7 +848,8 @@ verificacoes = [
     ('laco dos tons', bytes(app_velho[o_laco:o_laco + 8]) == montar.ROGER_LACO_ANTES
      and bytes(app[o_laco:o_laco + 8]) == montar.monta_call(montar.ROGER_LACO_EM, montar.S['gancho_roger_tons'])
      + montar.monta_goto(montar.ROGER_LACO_EM + 4, montar.ROGER_LACO_FIM)),
-    ('OFF em chines e o de fabrica', cn == cn_fabrica),
+    ('opcoes em chines = as em ingles (sem o chines, v37)',
+     campo_do_item('roger_le', 'opcoes_cn') == campo_do_item('roger_le', 'exibe') == montar.S['roger_opcoes']),
 ]
 for oque, ok in verificacoes:
     print(f'4j. roger: {oque}: ' + ('ok' if ok else 'FALHOU'))
@@ -766,9 +880,6 @@ freqs = [round(v * hz_por_unidade) for v in do_blob('scramble_freqs', 'H', 16)]
 erro_hz = max(abs(v * hz_por_unidade - f) for v, f in zip(do_blob('scramble_freqs', 'H', 16), freqs))
 valor, posicao = do_blob('scramble_valor', 'B', 9), do_blob('scramble_posicao', 'B', 16)
 nomes = [texto_do_blob(p) for p in do_blob('scramble_opcoes', 'I', 9)]
-cn = do_blob('scramble_opcoes_cn', 'I', 9)
-cn_fabrica = struct.unpack_from('<I', app_velho, 0x6AC0C + struct.unpack_from(
-    '<I', velha, montar.SCRAMBLE_ITEM * T + montar.CAMPO['opcoes_cn'])[0])[0]
 menu = [None] + [freqs[valor[p]] for p in range(1, 9)]        # frequencia que cada posicao grava
 o_rem = montar.SCRAMBLE_EM - montar.BASE_APP
 verificacoes = [
@@ -777,9 +888,10 @@ verificacoes = [
     ('valores 1 = 3400 Hz (ON de fabrica) e 2 = 2900 Hz (v24)', freqs[1] == 3400 and freqs[2] == 2900),
     ('menu de 2700 a 3400 Hz, de 100 em 100: ' + ' '.join(map(str, menu[1:])),
      menu[1:] == list(range(2700, 3401, 100)) and valor[0] == 0),
-    ('nomes das opcoes', nomes == ['OFF'] + [f'{f} Hz' for f in menu[1:]]
-     and [texto_do_blob(p) for p in cn[1:]] == nomes[1:]),
-    ('OFF em chines e o de fabrica', cn[0] == cn_fabrica),
+    ('nomes das opcoes', nomes == ['OFF'] + [f'{f} Hz' for f in menu[1:]]),
+    ('opcoes em chines = as em ingles (sem o chines, v37)',
+     campo_do_item('scramble_le', 'opcoes_cn') == campo_do_item('scramble_le', 'exibe')
+     == montar.S['scramble_opcoes']),
     ('posicao <-> valor: ida e volta', all(posicao[valor[p]] == p for p in range(9))),
     ('valores 0 a 15: o menu mostra a frequencia em que o radio inverte',
      posicao[0] == 0 and all(menu[posicao[v]] == freqs[v] for v in range(1, 16))),
@@ -795,8 +907,8 @@ for oque, ok in verificacoes:
 previsto.append((montar.SCRAMBLE_EM, montar.SCRAMBLE_EM + 13, 'scramble: frequencia pelo valor'))
 previsto += [(s_, s_ + len(a_) - 1, 'vozes: ' + d_) for s_, a_, _, d_ in montar.VOZES_REMENDOS]
 previsto += previsto_tela
-previsto += [(montar.G729, montar.G729 + len(tela) - 1, 'tela B no lugar do G.729'),
-             (montar.G729_REGISTRO, montar.G729_REGISTRO + 3, 'tipo do G.729 no registro')]
+previsto += [(montar.LIVRE, montar.LIVRE + len(tela) - 1, 'tela B no lugar do G.729 e do MP3')]
+previsto += [(r, r + 3, f'tipo do {d} no registro') for r, _, _, d in montar.DECODIFICADORES]
 
 if montar.REALCE_DIAG:
     certas = sum(bytes(app[e - montar.BASE_APP:e - montar.BASE_APP + 2])

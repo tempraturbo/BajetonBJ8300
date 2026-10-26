@@ -5,6 +5,84 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v39 — Oct 26 — the name editor in screen B, amber and red TX 🧪 **in test**
+
+What the v38 test showed, fixed. Since v38 the `VERSION` menu shows `Firmware: V2.0T`, as the
+owner asked.
+
+- **The name editor (BANK NAME and CH-NAME) in screen B.** The title sits on top, with an amber
+  chip on the right showing the mode (`abc`, `ABC` or `123`, switched by `#`). The text sits in a
+  green-bordered card, at 2x when it fits, with the amber cursor at the end and how many characters
+  of how many. The menu engine calls the mode indicator (`0x01E48720`) on every editor pass, and
+  that is what draws the whole editor: on opening, the stock clear (`0x01E49B1C`) has just wiped
+  everything. The frame the firmware draws straight to the LCD (`0x01E4865C`) and the text line
+  (`0x01E48FE0`) no longer reach the screen. Details in
+  [section 13 of the screen map](screen-map.md#13-the-other-screens-v37-to-v39).
+- **A bank that is on, and a channel in the bank, in amber** instead of the barely visible green.
+  BANK CH's " IN" is gone, as BANK's " ON" already was.
+- **TX:** the top bar chip got the dot, like RX, in red, and the whole signal bar turns that red
+  while transmitting (it was amber).
+- **`conferir.py`:** `4g` only reads instructions inside functions (each one's size comes from the
+  ELF symbol table) and inside the detours. The `.rodata` of `tela.o` is interleaved with the code,
+  and the string of the `abc` icons showed up as a `goto` outside.
+
+**Still open:** the radio freezes when switching the modulation from AM or FM to USB or LSB, and
+it has to be turned off. What was ruled out is under v38.
+
+## v38 — Oct 26 — what v37 showed ✔️ tested, with defects
+
+Tested on the radio. The fixes worked. Left over: the name editor, still the stock one; the green
+of a bank that is on, hard to see; and the freeze on switching to USB/LSB.
+
+- **Six radio RAM addresses were wrong in v37.** The disassembly writes `h[base+i<<1]` for base +
+  i × 2, and they were read as base + i: the frequency is `h[0x14CA6]` (not `0x14993`), the band
+  `b[0x12A1B]`, the memory mode `b[0x129F9]`, the steps `b[0x12A6F]` and `b[0x12A6E]`, and the BFO
+  `h[0x14CBC]`. The preview did not catch it, because it fakes the RAM with the same addresses.
+  `conferir.py` gained `4p`, which rebuilds each address from the stock bytes of the routine that
+  reads it.
+- **Menu:** the stock blinking (the item number at (133, 57) and, while editing, the cursor line in
+  the old font) all goes out through one `envia()` in the signal loop (`0x01E476E4`), which screen B
+  silences; the value being edited stays still, with the green border and the arrows. The row marker
+  (`02 10`, two spaces or nothing) is read from the content: the name (type 7) and "NONE" have none,
+  and BANK NAME was losing its first two letters ("MOTOROLA" showed as "TOROLA").
+- **The medium font**, 9 px, in the whole menu: the same letter, with each stem or empty column
+  2 px wide and the others 1 px, and rows 2 and 6 2 px tall. "NOISE REDUCTION" fits whole.
+- **Radio:** typing the frequency (`0x01E49078`), "SEEK..." (`0x01E4D3F8`) and the wait during a
+  modulation change (the set of the Modulation item, `0x01E3DE52`) in screen B. The two `envia()`
+  calls of the stock settings routine are silenced in radio mode, and the stock row stopped
+  flickering.
+- **DTMF** (the `#` key, screen mode 7): an amber-bordered box with amber text in place of the card
+  of the side in use.
+- **Voltage at power-on:** a "VOLTAGE" card instead of "Volta 8.1V". The firmware wrote the voltage
+  over the 8th position of "   Voltage" and ate the "ge"; the stock text left elsewhere became
+  " VOLTAGE".
+- **Both sides on a bank change:** turning a bank on or off puts both sides on a valid channel, as
+  the stock DELCH does (`0x01E3C5D6..`: each side's channel that left the map jumps to the next one,
+  and `0x01E3A812` reloads both). Before, only the highlighted side moved.
+- **The stack of pointer calls.** The menu get/set/exibe routines are called through a pointer, and
+  the stack analysis did not follow them. Measured now at the call site, they stay at up to 652 B,
+  under the stock 740 B. Saving a BANK NAME went 40 B over since v35, because leaving the editor
+  redraws the whole screen with the bank structure still on the stack; the write was split off.
+
+**Freeze on switching to USB/LSB** (already in v37): the SSB patch the radio sends to the receiver
+chip (`0x01E64D40..0x01E68B18`, 15,832 B, sent at `0x01E3DC42`) is the same as stock. The signal
+loop runs inside the interface, so nothing competes with the upload. The cause is not proven, and
+the next step is to test v36, which did not touch the radio.
+
+## v37 — Oct 25 — the other screens in theme B, no Chinese ✔️ tested, with defects
+
+Tested on the radio. The QT scan came out fine; the menu, the radio and the radio wait screen showed
+the defects fixed in v38.
+
+- **Menu, radio, QT scan and radio wait screen in theme B**, drawn by `firmware/src/telas.c` from
+  each one's stock routines, with no hook on the general `envia()`: that way prompts like
+  "Sure to Reset?" go through like the stock ones.
+- **No Chinese:** the LANGUAGE item left the menu, the power-on hook sets the language to English,
+  and the items' Chinese options point at the English tables.
+- **The free range grew:** the MP3 decoder goes out together with G.729
+  (`0x01E257E0..0x01E2EFC4`, 38,884 B; [section 16](reverse-engineering.md#16-g729-and-mp3-out-v36-and-v37)).
+- **The unlit meter is lighter**, so it does not blend into the black, on the radio's S-meter too.
+
 ## v36 — Oct 25 — screen B in place of G.729 ✅
 
 **Tested on the radio: it flashed completely and "everything worked, perfect".** The test
@@ -15,7 +93,7 @@ same, linked at another address.
 
 - **Screen B lives in place of the G.729 decoder**, the one for the `.wtg` voices, which have not
   played since v30: `0x01E257E0..0x01E278C8`, 8,424 B inside `app.bin`, of which the screen uses
-  5,636. The proof that it never runs is in [section 16](reverse-engineering.md#16-g729-out-v36).
+  5,636. The proof that it never runs is in [section 16](reverse-engineering.md#16-g729-and-mp3-out-v36-and-v37).
 - **G.729 leaves the decoder registry:** its type goes from `0x40` to 0, which no lookup matches.
   So it is not chosen even by a path that slipped through the map.
 - **Only the spectrum stays in the voices**, in C0 and C1, byte for byte the same as in v34.

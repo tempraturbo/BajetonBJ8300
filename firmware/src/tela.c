@@ -60,6 +60,8 @@ FIRMWARE(ENVIA, 0x01E3ADBC);   void ENVIA(void);
 #define TRAVA            RAM(u8, 0x00014B87)
 #define TENSAO_BRUTA     RAM(u8, 0x000149BC)             /* x 444 / 1000 = decimos de volt */
 #define NIVEL_BATERIA    RAM(u32, 0x000149C0)
+#define MODO_TELA        RAM(u8, 0x0001533D)             /* 0/3/5 dois VFOs, 1 menu, 2 radio, 7 DTMF,
+                                                          * 17 scan QT, 20 espectro */
 
 /* As cores do rascunho B (#rrggbb convertido para RGB565). */
 #define COR_FUNDO          0x0040u   /* #050806 */
@@ -76,13 +78,13 @@ FIRMWARE(ENVIA, 0x01E3ADBC);   void ENVIA(void);
 #define COR_CHIP_AMBAR     0x3941u   /* #3b2a0b */
 #define COR_TEXTO_AMBAR    0xFDE4u   /* #fbbf24 */
 #define COR_CHIP_VERMELHO  0x3861u   /* #3b0f0f */
-#define COR_SEG_FUNDO      0x1143u   /* #15291f */
+#define COR_SEG_FUNDO      0x2A68u   /* #2c4c3f: apagado, claro o bastante para nao sumir no preto */
 #define COR_SEG_VERDE      0x262Bu   /* #22c55e */
 #define COR_SEG_AMARELO    0xED81u   /* #eab308 */
 #define COR_SEG_VERMELHO   0xEA28u   /* #ef4444 */
 #define COR_SELO_B         0x21C5u   /* #20382c */
 #define COR_CHIP_CANAL_B   0x08E3u   /* #0f1f18 */
-#define COR_SEG_FUNDO_B    0x10E3u   /* #111f18 */
+#define COR_SEG_FUNDO_B    0x21E6u   /* #223f32 */
 #define COR_BRANCO         0xFFFFu
 
 /* Geometria: barra de cima, cartao do lado em evidencia (68 linhas) e faixa do outro (38). */
@@ -226,6 +228,34 @@ static unsigned indice(unsigned c)
     return c - FONTE_B_PRIMEIRA < FONTE_B_LETRAS ? c - FONTE_B_PRIMEIRA : '?' - FONTE_B_PRIMEIRA;
 }
 
+/* O tamanho medio (v38), entre o 1x (7 de altura) e o 2x (14): e = MEDIA. A mesma letra, com cada
+ * coluna de haste (4 pontos acesos ou mais) e cada coluna vazia com 2 px e as outras com 1, e a 2a e a
+ * 6a linha com 2 px - 9 de altura, o traco vertical do 2x e o horizontal do 1x. 1 px entre letras. */
+#define MEDIA         0
+#define ALTURA_MEDIA  9
+static const u8 linha_media[8] = {0, 1, 3, 4, 5, 6, 8, 9};
+
+static unsigned coluna_media(unsigned b)
+{
+    unsigned n;
+
+    for (n = 0; b; b >>= 1)
+        n += b & 1;
+    return n >= 4 || n == 0 ? 2 : 1;
+}
+
+/* Quanto uma letra anda: a largura dela mais o espaco depois. */
+static unsigned avanco(unsigned l, unsigned e)
+{
+    unsigned i, a = 1;
+
+    if (e)
+        return ((l & 7) + 1) * e;
+    for (i = 0; i < (l & 7); i++)
+        a += coluna_media(fonte_b_colunas[(l >> 3) + i]);
+    return a;
+}
+
 /* Uma letra com o canto de cima em (x, y), cada ponto um quadrado de e x e. Devolve quanto andar:
  * a largura dela mais uma coluna de espaco. */
 static unsigned letra(unsigned x, unsigned y, unsigned c, unsigned e, unsigned cor)
@@ -240,10 +270,27 @@ static unsigned letra(unsigned x, unsigned y, unsigned c, unsigned e, unsigned c
     return ((l & 7) + 1) * e;
 }
 
+/* A mesma letra no tamanho medio. Separada da letra(), que fica no fim do caminho mais fundo da tela
+ * principal: junta, as duas contas guardavam mais registradores e o quadro dela crescia. */
+SEPARADA static unsigned letra_media(unsigned x, unsigned y, unsigned c, unsigned cor)
+{
+    unsigned l = fonte_b_letra[indice(c)], i, b, r, w, a = 1;
+    unsigned ve = y < JAN_Y1 && y + ALTURA_MEDIA > JAN_Y0;
+
+    for (i = 0; i < (l & 7); i++, a += w, x += w) {
+        b = fonte_b_colunas[(l >> 3) + i];
+        w = coluna_media(b);
+        for (r = 0; ve && x < JAN_X1 && b; b >>= 1, r++)
+            if (b & 1)
+                retangulo(x, y + linha_media[r], x + w, y + linha_media[r + 1], cor);
+    }
+    return a;
+}
+
 COLADA static unsigned texto(unsigned x, unsigned y, const char *s, unsigned e, unsigned cor)
 {
     while (*s)
-        x += letra(x, y, (u8)*s++, e, cor);
+        x += e ? letra(x, y, (u8)*s++, e, cor) : letra_media(x, y, (u8)*s++, cor);
     return x;
 }
 
@@ -253,8 +300,8 @@ static unsigned largura(const char *s, unsigned e)
     unsigned l = 0;
 
     while (*s)
-        l += ((fonte_b_letra[indice((u8)*s++)] & 7) + 1) * e;
-    return l ? l - e : 0;
+        l += avanco(fonte_b_letra[indice((u8)*s++)], e);
+    return l ? l - (e ? e : 1) : 0;
 }
 
 /* Etiqueta: texto de 7 px num retangulo de 11 de altura, com 3 px de folga dos lados. Com direita,
@@ -316,13 +363,13 @@ static void texto_canal(char *s, unsigned canal)
 }
 
 /* Medidor de 20 segmentos de 4 px, de 5 em 5: 9 verdes, 5 amarelos e 6 vermelhos acesos ate o
- * sinal; transmitindo, todos ambar. */
+ * sinal; transmitindo, todos no vermelho do TX (v38; ate a v37, ambar). */
 static void medidor(unsigned x, unsigned y, unsigned altura, unsigned sinal, unsigned tx, unsigned apagado)
 {
     unsigned i;
 
     for (i = 0; i < 20; i++) {
-        unsigned cor = i >= sinal ? apagado : tx ? COR_TEXTO_AMBAR : i < 9 ? COR_SEG_VERDE
+        unsigned cor = i >= sinal ? apagado : tx ? COR_SEG_VERMELHO : i < 9 ? COR_SEG_VERDE
                                                              : i < 14 ? COR_SEG_AMARELO : COR_SEG_VERMELHO;
 
         pinta(x + i * 5, y, x + i * 5 + 4, y + altura, cor);
@@ -474,12 +521,13 @@ SEPARADA static void barra_estado(const struct estado *e)
 
     pinta(0, 0, 160, ALTURA_ESTADO - 1, COR_ESTADO);
     pinta(0, ALTURA_ESTADO - 1, 160, ALTURA_ESTADO, COR_LINHA);
-    if (e->tx)
-        x = etiqueta(x, 2, "TX", COR_CHIP_VERMELHO, COR_SEG_VERMELHO, 0);
-    else if (e->rx) {
-        pinta(x, 2, x + 22, 13, COR_CHIP_RX);
-        pinta(x + 3, 6, x + 6, 9, COR_TEXTO_RX);
-        texto(x + 8, 4, "RX", 1, COR_TEXTO_RX);
+    /* RX ou TX: o mesmo chip, com a bolinha, em verde ou em vermelho (v38: o TX tinha so o texto) */
+    if (e->tx || e->rx) {
+        unsigned cor = e->tx ? COR_SEG_VERMELHO : COR_TEXTO_RX;
+
+        pinta(x, 2, x + 22, 13, e->tx ? COR_CHIP_VERMELHO : COR_CHIP_RX);
+        pinta(x + 3, 6, x + 6, 9, cor);
+        texto(x + 8, 4, e->tx ? "TX" : "RX", 1, cor);
         x += 24;
     }
     if (e->vox)
@@ -513,12 +561,44 @@ SEPARADA static void barra_estado(const struct estado *e)
     }
 }
 
+/* A caixa do DTMF (modo de tela 7, a tecla #), no lugar da de fabrica (0x01E4DA54 abrindo,
+ * 0x01E4A8D4 a cada digito): no lugar do cartao do lado em evidencia, com contorno e texto ambar. Os
+ * digitos sao os de 0x14A3A (quantos em b[0x14A35], ate 10), completados com '-', como na de fabrica.
+ * Faz parte da cena enquanto o modo for 7, entao qualquer redesenho do cartao a mantem; a saida do
+ * modo zera o modo antes do redesenho inteiro (0x01E3C29C, 0x01E40D68). */
+#define TOPO_DTMF(lado) TOPO_CARTAO(lado)
+#define ALTURA_DTMF     ALTURA_CARTAO
+
+SEPARADA static void caixa_dtmf(unsigned lado)
+{
+    static const char titulo[] = "DTMF";
+    unsigned y = TOPO_DTMF(lado), i;
+    char s[11];
+
+    pinta(3, y, 157, y + ALTURA_DTMF, COR_TEXTO_AMBAR);
+    pinta(5, y + 2, 155, y + ALTURA_DTMF - 2, COR_FUNDO);
+    texto(80 - largura(titulo, MEDIA) / 2, y + 14, titulo, MEDIA, COR_TEXTO_AMBAR);
+    for (i = 0; i < 10; i++)
+        s[i] = i < DIGITADOS ? RAM(u8, DIGITOS + i) : '-';
+    s[10] = 0;
+    texto(80 - largura(s, 2) / 2, y + 33, s, 2, COR_TEXTO_AMBAR);
+}
+
+/* Cada parte so quando a janela aberta a cruza: o resto cairia todo fora dela. */
 static void cena(const struct estado *e)
 {
-    barra_estado(e);
-    cartao(e, e->evidencia);
-    informacoes(&e->lado[e->evidencia], TOPO_CARTAO(e->evidencia) + 38);
-    compacto(e, !e->evidencia);
+    unsigned i = e->evidencia, y0 = JAN_Y0, y1 = JAN_Y1;
+
+    if (y0 < ALTURA_ESTADO)
+        barra_estado(e);
+    if (y0 < TOPO_CARTAO(i) + ALTURA_CARTAO && y1 > TOPO_CARTAO(i)) {
+        cartao(e, i);
+        informacoes(&e->lado[i], TOPO_CARTAO(i) + 38);
+    }
+    if (y0 < TOPO_COMPACTO(!i) + ALTURA_COMPACTO && y1 > TOPO_COMPACTO(!i))
+        compacto(e, !i);
+    if (MODO_TELA == 7 && y0 < TOPO_DTMF(i) + ALTURA_DTMF && y1 > TOPO_DTMF(i))
+        caixa_dtmf(i);
 }
 
 /* As linhas [y0, y1) da tela, em janelas de ate 32 linhas (32 x 160 x 2 = 10240 B, o buffer todo). */
@@ -542,7 +622,8 @@ void tela_b(void)
 /* O medidor de um lado com o nivel dado (0..10, o do firmware; estado 1 = TX), e a barra de cima,
  * que mostra RX ou TX. E o que o gancho do medidor desenha (b_medidor), colado nele: o RX o chama do
  * laco 0x01E4622A, e assim o caminho fica dentro do que o firmware de fabrica ja usa de pilha ali. */
-static inline __attribute__((always_inline)) void medidor_b(unsigned estado, unsigned nivel, unsigned lado)
+static inline __attribute__((always_inline)) void medidor_b(unsigned estado, unsigned nivel, unsigned lado,
+                                                            unsigned so_barra)
 {
     struct estado e;
     unsigned y;
@@ -553,14 +634,15 @@ static inline __attribute__((always_inline)) void medidor_b(unsigned estado, uns
     e.tx = estado == 1;
     e.rx = !e.tx && nivel != 0;
     y = lado == e.evidencia ? TOPO_CARTAO(lado) + 54 : TOPO_COMPACTO(lado) + 24;
-    desenha(&e, y, y + (lado == e.evidencia ? 9 : 4));
+    if (!so_barra)                  /* nas outras telas (v37) nao ha medidor dos lados: so a barra */
+        desenha(&e, y, y + (lado == e.evidencia ? 9 : 4));
     desenha(&e, 0, ALTURA_ESTADO);
 }
 
 #ifdef PREVIA
 void tela_b_medidor(unsigned estado, unsigned nivel, unsigned lado)
 {
-    medidor_b(estado, nivel, lado);
+    medidor_b(estado, nivel, lado, 0);
 }
 #endif
 
@@ -587,21 +669,259 @@ void tela_b_digitando(void)
     desenha_lado(&e, e.evidencia);
 }
 
+#include "telas.c"
+
 #ifndef PREVIA
 /* ---------- ligacao com o firmware ----------
  * Treze rotinas que desenham a tela de dois VFOs ganham um desvio na entrada (DESVIO, abaixo). O
  * gancho de cada uma recebe os argumentos dela e devolve 1 quando desenhou a tela B no lugar - a
  * rotina de fabrica nao roda - ou 0, e entao ela roda como sempre. A tela B so desenha na tela de
- * dois VFOs (layout() diferente de 0, a mesma regra das rotinas de fabrica) e fora do idioma
- * chines, que a fonte nao tem. Quem decide QUANDO desenhar continua sendo o firmware. */
+ * dois VFOs (layout() diferente de 0, a mesma regra das rotinas de fabrica). Desde a v37 o radio fica
+ * sempre em ingles (o gancho da partida, no bancos.c), entao nao ha tela chinesa para respeitar.
+ * Quem decide QUANDO desenhar continua sendo o firmware. */
 FIRMWARE(LAYOUT, 0x01E3B1A2);  unsigned LAYOUT(unsigned);
 FIRMWARE(LIMPA, 0x01E3ACBA);   void LIMPA(unsigned);
-FIRMWARE(ENCHE, 0x01E3AC68);   void ENCHE(unsigned, unsigned, unsigned);
-#define IDIOMA  RAM(u8, 0x00014B74)                      /* 1 = chines */
-
 static unsigned ativa(void)
 {
-    return LAYOUT(LADO_B) != 0 && IDIOMA != 1;
+    return LAYOUT(LADO_B) != 0;
+}
+
+/* ---------- as outras telas (v37 e v38) ----------
+ * Menu (modo 1), radio (2) e scan QT (17), desenhados pelo telas.c, cada parte pela rotina de fabrica
+ * que a desenha - nada no envia() em geral, para aviso e confirmacao ("Sure to Reset?") passarem como
+ * os de fabrica e o desenho fundo so rodar nesses pontos:
+ *  - a barra de cima: os ganchos da barra, da pilha, do MO e do medidor, como na tela principal;
+ *  - o resumo do lado em evidencia (menu e scan QT): o gancho do lado (0x01E3B2C4, que o motor de
+ *    menus chama no fim de cada redesenho);
+ *  - menu: as duas chamadas do envia() do motor de menus (0x01E489E0), a do titulo e a de cada linha,
+ *    e a da piscada do laco do sinal (0x01E476E4, v38), que a tela B cala;
+ *  - radio: os desvios do redesenho inteiro (0x01E44FB0), da frequencia (0x01E449BA), do nome
+ *    (0x01E44B28), do medidor S (0x01E45198), dos ajustes (0x01E44C68) e, na v38, da frequencia
+ *    digitada (0x01E49078); as duas chamadas do envia() dos ajustes (0x01E44CA8, 0x01E44FA8), caladas
+ *    no modo 2, e a do "SEEK..." da interface (0x01E4D3F8);
+ *  - scan QT: o desvio do redesenho dele (0x01E45A82);
+ *  - a espera do radio: a chamada do envia() da partida dele (0x01E4A7D4) e as da troca de modulacao
+ *    (0x01E3DEBE e 0x01E3DEEA; a terceira, 0x01E3DF10, vira nop no montar.py);
+ *  - o editor de nome do menu (tipo 7 editando, v38): os desvios do indicador do modo (0x01E48720),
+ *    que desenha o editor inteiro, e da moldura direto no LCD (0x01E4865C), e a chamada do envia() da
+ *    linha do texto (0x01E48FE0), calada. */
+static unsigned telas_modo(void)
+{
+    unsigned m = MODO_TELA;
+
+    return m == 1 || m == 2 || m == 17 ? m : 0;
+}
+
+/* As linhas [y0, y1) de um modo. Separada, para a estrutura so pesar na pilha de quem desenha. */
+SEPARADA static void telas_faixa(unsigned m, unsigned y0, unsigned y1, unsigned variante, unsigned item)
+{
+    struct telas t;
+
+    le_telas(&t, m, variante, item);
+    desenha_telas(&t, y0, y1);
+}
+
+/* No lugar do envia() do titulo (0x01E48E82) e do de cada linha (0x01E48ECA) do motor de menus: a
+ * faixa do titulo, ou a da linha que o motor acabou de montar (a janela dele: y 75, 92 ou 109). Fora
+ * do modo de menu (ou no editor de nome), o envia() de fabrica. */
+void gancho_menu_titulo(void)
+{
+    if (telas_modo() != 1) {
+        ENVIA();
+        return;
+    }
+    telas_faixa(1, TOPO_MENU, TOPO_MENU + 18, 0, 0);
+}
+
+void gancho_menu_linha(void)
+{
+    unsigned r = JAN_Y0 >= 109 ? 2 : JAN_Y0 >= 92 ? 1 : 0;
+
+    if (telas_modo() != 1) {
+        ENVIA();
+        return;
+    }
+    telas_faixa(1, TOPO_MENU + 18 + r * 18, TOPO_MENU + 36 + r * 18, 0, 0);
+}
+
+/* No lugar do envia() de 0x01E476E4, por onde sai toda a piscada do menu no laco do sinal: o numero
+ * do item em (133, 57) e o espaco que o apaga (contador b[0x14C1A] em 4 e em 0, fora da edicao) e,
+ * editando, a linha do cursor na fonte de fabrica e a faixa que a apaga (0x01E472EA, 0x01E47332).
+ * No menu da tela B nada disso vai ao LCD - o cartao com borda verde e as setas ja mostram a edicao;
+ * no editor de nome (o cursor dele pisca por aqui tambem) e fora do menu, o envia() de fabrica. */
+void gancho_menu_pisca(void)
+{
+    if (telas_modo() != 1)
+        ENVIA();
+}
+
+/* 0x01E48720, o indicador do modo do editor de nome (abc, ABC, 123), que o motor de menus chama em
+ * toda passada no editor (0x01E48DAC, depois de cada tecla) e a troca de modo (#, 0x01E4A5B2). A de
+ * fabrica so o desenha quando o modo muda (o ja desenhado em b[0x14686]), com parte direto no LCD (as
+ * linhas de y 55 e 88 e a moldura). Na tela B ele desenha o editor inteiro abaixo da barra - ao abrir,
+ * a limpeza de fabrica (0x01E49B1C) acabou de apagar tudo - e grava o modo desenhado, como ela. */
+u32 b_editor_modo(void)
+{
+    if (telas_modo() != 1 || !menu_editor())
+        return 0;
+    EDITOR_DESENHADO = EDITOR_MODO;
+    telas_faixa(1, ALTURA_ESTADO, 128, 0, 0);
+    return 1;
+}
+
+/* 0x01E4865C(x0, y0, x1, y1, cor), a moldura direto no LCD: no editor, a do indicador e a da caixa
+ * do pinyin (0x01E48DD0, 0x01E48F18 - esta, a apagada, depois de cada troca de modo). Na tela B nao
+ * ha moldura de fabrica. */
+u32 b_editor_quadro(void)
+{
+    return telas_modo() == 1 && menu_editor();
+}
+
+/* No lugar do envia() da linha do texto do editor (0x01E48FE0, "%15s" em y 110): o b_editor_modo ja
+ * desenhou o texto na mesma passada. */
+void gancho_editor_linha(void)
+{
+    if (telas_modo() != 1 || !menu_editor())
+        ENVIA();
+}
+
+/* 0x01E44FB0, o redesenho do radio: so desenha (faixa da banda, 0x01E449BA, 0x01E44B28 e
+ * 0x01E44C68(0, -1), que com o item 0 nao grava nada), depois de por a banda (> 4) e a faixa do AM
+ * (> 3) em 0, como ele faz (0x01E44FD2, 0x01E4501A). Como ele, a seta fica na frequencia. */
+u32 b_radio(void)
+{
+    if (MODO_TELA != 2)
+        return 0;
+    if (RADIO_BANDA >= 5)
+        RADIO_BANDA = 0;
+    if (RADIO_FAIXA_AM >= 4)
+        RADIO_FAIXA_AM = 0;
+    telas_faixa(2, 0, 128, RADIO_NORMAL, 0);
+    return 1;
+}
+
+/* 0x01E449BA, a frequencia e o numero da memoria (so desenha): a faixa da frequencia e a do nome,
+ * onde a tela B mostra a memoria. A seta, pelo item em edicao ([0x14CD4]). */
+u32 b_radio_freq(void)
+{
+    if (MODO_TELA != 2)
+        return 0;
+    telas_faixa(2, 36, 88, RADIO_NORMAL, RADIO_ITEM);
+    return 1;
+}
+
+/* 0x01E44B28, o nome da memoria (so le o chip de dados e desenha). */
+u32 b_radio_nome(void)
+{
+    if (MODO_TELA != 2)
+        return 0;
+    telas_faixa(2, 68, 88, RADIO_NORMAL, RADIO_ITEM);
+    return 1;
+}
+
+/* 0x01E45198, o medidor S: a de fabrica so redesenha quando o nivel (sinal / 6) muda, e grava o nivel
+ * em b[0x14CCE]; o gancho faz o mesmo. */
+u32 b_radio_sinal(void)
+{
+    unsigned nivel = RADIO_SINAL / 6;
+
+    if (MODO_TELA != 2)
+        return 0;
+    if (RADIO_NIVEL != nivel) {
+        RADIO_NIVEL = nivel;
+        telas_faixa(2, 16, 36, RADIO_NORMAL, RADIO_ITEM);
+    }
+    return 1;
+}
+
+/* 0x01E44C68(item, valor), a seta e os ajustes: grava o valor (passo, BW, LNA, BFO) e desenha. O
+ * gancho a roda inteira (radio_ajustes_fabrica, no fim do arquivo) - os dois envia() dela ficam
+ * calados no modo 2 (gancho_radio_mudo), para a fileira de fabrica nao piscar na tela - e depois
+ * desenha as faixas com o item. */
+void radio_ajustes_fabrica(u32 item, u32 valor);
+
+u32 b_radio_ajustes(u32 item, u32 valor)
+{
+    if (MODO_TELA != 2)
+        return 0;
+    radio_ajustes_fabrica(item, valor);
+    telas_faixa(2, 36, 68, RADIO_NORMAL, item);
+    telas_faixa(2, 88, 128, RADIO_NORMAL, item);
+    return 1;
+}
+
+/* No lugar dos dois envia() de 0x01E44C68 (0x01E44CA8, a seta; 0x01E44FA8, a fileira de ajustes): no
+ * radio a tela B desenha depois, entao o desenho de fabrica nao vai ao LCD. */
+void gancho_radio_mudo(void)
+{
+    if (MODO_TELA != 2)
+        ENVIA();
+}
+
+/* 0x01E49078, a frequencia sendo digitada (so desenha: a mascara e os digitos de 0x14A3A, e a unidade). */
+u32 b_radio_digita(void)
+{
+    if (MODO_TELA != 2)
+        return 0;
+    telas_faixa(2, 36, 68, RADIO_DIGITANDO, RADIO_ITEM);
+    return 1;
+}
+
+/* No lugar do envia() do "SEEK..." que a interface escreve no lugar da frequencia (0x01E4D3D4..
+ * 0x01E4D3F8) ao comecar a busca. */
+void gancho_radio_seek(void)
+{
+    if (MODO_TELA != 2) {
+        ENVIA();
+        return;
+    }
+    telas_faixa(2, 36, 68, RADIO_BUSCANDO, RADIO_ITEM);
+}
+
+/* 0x01E45A82(rodando), o scan QT: so desenha o titulo e o estado. */
+u32 b_scanqt(u32 rodando)
+{
+    if (MODO_TELA != 17)
+        return 0;
+    telas_faixa(17, 0, 128, rodando != 0, 0);
+    return 1;
+}
+
+/* No lugar do envia() que manda "Radio Initialization / Please Wait..." na partida do radio
+ * (0x01E4A7D4; o modo ja e o 2, gravado em 0x01E4A612) e na troca de modulacao (0x01E3DEBE em
+ * chines, 0x01E3DEEA em ingles: o set do item Modulation do menu do radio, 0x01E3DE52, que antes
+ * redesenha a tela de um VFO de fabrica - a espera cobre a tela inteira). */
+void gancho_radio_inicio(void)
+{
+    telas_faixa(TELA_INICIO_RADIO, 0, 128, 0, 0);
+}
+
+/* No lugar do envia() da caixa do DTMF de fabrica: abrindo (0x01E4DA88, os dois lados) e a cada
+ * digito (0x01E4A93C). Na tela de dois VFOs, a faixa da caixa na tela B (a cena a desenha no modo 7);
+ * fora dela, o envia() de fabrica. */
+void gancho_dtmf(void)
+{
+    struct estado e;
+
+    if (!ativa()) {
+        ENVIA();
+        return;
+    }
+    le_estado(&e);
+    desenha(&e, TOPO_DTMF(e.evidencia), TOPO_DTMF(e.evidencia) + ALTURA_DTMF);
+}
+
+/* No lugar do envia() da tensao na partida (0x01E55F40): a tela B inteira, com a tensao lida como a
+ * partida a le (0x01E45FB0 x 444 / 1000). */
+void gancho_tensao(void)
+{
+    unsigned decimos = LE_TENSAO() * 444u / 1000, y;
+
+    for (y = 0; y < 128; y += 32) {
+        janela_b(0, 160, y, y + 32, COR_FUNDO);
+        tensao_cena(decimos);
+        ENVIA();
+    }
 }
 
 /* 0x01E3C132(0): a tela inteira. Ela zera o estado de TX (0x01E3C1D4); o gancho tambem. Com 1 e a
@@ -621,7 +941,7 @@ u32 b_barra(void)
 {
     struct estado e;
 
-    if (!ativa())
+    if (!ativa() && !telas_modo())
         return 0;
     le_estado(&e);
     desenha(&e, 0, ALTURA_ESTADO);
@@ -634,7 +954,7 @@ u32 b_bateria(u32 nivel)
 {
     struct estado e;
 
-    if (!ativa())
+    if (!ativa() && !telas_modo())
         return 0;
     le_estado(&e);
     e.bateria = nivel;
@@ -647,7 +967,7 @@ u32 b_monitor(u32 ligado)
 {
     struct estado e;
 
-    if (!ativa())
+    if (!ativa() && !telas_modo())
         return 0;
     le_estado(&e);
     e.mo = ligado != 0;
@@ -680,7 +1000,7 @@ u32 b_digitando(void)
  * A/B (0x01E4DC9E) troca o lado e chama 0x01E41486, que, com b[0x14685] em 0, so redesenha o lado
  * novo por estas duas - e na tela B o cartao muda de lugar, entao o outro lado tambem muda. Sao
  * raras (A/B, potencia, modulacao); a troca de canal vem por b_evidencia. */
-u32 b_lado(void)
+SEPARADA static u32 lado_principal(void)
 {
     struct estado e;
 
@@ -691,14 +1011,29 @@ u32 b_lado(void)
     return 1;
 }
 
+/* No menu e no scan QT, so o resumo; a estrutura da tela principal fica na lado_principal, para as
+ * duas nao se somarem na pilha. */
+u32 b_lado(void)
+{
+    unsigned m = telas_modo();
+
+    if (m == 1 || m == 17) {
+        desenha_resumo();
+        return 1;
+    }
+    return lado_principal();
+}
+
 /* 0x01E3B592(estado, nivel, lado, janela propria), o medidor; fora da tela inteira e da TX (que sao
  * nossas), so o RX chama (0x01E45328). O nivel que vem e o que vale (o MO passa 10, 0x01E4532C), e a
  * barra de cima acompanha, pelo RX. */
 u32 b_medidor(u32 estado, u32 nivel, u32 lado)
 {
-    if (!ativa())
+    unsigned outra = telas_modo() != 0;
+
+    if (!ativa() && !outra)
         return 0;
-    medidor_b(estado, nivel, lado);
+    medidor_b(estado, nivel, lado, outra);
     return 1;
 }
 
@@ -764,68 +1099,52 @@ DESVIO(desvio_lado, b_lado, 0x01E413C2, "0x76, 0x04, 0xe2, 0x9e");
 DESVIO(desvio_informacoes, b_lado, 0x01E3B2C8, "0x7a, 0x04, 0xe2, 0x9c");
 DESVIO(desvio_medidor, b_medidor, 0x01E3B596, "0x7c, 0x04, 0xe2, 0x9c");
 DESVIO(desvio_transmissao, b_transmissao, 0x01E40F20, "0x76, 0x04, 0xe2, 0x9e");
+DESVIO(desvio_radio, b_radio, 0x01E44FB4, "0x77, 0x04, 0xe2, 0x9b");
+DESVIO(desvio_radio_freq, b_radio_freq, 0x01E449BE, "0x79, 0x04, 0xe2, 0x9a");
+DESVIO(desvio_radio_nome, b_radio_nome, 0x01E44B2C, "0x75, 0x04, 0xe2, 0x95");
+DESVIO(desvio_radio_sinal, b_radio_sinal, 0x01E4519C, "0x7b, 0x04, 0xe2, 0x9c");
+DESVIO(desvio_radio_ajustes, b_radio_ajustes, 0x01E44C6C, "0x7d, 0x04, 0xe2, 0x99");
+DESVIO(desvio_scanqt, b_scanqt, 0x01E45A86, "0x76, 0x04, 0xe2, 0x9a");
+DESVIO(desvio_radio_digita, b_radio_digita, 0x01E4907C, "0x77, 0x04, 0xe2, 0x9b");
+DESVIO(desvio_editor_modo, b_editor_modo, 0x01E48724, "0x76, 0x04, 0xe2, 0x9c");
+DESVIO(desvio_editor_quadro, b_editor_quadro, 0x01E48660, "0x7e, 0x04, 0x29, 0x16");
 
-/* ---------- realce verde, a tela de fabrica quando a B nao desenha ----------
- * Desde a v17 o bloco do VFO em evidencia fica verde (docs/mapa-da-tela.md, secao 7); hoje isso so
- * vale com o idioma chines, em que a tela B nao desenha. O gancho do envio entra nas 16 chamadas de
- * envia() das rotinas da tela de dois VFOs (REALCE_SITIOS_GANCHO, no montar.py) e o da limpeza nas
- * duas que limpam e redesenham a tela inteira (LIMPA_SITIOS).
+/* 0x01E44C68 de fabrica, chamada como rotina: os bytes que o desvio cobre e a volta. O rets que o
+ * primeiro deles empilha e o de quem chamou esta, entao a de fabrica volta para la. */
+__asm__(".section .text.radio_ajustes_fabrica,\"ax\"\n"
+        ".globl radio_ajustes_fabrica\n"
+        "radio_ajustes_fabrica:\n\t"
+        ".byte 0x7d, 0x04, 0xe2, 0x99\n\t"
+        "goto desvio_radio_ajustes_volta\n"
+        ".previous");
+
+/* ---------- envio e limpeza da tela de dois VFOs ----------
+ * O gancho do envio entra nas 16 chamadas de envia() das rotinas da tela de dois VFOs
+ * (REALCE_SITIOS_GANCHO, no montar.py) e o da limpeza nas duas que limpam e redesenham a tela inteira
+ * (LIMPA_SITIOS). Ate a v36 eles tambem pintavam o realce verde da tela de fabrica, que so aparecia
+ * no idioma chines; o chines saiu na v37, e o realce com ele.
  *
  * Com a tela B desenhando, nenhuma dessas rotinas deveria chegar ao envio - as treze acima nao rodam.
  * Se alguma chegar, pelo caminho que for, o gancho redesenha da tela B o lado a que a janela pertence
  * (pela separadora da limpeza de fabrica: 88 com o A em evidencia, 55 com o B), no lugar do que a
  * rotina de fabrica desenhou. A limpeza nao roda: a tela inteira vem logo depois (0x01E3C290 e
- * 0x01E40F1C passam por 0x01E3C132) e a desenha toda. */
-/* #004900, degrau 18 dos 64 do verde em RGB565. Ja passaram por aqui o 0x00E0 (degrau 7, "nao da
- * nem pra perceber que e verde"), o 0x0280 (20), o 0x0380 (28, claro demais no bloco inteiro) e o
- * 0x02C0 (22, v17 a v19: "ainda bem claro"). */
-#define COR_REALCE  0x0240u
-#define COR_BUF     ((u16)(COR_REALCE >> 8 | COR_REALCE << 8))
-#define AREA        72u                                  /* linhas do lado em evidencia na limpeza */
-
-/* Primeira linha da area do lado em evidencia (16 com o A, 56 com o B), ou 0 fora da tela de dois
- * VFOs: layout() devolve 2 com o A em evidencia, 1 com o B e 0 nas outras telas. */
-static unsigned area_realce(void)
-{
-    unsigned lado = LAYOUT(LADO_B);
-
-    return lado - 1 <= 1 ? 96 - 40 * lado : 0;
-}
-
+ * 0x01E40F1C passam por 0x01E3C132) e a desenha toda. Fora da tela de dois VFOs (layout() = 0) os
+ * dois fazem o que a chamada de fabrica fazia. */
 void gancho_envia(void)
 {
-    unsigned y0 = JAN_Y0, inicio = area_realce();
-
-    if (inicio && IDIOMA != 1) {
+    if (ativa()) {
         struct estado e;
 
         le_estado(&e);
-        desenha_lado(&e, y0 >= (e.evidencia ? 56u : 89u));
+        desenha_lado(&e, JAN_Y0 >= (e.evidencia ? 56u : 89u));
         return;
-    }
-    if (inicio && y0 - inicio < AREA) {      /* sem sinal: y0 abaixo do inicio da um numero enorme */
-        unsigned n = (JAN_LINHA >> 1) * (JAN_Y1 - y0);
-        volatile u16 *p = &RAM(u16, VIDEO);
-
-        if (n > TAM_VIDEO / 2)       /* nunca passa do buffer, mesmo com janela absurda */
-            n = TAM_VIDEO / 2;
-        while (n--) {
-            if (*p == 0)
-                *p = COR_BUF;
-            p++;
-        }
     }
     ENVIA();
 }
 
 void gancho_limpa(unsigned modo)
 {
-    unsigned inicio = area_realce();
-
-    if (inicio && IDIOMA != 1)
-        return;
-    LIMPA(modo);
-    if (inicio)
-        ENCHE(inicio, AREA, COR_REALCE);
+    if (!ativa())
+        LIMPA(modo);
 }
 #endif

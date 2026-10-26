@@ -61,6 +61,12 @@ FIRMWARE(APAGA_SETOR, 0x01E3A126);  void APAGA_SETOR(u32);
 FIRMWARE(GRAVA_FLASH, 0x01E3A25A);  void GRAVA_FLASH(u32, const void *, u32);
 FIRMWARE(VALIDA_FREQ, 0x01E38C3A);  int VALIDA_FREQ(u32);
 FIRMWARE(REVALIDA, 0x01E3A700);     void REVALIDA(void);
+/* As tres que o DELCH de fabrica (set 0x01E3C516) usa depois de apagar um canal, para os dois lados:
+ * o bit do canal no mapa (busca 0 = o de existencia), o proximo canal que vale (0xFFFF se nenhum) e a
+ * recarga dos dois lados, que revalida cada um e deixa o lado em evidencia como estava. */
+FIRMWARE(CANAL_VALE, 0x01E39FCE);   unsigned CANAL_VALE(unsigned canal, unsigned busca);
+FIRMWARE(PROXIMO_CANAL, 0x01E3C4C0); unsigned PROXIMO_CANAL(unsigned canal, unsigned busca);
+FIRMWARE(RECARREGA_LADOS, 0x01E3A812); void RECARREGA_LADOS(void);
 /* As tres que os ganchos substituem e repassam (o que a chamada original fazia). */
 FIRMWARE(FIM_DA_CARGA, 0x01E3951C); void FIM_DA_CARGA(void);     /* ultima etapa da partida */
 FIRMWARE(AVANCA_SCAN, 0x01E458E4);  void AVANCA_SCAN(void);      /* proximo canal da varredura */
@@ -107,12 +113,15 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
  */
 #define TEXTO          ((char *)0x000129B0)                  /* buffer do texto que vai para a tela */
 #define VALOR          (*(volatile u16 *)0x00014BFC)
+#define IDIOMA         (*(volatile u8 *)0x00014B74)          /* 1 = chines; o 0x9008 do chip de dados */
 #define MAPA_EXISTE    ((volatile u8 *)0x00015D8B)           /* 120 B: canal esta gravado */
 #define MAPA_BUSCA     ((volatile u8 *)0x00015D12)           /* 120 B: canal entra na busca */
 #define ZONAS_EXISTE   (*(volatile u16 *)0x00015D10)         /* mascaras por zona, montadas junto */
 #define ZONAS_EXISTE2  (*(volatile u16 *)0x00015E06)
 #define ZONAS_BUSCA    (*(volatile u16 *)0x00015E08)
 #define CANAL_ATUAL    (*(volatile u16 *)0x00015E3C)
+#define MODO_ZONA      (*(volatile u8 *)0x00014BD4)          /* 0 = navega por zona (o b[0x14BD4] do DELCH) */
+#define CANAL_LADO(l)  (*(volatile u16 *)(0x00015E0C + (l) * 4))  /* canal de cada lado, base 0 (h[0x15E0C], h[0x15E10]) */
 /* Editor de texto do firmware, lido no item CH-NAME (get 0x01E3C732, set 0x01E3C7BE). */
 #define EDITOR_TAM     (*(volatile u8 *)0x00014A35)          /* quantos caracteres tem o texto */
 #define EDITOR_TAM_MAX (*(volatile u8 *)0x00014A36)
@@ -374,17 +383,12 @@ static void reconstroi_mapas(void)
 
 /* Deixa nos mapas a intersecao entre o que existe e os bancos ligados. Com reconstruir != 0,
  * remonta os mapas antes (obrigatorio fora da partida, onde eles podem estar filtrados).
- * Devolve 1 se filtrou. Banco ligado que nao tem nenhum canal existente nao filtra nada: o radio
- * fica mostrando tudo, em vez de ficar sem canal nenhum para mostrar.
- * A uniao dos bancos fica na pilha (120 B) e cada mapa entra em pedacos de 24 B - nada de buffer
- * grande emprestado do firmware. */
-/* Deixa nos mapas a intersecao entre o que existe e os bancos ligados. Com reconstruir != 0,
- * remonta os mapas antes (obrigatorio fora da partida, onde eles podem estar filtrados).
  * Devolve 1 se filtrou - e o liga/desliga do BANK usa essa resposta para nao deixar ligado um
  * banco que nao filtra nada, caso em que o radio fica mostrando tudo em vez de ficar sem canal.
  * A uniao fica na pilha e cada mapa entra em pedacos: nada de buffer grande emprestado (o do
- * firmware e a memoria de video). */
-static int aplica_filtro(int reconstruir)
+ * firmware e a memoria de video). Quem chama poe o radio num canal que ainda vale (revalida_lados
+ * ou REVALIDA), depois desta voltar: separada, a uniao nao fica na pilha durante a recarga. */
+__attribute__((noinline)) static int aplica_filtro(int reconstruir)
 {
     u8 uniao[TAM_MAPA], pedaco[TAM_PEDACO];
     struct cabeca c;
@@ -429,22 +433,49 @@ static int aplica_filtro(int reconstruir)
     ZONAS_EXISTE = (u16)existe;
     ZONAS_EXISTE2 = (u16)existe;
     ZONAS_BUSCA = (u16)busca;
-    /* Poe o radio num canal que ainda vale: sem isto, trocar para um canal fora do banco deixaria
-     * o radio parado nele. (REVALIDA pede redesenho pelas flags de 0x15367 - cheguei a suspeitar
-     * que fosse a faixa na tela de abertura, mas a faixa continuou sem ele.) */
-    REVALIDA();
     return tem != 0;
+}
+
+/* Poe os dois lados num canal que ainda vale, depois de o filtro mudar: sem isto, o lado fora de
+ * evidencia ficava parado num canal que saiu do banco (ate a v37 so o REVALIDA rodava, e ele so
+ * olha o lado em evidencia). E o que o DELCH de fabrica faz depois de apagar um canal, em canal
+ * cheio (0x01E3C5D6..0x01E3C6C4): com algum canal existindo, o de cada lado que saiu do mapa pula
+ * para o proximo que vale, e a recarga traz os dois lados (pede o redesenho pelo REVALIDA, como
+ * antes). No modo por zona fica o REVALIDA do lado em evidencia, como ate a v37. */
+static void revalida_lados(void)
+{
+    unsigned l;
+
+    if (MODO_ZONA == 0) {
+        REVALIDA();
+        return;
+    }
+    if (ZONAS_EXISTE2)
+        for (l = 0; l < 2; l++)
+            if (!CANAL_VALE(CANAL_LADO(l), 0))
+                CANAL_LADO(l) = (u16)PROXIMO_CANAL(CANAL_LADO(l), 0);
+    RECARREGA_LADOS();
 }
 
 /* ---------- gancho da partida ----------
  * Entra no lugar da ultima chamada do carregamento de configuracao e canais: faz o que ela fazia
  * e aplica o filtro. Os mapas acabaram de ser montados pela partida, entao nao precisa remontar.
  * Roda depois da leitura do combo PTT2+atalho, entao nao atrapalha a regravacao pelo cabo.
+ *
+ * O radio fica sempre em ingles (v37, a pedido do dono: o item LANGUAGE saiu do menu). Os ajustes
+ * acabaram de vir do chip de dados em bloco (0x9000 -> b[0x14B6C]), e um idioma chines gravado la -
+ * pelo CHIRP de fabrica, por exemplo - vira ingles aqui, antes da tela inicial. O primeiro ajuste
+ * salvo (0x01E3AB36) grava o 0 no chip. Fora daqui, so o set do LANGUAGE (0x01E3C9B8) gravava o
+ * idioma, e o retorno aos ajustes de fabrica (0x01E4842E) o preserva.
  */
 void gancho_partida(void)
 {
     FIM_DA_CARGA();
+    IDIOMA = 0;
     aplica_filtro(0);
+    /* So o lado em evidencia: a partida ja recarregou os dois lados (0x01E56A9E), e uma segunda
+     * recarga aqui pediria mais redesenho por cima do logo. */
+    REVALIDA();
     /* Na partida o logo ja esta na tela. Se o filtro trocou o canal, o REVALIDA pediu redesenho
      * (0x01E39F20 liga b[0x15367]) e a interface repinta uma banda por cima do logo - era essa a
      * faixa branca. O canal ja foi arrumado; aqui so desfazemos o pedido, porque a tela inicial e
@@ -756,7 +787,6 @@ NAS_VOZES unsigned long long gancho_tecla_espectro(unsigned tecla)
  * liga o gerador, toca, desliga, mesmo final - e o laco dos tons (0x01E44638) virou uma chamada
  * para ca e um desvio por cima dele. */
 const char *const roger_opcoes[5] = {"OFF", "BEEP 1", "BEEP 2", "COIN", "TONE1200"};
-const char *const roger_opcoes_cn[5] = {(const char *)0x01E5FC88, "BEEP 1", "BEEP 2", "COIN", "TONE1200"};
 static const u8 roger_valor[5] = {0, 1, 3, 4, 2};      /* posicao no menu -> valor gravado */
 static const u8 roger_posicao[5] = {0, 1, 4, 2, 3};    /* valor gravado -> posicao no menu */
 /* Os tons, em pares (frequencia, espera em unidades de 2 ms), ate o 0. A frequencia vai em unidades
@@ -804,8 +834,6 @@ const u8 scramble_valor[9] = {0, 3, 4, 2, 5, 6, 7, 8, 1};                  /* po
 const u8 scramble_posicao[16] = {0, 8, 3, 1, 2, 4, 5, 6, 7, 8, 8, 8, 8, 8, 8, 8};  /* e a volta */
 const char *const scramble_opcoes[9] = {"OFF", "2700 Hz", "2800 Hz", "2900 Hz", "3000 Hz",
                                         "3100 Hz", "3200 Hz", "3300 Hz", "3400 Hz"};
-const char *const scramble_opcoes_cn[9] = {(const char *)0x01E5FC88, "2700 Hz", "2800 Hz", "2900 Hz",
-                                           "3000 Hz", "3100 Hz", "3200 Hz", "3300 Hz", "3400 Hz"};
 
 u16 scramble_le(void)
 {
@@ -919,8 +947,11 @@ char *bank_exibe(void)
     le_cabeca(&c);                         /* o motor so chama exibe() com valor < maximo */
     le_nome(n, nome);
     SPRINTF(TEXTO, "%d %s", n + 1, nome);  /* banco sem nome mostra so o numero */
+    /* Ligado: um byte 0x01 no fim (LIGADO no telas.c), que a tela B nao escreve e usa para pintar a
+     * linha de ambar, no lugar do " ON" de ate a v37. Quem mostra a lista e so a tela B: a piscada de
+     * fabrica do menu nao chega mais ao LCD (gancho_menu_pisca, v38). */
     if ((c.ativos >> n) & 1)
-        acrescenta(TEXTO, " ON");
+        acrescenta(TEXTO, "\x01");
     return TEXTO;
 }
 
@@ -950,6 +981,7 @@ void bank_grava(void)
         grava_cabeca(&c);
         aplica_filtro(0);
     }
+    revalida_lados();
 }
 
 /* ---------- item BANK NAME: usa o editor de texto do firmware (flags 0x07) ---------- */
@@ -980,7 +1012,10 @@ u16 nome_le(void)
     return 0;
 }
 
-void nome_grava(void)
+/* O nome do editor no banco escolhido. Separada do nome_grava (v38): a estrutura do banco sai da
+ * pilha antes da saida do editor, que redesenha a tela inteira - a tela B desde a v35, mais funda que
+ * a de fabrica. Junto, o set passava do que o firmware de fabrica usa de pilha no mesmo lugar. */
+__attribute__((noinline)) static void grava_nome_do_editor(void)
 {
     struct cabeca c;
     struct banco b;
@@ -994,6 +1029,11 @@ void nome_grava(void)
     for (i = 0; i < tam; i++)
         b.nome[i] = EDITOR_TEXTO[i];
     grava_banco(c.escolhido, &b);
+}
+
+void nome_grava(void)
+{
+    grava_nome_do_editor();
     /* Sair do editor e o que o CH-NAME faz no fim do set dele (0x01E3C822): sem estas duas
      * chamadas o estado do editor fica ligado e o cabecalho do menu continua mostrando o "abc" do
      * teclado em vez do canal, em todos os itens, ate sair e entrar no menu de novo. */
@@ -1015,7 +1055,7 @@ char *canal_exibe(void)
     if (!canal_existe(canal))
         acrescenta(TEXTO, " -");                           /* canal vazio na memoria */
     if ((mapa >> (canal & 7)) & 1)
-        acrescenta(TEXTO, " IN");                          /* esta neste banco */
+        acrescenta(TEXTO, "\x01");  /* esta neste banco: a tela B pinta de ambar (LIGADO, telas.c) */
     return TEXTO;
 }
 
@@ -1037,4 +1077,5 @@ void canal_grava(void)
     b.canais[canal >> 3] ^= (u8)(1u << (canal & 7));
     grava_banco(c.escolhido, &b);
     aplica_filtro(1);                      /* entra ou sai da navegacao na hora */
+    revalida_lados();
 }

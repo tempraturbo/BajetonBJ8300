@@ -213,6 +213,15 @@ Para desfazer, os mapas são remontados do zero com o mesmo critério da partida
 BCD, `VALIDA_FREQ`), em vez de guardar cópia: assim não existe estado nosso em RAM e canal gravado
 ou apagado pelo MEMCH/DELCH entra na conta na hora.
 
+Depois de o filtro mudar pelo menu (o BANK e o BANK CH), **os dois lados** vão para um canal que
+vale (v38), como o DELCH de fábrica faz depois de apagar um canal (`0x01E3C5D6..0x01E3C6C4`): em
+canal cheio, o canal de cada lado (`h[0x15E0C]`, `h[0x15E10]`) que saiu do mapa pula para o
+próximo que vale (`0x01E3C4C0`), e `0x01E3A812` recarrega os dois lados, revalidando cada um.
+Até a v37 só o `REVALIDA()` rodava, e ele olha só o lado em evidência. Na partida continua só ele,
+porque a partida já recarregou os dois lados (`0x01E56A9E`) antes do gancho, e uma segunda recarga
+pediria redesenho por cima do logo. No modo por zona, que o driver do CHIRP desliga em todo
+upload, também fica só o `REVALIDA()`.
+
 ### Formato gravado
 
 ```
@@ -602,7 +611,7 @@ pede os pedaços do `.anc` e grava. Ele é cifrado e não se lê. O que foi medi
 - mudar o `app.bin` sempre passou.
 
 O porquê (quantidade de arquivos, de setores ou de bytes) não se sabe sem ler o carregador. O
-código novo grande foi para dentro do `app.bin` ([seção 16](#16-o-g729-fora-v36)), e a `2g` recusa
+código novo grande foi para dentro do `app.bin` ([seção 16](#16-o-g729-e-o-mp3-fora-v36-e-v37)), e a `2g` recusa
 montar se mudar qualquer arquivo de voz além do C0 e do C1.
 
 ## 15. Vozes fora
@@ -701,9 +710,9 @@ também acha "desvios" no meio de uma instrução: o meio da chamada em `0x01E16
 **Tela principal B (v35, daqui para fora na v36).** Na v35 o `tela.o` inteiro morava aqui também
 (6,6 KB contando o espectro), e o carregador recusou a imagem, porque ela mudava os arquivos C0..C11
 ([seção 14](#14-flash-interna-partições-e-quem-grava)). Desde a v36 a tela mora no lugar do G.729
-([seção 16](#16-o-g729-fora-v36)), e aqui fica só o espectro, dentro do C0 e do C1.
+([seção 16](#16-o-g729-e-o-mp3-fora-v36-e-v37)), e aqui fica só o espectro, dentro do C0 e do C1.
 
-## 16. O G.729 fora (v36)
+## 16. O G.729 e o MP3 fora (v36 e v37)
 
 A tela B (5.636 B) foi para dentro do `app.bin`, no lugar do decodificador G.729, o das vozes
 `.wtg`, que não tocam desde a v30.
@@ -780,8 +789,39 @@ Ela está em uso.
 
 **No build:**
 
-- a `2b` exige o `tela.o` no `.g729`, e só ele;
+- a `2b` exige o `tela.o` no `.livre` (no `.g729` até a v36), e só ele;
 - a `2h` confere o registro e o lugar, e que nada de fora aponte para a faixa, no de fábrica e no
   novo, fora os sítios da tela B. Vale para valor de 32 bits e para `call`/`goto` de 4 bytes, estes
   pelo endereço da flash e pelo da RAM. Ela foi testada com a faixa 8 B mais larga, quando acusa
   as estruturas vizinhas e o MP3, e sem excluir o registro, quando acusa os 6 ponteiros.
+
+**O MP3 também (v37).** O decodificador de MP3 começa logo depois do G.729, em `0x01E278C8`, e não
+tem arquivo nenhum para tocar: no diretório de sons, o que não é `.sin` são as vozes `.wtg` e o
+`index.idx`. Ele sai pelo mesmo caminho, e a faixa passa a ser `0x01E257E0..0x01E2EFC4`, 38.884 B,
+com o código e as tabelas dos dois colados:
+
+- o tipo dele no registro (`0x01E3487C`, o segundo de 68 B) também vira 0;
+- o que aponta para dentro do MP3 vindo de fora da faixa nova é só o registro. A chamada de
+  `0x01E2ECAA` e a tabela `0x01E2C084` ficam dentro da faixa;
+- a única exceção é `0x01E05AD4`: os bytes `87 e8 e2 01`, lidos como 32 bits, caem na faixa, mas são
+  a instrução `if (r0 != r7) goto -60`. O `conferir.py` só aceita a exceção com esses bytes exatos.
+
+Na v39 a tela B usa 11.650 B dos 38.884.
+
+## 17. Sem chinês (v37)
+
+O rádio fica sempre em inglês, a pedido do dono:
+
+- **o item LANGUAGE sai do menu** (o 22 de fábrica, get `0x01E3C9A8` e set `0x01E3C9B8`), junto com
+  o ZONE, o "Zone Or Channel" e o VOICE;
+- **o gancho da partida zera o idioma** (`b[0x14B74]`, que o get do LANGUAGE lê) logo depois de os
+  ajustes virem do chip de dados. Um idioma chinês gravado por outro programa vira inglês antes da
+  tela inicial, e o primeiro ajuste salvo (`0x01E3AB36`) grava o 0 no chip. Fora dali, só o set do
+  LANGUAGE gravava o idioma, e o retorno aos ajustes de fábrica (`0x01E4842E`) o preserva;
+- **as opções em chinês dos itens mudados** (o campo `+0x17` do ROGER e do SCRAMBLE) apontam as
+  tabelas em inglês;
+- **o modo pinyin do editor de nome some**: a troca de modo (`0x01E4A59C`) cicla 3 modos em inglês e
+  4 em chinês.
+
+O `conferir.py` confere na `4o` que o byte que o
+gancho zera é o que o get do LANGUAGE lê e que o item saiu da tabela.
