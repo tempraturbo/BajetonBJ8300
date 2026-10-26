@@ -205,7 +205,7 @@ PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho
            'watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
            'canal_c_le', 'canal_c_grava', 'canal_c_exibe', 'titulo_canal_c',
            'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'menu_tabela', 'gancho_troca_dw',
-           'gancho_volta_dw', 'gancho_ab',
+           'gancho_volta_dw', 'gancho_ab', 'gancho_luz',
            'scramble_le', 'scramble_grava', 'scramble_freqs', 'scramble_valor', 'scramble_posicao',
            'scramble_opcoes', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
            'gancho_partida', 'canal_exibe', 'canal_le', 'canal_grava',
@@ -419,6 +419,10 @@ TEXTOS = [
     (0x01E60302, '   Voltage      ', ' VOLTAGE'),
     # o nome chines do item e 语音加密 (criptografia de voz): VOICEPRI engana
     (0x01E5A82F, 'VOICEPRI', 'ENCRYPT'),
+    # a dupla escuta virou tripla com o TRIPLE (v42): TDR -> TTR, pedido do dono (v48). A cadeia e
+    # unica no app.bin; apontam para ela o item 7 da tabela de menus (0x01E63067) e a outra lista de
+    # itens de fabrica (0x01E5E697, a de MEMCH, STEP, TXP, SQL...), e as duas passam a dizer TTR
+    (0x01E5A782, 'TDR', 'TTR'),
 ]
 
 # Chamada no fim do carregamento de configuracao, trocada pelo gancho que aplica o filtro.
@@ -455,9 +459,16 @@ DW_VOLTA_EM = 0x01E481CC
 DW_VOLTA_ERA = 0x01E3FD9E
 AB_EM = 0x01E4D44C
 AB_ERA = 0x01E40E52
-TRIPLE_CHAMADAS = ((DW_TROCA_EM, DW_TROCA_ERA, 'gancho_troca_dw', 'ida da dupla escuta ao outro lado'),
-                   (DW_VOLTA_EM, DW_VOLTA_ERA, 'gancho_volta_dw', 'volta da dupla escuta (a terceira)'),
-                   (AB_EM, AB_ERA, 'gancho_ab', 'tecla A/B: A, B e C'))
+TRIPLE_CHAMADAS = ((DW_TROCA_EM, DW_TROCA_ERA, 'gancho_troca_dw', 'TRIPLE: ida da dupla escuta ao outro lado'),
+                   (DW_VOLTA_EM, DW_VOLTA_ERA, 'gancho_volta_dw', 'TRIPLE: volta da dupla escuta (a terceira)'),
+                   (AB_EM, AB_ERA, 'gancho_ab', 'TRIPLE: tecla A/B: A, B e C'))
+# v49: a luz da tela fica acesa no espectro. No laco do sinal, "r0 = 0" e a chamada que apaga a luz
+# (0x01E394D6, em 0x01E46578; o unico chamador com 0) quando a contagem do ABR chega a 0; o gancho
+# so a repassa fora do modo 20. Depois da chamada o laco segue em 0x01E4657C, que le r0 de novo.
+LUZ_EM = 0x01E46578
+LUZ_ERA = 0x01E394D6
+# As chamadas trocadas por ganchos do .livre, cada uma com o rotulo que o montar e o conferir mostram.
+CHAMADAS_LIVRE = TRIPLE_CHAMADAS + ((LUZ_EM, LUZ_ERA, 'gancho_luz', 'luz acesa no espectro'),)
 
 # Gancho das teclas do espectro: parado num sinal achado, a seta continua a varredura em vez de
 # mexer no limite. Entra no lugar do "r1 = r0 - 16" que escolhe o caso do tbh das teclas do modo
@@ -540,7 +551,8 @@ NA_LIVRE += (TABELA_SIMBOLO,)              # v43: a tabela do menu, dado no .liv
 # v44: o WATCH e o TRIPLE do bancos.c tambem moram no .livre (a area do fim da imagem nao os cabia)
 NA_LIVRE += ('watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
              'canal_c_le', 'canal_c_grava', 'canal_c_exibe', 'titulo_canal_c',
-             'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'gancho_troca_dw', 'gancho_volta_dw', 'gancho_ab')
+             'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'gancho_troca_dw', 'gancho_volta_dw', 'gancho_ab',
+             'gancho_luz')
 PRECISA += ESPECTRO_B
 
 # Realce do bloco do VFO em evidencia na tela principal. O gancho entra no ENVIO do pedaco para o
@@ -791,7 +803,7 @@ def main():
     escritas += [(s_, 4, o_) for s_, _, o_ in ENVIA_SITIOS]
     escritas += [(s_, 4, o_) for s_, o_ in NOP_SITIOS]
     escritas += [(s_, 4, 'espera da troca de banda do radio') for s_ in ESPERAS_RADIO]
-    escritas += [(s_, 4, f'TRIPLE: {o_}') for s_, _, _, o_ in TRIPLE_CHAMADAS]
+    escritas += [(s_, 4, o_) for s_, _, _, o_ in CHAMADAS_LIVRE]
     escritas += [(LIVRE, len(tela), 'tela B no lugar dos decodificadores G.729 e MP3')]
     escritas += [(r, 4, f'tipo do {d} no registro dos decodificadores') for r, _, _, d in DECODIFICADORES]
     if TEXTOS_REVISADOS:
@@ -825,13 +837,13 @@ def main():
         print(f"  gancho do scan {SCAN_EM:#x}: chamada para {SCAN_ERA:#x} -> {S['gancho_scan']:#x} "
               '(pede redesenho a cada canal da varredura)')
 
-    for sitio, era, gancho, oque in TRIPLE_CHAMADAS:
+    for sitio, era, gancho, oque in CHAMADAS_LIVRE:
         o = sitio - BASE_APP
         antes = bytes(app[o:o + 4])
         if antes != monta_call(sitio, era):
             raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {era:#x}: {antes.hex()}')
         app[o:o + 4] = monta_call(sitio, S[gancho])
-        print(f"  TRIPLE {sitio:#x}: {era:#x} -> {gancho} {S[gancho]:#x} ({oque})")
+        print(f"  {sitio:#x}: {era:#x} -> {gancho} {S[gancho]:#x} ({oque})")
 
     if ESPECTRO_TECLAS:
         o = ESPECTRO_EM - BASE_APP

@@ -172,7 +172,7 @@ sitios_vozes = ({montar.ESPECTRO_EM} | {s for s, _, _, _ in montar.ESPECTRO_CHAM
 sitios_livre = ({s for s, _ in montar.REALCE_SITIOS_GANCHO} | {s for s, _ in montar.LIMPA_SITIOS} | {s_ for s_, _, _ in montar.ENVIA_SITIOS}
                | {e for e, _, _, _, _ in montar.TELA_DESVIOS} | {s for s, _, _, _ in montar.ESPECTRO_B_CHAMADAS}
                | {e for e, _, _, _ in montar.ESPECTRO_B_FUNCOES}
-               | {s for s, _, _, _ in montar.TRIPLE_CHAMADAS})
+               | {s for s, _, _, _ in montar.CHAMADAS_LIVRE})
 imagens = []
 for e in entradas:
     if e['type'] in jlfw.FLASH_TYPES:
@@ -381,6 +381,20 @@ for p_ in problemas[:20]:
     print('    ' + p_)
 erros += problemas
 
+# 2i. o carimbo do fim (v47): o carimbo_fim tem o CRC16 do .text gravado no fim da imagem e mora dentro
+# do app.bin, que o CRC do app_area_head cobre. O carregador de atualizacao so regrava o que tem CRC
+# novo, e nenhum CRC de dentro da imagem cobre o fim: sem o carimbo, a versao que so muda o fim e
+# recusada (a v46, por cima da v45, parou nos 5% como a v34 gravada por cima dela mesma).
+simbolos = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'build', 'simbolos.txt')
+carimbo = next((int(p[0], 16) for p in map(str.split, open(simbolos)) if p[-1:] == ['carimbo_fim']), None)
+o = None if carimbo is None else carimbo - montar.BASE_APP
+ok = (o is not None and carimbo % 2 == 0 and montar.LIVRE <= carimbo < montar.LIVRE_FIM
+      and 0 <= o and o + 2 <= len(app) and struct.unpack_from('<H', app, o)[0] == jlfw.crc16(blob))
+print(f'2i. carimbo do fim em {carimbo or 0:#x}, dentro do app.bin ({len(app)} B): '
+      f'crc16 do .text = {jlfw.crc16(blob):#06x}: ' + ('ok' if ok else 'FALHOU'))
+if not ok:
+    erros.append('carimbo do fim ausente, fora do app.bin ou diferente do CRC16 do .text')
+
 # 3. a copia da tabela: nenhum item de fabrica perdido e os dos bancos no lugar certo
 T = montar.TAM_ITEM
 velha = app_velho[montar.TABELA - montar.BASE_APP:]
@@ -475,16 +489,17 @@ if montar.CABO_ESTENDIDO:
         if not ok:
             erros.append(f'gancho do cabo errado em {sitio:#x}')
 
-# 4r. TRIPLE (v42, v44): a ida e a volta da dupla escuta e a tecla A/B passam pelos ganchos da C
+# 4r. TRIPLE (v42, v44): a ida e a volta da dupla escuta e a tecla A/B passam pelos ganchos da C; e
+# (v49) a chamada que apaga a luz, pelo gancho que a deixa acesa no espectro
 previsto_tripla = []
-for sitio, era, gancho, oque in montar.TRIPLE_CHAMADAS:
+for sitio, era, gancho, oque in montar.CHAMADAS_LIVRE:
     o = sitio - montar.BASE_APP
     ok = (bytes(app_velho[o:o + 4]) == montar.monta_call(sitio, era)
           and bytes(app[o:o + 4]) == montar.monta_call(sitio, montar.S[gancho]))
-    print(f'4r. TRIPLE em {sitio:#x}: {era:#x} -> {gancho} ({oque}): ' + ('ok' if ok else 'FALHOU'))
+    print(f'4r. {sitio:#x}: {era:#x} -> {gancho} ({oque}): ' + ('ok' if ok else 'FALHOU'))
     if not ok:
-        erros.append(f'gancho do TRIPLE errado em {sitio:#x}')
-    previsto_tripla.append((sitio, sitio + 3, f'TRIPLE: {oque}'))
+        erros.append(f'gancho errado em {sitio:#x} ({oque})')
+    previsto_tripla.append((sitio, sitio + 3, oque))
 
 if montar.SCAN_REDESENHA:
     o = montar.SCAN_EM - montar.BASE_APP

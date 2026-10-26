@@ -82,7 +82,12 @@ FIRMWARE(DECODIFICA, 0x01E3900A);   void DECODIFICA(void);
 FIRMWARE(VOLTA_DW, 0x01E3FD9E);     void VOLTA_DW(void);          /* sombra do lado em evidencia -> corrente, e decodifica */
 FIRMWARE(PARA_DW, 0x01E3FDE4);      void PARA_DW(void);           /* desarma a dupla escuta, no lado em evidencia */
 FIRMWARE(TROCA_AB, 0x01E40E52);     void TROCA_AB(unsigned);      /* troca o lado em evidencia (a tecla A/B passa 1) */
-FIRMWARE(CANAL_NO_LADO, 0x01E40B9E); void CANAL_NO_LADO(unsigned, unsigned);  /* o caminho das setas */
+/* v49, o VFO da C: o registro de VFO do lado (0 A, 1 B) recebe os 32 B do VFO corrente (0x15E80) e,
+ * se mudou, vai para o log 0x8000 do chip; e os ajustes (0x14B6C.., com o modo de cada lado em
+ * 0x14B86) vao para o log 0x9000 - a tecla VFO/MR os grava assim (0x01E4DCB6). */
+FIRMWARE(SALVA_VFO, 0x01E3A4FE);    void SALVA_VFO(unsigned lado);
+FIRMWARE(SALVA_AJUSTES, 0x01E3AB36); void SALVA_AJUSTES(void);
+FIRMWARE(LUZ, 0x01E394D6);          void LUZ(unsigned acende);    /* a luz da tela: 1 acende, 0 apaga */
 /* A tela inteira de novo (limpa, a barra e 0x01E3C132(0)): o fim da troca de lados de fabrica
  * (0x01E40EF4) e do retorno a tela principal que tambem poe o canal no lado (0x01E4BDBE, logo depois
  * de 0x01E40B9E(0, 1)). Nao recebe argumento. */
@@ -218,6 +223,10 @@ unsigned watch_vista(void);
  * achou livre (docs/engenharia-reversa.md, secao 3). Desde a v46 a janela que o cabo grava o inclui
  * (gancho_cabo), para o CHIRP gravar o WATCH, o CH-C e o MDF-C. */
 #define SETOR_WATCH    0x000D2000u
+/* Os VFOs da C (v49): o da C e o do B guardado enquanto a C esta no lado B, no setor seguinte, tambem
+ * livre no levantamento. Ficam fora do registro do WATCH porque a tela B le aquele a cada desenho, e
+ * 64 B a mais na pilha de quem o le passariam da de fabrica; estes so a tecla A/B e o rodizio leem. */
+#define SETOR_VFC      0x000D3000u
 
 /* A marca fica em dois u16 em vez de quatro u8: conferir e gravar a marca passa a ser dois acessos
  * de 16 bits (as duas estruturas tem campo u16, entao o alinhamento de 2 e garantido) em vez de um
@@ -225,10 +234,12 @@ unsigned watch_vista(void);
 #define MARCA_CAB    0x334B4E42u               /* "BNK3" */
 #define MARCA_BANCO  0x314F4342u               /* "BCO1" */
 #define MARCA_WATCH  0x31435457u               /* "WTC1" */
+#define MARCA_VFC    0x31434656u               /* "VFC1" */
 /* A marca sai do proprio endereco - o cabecalho tem a sua, os 16 setores de banco tem a outra -
  * em vez de viajar como parametro em cada chamada: um argumento a menos para errar. */
 #define MARCA_DE(endereco)  ((endereco) == SETOR_CAB ? MARCA_CAB : \
-                             (endereco) == SETOR_WATCH ? MARCA_WATCH : MARCA_BANCO)
+                             (endereco) == SETOR_WATCH ? MARCA_WATCH : \
+                             (endereco) == SETOR_VFC ? MARCA_VFC : MARCA_BANCO)
 
 struct cabeca {
     u16 marca[2];                          /* "BNK3" */
@@ -246,8 +257,18 @@ struct vigia {
     u8 mdf_c;                              /* a exibicao da C, como a do MDF-A: 0 nome, 1 frequencia, 2 numero */
     u16 canal_c;                           /* o canal da C, 0..959 (o indice do CANAL de cada lado) */
     u8 c_no_b;                             /* 1 = a C esta no lado B, em evidencia (a tecla A/B a pos la) */
-    u8 reservado;
+    u8 vfo;                                /* v49: bit 0 = a C em VFO; bit 1 = o B guardado em VFO (com a C
+                                            * no lado B). Era reservado e gravado em 0: canal, como ate a v48 */
     u16 canal_b;                           /* com a C no lado B: o canal do B, que volta quando ela sai */
+    u16 soma;
+};
+
+/* Os VFOs da C (v49), no formato do registro de VFO de cada lado (0x14E42 o do A, 0x14E62 o do B: o
+ * "struct vfo" de 32 B do CHIRP, que o log 0x8000 guarda). */
+struct vfc {
+    u16 marca[2];                          /* "VFC1" */
+    u8 vfo_c[32];                          /* o da C */
+    u8 vfo_b[32];                          /* o do B, enquanto a C esta no lado B */
     u16 soma;
 };
 
@@ -266,6 +287,7 @@ struct banco {
  * compila. */
 typedef char confere_cabeca[sizeof(struct cabeca) == 10 ? 1 : -1];
 typedef char confere_vigia[sizeof(struct vigia) == 14 ? 1 : -1];
+typedef char confere_vfc[sizeof(struct vfc) == 70 ? 1 : -1];
 typedef char confere_banco[sizeof(struct banco) == 4 + TAM_NOME + TAM_MAPA + 2 ? 1 : -1];
 
 /* ---------- utilidades (sem libc: o blob nao linka nada) ----------
@@ -361,6 +383,8 @@ static void grava_registro(u32 endereco, void *buf, unsigned tam)
 #define le_banco(n, b)    le_registro(SETOR_BANCO(n), (b), sizeof(struct banco))
 #define le_vigia(v)       le_registro(SETOR_WATCH, (v), sizeof(struct vigia))
 #define grava_vigia(v)    grava_registro(SETOR_WATCH, (v), sizeof(struct vigia))
+#define le_vfc(f)         le_registro(SETOR_VFC, (f), sizeof(struct vfc))
+#define grava_vfc(f)      grava_registro(SETOR_VFC, (f), sizeof(struct vfc))
 #define grava_banco(n, b) grava_registro(SETOR_BANCO(n), (b), sizeof(struct banco))
 
 /* ---------- canais: o mesmo critério da partida ----------
@@ -875,9 +899,11 @@ NA_LIVRE_COD char *canal_c_exibe(void)
 }
 
 /* Com a C no lado B (TRIPLE, tecla A/B), o canal dela e o do lado B - as setas o mudam, como em
- * qualquer lado -, e o CH-C le e grava esse; com ela em evidencia, o canal novo vai para ela ja. */
+ * qualquer lado -, e o CH-C le e grava esse; com ela em evidencia e em canal, o canal novo vai para
+ * ela ja (em VFO, fica guardado no lado para a tecla VFO/MR, como o de qualquer lado). */
 #define CANAL_DO_B     (*(volatile u16 *)0x00015E10)         /* h[0x15E0C + 4], o canal gravado do lado B */
-static void canal_no_b(unsigned canal);
+#define MODO_LADOS     (*(volatile u8 *)0x00014B86)          /* um nibble por lado: 1 = canal, 0 = VFO */
+#define B_EM_CANAL     ((MODO_LADOS >> 4) == 1)
 
 NA_LIVRE_COD u16 canal_c_le(void)
 {
@@ -897,8 +923,13 @@ NA_LIVRE_COD void canal_c_grava(void)
     le_vigia(&v);
     v.canal_c = canal;
     grava_vigia(&v);
-    if (v.c_no_b && LADO_B == 1)
-        canal_no_b(canal);
+    if (v.c_no_b && LADO_B == 1) {
+        CANAL_DO_B = canal;
+        if (B_EM_CANAL) {
+            PARA_DW();
+            RECARREGA_LADOS();             /* carrega, grava o canal do lado e o log (0x01E3A42A) */
+        }
+    }
 }
 
 /* MDF-C: a exibicao da C. O item usa a tabela de opcoes do MDF-A, e o valor e o mesmo dele. */
@@ -925,22 +956,30 @@ NA_LIVRE_COD void mdf_c_grava(void)
  * corrente e decodifica, chamada em 0x01E481CC). A sintonia le o que foi decodificado. Nada disso
  * grava na flash, nem mexe no registro da tela (0x14DC4).
  *
+ * Desde a v49 a C e um lado como o A e o B: modo (VFO ou canal), VFO de 32 B e canal (o CH-C). O
+ * modo e o canal ficam no registro do WATCH; o VFO, no setor 0xD3000 (struct vfc).
+ *
  * A C entra de dois jeitos, sem tocar no motor:
  *  - Vigiada (TDR ligado). Na volta do outro lado, em vez de voltar ao lado em evidencia, a
  *    dupla escuta vai a terceira - a que nao esta em nenhum dos dois lados: a C, ou o B quando a C
- *    esta no lado B -, com b[0x15378] em 1 e o canal dela na corrente (o registro cru lido da
- *    memoria, como o carregador de canal de fabrica le, 0x01E3A650: 20 B de canal x 32). Na volta
- *    seguinte, a de fabrica restaura o lado em evidencia. As tres ficam com os mesmos 50 tiques:
- *    A, B, C, A... A decodificacao e feita como na ida ao outro lado - com o lado em evidencia
- *    invertido em volta dela -, e a potencia do outro lado, que ela grava (0x01E38F34, com
- *    b[0x153A1] = 165), e devolvida.
+ *    esta no lado B -, com b[0x15378] em 1 e ela na corrente: em canal, o registro cru lido da
+ *    memoria, como o carregador de canal de fabrica le (0x01E3A650: 20 B de canal x 32); em VFO, os
+ *    32 B do VFO dela no VFO corrente (0x15E80), como o carregador de VFO de fabrica copia
+ *    (0x01E3A5E8: so os 32 B do registro do lado). Na volta seguinte, a de fabrica restaura o lado em
+ *    evidencia. As tres ficam com os mesmos 50 tiques: A, B, C, A... A decodificacao e feita como na
+ *    ida ao outro lado - com o lado em evidencia invertido em volta dela -, e a potencia do outro
+ *    lado, que ela grava (0x01E38F34, com b[0x153A1] = 165), e devolvida.
  *  - Em evidencia (tecla A/B). A troca de lados de fabrica (0x01E40E52, chamada pela tecla em
- *    0x01E4D44C) passa por gancho_ab: A -> B como sempre; B -> C guarda o canal do B, poe o da C
- *    no lado B pelo mesmo caminho das setas (0x01E40B9E: carrega, grava o canal do lado e o log da
- *    flash) e redesenha a tela inteira, como a troca de fabrica (0x01E3C290; o caminho das setas
- *    nao redesenha, e sem isso a tela ficava no B ate a proxima seta - v45); C -> A guarda o canal em que a C ficou (as setas e a digitacao a mudam, como a qualquer
- *    lado), devolve o B ao lado B e faz a troca de fabrica. A C transmite, muda de canal e e vigiada
- *    como os outros. So com o B num canal (num VFO, a tecla A/B fica no A e no B).
+ *    0x01E4D44C) passa por gancho_ab: A -> B como sempre; B -> C guarda o modo, o canal e o VFO do B
+ *    e poe os da C nas vagas do lado B - o nibble do B em 0x14B86, o canal do lado em h[0x15E10] e o
+ *    registro de VFO do B (0x14E62, pelo VFO corrente e 0x01E3A4FE(1), que grava o log 0x8000) -, e
+ *    remonta os dois lados pela rotina da tecla VFO/MR (0x01E3A812: a partida de cada lado pelo
+ *    modo e pelo canal guardados, e 0x01E3A700, que carrega e grava o canal do lado e o log). Os
+ *    ajustes vao para o chip como a VFO/MR os grava (0x01E3AB36), e a tela inteira e refeita
+ *    (0x01E3C290). Enquanto a C esta no lado B, tudo o que mexe no lado B (VFO/MR, setas, digitacao,
+ *    STEP, TXP, tons...) e o firmware de fabrica mexendo nela. C -> A recolhe o modo, o canal e o VFO
+ *    que estao no lado B para a C, devolve os do B do mesmo jeito e faz a troca de fabrica. Ate a
+ *    v48 era o caminho das setas (0x01E40B9E), que so servia com o B e a C em canal.
  *
  * O estado do rodizio fica em b[0x14BD0], o 0x9024 do bloco de ajustes (o "Single Mode" do RT-900
  * BT, que este firmware nao usa): fora as copias do bloco (gravar ajustes, padrao, partida e cabo),
@@ -954,19 +993,48 @@ NA_LIVRE_COD void mdf_c_grava(void)
 #define EVIDENCIA_MODO (*(volatile u8 *)0x00015E13)
 #define CORRENTE_CANAL (*(volatile u16 *)0x00015E3C)
 #define POTENCIA_LADO  ((volatile u8 *)0x00015E30)
-#define CANAL_LADO(l)  (*(volatile u16 *)(0x00015E0C + (l) * 4))   /* o canal gravado de cada lado */
-#define MODO_LADOS     (*(volatile u8 *)0x00014B86)          /* um nibble por lado: 1 = canal */
 #define EXIBICAO_B     (*(volatile u8 *)0x00014B7A)          /* o MDF-B */
+#define CORRENTE_VFO   ((u8 *)0x00015E80)                    /* o VFO do lado que esta sendo ouvido (36 B; o registro e 32) */
+#define REGISTRO_VFO_B ((u8 *)0x00014E62)                    /* o registro de VFO do B, o que o log 0x8000 guarda */
+#define POS_VFO(do_b)  (SETOR_VFC + 4 + ((do_b) ? 32u : 0u))  /* o vfo_c ou o vfo_b da struct vfc, no chip */
 
-/* A terceira: o canal e a exibicao da que nao esta em nenhum dos dois lados - a C, ou o B quando a
- * C esta no lado B. 0xFFFF no canal: nao ha terceira (fora do TRIPLE, ou canal vazio). */
+/* Os VFOs da C so valem com o setor dela gravado: sem ele, a C fica em canal, como ate a v48. So a
+ * marca, para a pilha de quem desenha a tela (a soma, quem grava confere). */
+NA_LIVRE_COD static int vfc_existe(void)
+{
+    u16 m[2];
+
+    LE_FLASH(SETOR_VFC, m, sizeof m);
+    return marca_ok(m, MARCA_VFC);
+}
+
+/* A terceira: a que nao esta em nenhum dos dois lados - a C, ou o B quando a C esta no lado B. Bits
+ * 0..15 o canal, 16..23 a exibicao, 24 em VFO, 25 o VFO e o do B guardado (senao o da C). 0xFFFF:
+ * nao ha terceira (fora do TRIPLE, ou em canal e canal vazio). */
+#define TERCEIRA_VFO   (1u << 24)
+#define TERCEIRA_DO_B  (1u << 25)
 NA_LIVRE_COD static u32 terceira_de(const struct vigia *v)
 {
-    unsigned canal = v->c_no_b ? v->canal_b : v->canal_c;
+    unsigned do_b = v->c_no_b != 0, canal = do_b ? v->canal_b : v->canal_c;
+    u32 em_vfo = (v->vfo >> do_b & 1) && vfc_existe() ? TERCEIRA_VFO : 0;
 
-    if (v->modo != WATCH_TRIPLE || !canal_existe(canal))
+    if (v->modo != WATCH_TRIPLE || (!em_vfo && !canal_existe(canal)))
         return 0xFFFF;
-    return canal | (u32)(v->c_no_b ? EXIBICAO_B : v->mdf_c) << 16;
+    return canal | (u32)(do_b ? EXIBICAO_B : v->mdf_c) << 16 | em_vfo | (do_b ? TERCEIRA_DO_B : 0);
+}
+
+/* A frequencia do VFO da terceira (bits como os de terceira()), para a faixa dela na tela B: os 8
+ * primeiros bytes do registro de VFO sao os digitos, em dezenas de Hz (como o CHIRP os le). */
+NA_LIVRE_COD u32 freq_terceira(u32 t)
+{
+    u8 d[8];
+    u32 f = 0;
+    unsigned k;
+
+    LE_FLASH(POS_VFO(t & TERCEIRA_DO_B), d, sizeof d);
+    for (k = 0; k < 8; k++)
+        f = f * 10 + (d[k] < 10 ? d[k] : 0);
+    return f;
 }
 
 NA_LIVRE_COD u32 terceira(void)
@@ -1010,9 +1078,14 @@ NA_LIVRE_COD void gancho_volta_dw(void)
     }
     RODIZIO = 2;
     DW_OUTRO = 1;                            /* continua fora do lado em evidencia */
-    LE_FLASH((t & 0xFFFF) * 32, CORRENTE_CRU, 20);
-    CORRENTE_MODO = 1;
-    CORRENTE_CANAL = t & 0xFFFF;
+    if (t & TERCEIRA_VFO) {                  /* como o carregador de VFO de fabrica: os 32 B do registro */
+        LE_FLASH(POS_VFO(t & TERCEIRA_DO_B), CORRENTE_VFO, 32);
+        CORRENTE_MODO = 0;
+    } else {
+        LE_FLASH((t & 0xFFFF) * 32, CORRENTE_CRU, 20);
+        CORRENTE_MODO = 1;
+        CORRENTE_CANAL = t & 0xFFFF;
+    }
     LADO_B = lado;                           /* como a ida ao outro lado decodifica */
     potencia = POTENCIA_LADO[lado];
     DECODIFICA();
@@ -1031,26 +1104,68 @@ NA_LIVRE_COD unsigned c_no_lugar(void)
     return DW_OUTRO == 1 && RODIZIO == 2;
 }
 
-/* Poe um canal no lado B, com ele em evidencia, pelo caminho das setas (0x01E40B9E(0, 1): copia a
- * corrente para o lado em evidencia, limpa os digitos, carrega - 0x01E3A650 -, sem voz, e grava o
- * canal do lado e o log da flash, 0x01E3A42A). O lado B fica em canal. */
-NA_LIVRE_COD static void canal_no_b(unsigned canal)
+/* As vagas do lado B (em evidencia): o modo no nibble alto de 0x14B86, o canal guardado em h[0x15E10]
+ * e o registro de VFO 0x14E62. recolhe_b copia o VFO - antes, o VFO que esta sendo usado vai para o
+ * registro, se o lado esta em VFO (o desarme da dupla escuta deixa o lado em evidencia na corrente) - e
+ * devolve 1 com o lado em VFO. */
+NA_LIVRE_COD static unsigned recolhe_b(u8 *vfo)
 {
     PARA_DW();
-    MODO_LADOS = (MODO_LADOS & 0x0F) | 0x10;
-    CORRENTE_MODO = EVIDENCIA_MODO = 1;
-    CORRENTE_CANAL = canal;
-    CANAL_NO_LADO(0, 1);
+    if (CORRENTE_MODO == 0)
+        SALVA_VFO(1);
+    COPIA_MEM(vfo, REGISTRO_VFO_B, 32);
+    return !B_EM_CANAL;
 }
 
-/* Com o lado B em evidencia e a C nele: guarda o canal em que a C ficou e devolve o B. */
-NA_LIVRE_COD static void volta_b(struct vigia *v)
+/* O contrario: o VFO entra pelo VFO corrente e 0x01E3A4FE(1), que o copia para o registro do B e grava
+ * o log 0x8000; o canal e o modo, nas vagas; e a remontagem da tecla VFO/MR (0x01E3A812) refaz os dois
+ * lados a partir delas. Os ajustes, com o nibble, vao para o chip como a VFO/MR os grava. */
+NA_LIVRE_COD static void poe_no_b(unsigned em_vfo, unsigned canal, const u8 *vfo)
 {
-    if ((MODO_LADOS >> 4 & 15) == 1)
-        v->canal_c = CANAL_LADO(1);
+    COPIA_MEM(CORRENTE_VFO, vfo, 32);
+    SALVA_VFO(1);
+    CANAL_DO_B = canal;
+    MODO_LADOS = (MODO_LADOS & 0x0F) | (em_vfo ? 0 : 0x10);
+    RECARREGA_LADOS();
+    SALVA_AJUSTES();
+}
+
+/* B -> C: guarda o modo, o canal e o VFO do B e poe os da C. Sem o setor dos VFOs (a primeira vez), a C
+ * comeca com o VFO do B. */
+NA_LIVRE_COD __attribute__((noinline)) static void vai_c(struct vigia *v)
+{
+    struct vfc f;
+    unsigned tinha = le_vfc(&f);
+
+    v->vfo = (v->vfo & ~2) | recolhe_b(f.vfo_b) << 1;
+    if (!tinha)
+        COPIA_MEM(f.vfo_c, f.vfo_b, 32);
+    v->canal_b = CANAL_DO_B;
+    v->c_no_b = 1;
+    grava_vigia(v);
+    grava_vfc(&f);
+    poe_no_b(v->vfo & 1, v->canal_c, f.vfo_c);
+}
+
+/* Com o lado B em evidencia e a C nele: recolhe o modo, o canal e o VFO em que a C ficou e devolve os
+ * do B. Sem o setor dos VFOs (a C foi para o lado B antes da v49, pelo caminho das setas, que nao mexia
+ * em VFO), o registro do B ainda e o dele, e o B volta em canal, como ia. */
+NA_LIVRE_COD __attribute__((noinline)) static void volta_b(struct vigia *v)
+{
+    struct vfc f;
+    unsigned tinha = le_vfc(&f), c_em_vfo = recolhe_b(f.vfo_c);
+
+    if (!tinha) {
+        COPIA_MEM(f.vfo_b, f.vfo_c, 32);
+        v->vfo &= ~2;
+    }
+    if (!c_em_vfo)
+        v->canal_c = CANAL_DO_B;
+    v->vfo = (v->vfo & ~1) | c_em_vfo;
     v->c_no_b = 0;
     grava_vigia(v);
-    canal_no_b(v->canal_b);
+    grava_vfc(&f);
+    poe_no_b(v->vfo >> 1 & 1, v->canal_b, f.vfo_b);
 }
 
 /* A tecla A/B (0x01E4D44C, no lugar de 0x01E40E52(1)). Fora do TRIPLE, a troca de sempre - e, se a C
@@ -1073,15 +1188,25 @@ NA_LIVRE_COD void gancho_ab(void)
         TROCA_AB(1);
         return;
     }
-    if (v.modo == WATCH_TRIPLE && (MODO_LADOS >> 4 & 15) == 1 && canal_existe(v.canal_c)) {
-        v.canal_b = CANAL_LADO(1);           /* B -> C */
-        v.c_no_b = 1;
-        grava_vigia(&v);
-        canal_no_b(v.canal_c);
-        TELA_INTEIRA();                      /* o caminho das setas nao redesenha: quem o chama, sim */
+    if (v.modo == WATCH_TRIPLE && ((v.vfo & 1) || canal_existe(v.canal_c))) {
+        vai_c(&v);                           /* B -> C */
+        TELA_INTEIRA();                      /* a remontagem nao redesenha; a troca de fabrica, sim (0x01E40EF4) */
         return;
     }
-    TROCA_AB(1);                             /* B -> A: fora do TRIPLE, B em VFO ou sem C */
+    TROCA_AB(1);                             /* B -> A: fora do TRIPLE, ou a C em canal vazio */
+}
+
+/* ---------- a luz no espectro (v49) ----------
+ * O laco do sinal apaga a luz quando a contagem do ABR (h[0x14F80], que o tique desce nos modos 0, 2,
+ * 3, 11 e 20 - 0x01E41876 e 0x01E41A0C) chega a 0: 0x01E394D6(0) em 0x01E46578, o unico lugar que
+ * apaga (a marca da luz, b[0x15386], so vai a 0 dentro dela; os outros tres chamadores acendem). No
+ * espectro (modo 20, so a entrada por tecla o grava, 0x01E4CF7E) ela fica acesa. Nada e gravado: ao
+ * sair do espectro, ou ao religar o radio, o ABR volta a valer. */
+#define MODO_TELA      (*(volatile u8 *)0x0001533D)
+NA_LIVRE_COD void gancho_luz(unsigned acende)
+{
+    if (MODO_TELA != 20)
+        LUZ(acende);
 }
 
 /* ---------- scramble: 8 frequencias de inversao, de 2700 a 3400 Hz ----------
@@ -1155,7 +1280,8 @@ void gancho_roger_tons(void)
  * O 'W' de fabrica tambem e de 64 B (0x01E4C0E8 espera 68 bytes no buffer), entao o pacote
  * estendido de gravacao tem exatamente o tamanho do de fabrica.
  *
- * Gravacao estendida **so na area dos bancos e no WATCH** (0xC1000..0xD2FFF; ate a v45, 0xD1FFF),
+ * Gravacao estendida **so na area dos bancos, no WATCH e nos VFOs da C** (0xC1000..0xD3FFF; ate a
+ * v45, 0xD1FFF; da v46 a v48, 0xD2FFF),
  * apagando o setor quando o bloco comeca nele; qualquer outro endereco e ignorado sem escrever nada.
  * Quem grava banco pelo cabo tem que desligar e ligar o radio depois: o filtro e montado na
  * partida.
@@ -1180,11 +1306,11 @@ void gancho_cabo(unsigned grava)
             else
                 LE_FLASH(endereco, (void *)(p + 4), 0x40);
         }
-        /* A faixa 0xC1000..0xD2FFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
+        /* A faixa 0xC1000..0xD3FFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
          * 2026-10-24 mostra que nada mais mora ali, e o chip de 1 MB nao espelha nesse endereco.
          * Quem grava por aqui e o PC mandando registro de banco; o caminho do menu continua com a
          * trava do setor_livre. */
-        else if (setor - (SETOR_CAB >> 12) < NUM_BANCOS + 2u) {   /* o cabecalho, os bancos e o WATCH */
+        else if (setor - (SETOR_CAB >> 12) < NUM_BANCOS + 3u) {   /* o cabecalho, os bancos, o WATCH e os VFOs da C */
             if (endereco == (u32)setor << 12)   /* bloco que abre o setor: apaga antes */
                 APAGA_SETOR(endereco);
             GRAVA_FLASH(endereco, (void *)(p + 4), 0x40);
@@ -1352,3 +1478,15 @@ void canal_grava(void)
     aplica_filtro(1);                      /* entra ou sai da navegacao na hora */
     revalida_lados();
 }
+
+/* ---------- o carimbo do fim da imagem (v47) ----------
+ * O CRC16 do .text (o codigo no fim da imagem, 0x01E96124 em diante), que o build.sh calcula numa
+ * primeira ligacao e passa aqui na segunda. O carregador de atualizacao so regrava o que tem CRC novo
+ * (v30, e a v34 gravada por cima dela mesma parava nos 5%), e nenhum CRC de dentro da imagem cobre o
+ * fim: o do app_area_head vai so ate o fim do app.bin. A v46 mudou 1 byte so ali, e o radio com a v45
+ * a recusou. O carimbo mora no .livre, dentro do app.bin (o bancos.ld o poe por ultimo, *(.carimbo)):
+ * mudar o fim muda o app.bin, e o carregador grava. O conferir.py confere (2i). */
+#ifndef CARIMBO_FIM
+#define CARIMBO_FIM 0
+#endif
+__attribute__((section(".carimbo"), used)) const u16 carimbo_fim = CARIMBO_FIM;

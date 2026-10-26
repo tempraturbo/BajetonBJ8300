@@ -69,7 +69,7 @@ and a font of its own:
 | **Top bar** | Shows **only what is on**: RX and TX in a tag with a dot (green on RX, red on TX), dual watch (DW), VOX, MO, noise reduction (NR), DTMF ST, Bluetooth and the lock; the **voltage in volts** and the battery, which gets a red outline and blinks when low |
 | **Transmitting** | The big line switches to the transmit frequency, and the meter turns **red, filled by the power** |
 | **Typing** | The frequency is typed in its place, over the `---.---` mask; the channel, in the channel tag |
-| **DTMF** (`#` key) | An amber box in place of the card of the side in use, with the digits |
+| **DTMF** (`#` key) | An amber box in place of the card of the side in use, with the digits (since v47; up to v46 the stock box came up) |
 | **Menus** | A medium font, easier to read; the item number in a green tag and the title in large type; three options, the one under the cursor in a card and the **saved value marked with a green dot**. Changing the value, the card gets the green border and the arrows, with no blinking. At the top, the highlighted side summed up |
 | **Name editor** (BANK NAME, CH-NAME) | The text in a card, in large type when it fits, with the amber cursor, how many characters out of how many and the mode (`abc`, `ABC`, `123`, switched with `#`) in an amber tag |
 | **Banks** (BANK, BANK CH) | The banks that are on, and the banks the channel is in, in **amber** |
@@ -330,7 +330,6 @@ the [changelog](docs/changelog.md).
 | File | Status |
 |---|---|
 | `BJ8300_BANK_v2.0T.anc` | **stable, the recommended one** — v41 under the version's name (same file); use with the CHIRP driver from the same release |
-| `BJ8300_BANK_v46.anc` | v45 + the cable writes the WATCH record, so CHIRP can set WATCH, CH-C and MDF-C — not tested on the radio |
 | `BJ8300_BANK_v45.anc` | v41 + the `WATCH` menu (SINGLE: one side full screen; DUAL: the usual A/B; TRIPLE: a third frequency, C, picked in `CH-C` and shown as `MDF-C` asks, which dual watch watches with the same time as the others and the A/B key brings into focus) — tested on the radio |
 | `BJ8300_BANK_v41.anc` | v39 + the spectrum in theme B, the radio settings checked on entry and on every modulation switch, a modulation switch ~2.5 s faster and the S of the medium font — tested on the radio |
 | `BJ8300_BANK_v39.anc` | v36 + the other screens in theme B (menu with the medium font, name editor, radio, QT scan, DTMF and the power-on voltage), no Chinese language, both sides on a bank change and the `VERSION` menu at `V2.0T` — tested on the radio (a freeze when switching to USB/LSB came from what was saved in it: [changelog](docs/changelog.md), v40) |

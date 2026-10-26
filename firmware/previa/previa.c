@@ -83,6 +83,14 @@ u32 terceira(void)
     return previa_terceira | previa_mdf_terceira << 16;
 }
 
+/* v49: a C em VFO (bit 24 de terceira()) - a frequencia do VFO dela, em dezenas de Hz */
+static u32 previa_freq_vfo;
+u32 freq_terceira(u32 t)
+{
+    (void)t;
+    return previa_freq_vfo;
+}
+
 /* o rodizio do TRIPLE (bancos.c): a C no lugar do outro lado, e o outro lado recebendo */
 unsigned c_no_lugar(void)
 {
@@ -260,6 +268,15 @@ int main(int argc, char **argv)
     tela_b();
     grava("35-single-transmitindo");
 
+    /* o DTMF (modo 7) em SINGLE (v47: ate a v46 a caixa saia sempre a de fabrica, gancho_dtmf) */
+    limpa();
+    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    memoria[0x1533D] = 7;
+    digitando("123*5666");
+    tela_b();
+    grava("35b-dtmf-single");
+
     /* WATCH em TRIPLE (v42): a C e o canal 5 da memoria, gravado no chip imitado como o radio grava
      * (32 B por canal, RX em BCD com o byte baixo primeiro, nome em +20) */
     previa_vista = 2;
@@ -301,6 +318,23 @@ int main(int argc, char **argv)
     grava("38-triple-b-em-evidencia-a-recebendo");
     previa_outro_rx = 0;
 
+    /* o DTMF no TRIPLE com o B em evidencia */
+    memoria[0x1533D] = 7;
+    digitando("123*5666");
+    tela_b();
+    grava("38b-dtmf-triple-b");
+
+    /* v49: a C em VFO, com o A em evidencia - a faixa dela com a frequencia e "VFO" */
+    limpa();
+    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    memoria[0x14B70] = 1;
+    previa_terceira = 4 | 1u << 24;
+    previa_freq_vfo = 14652000;
+    tela_b();
+    grava("38c-triple-c-em-vfo");
+    previa_terceira = 4;
+
     /* a C em evidencia (tecla A/B): ela no lado B, e o B (canal 10) fora, como terceira */
     {
         static const u8 canal10[32] = {0x50, 0x62, 0x25, 0x46, 0x50, 0x62, 0x25, 0x46};
@@ -320,6 +354,12 @@ int main(int argc, char **argv)
     tela_b();
     tela_b_medidor(0, 4, 1);
     grava("39-triple-c-em-evidencia");
+
+    /* o DTMF no TRIPLE com a C em evidencia (a foto do dono, na v45) */
+    memoria[0x1533D] = 7;
+    digitando("123*5666");
+    tela_b();
+    grava("39b-dtmf-triple-c");
     previa_vista = 0;
 
     /* as outras telas (v37 e v38), com o estado das fotos do dono (PIGAO 2 no canal 101) posto na

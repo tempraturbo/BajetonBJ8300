@@ -56,6 +56,7 @@ SECTIONS
     .livre : {
         *tela.o(.text* .rodata*)
         *(.livre.*)
+        *(.carimbo)     /* v47: o CRC16 do .text, por ultimo, para nada mudar de lugar com ele */
     } > livre
 
     .vozes : {

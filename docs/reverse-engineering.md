@@ -73,6 +73,7 @@ by looking for where content starts mirroring address 0:
 | `0xC0000–0xC0FFF` | 64 records of 60 B used by the firmware |
 | **`0xC1000–0xD1FFF`** | **the banks** (header + 16 sectors of 4 KB) |
 | **`0xD2000–0xD2FFF`** | **the WATCH record** (v43; the cable writes it since v46; [section 18](#18-dual-watch-and-triple-v42-to-v45)) |
+| **`0xD3000–0xD3FFF`** | **C's VFOs** (v49: C's and the saved B's; [section 18](#18-dual-watch-and-triple-v42-to-v45)) |
 | `0xFA000` | 4 KB used by the firmware |
 | free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -122,8 +123,8 @@ It fits in the same 4 bytes: **bit 7 of the size byte set** means a 24-bit addre
 7 bits carrying the third address byte; the block is always 64 B. Bit 7 clear is byte-for-byte
 stock behaviour — CHIRP sees no difference. Reach: 8 MB.
 
-Extended writes are only accepted in `0xC1000..0xD2FFF` (up to v45, `0xD1FFF`; v46 added the
-WATCH record), erasing the sector when the block starts it. Any other address is ignored without
+Extended writes are only accepted in `0xC1000..0xD3FFF` (up to v45, `0xD1FFF`; v46 added the
+WATCH record and v49 C's VFOs), erasing the sector when the block starts it. Any other address is ignored without
 writing anything (proven with `tools/cabo/teste_cabo_grava.ps1`), and the ACK goes out anyway.
 
 **Memory read (v31, diagnostic).** In the extended `R`, an address with bit 22 set (`0x400000` and
@@ -295,6 +296,10 @@ bits).
 10. **Three UFW entries are encrypted by their position in the file** (`isd_config.ini`,
     `script.ver`, `blimit.bin`: the CRC only matches when decrypted with their offset). Changing
     the size of an earlier entry moves them, and they have to be encrypted again.
+11. **The loader also skips a whole image whose inner CRCs do not change** (v46). v46 only changed
+    the code at the end of the image, outside every CRC, and the radio on v45 stopped at 5% and
+    came back on it, like v34 flashed over v34. Since v47 `carimbo_fim` (the CRC16 of the end code)
+    lives inside `app.bin`, and `conferir.py` checks it (`2i`).
 
 ## 10. Why it cannot brick
 
@@ -505,6 +510,16 @@ the other. The proof:
 The four immediates that v26 and v34 changed inside the dBm and AM/FM routines are gone, because
 the whole routines no longer run.
 
+**The light on in the spectrum (v49).** The ABR count is at `h[0x14F80]`: whoever turns the
+light on (`0x01E3951C`) loads it from ABR and calls `0x01E394D6(1)`, and the tick counts it down in
+modes 0, 2, 3 and 11 (mask 2061 at `0x01E41876`) and in 20 (`0x01E41A0C`). The signal loop turns
+it off, at its head (`0x01E4655A`, which every mode goes through on every turn): with ABR on, out
+of mode 4 and the count at 0, `0x01E394D6(0)` at `0x01E46578`. It is the only caller that passes 0
+(the light flag, `b[0x15386]`, only goes to 0 inside it; the other three turn it on). `gancho_luz`
+takes that call and does not pass it on in mode 20. Nothing is saved: on leaving the spectrum, or
+on powering the radio back on (power-up does not write 20 to the mode; only the key entry does,
+`0x01E4CF7E`), ABR applies again.
+
 ## 12. Roger
 
 The ROGER menu entry (stock index 20) keeps its value at **`b[0x14B83]`** (offset `0x17` of the
@@ -665,6 +680,12 @@ read. What was measured on the radio ([changelog](changelog.md), v35):
 Why (number of files, of sectors or of bytes) cannot be known without reading the loader. The large
 new code went inside `app.bin` ([section 16](#16-g729-and-mp3-out-v36-and-v37)), and `2g` refuses to build if any
 voice file other than C0 and C1 changes.
+
+**The loader skips an image whose inner CRCs do not change (v46).** Flashing v34 over v34 itself
+stopped at 5% and came back (Oct 25), and v46 over v45 did the same (Oct 26): it only changed 1
+byte of the code at the end of the image, which `app_area_head`'s CRC does not cover (it only goes
+to the end of `app.bin`). Every version that flashed changed `app.bin`. Since v47 the build writes
+the CRC16 of the end code into `carimbo_fim`, inside `app.bin`, and `2i` checks it.
 
 ## 15. Voices removed
 
@@ -953,7 +974,7 @@ settings (`0x01E3AB36`, with r0 ≠ 0), redraws (`0x01E3C290`) and mutes (`0x01E
 | 5 | MDF-C: 0 name, 1 frequency, 2 number |
 | 6–7 | C's channel (0 to 959) |
 | 8 | 1 = C is on side B |
-| 9 | reserved |
+| 9 | since v49: bit 0 = C on VFO; bit 1 = the saved B on VFO (up to v48, reserved and 0) |
 | 10–11 | B's channel, kept while C is on side B |
 | 12–13 | the checksum of bytes 0 to 11, the same as the banks |
 
@@ -961,11 +982,36 @@ With no valid record (wrong magic or checksum), the radio stays in DUAL. v43's r
 bytes, without fields 8 to 11, and stopped being valid in v44. Screen B reads the record on every
 draw. Since v46 the cable write window includes it, and CHIRP writes WATCH, CH-C and MDF-C.
 
+**VFO C (v49).** C gets a mode (VFO or channel) and a VFO, like A and B. The VFOs are in sector
+`0xD3000` (`struct vfc`, "VFC1", 70 bytes: C's, the saved B's and the checksum), in the format of
+each side's VFO record (`0x14E42` A's, `0x14E62` B's, the 32 bytes of the `0x8000` log). Each
+side's state, which the stock swap shows, is by "in focus" and "other", not by A and B:
+
+| What | current | in focus | other |
+|---|---|---|---|
+| mode (0 VFO, 1 channel) | `b[0x15E12]` | `b[0x15E13]` | `b[0x15E14]` |
+| channel | `h[0x15E3C]` | `h[0x15E3E]` | `h[0x15E40]` |
+| zone | `b[0x15E15]` | `b[0x15E16]` | `b[0x15E17]` |
+| raw VFO, 36 bytes | `0x15E80` | `0x15EA4` | `0x15EC8` |
+| raw channel, 20 bytes | `0x15E44` | `0x15E58` | `0x15E6C` |
+
+What is saved is by A and B: each side's mode in a nibble of `b[0x14B86]` (the settings'
+`0x901A`, 1 = channel), each side's channel at `h[0x15E0C + side × 4]` and the VFO record.
+`0x01E3A4FE(side)` copies the current VFO's 32 bytes to the record and, if it changed, writes the
+log. `0x01E3A812` (the VFO/MR key's routine, which only flips the nibble and calls it) rebuilds both
+sides from what is saved: each side's power-up (`0x01E3A486` A, `0x01E3A796` B) and `0x01E3A700`,
+which on a channel writes the side's channel and the log (`0x01E3A42A`) and loads through the
+stock loader (`0x01E3A650`, which on VFO copies the record's 32 bytes). The A/B key from B to C
+swaps what is saved for side B with C's and calls that rebuild; from C to A it does the reverse
+and the stock swap. In the round-robin, C on VFO goes in with its 32 bytes in the current VFO and
+mode 0.
+
 **The TDR rule**, the owner's: in SINGLE dual watch is off, and only the frequency shown receives.
 WATCH set to SINGLE clears TDR, the TDR item's setter (item 7, `tdr_grava` instead of
 `0x01E3957C`) keeps it at 0, and power-up clears it again. In DUAL and TRIPLE, on listens to all of
 them, and off only to the one in focus.
 
 **Checked at build time** (`conferir.py`): `4r` checks the three swapped call sites byte by byte
-(`0x01E4826E`, `0x01E481CC` and `0x01E4D44C`: the stock call before, the hook's after); `4b` checks
+(`0x01E4826E`, `0x01E481CC` and `0x01E4D44C`: the stock call before, the hook's after; and, since
+v49, the light's, `0x01E46578`); `4b` checks
 the menu table pointer; the stack with the hooks is the stock one at all three roots.

@@ -73,6 +73,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | `0xC0000–0xC0FFF` | 64 registros de 60 B que o firmware usa |
 | **`0xC1000–0xD1FFF`** | **os bancos** (cabeçalho + 16 setores de 4 KB) |
 | **`0xD2000–0xD2FFF`** | **o registro do WATCH** (v43; o cabo o grava desde a v46; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v45)) |
+| **`0xD3000–0xD3FFF`** | **os VFOs da C** (v49: o da C e o do B guardado; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v45)) |
 | `0xFA000` | 4 KB de uso do firmware |
 | livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -124,8 +125,8 @@ Cabe nos mesmos 4 bytes: **bit 7 do tamanho ligado** = endereço de 24 bits, com
 valendo o terceiro byte; o bloco é sempre de 64 B. Bit 7 em zero = comportamento de fábrica, byte a
 byte — o CHIRP não vê diferença. Alcance: 8 MB.
 
-Gravação estendida só em `0xC1000..0xD2FFF` (até a v45, `0xD1FFF`; a v46 incluiu o registro do
-WATCH), apagando o setor quando o bloco começa nele. Qualquer outro endereço é ignorado sem escrever
+Gravação estendida só em `0xC1000..0xD3FFF` (até a v45, `0xD1FFF`; a v46 incluiu o registro do
+WATCH e a v49 os VFOs da C), apagando o setor quando o bloco começa nele. Qualquer outro endereço é ignorado sem escrever
 nada (provado com `tools/cabo/teste_cabo_grava.ps1`), e o ACK sai do mesmo jeito.
 
 **Leitura de memória (v31, diagnóstico).** No `R` estendido, endereço com o bit 22 ligado
@@ -298,6 +299,10 @@ nos bits altos).
 10. **Três entradas do UFW são cifradas pela posição no arquivo** (`isd_config.ini`, `script.ver`,
     `blimit.bin`: o CRC só bate decifrando com o deslocamento delas). Mudar o tamanho de uma
     entrada anterior as move, e elas têm de ser cifradas de novo.
+11. **O carregador também pula a imagem inteira cujos CRCs de dentro não mudam** (v46). A v46 só
+    mudava o código do fim da imagem, fora de todo CRC, e o rádio com a v45 parou nos 5% e voltou
+    nela, como a v34 gravada por cima da própria v34. Desde a v47 o `carimbo_fim` (o CRC16 do
+    código do fim) mora dentro do `app.bin`, e o `conferir.py` o confere (`2i`).
 
 ## 10. Prova de que não brica
 
@@ -501,6 +506,15 @@ em momentos diferentes, e não há RAM onde guardar um para redesenhar junto com
 Os quatro imediatos que a v26 e a v34 mudavam dentro do dBm e do AM/FM saíram, porque as rotinas
 inteiras não rodam mais.
 
+**A luz acesa no espectro (v49).** A contagem do ABR fica em `h[0x14F80]`: quem acende a luz
+(`0x01E3951C`) a carrega pelo ABR e chama `0x01E394D6(1)`, e o tique a desce nos modos 0, 2, 3 e
+11 (a máscara 2061 em `0x01E41876`) e no 20 (`0x01E41A0C`). Quem apaga é o laço do sinal, na
+cabeça dele (`0x01E4655A`, por onde todos os modos passam a cada volta): com o ABR ligado, fora do
+modo 4 e com a contagem em 0, `0x01E394D6(0)` em `0x01E46578`. É o único chamador que passa 0 (a
+marca da luz, `b[0x15386]`, só vai a 0 dentro dela; os outros três acendem). O `gancho_luz` entra
+nessa chamada e não a repassa no modo 20. Nada é gravado: ao sair do espectro, ou ao religar o
+rádio (a partida não grava 20 no modo; só a entrada por tecla, `0x01E4CF7E`), o ABR volta a valer.
+
 ## 12. Roger
 
 O item ROGER do menu (índice 20 de fábrica) guarda o valor em **`b[0x14B83]`** (offset `0x17` do
@@ -661,6 +675,12 @@ pede os pedaços do `.anc` e grava. Ele é cifrado e não se lê. O que foi medi
 O porquê (quantidade de arquivos, de setores ou de bytes) não se sabe sem ler o carregador. O
 código novo grande foi para dentro do `app.bin` ([seção 16](#16-o-g729-e-o-mp3-fora-v36-e-v37)), e a `2g` recusa
 montar se mudar qualquer arquivo de voz além do C0 e do C1.
+
+**O carregador pula a imagem cujos CRCs de dentro não mudam (v46).** Gravar a v34 por cima da
+própria v34 parava nos 5% e voltava (25/10), e a v46 por cima da v45 fez o mesmo (26/10): ela só
+mudava 1 byte do código do fim da imagem, que o CRC do `app_area_head` não cobre (ele vai só até o
+fim do `app.bin`). Todas as versões que gravaram mudaram o `app.bin`. Desde a v47 o build grava o
+CRC16 do código do fim no `carimbo_fim`, dentro do `app.bin`, e a `2i` confere.
 
 ## 15. Vozes fora
 
@@ -942,7 +962,7 @@ sombras dos dois lados, decodifica, refaz o registro da tela (`0x01E39128`) e a 
 | 5 | o MDF-C: 0 nome, 1 frequência, 2 número |
 | 6–7 | o canal da C (0 a 959) |
 | 8 | 1 = a C está no lado B |
-| 9 | reservado |
+| 9 | desde a v49: bit 0 = a C em VFO; bit 1 = o B guardado em VFO (até a v48, reservado e 0) |
 | 10–11 | o canal do B, guardado enquanto a C está no lado B |
 | 12–13 | a soma dos bytes 0 a 11, a mesma dos bancos |
 
@@ -950,11 +970,35 @@ Sem registro válido (marca ou soma errada), o rádio fica em DUAL. A v43 tinha 
 campos 8 a 11, e o registro dela deixou de valer na v44. A tela B lê o registro a cada desenho.
 Desde a v46 a janela de gravação do cabo o inclui, e o CHIRP grava o WATCH, o CH-C e o MDF-C.
 
+**O VFO C (v49).** A C ganha modo (VFO ou canal) e VFO, como o A e o B. Os VFOs ficam no setor
+`0xD3000` (`struct vfc`, "VFC1", 70 B: o da C, o do B guardado e a soma), no formato do registro
+de VFO de cada lado (`0x14E42` o do A, `0x14E62` o do B, os 32 B do log `0x8000`). O estado de cada
+lado, que a troca de fábrica mostra, é por "em evidência" e "outro", e não por A e B:
+
+| O quê | corrente | em evidência | outro |
+|---|---|---|---|
+| modo (0 VFO, 1 canal) | `b[0x15E12]` | `b[0x15E13]` | `b[0x15E14]` |
+| canal | `h[0x15E3C]` | `h[0x15E3E]` | `h[0x15E40]` |
+| zona | `b[0x15E15]` | `b[0x15E16]` | `b[0x15E17]` |
+| VFO cru, 36 B | `0x15E80` | `0x15EA4` | `0x15EC8` |
+| canal cru, 20 B | `0x15E44` | `0x15E58` | `0x15E6C` |
+
+O que é guardado é por A e B: o modo de cada lado num nibble de `b[0x14B86]` (o `0x901A` dos
+ajustes, 1 = canal), o canal de cada lado em `h[0x15E0C + lado × 4]` e o registro de VFO.
+`0x01E3A4FE(lado)` copia os 32 B do VFO corrente para o registro e, se mudou, grava o log.
+`0x01E3A812` (a rotina da tecla VFO/MR, que só inverte o nibble e a chama) remonta os dois lados a
+partir do que está guardado: a partida de cada lado (`0x01E3A486` o A, `0x01E3A796` o B) e
+`0x01E3A700`, que em canal grava o canal do lado e o log (`0x01E3A42A`) e carrega pelo carregador
+de fábrica (`0x01E3A650`, que em VFO copia os 32 B do registro). A tecla A/B do B para a C troca
+o que está guardado no lado B pelo da C e chama essa remontagem; da C para o A faz o contrário e a
+troca de fábrica. No rodízio, a C em VFO entra com os 32 B dela no VFO corrente e o modo 0.
+
 **A regra do TDR**, do dono: no SINGLE a dupla escuta fica desligada, e só a frequência mostrada
 recebe. O WATCH em SINGLE zera o TDR, o set do item TDR (o 7, `tdr_grava` no lugar de
 `0x01E3957C`) o mantém em 0, e a partida o zera de novo. No DUAL e no TRIPLE, ligada escuta todas,
 e desligada só a que está em evidência.
 
 **Conferido no build** (`conferir.py`): a `4r` confere os três pontos de troca byte a byte
-(`0x01E4826E`, `0x01E481CC` e `0x01E4D44C`: a chamada de fábrica antes, a do gancho depois); a `4b`
+(`0x01E4826E`, `0x01E481CC` e `0x01E4D44C`: a chamada de fábrica antes, a do gancho depois; e, desde
+a v49, a da luz, `0x01E46578`); a `4b`
 confere o ponteiro da tabela do menu; a pilha com os ganchos é a de fábrica nas três raízes.

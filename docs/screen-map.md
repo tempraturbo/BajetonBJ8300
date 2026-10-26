@@ -496,7 +496,10 @@ the factory setters (`0x01E44C68`) goes back to the default (v40, [changelog](ch
 **DTMF** (the `#` key). The mode becomes 7 (`0x01E4CD06`), and the stock box opens at `0x01E4DA54`
 (on side A at y 28..68, on B at y 83..124); the digits are redrawn at `0x01E4A8D4`, from `0x14A3A`,
 how many in `b[0x14A35]`, up to 10. In screen B the box is part of the scene while the mode is 7: the
-exit zeroes the mode before the full redraw (`0x01E3C29C`, `0x01E40D68`).
+exit zeroes the mode before the full redraw (`0x01E3C29C`, `0x01E40D68`). `gancho_dtmf` (on the sends
+`0x01E4DA88` and `0x01E4A93C`) draws when the mode is 7; up to v46 it asked whether the two-VFO
+screen was active, and `0x01E3B1A2` answers 0 with the mode above 5, so the stock box always came
+up.
 
 **Voltage at power-on** (`0x01E55E9C`, with the power-on message set to voltage): boot reads the
 ADC at `0x01E45FB0` and does × 444 / 1000, in tenths of a volt. The stock text is "   Voltage" with
@@ -558,7 +561,8 @@ from the letter:
 Each strip has the letter badge, the text its MDF asks for (the name, the frequency or the number)
 and the channel on a chip (`VFO` on the VFO). The third one, the one on neither side, is read from
 the data chip: the channel record, with MDF-C (or MDF-B, when it is B). An empty channel shows as
-`EMPTY CH`. **While receiving**, the strip turns dark amber (`#3b2a0b`, the amber chip's
+`EMPTY CH`. Since v49, a third one on VFO shows its VFO's frequency (read from sector `0xD3000`)
+with `VFO` on the chip. **While receiving**, the strip turns dark amber (`#3b2a0b`, the amber chip's
 background) with the badge and the text in amber (`#fbbf24`). The side out of focus is receiving
 when it has signal, or when dual watch is on it with state 4, and the one receiving is the third
 one when the round-robin is on it.

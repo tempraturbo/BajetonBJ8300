@@ -493,7 +493,10 @@ limites dos setters de fábrica (`0x01E44C68`) volta ao padrão (v40, [históric
 **DTMF** (tecla `#`). O modo vira 7 (`0x01E4CD06`), e a caixa de fábrica abre em `0x01E4DA54` (no
 lado A em y 28..68, no B em y 83..124); os dígitos são redesenhados em `0x01E4A8D4`, os de
 `0x14A3A`, quantos em `b[0x14A35]`, até 10. Na tela B a caixa faz parte da cena enquanto o modo for
-7: a saída zera o modo antes do redesenho inteiro (`0x01E3C29C`, `0x01E40D68`).
+7: a saída zera o modo antes do redesenho inteiro (`0x01E3C29C`, `0x01E40D68`). O `gancho_dtmf`
+(nos envios `0x01E4DA88` e `0x01E4A93C`) desenha quando o modo é 7; até a v46 ele perguntava se a
+tela de dois VFOs estava ativa, e `0x01E3B1A2` responde 0 com o modo acima de 5, de modo que saía
+sempre a caixa de fábrica.
 
 **A tensão na partida** (`0x01E55E9C`, com a mensagem de partida em tensão): a partida lê o ADC em
 `0x01E45FB0` e faz × 444 / 1000, em décimos de volt. O texto de fábrica é "   Voltage" com a tensão
@@ -554,7 +557,8 @@ da letra:
 Cada faixa tem o selo da letra, o texto que o MDF dela pede (o nome, a frequência ou o número) e o
 canal numa etiqueta (`VFO` no VFO). A terceira, a que não está em nenhum dos dois lados, é lida do
 chip de dados: o registro do canal, com o MDF-C (ou o MDF-B, quando ela é o B). Canal vazio
-aparece como `EMPTY CH`. **Recebendo**, a faixa fica em âmbar escuro (`#3b2a0b`, o fundo da
+aparece como `EMPTY CH`. Desde a v49, a terceira em VFO mostra a frequência do VFO dela (lida do
+setor `0xD3000`) com `VFO` na etiqueta. **Recebendo**, a faixa fica em âmbar escuro (`#3b2a0b`, o fundo da
 etiqueta âmbar) com o selo e o texto em âmbar (`#fbbf24`). O lado fora de evidência recebe quando
 tem sinal, ou quando a dupla escuta está nele com o estado em 4, e o que recebe é a terceira quando
 o rodízio está nela.

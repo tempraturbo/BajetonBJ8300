@@ -5,6 +5,58 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v49 — Oct 26 — VFO C and the light on in the spectrum ⏳ in the code, no release yet
+
+At the owner's request, C now has the same options as A and B. Up to v48 it was only a memory
+channel (CH-C); since v49 it is a side like the others: mode (VFO or channel), a 32-byte VFO and a
+channel. The code is ready and checked, and the release comes after a request he still has to make.
+
+- **Where it lives.** C's mode, and the saved B's, are in byte 9 of the WATCH record, which was
+  reserved and written as 0 (channel, as up to v48). The VFOs are in sector `0xD3000` (`struct
+  vfc`, "VFC1", 70 bytes: C's and the saved B's), in the format of each side's VFO record. They stay
+  out of the WATCH record because screen B reads that one on every draw, and 64 more bytes on the
+  stack of whoever reads it would go past the stock stack.
+- **The A/B key, from B to C,** saves B's mode, channel and VFO and puts C's in side B's slots: B's
+  nibble at `0x14B86`, the side's channel at `h[0x15E10]` and B's VFO record (`0x14E62`, through the
+  current VFO and `0x01E3A4FE(1)`, which writes the `0x8000` log). Then it rebuilds both sides with
+  the VFO/MR key's routine (`0x01E3A812`) and saves the settings (`0x01E3AB36`). From C to A, it does
+  the reverse and the stock swap. While C is on side B, everything that touches it (VFO/MR, arrows,
+  number entry, STEP, TXP, tones…) is the stock firmware touching C. Up to v48 it was the arrow
+  path, which only worked with B and C on channels.
+- **TRIPLE's round-robin**, with C on VFO, puts C's 32 VFO bytes in the current VFO (`0x15E80`), as
+  the stock loader does (`0x01E3A5E8` also copies only the record's 32 bytes). C's strip shows the
+  frequency with "VFO".
+- **The screen light stays on in the spectrum.** The signal loop turns the light off when the ABR
+  count (`h[0x14F80]`) reaches 0, through `0x01E394D6(0)` at `0x01E46578`, the only place that
+  turns it off. The hook only passes that call on outside mode 20. Nothing is saved: on leaving the
+  spectrum, or on powering the radio back on (it never starts in mode 20; only the key entry writes
+  it, `0x01E4CF7E`), ABR applies again.
+- **The cable also writes the VFO sector:** the window goes up to `0xD3FFF`.
+- The build passed ("tudo certo"), the stack is the stock one at all three roots, the menus' deepest
+  point went from 628 to 636 bytes (below the stock 740) and the preview's 85 screens come out the
+  same, plus a new one (C on VFO).
+
+## v48 — Oct 26 — TTR instead of TDR ⏳ superseded by v49, never flashed
+
+At the owner's request, the TDR menu item became **TTR** (Transmitter Triple Receiver), because in
+TRIPLE the watch is triple. The "TDR" string is unique in `app.bin` (`0x01E5A782`). Item 7 of the
+menu table and the other stock item list (`0x01E5E697`) point to it, and both now say TTR.
+
+## v47 — Oct 26 — the new DTMF box and the end stamp ⏳ superseded by v49, never flashed
+
+- **Screen B's DTMF box had never shown, from v38 to v46.** `gancho_dtmf` asked whether the two-VFO
+  screen was active, and the routine that answers (`0x01E3B1A2`) returns 0 with the screen mode
+  above 5 (`0x01E3B1B4`). The # key (case 24 of the actions `tbh`, `0x01E4BE28`) writes 7 to the
+  mode (`0x01E4CD06`) before opening the box. So the stock one always came up, with its Chinese
+  title turned to garbage since v37. Now the hook draws when the mode is 7.
+- **The paths, proven in the disassembly.** `0x01E4DA88` is only reached by case 24 (in modes 0 and
+  8; 8 is the cable session) and by the radio's frequency entry (only in mode 2, which keeps the
+  stock send). `0x01E4A93C` is only reached by mode 7's case. The preview gained DTMF in SINGLE and
+  in TRIPLE.
+- **The end stamp.** v46 did not flash over v45 (below). `build.sh` links twice and writes the CRC16
+  of the code at the end of the image into `carimbo_fim`, inside `app.bin`. So any change at the end
+  also changes `app.bin`'s CRC, and the loader writes it. `conferir.py` checks it (`2i`).
+
 ## CHIRP driver — Oct 26 — WATCH, CH-C and MDF-C
 
 - **Settings → Watch**, with the radio's three menu items: WATCH (SINGLE, DUAL and TRIPLE), C's
@@ -26,7 +78,15 @@ its cause, because that is what stops it happening twice.
   `teste_clonagem`, 1h and 6 to 6h (the cable, against a simulated radio with v46's window and with
   the earlier one).
 
-## v46 — Oct 26 — the cable writes the WATCH record ⏳ in test
+## v46 — Oct 26 — the cable writes the WATCH record ❌ the radio on v45 did not flash it
+
+**The loader did not write it: in the flasher, 4 to 5% then a jump to 100%, and the radio came
+back on v45.** It is the same as when v34 was flashed over itself (Oct 25). v46 only changed 1
+byte of the code at the end of the image (`0x01E96124` on), which no CRC inside the image covers:
+`app_area_head`'s only goes to the end of `app.bin`. All the CRCs came out the same as v45's, and
+the loader only rewrites what has a new CRC (v30). Every version that flashed changed `app.bin`;
+v27, which also only changed the end, was flashed over v28. v46 left `firmware/releases/`; from
+v47 on, the end stamp solves it.
 
 - **The cable write window includes the WATCH sector.** The extended write only accepted
   `0xC1000..0xD1FFF` (the header and the 16 banks), and the WATCH record sits right after it, at

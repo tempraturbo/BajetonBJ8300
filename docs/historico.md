@@ -5,6 +5,58 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v49 — 26/10 — o VFO C e a luz acesa no espectro ⏳ no código, sem release ainda
+
+A pedido do dono, a C passa a ter as mesmas opções do A e do B. Até a v48 ela era só um canal da
+memória (o CH-C); desde a v49 é um lado como os outros: modo (VFO ou canal), VFO de 32 B e canal. O
+código está pronto e conferido, e a release sai depois de um pedido que ele ainda vai fazer.
+
+- **Onde mora.** O modo da C, e o do B guardado, ficam no byte 9 do registro do WATCH, que era
+  reservado e gravado em 0 (canal, como até a v48). Os VFOs ficam no setor `0xD3000` (`struct vfc`,
+  "VFC1", 70 B: o da C e o do B guardado), no formato do registro de VFO de cada lado. Ficam fora do
+  registro do WATCH porque a tela B lê aquele a cada desenho, e 64 B a mais na pilha de quem o lê
+  passariam da de fábrica.
+- **A tecla A/B, do B para a C,** guarda o modo, o canal e o VFO do B e põe os da C nas vagas do
+  lado B: o nibble do B em `0x14B86`, o canal do lado em `h[0x15E10]` e o registro de VFO do B
+  (`0x14E62`, pelo VFO corrente e `0x01E3A4FE(1)`, que grava o log `0x8000`). Depois remonta os dois
+  lados pela rotina da tecla VFO/MR (`0x01E3A812`) e grava os ajustes (`0x01E3AB36`). Da C para o A,
+  faz o contrário e a troca de fábrica. Enquanto a C está no lado B, tudo o que mexe nele (VFO/MR,
+  setas, digitação, STEP, TXP, tons…) é o firmware de fábrica mexendo nela. Até a v48 era o caminho
+  das setas, que só servia com o B e a C em canal.
+- **O rodízio do TRIPLE**, com a C em VFO, põe os 32 B do VFO dela no VFO corrente (`0x15E80`), como
+  o carregador de fábrica faz (`0x01E3A5E8` também só copia os 32 B do registro). A faixa da C mostra
+  a frequência com "VFO".
+- **A luz da tela fica acesa no espectro.** O laço do sinal apaga a luz quando a contagem do ABR
+  (`h[0x14F80]`) chega a 0, por `0x01E394D6(0)` em `0x01E46578`, o único lugar que a apaga. O gancho
+  só repassa essa chamada fora do modo 20. Nada é gravado: ao sair do espectro, ou ao religar o rádio
+  (que nunca parte no modo 20; só a entrada por tecla o grava, `0x01E4CF7E`), o ABR volta a valer.
+- **O cabo grava também o setor dos VFOs:** a janela vai até `0xD3FFF`.
+- O build passou ("tudo certo"), a pilha é a de fábrica nas três raízes, o ponto mais fundo dos
+  menus foi de 628 para 636 B (abaixo dos 740 B de fábrica) e as 85 telas da prévia saem iguais, com
+  uma nova (a C em VFO).
+
+## v48 — 26/10 — TTR no lugar de TDR ⏳ superada pela v49, nunca gravada
+
+A pedido do dono, o item TDR do menu virou **TTR** (Transmitter Triple Receiver), porque no TRIPLE a
+escuta é tripla. A cadeia "TDR" é única no `app.bin` (`0x01E5A782`). Apontam para ela o item 7 da
+tabela de menus e a outra lista de itens de fábrica (`0x01E5E697`), e as duas passam a dizer TTR.
+
+## v47 — 26/10 — a caixa do DTMF nova e o carimbo do fim ⏳ superada pela v49, nunca gravada
+
+- **A caixa do DTMF da tela B nunca tinha aparecido, da v38 à v46.** O `gancho_dtmf` perguntava se
+  a tela de dois VFOs estava ativa, e a rotina que responde (`0x01E3B1A2`) devolve 0 com o modo da
+  tela acima de 5 (`0x01E3B1B4`). A tecla # (caso 24 do `tbh` das ações, `0x01E4BE28`) grava o 7 no
+  modo (`0x01E4CD06`) antes de abrir a caixa. Por isso saía sempre a de fábrica, com o título em
+  chinês virado lixo desde a v37. Agora o gancho desenha quando o modo é 7.
+- **Os caminhos, provados no desmontado.** O `0x01E4DA88` só é alcançado pelo caso 24 (nos modos 0
+  e 8; o 8 é a sessão do cabo) e pela digitação da frequência do rádio (só no modo 2, que segue com o
+  envio de fábrica). O `0x01E4A93C` só é alcançado pelo caso do modo 7. A prévia ganhou o DTMF em
+  SINGLE e no TRIPLE.
+- **O carimbo do fim.** A v46 não gravava por cima da v45 (abaixo). O `build.sh` liga duas vezes e
+  grava o CRC16 do código do fim da imagem no `carimbo_fim`, dentro do `app.bin`. Assim toda
+  mudança no fim muda também o CRC do `app.bin`, e o carregador a grava. O `conferir.py` confere
+  (`2i`).
+
 ## Driver do CHIRP — 26/10 — WATCH, CH-C e MDF-C
 
 - **Settings → Watch**, com os três itens do menu do rádio: o WATCH (SINGLE, DUAL e TRIPLE), o
@@ -25,7 +77,15 @@ causa, porque é isso que evita repetir.
   `teste_clonagem`, o 1h e do 6 ao 6h (o cabo, com um rádio simulado com a janela da v46 e com a
   de antes).
 
-## v46 — 26/10 — o cabo grava o registro do WATCH ⏳ em teste
+## v46 — 26/10 — o cabo grava o registro do WATCH ❌ o rádio com a v45 não a gravou
+
+**O carregador não a gravou: no gravador, 4 a 5% e pulava para 100%, e o rádio voltava na v45.**
+É o mesmo de quando a v34 foi gravada por cima dela mesma (25/10). A v46 só mudava 1 byte do
+código do fim da imagem (`0x01E96124` em diante), que nenhum CRC de dentro da imagem cobre: o do
+`app_area_head` vai só até o fim do `app.bin`. Todos os CRCs saíram iguais aos da v45, e o
+carregador só regrava o que tem CRC novo (v30). Todas as versões que gravaram mudaram o
+`app.bin`; a v27, que também só mudava o fim, foi gravada por cima da v28. A v46 saiu de
+`firmware/releases/`; da v47 em diante, o carimbo do fim resolve.
 
 - **A janela de gravação do cabo inclui o setor do WATCH.** A gravação estendida só aceitava
   `0xC1000..0xD1FFF` (o cabeçalho e os 16 bancos), e o registro do WATCH fica logo depois, em

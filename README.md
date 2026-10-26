@@ -70,7 +70,7 @@ coloridas e uma fonte própria:
 | **Barra de cima** | Mostra **só o que está ligado**: RX e TX numa etiqueta com bolinha (verde no RX, vermelha no TX), dupla escuta (DW), VOX, MO, redução de ruído (NR), DTMF ST, Bluetooth e cadeado; a **tensão em volts** e a bateria, que fica com contorno vermelho e pisca quando está fraca |
 | **Transmitindo** | A linha grande passa para a frequência de transmissão, e o medidor fica **vermelho, cheio pela potência** |
 | **Digitando** | A frequência entra no lugar dela, sobre a máscara `---.---`; o canal, na etiqueta do canal |
-| **DTMF** (tecla `#`) | Uma caixa âmbar no lugar do cartão do lado em uso, com os dígitos |
+| **DTMF** (tecla `#`) | Uma caixa âmbar no lugar do cartão do lado em uso, com os dígitos (desde a v47; até a v46 aparecia a caixa de fábrica) |
 | **Menus** | Uma fonte média, mais legível; o número do item numa etiqueta verde e o título grande; três opções, a do cursor num cartão e o **valor gravado marcado com um ponto verde**. Mudando o valor, o cartão ganha a borda verde e as setas, sem piscar. Em cima, o lado em evidência resumido |
 | **Editor de nome** (BANK NAME, CH-NAME) | O texto num cartão, em tamanho grande quando cabe, com o cursor âmbar, quantos caracteres de quantos e o modo (`abc`, `ABC`, `123`, trocado pelo `#`) numa etiqueta âmbar |
 | **Bancos** (BANK, BANK CH) | Os bancos ligados, e os bancos em que o canal está, em **âmbar** |
@@ -328,7 +328,6 @@ quê, está no [histórico](docs/historico.md).
 | Arquivo | Estado |
 |---|---|
 | `BJ8300_BANK_v2.0T.anc` | **estável, a recomendada** — a v41 com o nome da versão (mesmo arquivo); use com o driver do CHIRP do mesmo release |
-| `BJ8300_BANK_v46.anc` | v45 + o cabo grava o registro do WATCH, para o CHIRP mexer no WATCH, no CH-C e no MDF-C — não testado no rádio |
 | `BJ8300_BANK_v45.anc` | v41 + o menu `WATCH` (SINGLE: um lado em tela cheia; DUAL: o A/B de sempre; TRIPLE: uma terceira frequência, a C, escolhida no `CH-C` e mostrada como o `MDF-C` pede, que a dupla escuta vigia com o mesmo tempo das outras e a tecla A/B põe em evidência) — testado no rádio |
 | `BJ8300_BANK_v41.anc` | v39 + o espectro no tema B, os ajustes do rádio conferidos na entrada e na troca de modulação, a troca de modulação ~2,5 s mais rápida e o S da fonte média — testado no rádio |
 | `BJ8300_BANK_v39.anc` | v36 + as outras telas no tema B (menu com a fonte média, editor de nome, rádio, scan QT, DTMF e a tensão na partida), sem o idioma chinês, os dois lados no banco e o menu `VERSION` em `V2.0T` — testado no rádio (um travamento na troca para USB/LSB vinha do que estava salvo nele: [histórico](docs/historico.md), v40) |

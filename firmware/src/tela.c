@@ -175,6 +175,8 @@ u32 watch_le_tudo(void);            /* modo | mdf_c << 8 | canal_c << 16 */
 #define VISTA_TRIPLE_C 3                /* TRIPLE com a C no lado B, em evidencia */
 unsigned watch_tela(void);          /* bancos.c: o modo (3 = TRIPLE com a C no lado B) | MDF-C << 8 */
 u32 terceira(void);                 /* bancos.c: canal | exibicao << 16 da que esta fora dos dois lados */
+u32 freq_terceira(u32 t);           /* bancos.c: a frequencia do VFO dela, em dezenas de Hz (v49) */
+#define TERCEIRA_VFO   (1u << 24)   /* em terceira(): ela esta em VFO (v49) */
 
 static void le_estado(struct estado *e)
 {
@@ -637,26 +639,31 @@ SEPARADA static void faixa_lado(const struct estado *e, unsigned i)
 SEPARADA static void faixa_terceira(const struct estado *e)
 {
     u32 t, f = 0;
-    unsigned canal, mdf, j = 3 - LETRA(e, 1), y = Y_FAIXA(e, j);
+    unsigned canal, mdf, n, j = 3 - LETRA(e, 1), y = Y_FAIXA(e, j);
     char s[16];
 
     if (JAN_Y0 >= y + ALTURA_FAIXA || JAN_Y1 <= y)
         return;
     t = terceira();
     canal = t & 0xFFFF;
-    mdf = t >> 16;
-    if (canal != 0xFFFF)
-        f = le_canal_c(canal, s);          /* o nome, em s; trocado abaixo se o MDF pede outra coisa */
-    if (!f)
-        junta(s, "EMPTY CH");
-    else if (mdf == 1)
-        frequencia(s, f, 5);
-    else if (mdf == 2)
-        texto_canal(s, canal + 1);
-    else if (!s[0])
-        junta(s, "UNNAMED CH");
-    faixa(y, 'A' + j, s, !f || mdf == 2 ? 0xFFFF : canal + 1,
-          (e->lado[!e->evidencia].sinal || outro_recebendo()) && c_no_lugar());
+    mdf = t >> 16 & 0xFF;
+    if (t & TERCEIRA_VFO) {                /* v49: em VFO, a frequencia e "VFO", como a faixa de um lado */
+        frequencia(s, freq_terceira(t), 5);
+        n = 0;
+    } else {
+        if (canal != 0xFFFF)
+            f = le_canal_c(canal, s);      /* o nome, em s; trocado abaixo se o MDF pede outra coisa */
+        if (!f)
+            junta(s, "EMPTY CH");
+        else if (mdf == 1)
+            frequencia(s, f, 5);
+        else if (mdf == 2)
+            texto_canal(s, canal + 1);
+        else if (!s[0])
+            junta(s, "UNNAMED CH");
+        n = !f || mdf == 2 ? 0xFFFF : canal + 1;
+    }
+    faixa(y, 'A' + j, s, n, (e->lado[!e->evidencia].sinal || outro_recebendo()) && c_no_lugar());
 }
 
 /* O outro lado, compacto: selo, o texto da exibicao (no VFO, a frequencia inteira), o canal e um
@@ -1189,13 +1196,19 @@ void gancho_radio_inicio(void)
 }
 
 /* No lugar do envia() da caixa do DTMF de fabrica: abrindo (0x01E4DA88, os dois lados) e a cada
- * digito (0x01E4A93C). Na tela de dois VFOs, a faixa da caixa na tela B (a cena a desenha no modo 7);
- * fora dela, o envia() de fabrica. */
+ * digito (0x01E4A93C). No modo 7, a faixa da caixa na tela B (a cena a desenha no modo 7); fora dele,
+ * o envia() de fabrica. A pergunta e o modo, e nao o ativa(): o layout() devolve 0 com o modo acima
+ * de 5 (0x01E3B1B4), e a tecla # grava o 7 (0x01E4CD06, a unica escrita do 7) antes de abrir a caixa.
+ * Com o ativa(), da v38 a v46 a caixa saiu sempre a de fabrica. Quem chega aos dois sitios (fecho
+ * para tras no desmontado de fabrica): o 0x01E4DA88, so o caso 24 do tbh das acoes (0x01E4BE28, a
+ * tecla #, nos modos 0 e 8 - o 8 e a sessao do cabo) e a digitacao da frequencia do radio
+ * (0x01E4D93C, so pelo caso do modo 2), que segue com o envia() de fabrica como sempre; o 0x01E4A93C,
+ * so pelo caso do modo 7 do tbh dos modos (0x01E4BEF8). */
 void gancho_dtmf(void)
 {
     struct estado e;
 
-    if (!ativa()) {
+    if (MODO_TELA != 7) {
         ENVIA();
         return;
     }
