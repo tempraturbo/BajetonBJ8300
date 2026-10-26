@@ -225,7 +225,8 @@ def main():
     confere('8e. OFF/BEEP 1/BEEP 2/COIN/TONE1200 gravam 0/1/3/4/2', gravados, [0, 1, 3, 4, 2])
     nomes = [x.get_name() for x in radio.get_settings().walk()]
     confere('8g2. o Voice Prompts saiu (o firmware nao toca mais voz)', 'settings_voice' in nomes, False)
-    confere('8g3. o resto da pagina continua (Language, Beep)', ['settings_language' in nomes, 'settings_beep' in nomes],
+    confere('8g3. o Language saiu (o firmware fica sempre em ingles, v37)', 'settings_language' in nomes, False)
+    confere('8g4. o resto da pagina continua (Beep, DTMF ST)', ['settings_beep' in nomes, 'settings_dtmfst' in nomes],
             [True, True])
     confere('8f. a lista da classe base nao mudou', radtel_rt900.ROGER_LIST,
             ['OFF', 'BEEP', 'TONE1200'])

@@ -78,7 +78,8 @@ the defects fixed in v38.
   each one's stock routines, with no hook on the general `envia()`: that way prompts like
   "Sure to Reset?" go through like the stock ones.
 - **No Chinese:** the LANGUAGE item left the menu, the power-on hook sets the language to English,
-  and the items' Chinese options point at the English tables.
+  and the items' Chinese options point at the English tables. The CHIRP driver hides the language
+  setting.
 - **The free range grew:** the MP3 decoder goes out together with G.729
   (`0x01E257E0..0x01E2EFC4`, 38,884 B; [section 16](reverse-engineering.md#16-g729-and-mp3-out-v36-and-v37)).
 - **The unlit meter is lighter**, so it does not blend into the black, on the radio's S-meter too.

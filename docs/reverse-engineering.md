@@ -833,5 +833,5 @@ The radio always runs in English, as the owner asked:
 - **the name editor's pinyin mode is gone**: the mode switch (`0x01E4A59C`) cycles 3 modes in English
   and 4 in Chinese.
 
-`conferir.py` checks in `4o` that the byte the hook
+The CHIRP driver hides the language setting. `conferir.py` checks in `4o` that the byte the hook
 zeroes is the one LANGUAGE's get reads and that the item left the table.

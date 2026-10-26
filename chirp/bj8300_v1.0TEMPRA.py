@@ -565,6 +565,10 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         # and the radio's VOICE menu item is gone, so the setting would do nothing.
         if not _remove_setting(settings, 'settings_voice'):
             LOG.warning('voice prompts setting not found in the base class')
+        # The banks firmware (v37 onwards) is English only: the LANGUAGE menu item is gone and the
+        # radio sets English at every power-on, whatever the memory holds.
+        if not _remove_setting(settings, 'settings_language'):
+            LOG.warning('language setting not found in the base class')
         settings.append(self._bank_settings())
         return settings
 

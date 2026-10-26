@@ -823,5 +823,5 @@ O rádio fica sempre em inglês, a pedido do dono:
 - **o modo pinyin do editor de nome some**: a troca de modo (`0x01E4A59C`) cicla 3 modos em inglês e
   4 em chinês.
 
-O `conferir.py` confere na `4o` que o byte que o
+O driver do CHIRP esconde o ajuste de idioma. O `conferir.py` confere na `4o` que o byte que o
 gancho zera é o que o get do LANGUAGE lê e que o item saiu da tabela.

@@ -76,7 +76,8 @@ corrigidos na v38.
   partir das rotinas de fábrica de cada um, sem gancho no `envia()` geral: assim avisos como
   "Sure to Reset?" passam como os de fábrica.
 - **Sem chinês:** o item LANGUAGE saiu do menu, o gancho da partida põe o idioma em inglês, e as
-  opções em chinês dos itens apontam as tabelas em inglês.
+  opções em chinês dos itens apontam as tabelas em inglês. O driver do CHIRP esconde o ajuste de
+  idioma.
 - **A faixa livre cresceu:** o decodificador de MP3 sai junto com o G.729
   (`0x01E257E0..0x01E2EFC4`, 38.884 B; [seção 16](engenharia-reversa.md#16-o-g729-e-o-mp3-fora-v36-e-v37)).
 - **O medidor apagado mais claro**, para não se confundir com o preto, também no medidor S do
