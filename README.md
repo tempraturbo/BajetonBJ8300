@@ -1,4 +1,4 @@
-# Baojie BJ-8300 — firmware V2.5T: escuta tripla, tela nova, bancos de canais e driver do CHIRP
+# Baojie BJ-8300 — firmware V2.6T: escuta tripla, tela nova, bancos de canais e driver do CHIRP
 
 <p align="center">
   <a href="README.en.md"><img src="docs/imagens/botao-english.svg" alt="English version" height="56"></a>
@@ -11,14 +11,14 @@ de verdade**, scramble compatível com o Baofeng UV-17L, ganho do microfone no m
 rápido e um **driver do CHIRP** próprio. O "T" da versão é de **Tempra**.
 
 > [!TIP]
-> ## 🎉 V2.5T — três frequências de uma vez
+> ## 🎉 V2.6T — três frequências de uma vez
 >
-> **[⬇️ Baixar a V2.5T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.5T)**
+> **[⬇️ Baixar a V2.6T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T)**
 >
 > | Arquivo do release | Para que serve |
 > |---|---|
-> | `BJ8300_BANK_v2.5T.anc` | o firmware, para gravar no rádio |
-> | `bj8300_v2.5TEMPRA.py` | o módulo do CHIRP para este firmware |
+> | `BJ8300_BANK_v2.6T.anc` | o firmware, para gravar no rádio |
+> | `bj8300_v2.6TEMPRA.py` | o módulo do CHIRP para este firmware |
 > | `BinTalk-V1.1.zip` | o gravador (BinTe ANC Bootloader) |
 > | `CH340-driver.zip` | o driver do cabo de programação USB |
 >
@@ -35,7 +35,7 @@ ajuda a próxima versão a sair.
 
 ## 🔺 TRIPLE: o BJ-8300 escutando três frequências
 
-O firmware de fábrica só tem dois lados, A e B, e a dupla escuta (TDR) vigia os dois. A V2.5T põe um
+O firmware de fábrica só tem dois lados, A e B, e a dupla escuta (TDR) vigia os dois. A V2.6T põe um
 **terceiro lado, a C**, e o rádio passa a vigiar **três frequências** ao mesmo tempo. Nenhum
 firmware do BJ-8300 fazia isso.
 
@@ -46,7 +46,7 @@ firmware do BJ-8300 fazia isso.
 | <img src="docs/imagens/tela-triple-c.png" alt="TRIPLE com a C em evidência" width="360"> | <img src="docs/imagens/tela-triple-c-vfo.png" alt="TRIPLE com a C em VFO" width="360"> |
 | **A C em evidência** (tecla A/B): ela ganha o cartão, transmite e muda de canal como o A e o B | **A C em VFO**: a faixa mostra a frequência e `VFO` |
 | <img src="docs/imagens/tela-triple-tx-c.png" alt="TRIPLE transmitindo na C" width="360"> | <img src="docs/imagens/tela-menu-txabc.png" alt="Menu TX-A/B/C com a C em evidência" width="360"> |
-| **Transmitindo na C** com o `TX-A/B/C` em C: o A continua em evidência, e a faixa da C fica vermelha | **O menu `TX-A/B/C`**, com a C em evidência no resumo de cima |
+| **Transmitindo na C** com o `TX-A/B/C` em C: ela fica em evidência enquanto o PTT está apertado, como o A e o B, e volta ao soltar | **O menu `TX-A/B/C`**, com a C em evidência no resumo de cima |
 
 - **O menu `WATCH`** escolhe quantas frequências a tela principal mostra: **SINGLE** (um lado só,
   em tela cheia), **DUAL** (o A/B de sempre) ou **TRIPLE**.
@@ -57,7 +57,8 @@ firmware do BJ-8300 fazia isso.
 - **A C é um lado completo**, em VFO ou em canal, com as mesmas opções do A e do B. O canal dela é o
   item `CH-C`, e o que a faixa mostra (nome, frequência ou canal) é o `MDF-C`.
 - **O `TX-A/B/C`** (o TX-A/B de fábrica, com o C) escolhe em que lado o PTT transmite com a escuta
-  ligada. Em C, o PTT transmite na C mesmo com ela fora dos dois lados, sem mudar nada de lugar.
+  ligada. Em C, a C fica em evidência enquanto o PTT está apertado, como o A e o B ficam, mesmo
+  estando fora dos dois lados; ao soltar, tudo volta como estava.
 - **No CHIRP**, tudo isso fica em **Settings → VFO A/B/C Channel**.
 
 ---
@@ -74,7 +75,7 @@ firmware do BJ-8300 fazia isso.
 As imagens saem da prévia no PC ([firmware/previa/](firmware/previa/)), que roda o mesmo código de
 desenho que vai para o rádio.
 
-## ✨ O que mudou da V0.12 de fábrica para a V2.5T
+## ✨ O que mudou da V0.12 de fábrica para a V2.6T
 
 ### 🆕 Recursos novos
 
@@ -82,7 +83,7 @@ desenho que vai para o rádio.
 |---|---|
 | 🔺 **WATCH: SINGLE, DUAL e TRIPLE** | Item novo do menu. **SINGLE** mostra só o lado em evidência, em tela cheia: a frequência em tamanho grande, um medidor largo e, com deslocamento, a frequência de transmissão embaixo (a escuta fica desligada). **DUAL** é o A/B de sempre. **TRIPLE** põe um terceiro lado, a C, e a escuta passa pelas três ([veja acima](#-triple-o-bj-8300-escutando-três-frequências)) |
 | 📡 **O lado C** | Um lado completo, em VFO ou em canal, com as mesmas opções do A e do B. A tecla A/B passa por A → B → C → A, e com a C em evidência ela transmite e muda como os outros. Menus novos: `CH-C` (o canal da C) e `MDF-C` (como a faixa dela aparece: nome, frequência ou canal) |
-| 📤 **TX-A/B/C** | O `TX-A/B` de fábrica (em que lado o PTT transmite com a escuta ligada) vira `TX-A/B/C`: OFF, A, B e C. No TRIPLE, em C, o PTT transmite na C mesmo com ela fora dos dois lados, sem mudar nada de lugar nem gravar nada; a faixa dela fica vermelha enquanto transmite |
+| 📤 **TX-A/B/C** | O `TX-A/B` de fábrica (em que lado o PTT transmite com a escuta ligada) vira `TX-A/B/C`: OFF, A, B e C. No TRIPLE, em C, a C fica em evidência enquanto o PTT está apertado, como o A e o B ficam, mesmo estando fora dos dois lados, e ao soltar tudo volta como estava, sem gravar nada |
 | 🎙️ **MIC GAIN** | Item novo do menu, logo depois do `NOISE REDUCTION`, com três níveis: **HIGH** (31, um degrau acima do 30 que a calibração de fábrica tinha no rádio de teste), **MID** (25) e **LOW** (19). Até a V2.0T o ganho vinha só da calibração, sem ajuste. Começa em HIGH. Vale na hora, sem desligar o rádio, mudado pelo menu, pelo CHIRP ou pelo retorno aos ajustes de fábrica |
 | 💡 **Luz acesa no espectro** | Enquanto o espectro está na tela, a luz não apaga. Ao sair, o tempo do `ABR` volta a valer, e o rádio nunca liga com a luz presa |
 | 🖥️ **Tela nova em todo o rádio** | Todas as telas foram redesenhadas: a principal (o lado em evidência num cartão com a frequência grande e o medidor, etiquetas coloridas de potência, modulação e tons, e a barra de cima só com o que está ligado), os menus e o editor de nome, o rádio FM/AM/SSB, o scan QT, o DTMF, o espectro e a tensão na partida ([veja acima](#-a-cara-nova)) |
@@ -104,7 +105,7 @@ etiquetas coloridas e uma fonte própria:
 |---|---|
 | **Principal** (os dois lados) | O lado em evidência fica num **cartão de borda verde**, com o nome, o canal, a **frequência grande** (os dois últimos dígitos pequenos) e um **medidor de 20 segmentos** (verde, amarelo e vermelho). O outro lado fica compacto, numa faixa fina. Etiquetas coloridas: potência (**H** vermelho, **M** âmbar, **L** verde), FM/AM, tom (CT/DCS), banda estreita, deslocamento, scramble e zona |
 | **Principal em SINGLE** | Só o lado em evidência, da barra ao pé da tela: a frequência ainda maior, as etiquetas, um medidor largo e, com deslocamento, a frequência de transmissão embaixo |
-| **Principal em TRIPLE** | O lado em evidência no cartão e os outros dois em faixas, na ordem A, B, C, cada uma com a letra, o texto e o canal (ou `VFO`). A faixa que está recebendo fica em âmbar, e a da C transmitindo pelo `TX-A/B/C`, em vermelho ([veja acima](#-triple-o-bj-8300-escutando-três-frequências)) |
+| **Principal em TRIPLE** | O lado em evidência no cartão e os outros dois em faixas, na ordem A, B, C, cada uma com a letra, o texto e o canal (ou `VFO`). A faixa que está recebendo fica em âmbar ([veja acima](#-triple-o-bj-8300-escutando-três-frequências)) |
 | **Barra de cima** | Mostra **só o que está ligado**: RX e TX numa etiqueta com bolinha (verde no RX, vermelha no TX), dupla escuta (DW), VOX, MO, redução de ruído (NR), DTMF ST, Bluetooth e cadeado; a **tensão em volts** e a bateria, que fica com contorno vermelho e pisca quando está fraca |
 | **Transmitindo** | A linha grande passa para a frequência de transmissão, e o medidor fica **vermelho, cheio pela potência** |
 | **Digitando** | A frequência entra no lugar dela, sobre a máscara `---.---`; o canal, na etiqueta do canal |
@@ -125,11 +126,11 @@ etiquetas coloridas e uma fonte própria:
 | 🟩 **Lado em evidência destacado** | O lado ativo fica num cartão de borda verde, com a frequência grande e o medidor; o outro fica compacto |
 | 📻 **Rádio FM/AM/SSB** | A troca de modulação ficou ~2,5 s mais rápida, e os ajustes salvos (passo, largura, LNA, BFO e as memórias) são conferidos ao entrar e a cada troca: valor fora dos limites dos menus volta ao padrão |
 | ↕️ **Setas do menu invertidas** | A seta de cima passa a subir na lista, em vez de avançar o valor |
-| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TTR` (Transmitter Triple Receiver), porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX-A/B/C`. O menu `VERSION` mostra `Firmware: V2.5T` |
+| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TTR` (Transmitter Triple Receiver), porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX-A/B/C`. O menu `VERSION` mostra `Firmware: V2.6T` |
 
 ### 🐞 Correções
 
-| Problema da V0.12 | Na V2.5T |
+| Problema da V0.12 | Na V2.6T |
 |---|---|
 | Durante o scan, a barra de sinal ficava congelada no último canal achado, e o número do canal descasava do nome | A tela acompanha cada canal da varredura |
 | Na partida com a tensão, o texto `   Voltage` tinha a tensão escrita por cima, e o "ge" sumia | `VOLTAGE` inteiro, com a tensão num cartão |
@@ -175,8 +176,8 @@ o firmware nem chega a ligar, mas ele **nunca foi testado**.
 Precisa de um PC com Windows e do **cabo de programação USB** do rádio (o de chip CH340, o mesmo do
 CPS de fábrica).
 
-**1. Baixe os arquivos.** Na [página do release V2.5T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.5T),
-baixe o `BJ8300_BANK_v2.5T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
+**1. Baixe os arquivos.** Na [página do release V2.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T),
+baixe o `BJ8300_BANK_v2.6T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
 o `CH340-driver.zip`. Descompacte os zips. (Os mesmos arquivos estão no repositório, em
 `firmware/releases/`, `tools/anc-bootloader/` e `tools/ch340-driver/`.)
 
@@ -191,7 +192,7 @@ Feche antes qualquer programa que use a porta COM (CHIRP, CPS).
 
 <p align="center"><img src="docs/imagens/gravador.png" alt="Janela do gravador BinTalk V1.1" width="300"></p>
 
-- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v2.5T.anc`.
+- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v2.6T.anc`.
 - **Port:** a COM do cabo (a do passo 2).
 - **Baudrate:** **115200** (já vem assim).
 
@@ -201,7 +202,7 @@ o rádio **segurando PTT2 + o botão de atalho**, até aparecer `UPDATE` na tela
 **5. Grave.** Clique em **Update** e espere. O log mostra `Update Mode` → `Baudrate OK` →
 `Update 3%` → `Jump To Loader` → `Progress 100%` → `Finish`. Não desconecte nada no meio.
 
-**6. Confira.** Desligue e ligue o rádio. No menu `VERSION` deve aparecer `Firmware: V2.5T`, e os
+**6. Confira.** Desligue e ligue o rádio. No menu `VERSION` deve aparecer `Firmware: V2.6T`, e os
 itens `BANK`, `BANK NAME` e `BANK CH` aparecem no menu.
 
 **Se der `Retry1..5 / Failure!`:** desligue o rádio, confira que nenhum outro programa está com a
@@ -373,7 +374,7 @@ quê, está no [histórico](docs/historico.md).
 
 | Arquivo | Estado |
 |---|---|
-| `BJ8300_BANK_v2.5T.anc` | **estável, a recomendada** — a v50: a v41 + o WATCH (SINGLE, DUAL e TRIPLE), o lado C completo (VFO ou canal), o TX-A/B/C, o MIC GAIN, a luz acesa no espectro, o TTR e a caixa do DTMF no tema novo; use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v2.6T.anc` | **estável, a recomendada** — a v51: a v41 + o WATCH (SINGLE, DUAL e TRIPLE), o lado C completo (VFO ou canal), o TX-A/B/C, o MIC GAIN, a luz acesa no espectro, o TTR e a caixa do DTMF no tema novo; use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v2.0T.anc` | estável anterior, a tela nova sem o WATCH — a v41 com o nome da versão (mesmo arquivo); use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v45.anc` | v41 + o menu `WATCH` (SINGLE: um lado em tela cheia; DUAL: o A/B de sempre; TRIPLE: uma terceira frequência, a C, escolhida no `CH-C` e mostrada como o `MDF-C` pede, que a dupla escuta vigia com o mesmo tempo das outras e a tecla A/B põe em evidência) — testado no rádio |
 | `BJ8300_BANK_v41.anc` | v39 + o espectro no tema B, os ajustes do rádio conferidos na entrada e na troca de modulação, a troca de modulação ~2,5 s mais rápida e o S da fonte média — testado no rádio |
@@ -437,14 +438,14 @@ O caminho da toolchain está em `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.
 
 **Orçamento de espaço:** o código novo mora em três lugares, todos no mesmo endereço nas 6 imagens:
 
-- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a V2.5T usa 2304);
+- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a V2.6T usa 2304);
 - **o espaço que era das vozes**, com o espectro, mas só dentro dos arquivos C0 e C1 (1066 bytes,
-  dos quais a V2.5T usa 674), porque o carregador do rádio recusa a imagem que muda mais arquivos de
+  dos quais a V2.6T usa 674), porque o carregador do rádio recusa a imagem que muda mais arquivos de
   voz;
 - **o lugar dos decodificadores G.729 e MP3**, dentro do `app.bin`, com as telas B, o WATCH, o
-  TRIPLE e a tabela de menus (38884 bytes, dos quais a V2.5T usa 19366).
+  TRIPLE e a tabela de menus (38884 bytes, dos quais a V2.6T usa 19542).
 
-A tabela de menus fica nesse último lugar desde a v43, num vetor de 64 vagas (a V2.5T usa 56); a
+A tabela de menus fica nesse último lugar desde a v43, num vetor de 64 vagas (a V2.6T usa 56); a
 original, de 54, fica intacta. [docs/engenharia-reversa.md](docs/engenharia-reversa.md)
 explica como medir, onde já foi economizado e por que esses lugares são seguros.
 

@@ -425,7 +425,7 @@ TEXTOS = [
     (0x01E5A60F, 'All', 'ALL'),
     (0x01E5AA81, 'RX Modulation', 'RX MODULATION'),
     # versao do firmware, que o item VERSION mostra (o hardware V01T32 fica como esta)
-    (0x01E5FD10, 'V0.12', 'V2.5T'),
+    (0x01E5FD10, 'V0.12', 'V2.6T'),
     # a tensao de fora da tela B (0x01E4CEB8..0x01E4CF1C, depois da tela de um VFO de fabrica): o
     # firmware escreve a tensao a partir da 8a posicao desta cadeia, e "   Voltage" perdia o "ge"
     # ("   Volta8.1V"); com " VOLTAGE" a tensao entra depois do espaco (v38)

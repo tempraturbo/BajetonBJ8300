@@ -5,6 +5,23 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V2.6T — 26/10 — três frequências de uma vez ✅
+
+A v51 virou a **V2.6T**, a terceira versão estável: `firmware/releases/BJ8300_BANK_v2.6T.anc` (sha256
+`9ef7cf3e…`). Testada no rádio: "agora funcionou tudo". O menu `VERSION` mostra `V2.6T`
+(`0x01E5FD10`). A V2.5T não chegou a ser lançada (abaixo): o teste da v50 mostrou a TX na C sem a C em
+evidência, e a correção saiu com o nome novo.
+
+Publicada no [release V2.6T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), junto com o módulo do CHIRP, o gravador e o
+driver do cabo. O README ganhou a seção do TRIPLE, com seis telas da prévia (o A recebendo, a C
+recebendo pela escuta, a C em evidência, a C em VFO, a TX na C e o menu TX-A/B/C), e o que mudou
+desde a V0.12 passou a contar o WATCH, o lado C, o TX-A/B/C, o MIC GAIN, a luz no espectro e o TTR.
+
+No uso, o dono achou a tela e os comandos da v49 um pouco mais lentos que na v45 (a tela de três
+lados e o desenho ao começar a receber), mas aceitável. Pelo código, os caminhos do desenho e da
+recepção são os mesmos da v45; o que pesa mais é a tecla A/B indo à C ou voltando dela, que desde a
+v49 grava o setor dos VFOs, o registro de VFO do B e os ajustes. Fica para observar no dia a dia.
+
 ## Driver do CHIRP — 26/10 — o nome da V2.6T
 
 - O módulo virou `chirp/bj8300_v2.6TEMPRA.py`, e o modelo no CHIRP, `Baojie → BJ8300_v2.6TEMPRA`. O
@@ -41,23 +58,12 @@ gravar nada:
   faz a troca, chega a 504 B no sítio), o ponto mais fundo dos menus ficou em 640 B, e as 43 telas da
   prévia saem iguais; a da TX na C (39c) mostra a C no cartão.
 
-## V2.5T — 26/10 — três frequências de uma vez ⏳ a v50, espera o teste no rádio para o release
+## V2.5T — 26/10 — ❌ nunca lançada, superada pela V2.6T
 
-A v50 vira a **V2.5T**, a terceira versão estável: `firmware/releases/BJ8300_BANK_v2.5T.anc`. É a v49,
-que o dono gravou e usa (sha256 `b0b3c2cd…`), com os dois consertos que o uso dela pediu (abaixo) e o
-nome da versão: o menu `VERSION` passa de `V2.0T` para `V2.5T` (`0x01E5FD10`). O build da v49 com o
-nome da versão foi comparado com ela desmontado: só o `0` → `5` em `0x01E5FD13` e os CRCs que o
-cobrem mudavam. O [release V2.5T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.5T) sai depois de o dono testar a v50
-no rádio, com o módulo do CHIRP, o gravador e o driver do cabo.
-
-O README ganhou a seção do TRIPLE, com telas da prévia (o A recebendo, a C recebendo pela escuta, a
-C em evidência, a C em VFO, a TX na C e o menu TX-A/B/C), e o que mudou desde a V0.12 passou a contar
-o WATCH, o lado C, o TX-A/B/C, o MIC GAIN, a luz no espectro e o TTR.
-
-No uso, o dono achou a tela e os comandos da v49 um pouco mais lentos que na v45 (a tela de três
-lados e o desenho ao começar a receber), mas aceitável. Pelo código, os caminhos do desenho e da
-recepção são os mesmos da v45; o que pesa mais é a tecla A/B indo à C ou voltando dela, que desde a
-v49 grava o setor dos VFOs, o registro de VFO do B e os ajustes. Fica para observar no dia a dia.
+A v50 seria a V2.5T: foi commitada com o nome (`firmware/releases/BJ8300_BANK_v2.5T.anc`) e o README
+já apontava para o release, mas o release ficou esperando o teste no rádio. O teste mostrou que a TX
+na C não punha a C em evidência; a correção (v51) saiu como V2.6T, e o `.anc` da V2.5T saiu de
+`firmware/releases/`.
 
 ## v50 — 26/10 — o TX-A/B/C e o selo C no menu ✔️ testada: a TX saía na C, sem a C em evidência
 
@@ -142,7 +148,7 @@ Os dois pedidos do dono depois de usar a v49.
 
 ## v49 — 26/10 — o VFO C, a luz acesa no espectro e o MIC GAIN ✔️ testada
 
-Testada no rádio; com os consertos da v50, é a V2.5T. A pedido do dono, a C passa a ter as
+Testada no rádio; com os consertos da v50 e da v51, é a V2.6T. A pedido do dono, a C passa a ter as
 mesmas opções do A e do B. Até a v48 ela era só um canal da memória (o CH-C); desde a v49 é um lado
 como os outros: modo (VFO ou canal), VFO de 32 B e canal.
 

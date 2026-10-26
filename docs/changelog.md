@@ -5,6 +5,24 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V2.6T — Oct 26 — three frequencies at once ✅
+
+v51 became **V2.6T**, the third stable version: `firmware/releases/BJ8300_BANK_v2.6T.anc` (sha256
+`9ef7cf3e…`). Tested on the radio: "now everything worked". The `VERSION` menu shows `V2.6T`
+(`0x01E5FD10`). V2.5T was never released (below): the v50 test showed TX on C without C in focus,
+and the fix came out under the new name.
+
+Published in the [V2.6T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), together with the CHIRP module, the flasher
+and the cable driver. The README got the TRIPLE section, with six screens from the preview (A
+receiving, C receiving through the watch, C in focus, C on a VFO, TX on C and the TX-A/B/C menu),
+and what changed since V0.12 now covers WATCH, side C, TX-A/B/C, MIC GAIN, the light in the spectrum
+and TTR.
+
+In use, the owner found v49's screen and commands a bit slower than on v45 (the three-side screen
+and the drawing when reception starts), but acceptable. From the code, the drawing and reception
+paths are the same as v45's; what weighs more is the A/B key going to C or coming back from it,
+which since v49 writes the VFO sector, B's VFO record and the settings. To be watched in daily use.
+
 ## CHIRP driver — Oct 26 — the V2.6T name
 
 - The module became `chirp/bj8300_v2.6TEMPRA.py`, and the model in CHIRP, `Baojie →
@@ -41,24 +59,12 @@ nothing:
   which now does the swap, reaches 504 bytes at its site), the menus' deepest point is 640 bytes, and
   the preview's 43 screens come out the same; the TX on C one (39c) shows C on the card.
 
-## V2.5T — Oct 26 — three frequencies at once ⏳ v50, waiting for the radio test before the release
+## V2.5T — Oct 26 — ❌ never released, superseded by V2.6T
 
-v50 becomes **V2.5T**, the third stable version: `firmware/releases/BJ8300_BANK_v2.5T.anc`. It is
-v49, which the owner flashed and uses (sha256 `b0b3c2cd…`), with the two fixes its use called for
-(below) and the version's name: the `VERSION` menu goes from `V2.0T` to `V2.5T` (`0x01E5FD10`). The
-v49 build with the version's name was compared with it, unpacked: only the `0` → `5` at
-`0x01E5FD13` and the CRCs covering it changed. The [V2.5T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.5T) comes
-out once the owner has tested v50 on the radio, with the CHIRP module, the flasher and the cable
-driver.
-
-The README got the TRIPLE section, with screens from the preview (A receiving, C receiving through
-the watch, C in focus, C on a VFO, TX on C and the TX-A/B/C menu), and what changed since V0.12 now
-covers WATCH, side C, TX-A/B/C, MIC GAIN, the light in the spectrum and TTR.
-
-In use, the owner found v49's screen and commands a bit slower than on v45 (the three-side screen
-and the drawing when reception starts), but acceptable. From the code, the drawing and reception
-paths are the same as v45's; what weighs more is the A/B key going to C or coming back from it,
-which since v49 writes the VFO sector, B's VFO record and the settings. To be watched in daily use.
+v50 would have been V2.5T: it was committed under that name (`firmware/releases/BJ8300_BANK_v2.5T.anc`)
+and the README already pointed to the release, but the release waited for the radio test. The test
+showed that TX on C did not bring C into focus; the fix (v51) came out as V2.6T, and V2.5T's `.anc`
+left `firmware/releases/`.
 
 ## v50 — Oct 26 — TX-A/B/C and the C label in the menu ✔️ tested: TX went out on C, without C in focus
 
@@ -144,7 +150,7 @@ The owner's two requests after using v49.
 
 ## v49 — Oct 26 — VFO C, the light on in the spectrum and MIC GAIN ✔️ tested
 
-Tested on the radio; with v50's fixes, it is V2.5T. At the owner's request, C now
+Tested on the radio; with the fixes of v50 and v51, it is V2.6T. At the owner's request, C now
 has the same options as A and B. Up to v48 it was only a memory channel (CH-C); since v49 it is a
 side like the others: mode (VFO or channel), a 32-byte VFO and a channel.
 

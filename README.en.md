@@ -1,4 +1,4 @@
-# Baojie BJ-8300 — firmware V2.5T: triple watch, a new screen, channel banks and CHIRP driver
+# Baojie BJ-8300 — firmware V2.6T: triple watch, a new screen, channel banks and CHIRP driver
 
 <p align="center">
   <a href="README.md"><img src="docs/imagens/botao-portugues.svg" alt="Versão em português" height="56"></a>
@@ -11,14 +11,14 @@ banks**, a scramble that talks to the Baofeng UV-17L, microphone gain in the men
 spectrum and a dedicated **CHIRP driver**. The "T" in the version stands for **Tempra**.
 
 > [!TIP]
-> ## 🎉 V2.5T — three frequencies at once
+> ## 🎉 V2.6T — three frequencies at once
 >
-> **[⬇️ Download V2.5T from the Releases page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.5T)**
+> **[⬇️ Download V2.6T from the Releases page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T)**
 >
 > | Release file | What it is for |
 > |---|---|
-> | `BJ8300_BANK_v2.5T.anc` | the firmware, to flash into the radio |
-> | `bj8300_v2.5TEMPRA.py` | the CHIRP module for this firmware |
+> | `BJ8300_BANK_v2.6T.anc` | the firmware, to flash into the radio |
+> | `bj8300_v2.6TEMPRA.py` | the CHIRP module for this firmware |
 > | `BinTalk-V1.1.zip` | the flasher (BinTe ANC Bootloader) |
 > | `CH340-driver.zip` | the driver for the USB programming cable |
 >
@@ -34,7 +34,7 @@ helps the next version come out.
 
 ## 🔺 TRIPLE: the BJ-8300 listening to three frequencies
 
-The stock firmware has only two sides, A and B, and dual watch (TDR) watches both. V2.5T adds a
+The stock firmware has only two sides, A and B, and dual watch (TDR) watches both. V2.6T adds a
 **third side, C**, and the radio now watches **three frequencies** at once. No BJ-8300 firmware did
 this before.
 
@@ -45,7 +45,7 @@ this before.
 | <img src="docs/imagens/tela-triple-c.png" alt="TRIPLE with C in focus" width="360"> | <img src="docs/imagens/tela-triple-c-vfo.png" alt="TRIPLE with C on a VFO" width="360"> |
 | **C in focus** (A/B key): it gets the card, transmits and changes channel like A and B | **C on a VFO**: the strip shows the frequency and `VFO` |
 | <img src="docs/imagens/tela-triple-tx-c.png" alt="TRIPLE transmitting on C" width="360"> | <img src="docs/imagens/tela-menu-txabc.png" alt="TX-A/B/C menu with C in focus" width="360"> |
-| **Transmitting on C** with `TX-A/B/C` on C: A stays in focus, and C's strip turns red | **The `TX-A/B/C` menu**, with C in focus in the summary at the top |
+| **Transmitting on C** with `TX-A/B/C` on C: it comes into focus while PTT is pressed, as A and B do, and goes back on release | **The `TX-A/B/C` menu**, with C in focus in the summary at the top |
 
 - **The `WATCH` menu** picks how many frequencies the main screen shows: **SINGLE** (one side only,
   full screen), **DUAL** (the usual A/B) or **TRIPLE**.
@@ -56,7 +56,8 @@ this before.
 - **C is a full side**, on a VFO or a channel, with the same options as A and B. Its channel is the
   `CH-C` item, and what its strip shows (name, frequency or channel) is `MDF-C`.
 - **`TX-A/B/C`** (the stock TX-A/B, with C) picks the side PTT transmits on with the watch on. On C,
-  PTT transmits on C even with it on neither side, without moving anything.
+  C comes into focus while PTT is pressed, as A and B do, even when it is on neither side; on
+  release, everything goes back as it was.
 - **In CHIRP**, all of this is under **Settings → VFO A/B/C Channel**.
 
 ---
@@ -73,7 +74,7 @@ this before.
 The images come from the PC preview ([firmware/previa/](firmware/previa/)), which runs the same
 drawing code that goes into the radio.
 
-## ✨ What changed from the stock V0.12 to V2.5T
+## ✨ What changed from the stock V0.12 to V2.6T
 
 ### 🆕 New features
 
@@ -81,7 +82,7 @@ drawing code that goes into the radio.
 |---|---|
 | 🔺 **WATCH: SINGLE, DUAL and TRIPLE** | A new menu item. **SINGLE** shows only the side in focus, full screen: the frequency in large type, a wide meter and, with an offset, the transmit frequency below (the watch stays off). **DUAL** is the usual A/B. **TRIPLE** adds a third side, C, and the watch goes through all three ([see above](#-triple-the-bj-8300-listening-to-three-frequencies)) |
 | 📡 **Side C** | A full side, on a VFO or a channel, with the same options as A and B. The A/B key goes A → B → C → A, and with C in focus it transmits and changes like the others. New menus: `CH-C` (C's channel) and `MDF-C` (how its strip shows: name, frequency or channel) |
-| 📤 **TX-A/B/C** | The stock `TX-A/B` (the side PTT transmits on with the watch on) becomes `TX-A/B/C`: OFF, A, B and C. In TRIPLE, on C, PTT transmits on C even with it on neither side, without moving or writing anything; its strip turns red while it transmits |
+| 📤 **TX-A/B/C** | The stock `TX-A/B` (the side PTT transmits on with the watch on) becomes `TX-A/B/C`: OFF, A, B and C. In TRIPLE, on C, C comes into focus while PTT is pressed, as A and B do, even when it is on neither side, and on release everything goes back as it was, writing nothing |
 | 🎙️ **MIC GAIN** | A new menu item, right after `NOISE REDUCTION`, with three levels: **HIGH** (31, one step above the 30 the factory calibration had on the test radio), **MID** (25) and **LOW** (19). Up to V2.0T the gain came only from the calibration, with no setting. It starts at HIGH. It takes effect at once, without turning the radio off, whether changed in the menu, in CHIRP or by the reset to factory settings |
 | 💡 **Light on in the spectrum** | While the spectrum is on the screen, the light does not go off. On leaving it, the `ABR` time applies again, and the radio never powers on with the light stuck |
 | 🖥️ **A new screen across the radio** | Every screen was redrawn: the main one (the highlighted side in a card with the big frequency and the meter, coloured tags for power, modulation and tones, and a top bar with only what is on), the menus and the name editor, the FM/AM/SSB radio, QT scan, DTMF, the spectrum and the power-on voltage ([see above](#-the-new-look)) |
@@ -103,7 +104,7 @@ tags and a font of its own:
 |---|---|
 | **Main** (both sides) | The highlighted side sits in a **green-bordered card**, with the name, the channel, the **big frequency** (the last two digits small) and a **20-segment meter** (green, yellow and red). The other side is compact, in a thin strip. Coloured tags: power (**H** red, **M** amber, **L** green), FM/AM, tone (CT/DCS), narrow band, offset, scramble and zone |
 | **Main in SINGLE** | Only the side in focus, from the bar to the bottom of the screen: an even bigger frequency, the tags, a wide meter and, with an offset, the transmit frequency below |
-| **Main in TRIPLE** | The side in focus in the card and the other two in strips, in A, B, C order, each with its letter, text and channel (or `VFO`). The strip that is receiving turns amber, and C's while transmitting through `TX-A/B/C`, red ([see above](#-triple-the-bj-8300-listening-to-three-frequencies)) |
+| **Main in TRIPLE** | The side in focus in the card and the other two in strips, in A, B, C order, each with its letter, text and channel (or `VFO`). The strip that is receiving turns amber ([see above](#-triple-the-bj-8300-listening-to-three-frequencies)) |
 | **Top bar** | Shows **only what is on**: RX and TX in a tag with a dot (green on RX, red on TX), dual watch (DW), VOX, MO, noise reduction (NR), DTMF ST, Bluetooth and the lock; the **voltage in volts** and the battery, which gets a red outline and blinks when low |
 | **Transmitting** | The big line switches to the transmit frequency, and the meter turns **red, filled by the power** |
 | **Typing** | The frequency is typed in its place, over the `---.---` mask; the channel, in the channel tag |
@@ -124,11 +125,11 @@ tags and a font of its own:
 | 🟩 **Highlighted side stands out** | The active side sits in a green-bordered card, with the big frequency and the meter; the other one is compact |
 | 📻 **FM/AM/SSB radio** | Switching modulation is ~2.5 s faster, and the saved settings (step, bandwidth, LNA, BFO and the memories) are checked on entry and on every switch: a value outside the menus' limits goes back to the default |
 | ↕️ **Menu arrows swapped** | The up arrow now moves up the list instead of stepping the value |
-| 🔤 **English texts revised** | 25 strings fixed and made consistent (e.g. `VOICEPRI` → `ENCRYPT`), `TDR` became `TTR` (Transmitter Triple Receiver), because with TRIPLE the watch is triple, and `TX-A/B` became `TX-A/B/C`. The `VERSION` menu shows `Firmware: V2.5T` |
+| 🔤 **English texts revised** | 25 strings fixed and made consistent (e.g. `VOICEPRI` → `ENCRYPT`), `TDR` became `TTR` (Transmitter Triple Receiver), because with TRIPLE the watch is triple, and `TX-A/B` became `TX-A/B/C`. The `VERSION` menu shows `Firmware: V2.6T` |
 
 ### 🐞 Fixes
 
-| V0.12 problem | In V2.5T |
+| V0.12 problem | In V2.6T |
 |---|---|
 | During scan, the signal bar froze on the last channel found, and the channel number got out of step with the name | The screen follows every channel of the sweep |
 | At power-on with the voltage, the `   Voltage` text had the voltage written over it, and the "ge" was lost | `VOLTAGE` in full, with the voltage in a card |
@@ -174,8 +175,8 @@ the firmware does not even start, but it has **never been tested**.
 You need a Windows PC and the radio's **USB programming cable** (the CH340 one, the same the stock
 CPS uses).
 
-**1. Download the files.** From the [V2.5T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.5T),
-download `BJ8300_BANK_v2.5T.anc`, `BinTalk-V1.1.zip` and, if Windows does not recognise the cable
+**1. Download the files.** From the [V2.6T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T),
+download `BJ8300_BANK_v2.6T.anc`, `BinTalk-V1.1.zip` and, if Windows does not recognise the cable
 yet, `CH340-driver.zip`. Unzip them. (The same files are in the repository, under
 `firmware/releases/`, `tools/anc-bootloader/` and `tools/ch340-driver/`.)
 
@@ -190,7 +191,7 @@ Close any program that uses the COM port first (CHIRP, CPS).
 
 <p align="center"><img src="docs/imagens/gravador.png" alt="The BinTalk V1.1 flasher window" width="300"></p>
 
-- In the top field, click **`...`** and pick `BJ8300_BANK_v2.5T.anc`.
+- In the top field, click **`...`** and pick `BJ8300_BANK_v2.6T.anc`.
 - **Port:** the cable's COM port (from step 2).
 - **Baudrate:** **115200** (the default).
 
@@ -200,7 +201,7 @@ it on **while holding PTT2 + the shortcut key**, until `UPDATE` shows on the scr
 **5. Flash.** Click **Update** and wait. The log shows `Update Mode` → `Baudrate OK` →
 `Update 3%` → `Jump To Loader` → `Progress 100%` → `Finish`. Do not unplug anything halfway.
 
-**6. Check.** Turn the radio off and on. The `VERSION` menu should show `Firmware: V2.5T`, and the
+**6. Check.** Turn the radio off and on. The `VERSION` menu should show `Firmware: V2.6T`, and the
 `BANK`, `BANK NAME` and `BANK CH` items show up in the menu.
 
 **If you get `Retry1..5 / Failure!`:** turn the radio off, make sure no other program holds the
@@ -374,7 +375,7 @@ the [changelog](docs/changelog.md).
 
 | File | Status |
 |---|---|
-| `BJ8300_BANK_v2.5T.anc` | **stable, the recommended one** — v50: v41 + WATCH (SINGLE, DUAL and TRIPLE), the full side C (VFO or channel), TX-A/B/C, MIC GAIN, the light on in the spectrum, TTR and the DTMF box in the new theme; use with the CHIRP driver from the same release |
+| `BJ8300_BANK_v2.6T.anc` | **stable, the recommended one** — v51: v41 + WATCH (SINGLE, DUAL and TRIPLE), the full side C (VFO or channel), TX-A/B/C, MIC GAIN, the light on in the spectrum, TTR and the DTMF box in the new theme; use with the CHIRP driver from the same release |
 | `BJ8300_BANK_v2.0T.anc` | the previous stable one, the new screen without WATCH — v41 under the version's name (same file); use with the CHIRP driver from the same release |
 | `BJ8300_BANK_v45.anc` | v41 + the `WATCH` menu (SINGLE: one side full screen; DUAL: the usual A/B; TRIPLE: a third frequency, C, picked in `CH-C` and shown as `MDF-C` asks, which dual watch watches with the same time as the others and the A/B key brings into focus) — tested on the radio |
 | `BJ8300_BANK_v41.anc` | v39 + the spectrum in theme B, the radio settings checked on entry and on every modulation switch, a modulation switch ~2.5 s faster and the S of the medium font — tested on the radio |
@@ -437,14 +438,14 @@ The toolchain path is in `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.3/...`)
 
 **Space budget:** the new code lives in three places, all at the same address in the 6 images:
 
-- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (V2.5T uses 2304);
+- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (V2.6T uses 2304);
 - **the space that was the voices'**, with the spectrum, but only inside the files C0 and C1
-  (1066 bytes, of which V2.5T uses 674), because the radio's loader refuses an image that changes
+  (1066 bytes, of which V2.6T uses 674), because the radio's loader refuses an image that changes
   more voice files;
 - **the place of the G.729 and MP3 decoders**, inside `app.bin`, with the B screens, WATCH, TRIPLE
-  and the menu table (38884 bytes, of which V2.5T uses 19366).
+  and the menu table (38884 bytes, of which V2.6T uses 19542).
 
-The menu table has lived in that last place since v43, in a 64-slot array (V2.5T uses 56); the
+The menu table has lived in that last place since v43, in a 64-slot array (V2.6T uses 56); the
 original, with 54, is left intact. [docs/reverse-engineering.md](docs/reverse-engineering.md)
 explains how to measure it, where space was already saved and why these places are safe.
 
