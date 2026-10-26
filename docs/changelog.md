@@ -17,6 +17,16 @@ cable driver. The README gained the "new look" section, with four screens taken 
 the new screen, the spectrum, the radio, the COIN roger and what was removed (the voices and the
 Chinese language).
 
+
+**The CHIRP module under the version's name.** At the owner's request, `bj8300_v1.0TEMPRA.py`
+became `chirp/bj8300_v2.0TEMPRA.py`, and the model in CHIRP `Baojie → BJ8300_v2.0TEMPRA`. A `.img`
+image keeps the vendor and model it was saved with, and CHIRP only opens it with a driver of the
+same model (`directory.get_radio_by_image`). So the module registers the old name in
+`directory.MODEL_COMPAT`, and images saved with the old module open in it with no second model in
+the list. `teste_chirp_real` gained `2c` (the image with the old name opens, under the new model)
+and `2d` (an unknown model is still refused). The file in the V2.0T release was replaced by the new
+one, and the v1.0T one is still there.
+
 ## v41 — Oct 26 — the spectrum in theme B ✅
 
 Tested on the radio: "it turned out excellent". It is the last screen the new theme was missing.

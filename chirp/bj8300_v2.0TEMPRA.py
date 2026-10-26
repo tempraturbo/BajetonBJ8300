@@ -12,7 +12,7 @@
 # ---------------------------------------------------------------------------------------------
 # WHAT THIS MODULE ADDS
 #
-# The modified BJ-8300 firmware (BJ8300_BANK, v1.0T) keeps 16 channel banks in the data chip,
+# The modified BJ-8300 firmware (BJ8300_BANK, v1.0T on) keeps 16 channel banks in the data chip,
 # OUTSIDE the 64 KB the cable protocol reaches with a 16-bit address:
 #
 #   0xC1000            header: "BNK3" magic, mask of enabled banks, selected bank, checksum
@@ -276,7 +276,7 @@ class _BankCableMixin(object):
             self.pipe.read(head[3])
             raise errors.RadioError(
                 'This radio is not running the banks firmware (the 24-bit address is not '
-                'accepted). Flash BJ8300_BANK v1.0T, or use the stock Bajeton BJ7800 or '
+                'accepted). Flash BJ8300_BANK V2.0T, or use the stock Bajeton BJ7800 or '
                 'Radtel RT-920 driver for the channels only.')
         data = self.pipe.read(EXT_BLOCK)
         if len(data) != EXT_BLOCK:
@@ -429,11 +429,19 @@ def _vfo_scramble_setting(old, side, vfo):
     return rs
 
 
+# Until V2.0T this module was bj8300_v1.0TEMPRA.py, and the model was BJ8300_v1.0TEMPRA. An image
+# keeps the vendor and model it was saved with, and CHIRP only opens it with a driver whose model
+# matches, directly or through directory.MODEL_COMPAT (get_radio_by_image): this keeps the images
+# saved with the old module opening here, without a second model in the radio list.
+if isinstance(getattr(directory, 'MODEL_COMPAT', None), dict):
+    directory.MODEL_COMPAT[('Baojie', 'BJ8300_v1.0TEMPRA')] = ('Baojie', 'BJ8300_v2.0TEMPRA')
+
+
 @directory.register
 class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     """Baojie BJ-8300 running the channel banks firmware."""
     VENDOR = 'Baojie'
-    MODEL = 'BJ8300_v1.0TEMPRA'        # its own name: it only works with the modified firmware
+    MODEL = 'BJ8300_v2.0TEMPRA'        # its own name: it only works with the modified firmware
     VARIANT = ''
 
     # the channel scramble with the firmware's options, in menu order (see SCRAMBLE_OPTIONS)
@@ -468,7 +476,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     def get_prompts(cls):
         rp = super().get_prompts()
         rp.experimental = (
-            'Driver for the BJ-8300 running the TEMPRA channel banks firmware (v1.0T).\n'
+            'Driver for the BJ-8300 running the TEMPRA channel banks firmware (V2.0T).\n'
             '\n'
             'The 16 banks are in the Banks tab: one column per bank, and a channel can be in as\n'
             'many banks as you like. Double-click a bank\'s column header to rename it. Each\n'
@@ -637,5 +645,5 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
 class BJ8300VhfUhf(BJ8300):
     """VHF/UHF sub-device: this is where the 960 channels are and, with them, the banks."""
     VENDOR = 'Baojie'
-    MODEL = 'BJ8300_v1.0TEMPRA'
+    MODEL = 'BJ8300_v2.0TEMPRA'
     VARIANT = 'VHF/UHF'

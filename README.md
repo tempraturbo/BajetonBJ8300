@@ -18,7 +18,7 @@ Baofeng UV-17L, espectro mais rápido e um **driver do CHIRP** próprio. O "T" d
 > | Arquivo do release | Para que serve |
 > |---|---|
 > | `BJ8300_BANK_v2.0T.anc` | o firmware, para gravar no rádio |
-> | `bj8300_v1.0TEMPRA.py` | o módulo do CHIRP para este firmware (o nome do modelo continua o mesmo) |
+> | `bj8300_v2.0TEMPRA.py` | o módulo do CHIRP para este firmware |
 > | `BinTalk-V1.1.zip` | o gravador (BinTe ANC Bootloader) |
 > | `CH340-driver.zip` | o driver do cabo de programação USB |
 >
@@ -174,7 +174,10 @@ porta COM, volte ao passo 4 e tente de novo.
 ## 📻 Como usar o CHIRP com este firmware
 
 > [!CAUTION]
-> **Com a V2.0T (e com a v1.0T), use só o módulo `bj8300_v1.0TEMPRA.py` do release.**
+> **Com a V2.0T, use só o módulo `bj8300_v2.0TEMPRA.py` deste release.** Ele substitui o
+> `bj8300_v1.0TEMPRA.py` (o modelo no CHIRP passou de `BJ8300_v1.0TEMPRA` para `BJ8300_v2.0TEMPRA`),
+> e uma imagem `.img` salva com o módulo antigo abre nele normalmente. A v1.0T tem o módulo dela no
+> [release v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T).
 >
 > - **Não use os modelos de fábrica do CHIRP** que servem para o BJ-8300 de fábrica (**Bajeton
 >   BJ7800** e **Radtel RT-920**). Eles não leem nem gravam os bancos, e não conhecem o roger BEEP
@@ -196,7 +199,7 @@ CHIRP**. O modo fica ligado nas próximas vezes.
 
 **3. Carregue o módulo (toda vez que abrir o CHIRP).** Menu **File** → **Load Module...** (só
 aparece com o modo desenvolvedor). O CHIRP avisa que carregar módulo é perigoso: clique **Yes** e
-escolha o `bj8300_v1.0TEMPRA.py`. A janela fica **vermelha** e o título mostra
+escolha o `bj8300_v2.0TEMPRA.py`. A janela fica **vermelha** e o título mostra
 `CHIRP **Module Loaded**`: é o sinal de que o módulo está carregado. Ao fechar o CHIRP, ele é
 descarregado, e na próxima vez é preciso carregar de novo.
 
@@ -207,13 +210,13 @@ descarregado, e na próxima vez é preciso carregar de novo.
 |---|---|
 | **Port** | a COM do cabo |
 | **Vendor** | **Baojie** (não é "Bajeton") |
-| **Model** | **BJ8300_v1.0TEMPRA** |
+| **Model** | **BJ8300_v2.0TEMPRA** |
 
 O CHIRP mostra o aviso *"Experimental driver"*, com as instruções do módulo: clique **Yes** e
 depois **OK** para ler.
 
 > [!NOTE]
-> Se o `BJ8300_v1.0TEMPRA` não aparece em **Baojie**, o módulo não está carregado: volte ao passo 3.
+> Se o `BJ8300_v2.0TEMPRA` não aparece em **Baojie**, o módulo não está carregado: volte ao passo 3.
 
 **5. Edite.** No lado direito aparece a lista das partes do rádio:
 
@@ -276,7 +279,7 @@ marcado para o outro.
 
 ## Como o driver do CHIRP funciona
 
-O arquivo é [chirp/bj8300_v1.0TEMPRA.py](chirp/bj8300_v1.0TEMPRA.py). O nome é proposital: só
+O arquivo é [chirp/bj8300_v2.0TEMPRA.py](chirp/bj8300_v2.0TEMPRA.py). O nome é proposital: só
 funciona com **este** firmware, e assim ninguém com um BJ-8300 de fábrica o usa por engano. Ele
 deriva do `radtel_rt900.py` do CHIRP, que já trata este rádio como família RT-920/BJ7800, e
 acrescenta:
@@ -407,7 +410,7 @@ firmware/
   original/     BJ8300_V0.12.anc — firmware de fábrica
   releases/     .anc prontos para gravar
   build.sh      compila, monta e confere
-chirp/          driver do CHIRP (bj8300_v1.0TEMPRA.py)
+chirp/          driver do CHIRP (bj8300_v2.0TEMPRA.py)
 tools/
   anc-bootloader/  gravador BinTe ANC Bootloader (BinTalk V1.1)
   ch340-driver/    driver do cabo USB

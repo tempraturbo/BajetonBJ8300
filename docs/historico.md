@@ -16,6 +16,16 @@ do cabo. O README ganhou a seção "A cara nova", com quatro telas tiradas da pr
 espectro, o rádio e o menu BANK), e o que mudou desde a V0.12 passou a contar a tela nova, o
 espectro, o rádio, o roger COIN e o que saiu (as vozes e o idioma chinês).
 
+
+**O módulo do CHIRP com o nome da versão.** A pedido do dono, o `bj8300_v1.0TEMPRA.py` virou
+`chirp/bj8300_v2.0TEMPRA.py`, e o modelo no CHIRP, `Baojie → BJ8300_v2.0TEMPRA`. Uma imagem `.img`
+guarda o fabricante e o modelo com que foi salva, e o CHIRP só a abre com um driver do mesmo modelo
+(`directory.get_radio_by_image`). Por isso o módulo registra o nome antigo em
+`directory.MODEL_COMPAT`, e as imagens salvas com o módulo antigo abrem nele sem um segundo modelo
+na lista. O `teste_chirp_real` ganhou a `2c` (a imagem com o nome antigo abre, com o modelo novo) e
+a `2d` (um modelo desconhecido continua recusado). O arquivo do release V2.0T foi trocado pelo
+novo, e o da v1.0T continua lá.
+
 ## v41 — 26/10 — o espectro no tema B ✅
 
 Testada no rádio: "ficou excelente". É a última tela que faltava no tema novo.

@@ -19,7 +19,7 @@ This licence covers the bank code, the build and verification scripts, the
 cable and analysis tools and the documentation in this repository. It does NOT
 cover the third-party parts kept here, which stay under their own terms:
 
-- chirp/bj8300_v1.0TEMPRA.py: derived from CHIRP's radtel_rt900.py,
+- chirp/bj8300_v2.0TEMPRA.py: derived from CHIRP's radtel_rt900.py,
   GPL-2.0-or-later (see the header of the file);
 - firmware/original/ and the manufacturer's code inside the .anc releases in
   firmware/releases/ (the stock firmware, with our patches on top);

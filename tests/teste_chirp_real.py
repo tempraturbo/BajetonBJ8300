@@ -16,6 +16,7 @@ import importlib.util
 import os
 import struct
 import sys
+import tempfile
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -25,7 +26,7 @@ except ImportError:
     print('chirp nao instalado - nada a testar aqui (o teste_bj8300.py cobre o resto)')
     sys.exit(0)
 
-CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v1.0TEMPRA.py')
+CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v2.0TEMPRA.py')
 _nome = 'chirp.loaded.%s' % os.path.splitext(os.path.basename(CAMINHO))[0]
 _spec = importlib.util.spec_from_file_location(_nome, CAMINHO)
 bj = importlib.util.module_from_spec(_spec)
@@ -70,7 +71,7 @@ def main():
 
     # 1. a classe e um radio do CHIRP, registrado e com o nome combinado
     confere('1. deriva de CloneModeRadio', issubclass(bj.BJ8300, chirp_common.CloneModeRadio), True)
-    confere('1b. nome do modelo', (bj.BJ8300.VENDOR, bj.BJ8300.MODEL), ('Baojie', 'BJ8300_v1.0TEMPRA'))
+    confere('1b. nome do modelo', (bj.BJ8300.VENDOR, bj.BJ8300.MODEL), ('Baojie', 'BJ8300_v2.0TEMPRA'))
     confere('1c. 960 canais, como o radio', bj.BJ8300._upper, 960)
 
     # 2. abre uma imagem (e o caminho que o CHIRP usa ao carregar um .img)
@@ -78,6 +79,30 @@ def main():
     rf = radio.get_features()
     confere('2. tem banco e nome de banco', (rf.has_bank, rf.has_bank_names), (True, True))
     confere('2b. limites de canal', rf.memory_bounds, (1, 960))
+
+    # 2c. o .img guarda fabricante e modelo, e o CHIRP so o abre com um driver do mesmo modelo
+    # (directory.get_radio_by_image): a imagem salva com o modulo antigo (BJ8300_v1.0TEMPRA) tem de
+    # abrir neste, pelo MODEL_COMPAT que ele registra - e um modelo que ninguem conhece, nao
+    from chirp import directory, errors
+
+    class Antigo(bj.BJ8300):                 # so para gravar o .img com o nome antigo; nao registra
+        MODEL = 'BJ8300_v1.0TEMPRA'
+
+    with tempfile.TemporaryDirectory() as pasta:
+        arq = os.path.join(pasta, 'antigo.img')
+        Antigo(imagem()).save_mmap(arq)
+        aberto = directory.get_radio_by_image(arq)
+        confere('2c. .img do modulo antigo abre neste, com o modelo novo',
+                (isinstance(aberto, bj.BJ8300), aberto.VENDOR, aberto.MODEL),
+                (True, 'Baojie', 'BJ8300_v2.0TEMPRA'))
+        Antigo.MODEL = 'BJ8300_v9.9XYZ'
+        Antigo(imagem()).save_mmap(arq)
+        try:
+            directory.get_radio_by_image(arq)
+            recusou = False
+        except errors.ImageMetadataInvalidModel:
+            recusou = True
+        confere('2d. e um modelo desconhecido continua recusado', recusou, True)
 
     # 3. imagem curta (salva pelo driver RT-920) ganha area de bancos apagada em vez de estourar
     curta = bj.BJ8300(memmap.MemoryMapBytes(b'\xff' * bj.BLOB_BASE))
