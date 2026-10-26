@@ -5,6 +5,25 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V2.5T — Oct 26 — three frequencies at once ⏳ v50, waiting for the radio test before the release
+
+v50 becomes **V2.5T**, the third stable version: `firmware/releases/BJ8300_BANK_v2.5T.anc`. It is
+v49, which the owner flashed and uses (sha256 `b0b3c2cd…`), with the two fixes its use called for
+(below) and the version's name: the `VERSION` menu goes from `V2.0T` to `V2.5T` (`0x01E5FD10`). The
+v49 build with the version's name was compared with it, unpacked: only the `0` → `5` at
+`0x01E5FD13` and the CRCs covering it changed. The [V2.5T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.5T) comes
+out once the owner has tested v50 on the radio, with the CHIRP module, the flasher and the cable
+driver.
+
+The README got the TRIPLE section, with screens from the preview (A receiving, C receiving through
+the watch, C in focus, C on a VFO, TX on C and the TX-A/B/C menu), and what changed since V0.12 now
+covers WATCH, side C, TX-A/B/C, MIC GAIN, the light in the spectrum and TTR.
+
+In use, the owner found v49's screen and commands a bit slower than on v45 (the three-side screen
+and the drawing when reception starts), but acceptable. From the code, the drawing and reception
+paths are the same as v45's; what weighs more is the A/B key going to C or coming back from it,
+which since v49 writes the VFO sector, B's VFO record and the settings. To be watched in daily use.
+
 ## v50 — Oct 26 — TX-A/B/C and the C label in the menu ⏳ waiting for the radio test
 
 The owner's two requests after using v49.
@@ -88,7 +107,7 @@ The owner's two requests after using v49.
 
 ## v49 — Oct 26 — VFO C, the light on in the spectrum and MIC GAIN ✔️ tested
 
-Tested on the radio. At the owner's request, C now
+Tested on the radio; with v50's fixes, it is V2.5T. At the owner's request, C now
 has the same options as A and B. Up to v48 it was only a memory channel (CH-C); since v49 it is a
 side like the others: mode (VFO or channel), a 32-byte VFO and a channel.
 
