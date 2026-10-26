@@ -444,7 +444,7 @@ class _BankCableMixin(object):
             self.pipe.read(head[3])
             raise errors.RadioError(
                 'This radio is not running the banks firmware (the 24-bit address is not '
-                'accepted). Flash BJ8300_BANK V2.0T, or use the stock Bajeton BJ7800 or '
+                'accepted). Flash BJ8300_BANK V2.5T, or use the stock Bajeton BJ7800 or '
                 'Radtel RT-920 driver for the channels only.')
         data = self.pipe.read(EXT_BLOCK)
         if len(data) != EXT_BLOCK:
@@ -660,6 +660,30 @@ def _roger_setting(old, roger):
     return rs
 
 
+MIC_GAIN_OPTIONS = ['HIGH', 'MID', 'LOW']              # the radio's MIC GAIN item, 0 = HIGH
+
+
+def _mic_gain_setting(level):
+    rs = MemSetting('settings.unknown_9033', 'Mic Gain', RadioSettingValueList(
+        MIC_GAIN_OPTIONS, current_index=int(level) if int(level) < 3 else 0))
+    rs.set_doc('Microphone sensitivity, as the radio\'s MIC GAIN item: HIGH, MID and LOW put 31, 25 '
+               'and 19 in the radio chip\'s microphone gain (the factory calibration had 30 on the '
+               'test radio). Needs firmware v49 or later; earlier firmware uses the factory '
+               'calibration and ignores this.')
+    return rs
+
+
+TXABC_OPTIONS = ['Off', 'A', 'B', 'C']                  # the radio's TX-A/B/C item (0x9013, 2 bits)
+
+
+def _txabc_setting(value):
+    rs = MemSetting('settings.dualtx', 'TX-A/B/C', RadioSettingValueList(
+        TXABC_OPTIONS, current_index=int(value) if int(value) < 4 else 0))
+    rs.set_doc('With TTR on, the side PTT transmits on: A, B or C (C only in TRIPLE). Off: the one '
+               'in focus. C needs firmware V2.5T; on earlier firmware leave it on Off, A or B.')
+    return rs
+
+
 def _same_as_memsetting(old, path):
     rs = MemSetting(path, old.get_shortname(), old.value)
     rs.set_doc(old.__doc__ or '')
@@ -681,19 +705,21 @@ def _vfo_scramble_setting(old, side, vfo):
     return rs
 
 
-# Until V2.0T this module was bj8300_v1.0TEMPRA.py, and the model was BJ8300_v1.0TEMPRA. An image
-# keeps the vendor and model it was saved with, and CHIRP only opens it with a driver whose model
-# matches, directly or through directory.MODEL_COMPAT (get_radio_by_image): this keeps the images
-# saved with the old module opening here, without a second model in the radio list.
+# The module is named after the firmware release: bj8300_v1.0TEMPRA.py (model BJ8300_v1.0TEMPRA)
+# until V2.0T, bj8300_v2.0TEMPRA.py until V2.5T. An image keeps the vendor and model it was saved
+# with, and CHIRP only opens it with a driver whose model matches, directly or through
+# directory.MODEL_COMPAT (get_radio_by_image): this keeps the images saved with the old modules
+# opening here, without more models in the radio list.
 if isinstance(getattr(directory, 'MODEL_COMPAT', None), dict):
-    directory.MODEL_COMPAT[('Baojie', 'BJ8300_v1.0TEMPRA')] = ('Baojie', 'BJ8300_v2.0TEMPRA')
+    directory.MODEL_COMPAT.update({('Baojie', old): ('Baojie', 'BJ8300_v2.5TEMPRA')
+                                   for old in ('BJ8300_v1.0TEMPRA', 'BJ8300_v2.0TEMPRA')})
 
 
 @directory.register
 class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     """Baojie BJ-8300 running the channel banks firmware."""
     VENDOR = 'Baojie'
-    MODEL = 'BJ8300_v2.0TEMPRA'        # its own name: it only works with the modified firmware
+    MODEL = 'BJ8300_v2.5TEMPRA'        # its own name: it only works with the modified firmware
     VARIANT = ''
 
     # the channel scramble with the firmware's options, in menu order (see SCRAMBLE_OPTIONS)
@@ -728,7 +754,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     def get_prompts(cls):
         rp = super().get_prompts()
         rp.experimental = (
-            'Driver for the BJ-8300 running the TEMPRA channel banks firmware (V2.0T).\n'
+            'Driver for the BJ-8300 running the TEMPRA channel banks firmware (V2.5T).\n'
             '\n'
             'The 16 banks are in the Banks tab: one column per bank, and a channel can be in as\n'
             'many banks as you like. Double-click a bank\'s column header to rename it. Each\n'
@@ -848,6 +874,13 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         if not _replace_setting(settings, 'settings_noise_reduction',
                                 lambda old: _noise_reduction_setting(old, nr)):
             LOG.warning('noise reduction setting not found in the base class')
+        # MIC GAIN (firmware v49): the level is the 0x9033 byte of the same block (b[0x14BDF], which
+        # the stock firmware does not use), next to Noise reduction
+        parent = _find(settings, 'settings_unknown_9032')[0]
+        if parent is None:
+            LOG.warning('noise reduction setting not found: Mic Gain goes to the end')
+            parent = settings[-1]
+        _put(parent, _mic_gain_setting(self._memobj.settings.unknown_9033), after='settings_unknown_9032')
         if _take(settings, 'settings_voice') is None:
             LOG.warning('voice prompts setting not found in the base class')
         # The banks firmware (v37 onwards) is English only: the LANGUAGE menu item is gone and the
@@ -882,6 +915,12 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
                         'time (A and B in DUAL; A, B and C in TRIPLE). Off: only the one in focus. '
                         'In SINGLE it stays off (the upload turns it off).')
             _put(abc, ttr, after='watch_mode')
+        # TX-A/B/C (firmware v50): the stock TX-A/B (0x9013) gets C, as the radio's menu item; it
+        # only works with TTR on, so it comes right after it
+        if _take(settings, 'settings_dualtx') is None:
+            LOG.warning('TX-A/B setting not found in the base class')
+        else:
+            _put(abc, _txabc_setting(self._memobj.settings.dualtx), after='settings_tdr')
         for side in 'ab':
             block = abc['%schannel' % side] if '%schannel' % side in abc else None
             mdf = _take(settings, 'settings_mdf' + side) if block is not None else None
@@ -1147,5 +1186,5 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
 class BJ8300VhfUhf(BJ8300):
     """VHF/UHF sub-device: this is where the 960 channels are and, with them, the banks."""
     VENDOR = 'Baojie'
-    MODEL = 'BJ8300_v2.0TEMPRA'
+    MODEL = 'BJ8300_v2.5TEMPRA'
     VARIANT = 'VHF/UHF'

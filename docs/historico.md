@@ -43,6 +43,19 @@ Os dois pedidos do dono depois de usar a v49.
   fábrica), e as 43 telas da prévia saem iguais, com duas novas (a TX na C e o menu TX-A/B/C com a
   C em evidência).
 
+## Driver do CHIRP — 26/10 — o Mic Gain, o TX-A/B/C e o nome da V2.5T
+
+- **O módulo com o nome da versão.** O `bj8300_v2.0TEMPRA.py` virou `chirp/bj8300_v2.5TEMPRA.py`, e o
+  modelo no CHIRP, `Baojie → BJ8300_v2.5TEMPRA`. O `directory.MODEL_COMPAT` registra os dois nomes
+  antigos (`BJ8300_v1.0TEMPRA` e `BJ8300_v2.0TEMPRA`), e as imagens salvas com eles abrem neste. O
+  `teste_chirp_real` ganhou a `2c2` (a imagem com o nome da V2.0T).
+- **Mic Gain** no BJ8300_v2.5TEMPRA Specific, logo depois do Noise reduction: HIGH, MID e LOW, no
+  byte `0x9033`, o mesmo do item MIC GAIN do rádio. Um valor fora da faixa aparece como HIGH, como o
+  firmware o lê. Testes 10p a 10r do `teste_chirp_real`. O texto de ajuda diz os valores (31, 25 e
+  19) e não a escala em dB, que vem da folha de dados de um chip que o firmware não prova.
+- **TX-A/B/C** (firmware v50) no VFO A/B/C Channel, logo depois do TTR, com que ele funciona: o TX-A/B
+  da base (`0x9013`, 2 bits) com o C. Testes 10s a 10u.
+
 ## Driver do CHIRP — 26/10 — VFO A/B/C Channel, o VFO C, o NR e a Voice Privacy do A
 
 - **Settings em outra ordem, a pedido do dono.** O VFO A/B Channel virou **VFO A/B/C Channel** e,

@@ -174,10 +174,10 @@ porta COM, volte ao passo 4 e tente de novo.
 ## 📻 Como usar o CHIRP com este firmware
 
 > [!CAUTION]
-> **Com a V2.0T, use só o módulo `bj8300_v2.0TEMPRA.py` deste release.** Ele substitui o
-> `bj8300_v1.0TEMPRA.py` (o modelo no CHIRP passou de `BJ8300_v1.0TEMPRA` para `BJ8300_v2.0TEMPRA`),
-> e uma imagem `.img` salva com o módulo antigo abre nele normalmente. A v1.0T tem o módulo dela no
-> [release v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T).
+> **Com a V2.5T, use só o módulo `bj8300_v2.5TEMPRA.py` deste release.** Ele substitui o
+> `bj8300_v2.0TEMPRA.py` e o `bj8300_v1.0TEMPRA.py` (o modelo no CHIRP passou a ser
+> `BJ8300_v2.5TEMPRA`), e uma imagem `.img` salva com um módulo antigo abre nele normalmente. A
+> V2.0T e a v1.0T têm o módulo delas no release de cada uma.
 >
 > - **Não use os modelos de fábrica do CHIRP** que servem para o BJ-8300 de fábrica (**Bajeton
 >   BJ7800** e **Radtel RT-920**). Eles não leem nem gravam os bancos, e não conhecem o roger BEEP
@@ -199,7 +199,7 @@ CHIRP**. O modo fica ligado nas próximas vezes.
 
 **3. Carregue o módulo (toda vez que abrir o CHIRP).** Menu **File** → **Load Module...** (só
 aparece com o modo desenvolvedor). O CHIRP avisa que carregar módulo é perigoso: clique **Yes** e
-escolha o `bj8300_v2.0TEMPRA.py`. A janela fica **vermelha** e o título mostra
+escolha o `bj8300_v2.5TEMPRA.py`. A janela fica **vermelha** e o título mostra
 `CHIRP **Module Loaded**`: é o sinal de que o módulo está carregado. Ao fechar o CHIRP, ele é
 descarregado, e na próxima vez é preciso carregar de novo.
 
@@ -210,13 +210,13 @@ descarregado, e na próxima vez é preciso carregar de novo.
 |---|---|
 | **Port** | a COM do cabo |
 | **Vendor** | **Baojie** (não é "Bajeton") |
-| **Model** | **BJ8300_v2.0TEMPRA** |
+| **Model** | **BJ8300_v2.5TEMPRA** |
 
 O CHIRP mostra o aviso *"Experimental driver"*, com as instruções do módulo: clique **Yes** e
 depois **OK** para ler.
 
 > [!NOTE]
-> Se o `BJ8300_v2.0TEMPRA` não aparece em **Baojie**, o módulo não está carregado: volte ao passo 3.
+> Se o `BJ8300_v2.5TEMPRA` não aparece em **Baojie**, o módulo não está carregado: volte ao passo 3.
 
 **5. Edite.** No lado direito aparece a lista das partes do rádio:
 
@@ -224,7 +224,8 @@ depois **OK** para ler.
   estão aqui.
 - **Banks (VHF/UHF):** uma coluna por banco; marque em quais bancos cada canal está. Para
   renomear um banco, **dê duplo clique no cabeçalho da coluna** dele.
-- **Settings:** os ajustes do rádio, com o roger de 4 opções e o scramble dos VFO A e B.
+- **Settings:** os ajustes do rádio, com o roger de 4 opções e, no **BJ8300_v2.5TEMPRA Specific**,
+  o **Mic Gain** (HIGH, MID ou LOW) logo depois do Noise reduction.
 - **Settings → Banks:** um bloco por banco, de **BANK 1** a **BANK 16**:
 
   | Linha | O que é |
@@ -236,10 +237,10 @@ depois **OK** para ler.
   Banco sem nenhum canal gravado **não liga**: se você marcar, o CHIRP desmarca na hora. E tirar
   o último canal de um banco o desliga sozinho. No fim da página, **Bank edited by the radio
   menu** escolhe o banco em que os itens `BANK NAME` e `BANK CH` do rádio mexem.
-- **Settings → VFO A/B/C Channel:** o **WATCH** (SINGLE, DUAL ou TRIPLE; firmware v46 em diante) e o
-  **TTR** em cima, e um bloco para cada lado, cada um com o seu MDF. O **VFO C** (firmware v49) tem
-  os mesmos campos do A e do B, mais o Work Mode e o **CH-C**. Com a C em evidência no rádio, os
-  blocos B e C ficam só de leitura: mude pelo rádio, ou aperte A/B nele e baixe de novo.
+- **Settings → VFO A/B/C Channel:** o **WATCH** (SINGLE, DUAL ou TRIPLE), o **TTR** e o
+  **TX-A/B/C** em cima, e um bloco para cada lado (A, B e C), cada um com o seu MDF e o scramble. O **VFO C** tem os mesmos
+  campos do A e do B, mais o Work Mode e o **CH-C**. Com a C em evidência no rádio, os blocos B e C
+  ficam só de leitura: mude pelo rádio, ou aperte A/B nele e baixe de novo.
 - **Memories (FM / AM / HF):** as outras faixas, como no driver de fábrica.
 
 > [!NOTE]
@@ -283,7 +284,7 @@ marcado para o outro.
 
 ## Como o driver do CHIRP funciona
 
-O arquivo é [chirp/bj8300_v2.0TEMPRA.py](chirp/bj8300_v2.0TEMPRA.py). O nome é proposital: só
+O arquivo é [chirp/bj8300_v2.5TEMPRA.py](chirp/bj8300_v2.5TEMPRA.py). O nome é proposital: só
 funciona com **este** firmware, e assim ninguém com um BJ-8300 de fábrica o usa por engano. Ele
 deriva do `radtel_rt900.py` do CHIRP, que já trata este rádio como família RT-920/BJ7800, e
 acrescenta:
@@ -301,6 +302,9 @@ acrescenta:
   TTR, como no firmware.
 - O **Noise reduction** lido e gravado no byte que o rádio usa (`0x9032`; o driver de base usa
   `0x9031`), e a **Voice Privacy do VFO A**, que o driver de base não gravava.
+- O **Mic Gain** no byte `0x9033` do bloco de ajustes, o mesmo que o item MIC GAIN do rádio usa
+  (0 HIGH, 1 MID, 2 LOW; outro valor o rádio lê como HIGH), e o **TX-A/B/C** nos 2 bits do TX-A/B
+  (`0x9013`), com o C (3).
 - **Sem zonas:** todo upload grava **Full Channel** (`0x9028` = 1), porque o modo zona continua no
   firmware e, sem o item de menu, o rádio não teria como sair dele — em modo zona o sobe/desce fica
   preso em 64 canais.
@@ -421,7 +425,7 @@ firmware/
   original/     BJ8300_V0.12.anc — firmware de fábrica
   releases/     .anc prontos para gravar
   build.sh      compila, monta e confere
-chirp/          driver do CHIRP (bj8300_v2.0TEMPRA.py)
+chirp/          driver do CHIRP (bj8300_v2.5TEMPRA.py)
 tools/
   anc-bootloader/  gravador BinTe ANC Bootloader (BinTalk V1.1)
   ch340-driver/    driver do cabo USB

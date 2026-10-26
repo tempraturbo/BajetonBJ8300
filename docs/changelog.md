@@ -44,6 +44,20 @@ The owner's two requests after using v49.
   740), and the preview's 43 screens come out the same, plus two new ones (TX on C and the TX-A/B/C
   menu with C in focus).
 
+## CHIRP driver — Oct 26 — Mic Gain, TX-A/B/C and the V2.5T name
+
+- **The module named after the version.** `bj8300_v2.0TEMPRA.py` became
+  `chirp/bj8300_v2.5TEMPRA.py`, and the model in CHIRP, `Baojie → BJ8300_v2.5TEMPRA`.
+  `directory.MODEL_COMPAT` registers both old names (`BJ8300_v1.0TEMPRA` and `BJ8300_v2.0TEMPRA`),
+  and the images saved with them open in this one. `teste_chirp_real` got `2c2` (the image with
+  V2.0T's name).
+- **Mic Gain** in BJ8300_v2.5TEMPRA Specific, right after Noise reduction: HIGH, MID and LOW, at byte
+  `0x9033`, the same as the radio's MIC GAIN item. A value out of range shows as HIGH, as the
+  firmware reads it. Tests 10p to 10r of `teste_chirp_real`. The help text gives the values (31, 25
+  and 19), not a dB scale, which comes from the datasheet of a chip the firmware does not prove.
+- **TX-A/B/C** (firmware v50) in VFO A/B/C Channel, right after TTR, which it works with: the base
+  TX-A/B (`0x9013`, 2 bits) with C. Tests 10s to 10u.
+
 ## CHIRP driver — Oct 26 — VFO A/B/C Channel, VFO C, NR and VFO A's Voice Privacy
 
 - **Settings in another order, at the owner's request.** VFO A/B Channel became **VFO A/B/C

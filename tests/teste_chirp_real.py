@@ -26,7 +26,7 @@ except ImportError:
     print('chirp nao instalado - nada a testar aqui (o teste_bj8300.py cobre o resto)')
     sys.exit(0)
 
-CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v2.0TEMPRA.py')
+CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v2.5TEMPRA.py')
 _nome = 'chirp.loaded.%s' % os.path.splitext(os.path.basename(CAMINHO))[0]
 _spec = importlib.util.spec_from_file_location(_nome, CAMINHO)
 bj = importlib.util.module_from_spec(_spec)
@@ -106,7 +106,7 @@ def main():
 
     # 1. a classe e um radio do CHIRP, registrado e com o nome combinado
     confere('1. deriva de CloneModeRadio', issubclass(bj.BJ8300, chirp_common.CloneModeRadio), True)
-    confere('1b. nome do modelo', (bj.BJ8300.VENDOR, bj.BJ8300.MODEL), ('Baojie', 'BJ8300_v2.0TEMPRA'))
+    confere('1b. nome do modelo', (bj.BJ8300.VENDOR, bj.BJ8300.MODEL), ('Baojie', 'BJ8300_v2.5TEMPRA'))
     confere('1c. 960 canais, como o radio', bj.BJ8300._upper, 960)
 
     # 2. abre uma imagem (e o caminho que o CHIRP usa ao carregar um .img)
@@ -116,20 +116,22 @@ def main():
     confere('2b. limites de canal', rf.memory_bounds, (1, 960))
 
     # 2c. o .img guarda fabricante e modelo, e o CHIRP so o abre com um driver do mesmo modelo
-    # (directory.get_radio_by_image): a imagem salva com o modulo antigo (BJ8300_v1.0TEMPRA) tem de
-    # abrir neste, pelo MODEL_COMPAT que ele registra - e um modelo que ninguem conhece, nao
+    # (directory.get_radio_by_image): a imagem salva com os modulos antigos (BJ8300_v1.0TEMPRA e
+    # BJ8300_v2.0TEMPRA) tem de abrir neste, pelo MODEL_COMPAT que ele registra - e um modelo que
+    # ninguem conhece, nao
     from chirp import directory, errors
 
     class Antigo(bj.BJ8300):                 # so para gravar o .img com o nome antigo; nao registra
-        MODEL = 'BJ8300_v1.0TEMPRA'
+        pass
 
     with tempfile.TemporaryDirectory() as pasta:
         arq = os.path.join(pasta, 'antigo.img')
-        Antigo(imagem()).save_mmap(arq)
-        aberto = directory.get_radio_by_image(arq)
-        confere('2c. .img do modulo antigo abre neste, com o modelo novo',
-                (isinstance(aberto, bj.BJ8300), aberto.VENDOR, aberto.MODEL),
-                (True, 'Baojie', 'BJ8300_v2.0TEMPRA'))
+        for letra, Antigo.MODEL in (('', 'BJ8300_v1.0TEMPRA'), ('2', 'BJ8300_v2.0TEMPRA')):
+            Antigo(imagem()).save_mmap(arq)
+            aberto = directory.get_radio_by_image(arq)
+            confere(f'2c{letra}. .img do {Antigo.MODEL} abre neste, com o modelo novo',
+                    (isinstance(aberto, bj.BJ8300), aberto.VENDOR, aberto.MODEL),
+                    (True, 'Baojie', 'BJ8300_v2.5TEMPRA'))
         Antigo.MODEL = 'BJ8300_v9.9XYZ'
         Antigo(imagem()).save_mmap(arq)
         try:
@@ -352,7 +354,7 @@ def main():
     aj = r.get_settings()
     confere('10c. VFO A/B/C Channel e FM/AM/SSB Modulation fora do Specific, no topo',
             [g.get_shortname() for g in aj],
-            ['Basic Settings', 'DTMF Settings', 'BJ8300_v2.0TEMPRA Specific', 'VFO A/B/C Channel',
+            ['Basic Settings', 'DTMF Settings', 'BJ8300_v2.5TEMPRA Specific', 'VFO A/B/C Channel',
              'FM/AM/SSB Modulation', 'Banks'])
     abc = aj['abblock']
     confere('10c2. o WATCH e o TTR primeiro no VFO A/B/C Channel, e um bloco para cada lado',
@@ -437,6 +439,35 @@ def main():
     {s.get_name(): s for s in aj.walk()}['vfo_a_voicepri'].value.set_value('ENCRY2')
     aj.apply_to(r._memobj)
     confere('10o. Voice Privacy do VFO A gravada', int(r._memobj.vfo.a.voicepri), 2)
+    # 10p. MIC GAIN (firmware v49): o byte 0x9033 do bloco de ajustes, logo depois do Noise reduction
+    r = bj.BJ8300(imagem())
+    aj = r.get_settings()
+    spec = aj['spec']
+    mic = {s.get_name(): s for s in aj.walk()}['settings_unknown_9033']
+    confere('10p. Mic Gain no Specific, logo depois do Noise reduction, em HIGH com o byte em 0',
+            (spec.keys()[spec.keys().index('settings_unknown_9032') + 1], mic.get_shortname(), str(mic.value)),
+            ('settings_unknown_9033', 'Mic Gain', 'HIGH'))
+    mic.value.set_value('LOW')
+    aj.apply_to(r._memobj)
+    confere('10q. LOW grava 2 em 0x9033', r._mmap[0x9033], bytes([2]))
+    r._mmap[0x9033] = bytes([7])
+    confere('10r. valor fora da faixa le HIGH, como o firmware',
+            str(ajuste_de(r, 'settings_unknown_9033').value), 'HIGH')
+    # 10s. TX-A/B/C (firmware v50): o TX-A/B de fabrica (0x9013, 2 bits) com o C, logo depois do TTR
+    r = bj.BJ8300(imagem())
+    aj = r.get_settings()
+    abc = aj['abblock']
+    tx = {s.get_name(): s for s in aj.walk()}['settings_dualtx']
+    confere('10s. TX-A/B/C no VFO A/B/C Channel, logo depois do TTR, com as 4 opcoes',
+            (abc.keys()[abc.keys().index('settings_tdr') + 1], tx.get_shortname(),
+             list(tx.value.get_options())),
+            ('settings_dualtx', 'TX-A/B/C', ['Off', 'A', 'B', 'C']))
+    r._mmap[0x9013] = bytes([0xFC])                 # os 6 bits de cima, do driver de base, ficam
+    aj = r.get_settings()
+    {s.get_name(): s for s in aj.walk()}['settings_dualtx'].value.set_value('C')
+    aj.apply_to(r._memobj)
+    confere('10t. C grava 3 nos 2 bits de 0x9013, sem mexer nos outros', r._mmap[0x9013], bytes([0xFF]))
+    confere('10u. e le de volta C', str(ajuste_de(r, 'settings_dualtx').value), 'C')
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')

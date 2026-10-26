@@ -173,10 +173,10 @@ COM port, go back to step 4 and try again.
 ## 📻 How to use CHIRP with this firmware
 
 > [!CAUTION]
-> **With V2.0T, use only the `bj8300_v2.0TEMPRA.py` module from this release.** It replaces
-> `bj8300_v1.0TEMPRA.py` (the model in CHIRP went from `BJ8300_v1.0TEMPRA` to `BJ8300_v2.0TEMPRA`),
-> and a `.img` image saved with the old module opens in it as usual. v1.0T has its own module in the
-> [v1.0T release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T).
+> **With V2.5T, use only the `bj8300_v2.5TEMPRA.py` module from this release.** It replaces
+> `bj8300_v2.0TEMPRA.py` and `bj8300_v1.0TEMPRA.py` (the model in CHIRP is now
+> `BJ8300_v2.5TEMPRA`), and a `.img` image saved with an older module opens in it as usual. V2.0T
+> and v1.0T have their own module in their releases.
 >
 > - **Do not use CHIRP's stock models** that serve the stock BJ-8300 (**Bajeton BJ7800** and
 >   **Radtel RT-920**). They neither read nor write the banks, and they do not know the BEEP 2
@@ -199,7 +199,7 @@ CHIRP**. The mode stays on from then on.
 
 **3. Load the module (every time you open CHIRP).** Menu **File** → **Load Module...** (it only
 shows up in developer mode). CHIRP warns that loading a module is dangerous: click **Yes** and pick
-`bj8300_v2.0TEMPRA.py`. The window turns **red** and the title shows `CHIRP **Module Loaded**`:
+`bj8300_v2.5TEMPRA.py`. The window turns **red** and the title shows `CHIRP **Module Loaded**`:
 that is the sign the module is loaded. Closing CHIRP unloads it, so next time it has to be loaded
 again.
 
@@ -210,13 +210,13 @@ again.
 |---|---|
 | **Port** | the cable's COM port |
 | **Vendor** | **Baojie** (not "Bajeton") |
-| **Model** | **BJ8300_v2.0TEMPRA** |
+| **Model** | **BJ8300_v2.5TEMPRA** |
 
 CHIRP shows the *"Experimental driver"* notice, with the module's instructions: click **Yes**, then
 **OK** to read.
 
 > [!NOTE]
-> If `BJ8300_v2.0TEMPRA` is not listed under **Baojie**, the module is not loaded: go back to step 3.
+> If `BJ8300_v2.5TEMPRA` is not listed under **Baojie**, the module is not loaded: go back to step 3.
 
 **5. Edit.** On the right you get the list of the radio's parts:
 
@@ -224,7 +224,8 @@ CHIRP shows the *"Experimental driver"* notice, with the module's instructions: 
   properties are here.
 - **Banks (VHF/UHF):** one column per bank; tick which banks each channel is in. To rename a
   bank, **double-click its column header**.
-- **Settings:** the radio settings, with the 4-option roger and the VFO A and B scramble.
+- **Settings:** the radio settings, with the 4-option roger and, in **BJ8300_v2.5TEMPRA Specific**,
+  **Mic Gain** (HIGH, MID or LOW) right after Noise reduction.
 - **Settings → Banks:** one block per bank, from **BANK 1** to **BANK 16**:
 
   | Row | What it is |
@@ -236,9 +237,9 @@ CHIRP shows the *"Experimental driver"* notice, with the module's instructions: 
   A bank with no programmed channel **cannot be turned on**: if you tick it, CHIRP unticks it right
   away. And removing a bank's last channel turns it off by itself. At the end of the page, **Bank
   edited by the radio menu** picks the bank the radio's `BANK NAME` and `BANK CH` items work on.
-- **Settings → VFO A/B/C Channel:** **WATCH** (SINGLE, DUAL or TRIPLE; firmware v46 on) and **TTR**
-  at the top, and a block for each side, each with its MDF. **VFO C** (firmware v49) has the same
-  fields as A and B, plus Work Mode and **CH-C**. With C in focus on the radio, blocks B and C are
+- **Settings → VFO A/B/C Channel:** **WATCH** (SINGLE, DUAL or TRIPLE), **TTR** and **TX-A/B/C** at
+  the top, and a block for each side (A, B and C), each with its MDF and scramble. **VFO C** has the same fields
+  as A and B, plus Work Mode and **CH-C**. With C in focus on the radio, blocks B and C are
   read only: change them on the radio, or press A/B on it and download again.
 - **Memories (FM / AM / HF):** the other bands, as in the stock driver.
 
@@ -283,7 +284,7 @@ next.
 
 ## How the CHIRP driver works
 
-The file is [chirp/bj8300_v2.0TEMPRA.py](chirp/bj8300_v2.0TEMPRA.py). The name is deliberate: it
+The file is [chirp/bj8300_v2.5TEMPRA.py](chirp/bj8300_v2.5TEMPRA.py). The name is deliberate: it
 only works with **this** firmware, so nobody with a stock BJ-8300 uses it by mistake. It derives
 from CHIRP's `radtel_rt900.py`, which already handles this radio as part of the RT-920/BJ7800
 family, and adds:
@@ -301,6 +302,9 @@ family, and adds:
   image. SINGLE turns TTR off, as in the firmware.
 - **Noise reduction** read and written at the byte the radio uses (`0x9032`; the base driver uses
   `0x9031`), and **VFO A's Voice Privacy**, which the base driver did not write.
+- **Mic Gain** at byte `0x9033` of the settings block, the same one the radio's MIC GAIN item uses
+  (0 HIGH, 1 MID, 2 LOW; the radio reads any other value as HIGH), and **TX-A/B/C** in TX-A/B's 2 bits
+  (`0x9013`), with C (3).
 - **No zones:** every upload writes **Full Channel** (`0x9028` = 1), because zone mode is still in
   the firmware and, without the menu item, the radio would have no way out of it — in zone mode
   up/down is stuck within 64 channels.
@@ -421,7 +425,7 @@ firmware/
   original/     BJ8300_V0.12.anc — stock firmware
   releases/     .anc files ready to flash
   build.sh      compiles, builds and checks
-chirp/          CHIRP driver (bj8300_v2.0TEMPRA.py)
+chirp/          CHIRP driver (bj8300_v2.5TEMPRA.py)
 tools/
   anc-bootloader/  BinTe ANC Bootloader flasher (BinTalk V1.1)
   ch340-driver/    USB cable driver
