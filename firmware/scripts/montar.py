@@ -205,7 +205,8 @@ PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho
            'watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
            'canal_c_le', 'canal_c_grava', 'canal_c_exibe', 'titulo_canal_c',
            'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'menu_tabela', 'gancho_troca_dw',
-           'gancho_volta_dw', 'gancho_ab', 'gancho_luz',
+           'gancho_volta_dw', 'gancho_ab', 'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic',
+           'gancho_ajustes',
            'scramble_le', 'scramble_grava', 'scramble_freqs', 'scramble_valor', 'scramble_posicao',
            'scramble_opcoes', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
            'gancho_partida', 'canal_exibe', 'canal_le', 'canal_grava',
@@ -377,8 +378,14 @@ ITENS = [
 # Itens nossos logo depois de um de fabrica (indice original -> itens): o MDF-C na sequencia do MDF-A e
 # do MDF-B, no molde do MDF-A, com as opcoes dele (v44, pedido do dono).
 MDF_B_ITEM = 43
+# v49: o MIC GAIN (o ganho do microfone, tres niveis: bancos.c) logo depois do NOISE REDUCTION, perto do
+# fim, para renumerar so os ultimos itens; uma lista no molde do TDR, como o WATCH.
+NR_ITEM = 48
 ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, maximo=3,
-                                  get='mdf_c_le', set='mdf_c_grava', titulo='titulo_mdf_c')]}
+                                  get='mdf_c_le', set='mdf_c_grava', titulo='titulo_mdf_c')],
+                NR_ITEM: [dict(nome='MIC GAIN', molde=TDR_ITEM, flags=0, maximo=3, get='mic_le',
+                               set='mic_grava', titulo='titulo_mic', exibe='mic_opcoes',
+                               opcoes_cn='mic_opcoes')]}
 
 # ---- revisao dos textos em ingles do menu (ver notas/textos-revisao.md) ----
 # As cadeias vem coladas na flash, sem folga: trocar no lugar so pode ter tamanho igual ou menor
@@ -469,6 +476,14 @@ LUZ_EM = 0x01E46578
 LUZ_ERA = 0x01E394D6
 # As chamadas trocadas por ganchos do .livre, cada uma com o rotulo que o montar e o conferir mostram.
 CHAMADAS_LIVRE = TRIPLE_CHAMADAS + ((LUZ_EM, LUZ_ERA, 'gancho_luz', 'luz acesa no espectro'),)
+# v49: o MIC GAIN vale na hora quando os ajustes mudam por fora do menu. O retorno aos ajustes de
+# fabrica (0x01E4842E) os grava com uma chamada (0x01E4845A; 0x01E3AB36 nao le registrador de
+# entrada), e o 'W' do bloco 0x9000 pelo cabo termina num goto para a mesma gravacao (0x01E43A50,
+# depois de desempilhar; so o ramo do 0x9000 da gravacao chega ali, 0x01E439F2). Os dois passam
+# pelo gancho_ajustes, que poe o ganho do nivel novo e grava.
+AJUSTES_ERA = 0x01E3AB36
+CHAMADAS_LIVRE += ((0x01E4845A, AJUSTES_ERA, 'gancho_ajustes', 'ajustes de fabrica: o MIC GAIN na hora'),)
+GOTOS_LIVRE = ((0x01E43A50, AJUSTES_ERA, 'gancho_ajustes', 'ajustes pelo cabo: o MIC GAIN na hora'),)
 
 # Gancho das teclas do espectro: parado num sinal achado, a seta continua a varredura em vez de
 # mexer no limite. Entra no lugar do "r1 = r0 - 16" que escolhe o caso do tbh das teclas do modo
@@ -552,7 +567,7 @@ NA_LIVRE += (TABELA_SIMBOLO,)              # v43: a tabela do menu, dado no .liv
 NA_LIVRE += ('watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
              'canal_c_le', 'canal_c_grava', 'canal_c_exibe', 'titulo_canal_c',
              'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'gancho_troca_dw', 'gancho_volta_dw', 'gancho_ab',
-             'gancho_luz')
+             'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic', 'gancho_ajustes')
 PRECISA += ESPECTRO_B
 
 # Realce do bloco do VFO em evidencia na tela principal. O gancho entra no ENVIO do pedaco para o
@@ -803,7 +818,7 @@ def main():
     escritas += [(s_, 4, o_) for s_, _, o_ in ENVIA_SITIOS]
     escritas += [(s_, 4, o_) for s_, o_ in NOP_SITIOS]
     escritas += [(s_, 4, 'espera da troca de banda do radio') for s_ in ESPERAS_RADIO]
-    escritas += [(s_, 4, o_) for s_, _, _, o_ in CHAMADAS_LIVRE]
+    escritas += [(s_, 4, o_) for s_, _, _, o_ in CHAMADAS_LIVRE + GOTOS_LIVRE]
     escritas += [(LIVRE, len(tela), 'tela B no lugar dos decodificadores G.729 e MP3')]
     escritas += [(r, 4, f'tipo do {d} no registro dos decodificadores') for r, _, _, d in DECODIFICADORES]
     if TEXTOS_REVISADOS:
@@ -844,6 +859,13 @@ def main():
             raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {era:#x}: {antes.hex()}')
         app[o:o + 4] = monta_call(sitio, S[gancho])
         print(f"  {sitio:#x}: {era:#x} -> {gancho} {S[gancho]:#x} ({oque})")
+    for sitio, era, gancho, oque in GOTOS_LIVRE:
+        o = sitio - BASE_APP
+        antes = bytes(app[o:o + 4])
+        if antes != monta_goto(sitio, era):
+            raise SystemExit(f'{sitio:#x} nao e o goto esperado para {era:#x}: {antes.hex()}')
+        app[o:o + 4] = monta_goto(sitio, S[gancho])
+        print(f"  {sitio:#x}: goto {era:#x} -> {gancho} {S[gancho]:#x} ({oque})")
 
     if ESPECTRO_TECLAS:
         o = ESPECTRO_EM - BASE_APP

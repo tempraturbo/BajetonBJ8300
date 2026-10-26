@@ -33,11 +33,11 @@ its cause, because that is what stops it happening twice.
   C on side B and Voice Privacy); in `teste_clonagem`, 7 to 7f (the cable, with v49's window and
   v46-v48's).
 
-## v49 — Oct 26 — VFO C and the light on in the spectrum ⏳ in the code, no release yet
+## v49 — Oct 26 — VFO C, the light on in the spectrum and MIC GAIN ✔️ tested
 
-At the owner's request, C now has the same options as A and B. Up to v48 it was only a memory
-channel (CH-C); since v49 it is a side like the others: mode (VFO or channel), a 32-byte VFO and a
-channel. The code is ready and checked, and the release comes after a request he still has to make.
+Tested on the radio. At the owner's request, C now
+has the same options as A and B. Up to v48 it was only a memory channel (CH-C); since v49 it is a
+side like the others: mode (VFO or channel), a 32-byte VFO and a channel.
 
 - **Where it lives.** C's mode, and the saved B's, are in byte 9 of the WATCH record, which was
   reserved and written as 0 (channel, as up to v48). The VFOs are in sector `0xD3000` (`struct
@@ -60,6 +60,15 @@ channel. The code is ready and checked, and the release comes after a request he
   spectrum, or on powering the radio back on (it never starts in mode 20; only the key entry writes
   it, `0x01E4CF7E`), ABR applies again.
 - **The cable also writes the VFO sector:** the window goes up to `0xD3FFF`.
+- **MIC GAIN**, requested by the owner after hearing the microphone gain changed over the cable
+  (calibration byte `0xF210` from 30 to 18 and to 31: "it changed a lot"). A new item right after
+  NOISE REDUCTION, with HIGH, MID and LOW, which put 31, 25 and 19 in the gain the firmware writes
+  to register `0x7D` on every transmission. The level lives at `0x9033` of the settings block, a
+  byte the firmware does not use. It applies at boot (after the calibration copy, which stays
+  intact in the chip), in the menu, and also on the reset to factory settings and on a CHIRP upload:
+  `gancho_ajustes` sits in the settings save of those two paths (a call at `0x01E4845A` and a
+  `goto` at `0x01E43A50`). Details in [section 19](reverse-engineering.md#19-microphone-gain-and-mic-gain-v49)
+  of the reverse engineering notes.
 - The build passed ("tudo certo"), the stack is the stock one at all three roots, the menus' deepest
   point went from 628 to 636 bytes (below the stock 740) and the preview's 85 screens come out the
   same, plus a new one (C on VFO).

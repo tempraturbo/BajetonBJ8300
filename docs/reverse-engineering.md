@@ -67,7 +67,7 @@ by looking for where content starts mirroring address 0:
 | Range | Contents |
 |---|---|
 | `0x00000–0x09FFF` | 960 channels, 32 B each |
-| `0x0A000–0x0FFFF` | settings; `0x0F000–0x0F24F` is factory calibration |
+| `0x0A000–0x0FFFF` | settings; `0x0F000–0x0F24F` is factory calibration (TX power at `0xF000–0xF0BF`, [section 20](#20-tx-power-map-read-only); microphone gain at `0xF210`, [section 19](#19-microphone-gain-and-mic-gain-v49)) |
 | `0x10000–0x1AFFF` | **boot image**: 160×138 RGB565 little-endian, 44160 B |
 | `0x20000–0x99FFF` | fonts and Chinese text (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 records of 60 B used by the firmware |
@@ -183,6 +183,8 @@ destination in r0, source in r1, size in r2). Read only. It is what showed the v
 | `0x00015367`, `0x0001536F` | redraw flags |
 | `0x00016671` / `0x0001666C` | cable packet / received length |
 | `0x00014B83` | roger: 0 OFF, 1 BEEP, 2 TONE1200; 3 = BEEP 2 (v22) |
+| `0x00014BDF` | MIC GAIN: 0 HIGH, 1 MID, 2 LOW (v49; `0x9033` of the settings, section 19) |
+| `0x0000706C` | microphone gain put into register `0x7D` on every TX (copy of `0xF210`; since v49, of MIC GAIN) |
 | `0x00015E2C` / `0x000129A4` | scramble of the current channel or VFO / the tuned one: 0 OFF, 1 3400 Hz, 2 2900 Hz, 3–8 = 2700, 2800, 3000…3300 Hz (v25) |
 | `0x01E68B18` | stock inversion frequencies (u16, Hz × 10.32444): 35103 = 3400 Hz and 36135 = 3500 Hz; since v25 nothing reads it (section 13) |
 | `0x0001533D` | screen mode (20 = spectrum) |
@@ -1023,3 +1025,69 @@ them, and off only to the one in focus.
 (`0x01E4826E`, `0x01E481CC` and `0x01E4D44C`: the stock call before, the hook's after; and, since
 v49, the light's, `0x01E46578`); `4b` checks
 the menu table pointer; the stack with the hooks is the stock one at all three roots.
+
+## 19. Microphone gain and MIC GAIN (v49)
+
+**Stock.** The microphone gain is the low 6 bits of the radio chip's register `0x7D`, written by
+the register routine `0x01E39D82(reg, value)`. Boot writes `0xE912` to it (`0x01E566A4`; 18 in the
+low bits), but that only lasts until the first transmission: on every TX (`0x01E477D8`) the
+firmware reads the register, replaces the low 6 bits with `b[0x706C]` and writes it back. `0x706C`
+is a copy of the factory calibration: boot reads 16 B from `0xF210` in the data chip into it
+(`0x01E561BE`..`0x01E561CC`). On the test radio `0xF210` was **30**. Neither the menu nor the stock
+CHIRP touches it (CHIRP downloads the calibration, `0xF000..0xF24F`, and does not write it).
+
+**The scale.** The firmware writes 6 bits, and the BK4819 datasheet puts the microphone
+sensitivity in bits 4 to 0 (0 to 31, in 0.5 dB steps). The other registers the firmware uses match
+that chip (`0x36` amplifier, `0x43` filter, `0x47`/`0x48` audio, `0x71` scramble), but there is no
+direct proof of the chip in the firmware: no text with its name, no read of its ID. That is why MIC
+GAIN does not go above 31. On the test radio, over the cable, `0xF210` went to 18 and then to 31,
+and the difference heard (18 → 31: "it changed a lot") fits that scale.
+
+**The MIC GAIN item** (v49, right after NOISE REDUCTION, modelled on TDR): HIGH, MID and LOW, which
+put **31, 25 and 19** in `b[0x706C]`. The level lives in `b[0x14BDF]`, `0x9033` of the settings
+block (saved with them by `0x01E3AB36` and served by the cable from RAM, section 4). Nothing in the
+firmware reads or writes that byte outside the block copies, checked across the whole
+disassembly. The default settings table leaves it at 171, and any value above 2 counts as HIGH
+(`mic_le`). The gain is set by `aplica_mic`, called:
+
+- at boot, by `gancho_partida`, which runs after the calibration copy (every path to it goes
+  through `0x01E561CC`): MIC GAIN replaces `0xF210`, which stays intact in the chip;
+- in the item's set (`mic_grava`): it takes effect on the next transmission, without a restart;
+- on the reset to factory settings (`0x01E4842E`), which saves the settings with a call at
+  `0x01E4845A`, and on the cable `W` of the `0x9000` block, which ends in a `goto` to the same save
+  at `0x01E43A50` (only the `0x9000` branch gets there, `0x01E439F2`). Both go through
+  `gancho_ajustes`, which sets the gain for the new level and calls the stock save (`0x01E3AB36`
+  reads no input register). A CHIRP upload takes effect at once.
+
+**Checked at build time** (`conferir.py`): `4r` checks the call at `0x01E4845A` and the `goto` at
+`0x01E43A50` byte by byte, the stock ones before and the hook's after. `gancho_ajustes` uses 296 B
+of stack at its deepest point, below the interface's stock 740 B.
+
+## 20. TX power (map, read only)
+
+Mapped at the owner's request, to find out whether H and L sit within the limits; the modified
+firmware changes none of it.
+
+- **The register.** `0x01E44526(bias)` writes the radio chip's `0x36`: with bias 0 (end of TX,
+  `0x01E44810`) it writes 127; otherwise `(bias << 8) | gain`, with the gain per level from the
+  table at `0x01E5BE4A` = {`0xFF` H, `0xD7` M, `0xE8` L}, indexed by `b[0x1299C] % 3` (0 H, 1 M,
+  2 L).
+- **The bias** comes from 16 B tables per band and level, picked at TX (`0x01E47800`..`0x01E478BA`)
+  by the frequency, through pointers from `0x01E5FB60`:
+
+  | Band | Index | H, M, L tables in RAM |
+  |---|---|---|
+  | below 200 MHz | (MHz − 130) / 3, up to 15 (below 130, 0) | `0x710C`, `0x711C`, `0x712C` |
+  | 200 to 299 MHz | (MHz − 200) / 5, up to 12 | `0x70DC`, `0x70EC`, `0x70FC` |
+  | 300 to 399 MHz | below 350, 0; otherwise (MHz − 350) / 5 | `0x707C`, `0x708C`, `0x709C` |
+  | 400 MHz and up | (MHz − 400) / 10, up to 12 | `0x70AC`, `0x70BC`, `0x70CC` |
+
+- **The tables are the factory calibration**: boot (`0x01E5609A` on) copies the 16 B rows of
+  `0xF000..0xF0BF` from the data chip to RAM (`0xF000` → `0x70AC`, `0xF010` → `0x710C`, `0xF020` →
+  `0x70DC`, `0xF030` → `0x707C`, `0xF040` → `0x70BC`, `0xF050` → `0x711C`, `0xF060` → `0x70EC`,
+  `0xF070` → `0x708C`, `0xF080` → `0x70CC`, `0xF090` → `0x712C`, `0xF0A0` → `0x70FC`, `0xF0B0` →
+  `0x709C`).
+- **On the test radio** (calibration read over the cable): H between 218 and 250, M between 186 and
+  201, L between 158 and 166, on a 0 to 255 bias (255 only in the steps the index never reaches).
+  The firmware does not know how many watts that gives: the output in W depends on the amplifier,
+  and only a wattmeter measures it.

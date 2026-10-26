@@ -34,11 +34,11 @@ causa, porque é isso que evita repetir.
   modo, a C no lado B e a Voice Privacy); no `teste_clonagem`, do 7 ao 7f (o cabo, com a janela da
   v49 e a da v46 à v48).
 
-## v49 — 26/10 — o VFO C e a luz acesa no espectro ⏳ no código, sem release ainda
+## v49 — 26/10 — o VFO C, a luz acesa no espectro e o MIC GAIN ✔️ testada
 
-A pedido do dono, a C passa a ter as mesmas opções do A e do B. Até a v48 ela era só um canal da
-memória (o CH-C); desde a v49 é um lado como os outros: modo (VFO ou canal), VFO de 32 B e canal. O
-código está pronto e conferido, e a release sai depois de um pedido que ele ainda vai fazer.
+Testada no rádio. A pedido do dono, a C passa a ter as
+mesmas opções do A e do B. Até a v48 ela era só um canal da memória (o CH-C); desde a v49 é um lado
+como os outros: modo (VFO ou canal), VFO de 32 B e canal.
 
 - **Onde mora.** O modo da C, e o do B guardado, ficam no byte 9 do registro do WATCH, que era
   reservado e gravado em 0 (canal, como até a v48). Os VFOs ficam no setor `0xD3000` (`struct vfc`,
@@ -60,6 +60,15 @@ código está pronto e conferido, e a release sai depois de um pedido que ele ai
   só repassa essa chamada fora do modo 20. Nada é gravado: ao sair do espectro, ou ao religar o rádio
   (que nunca parte no modo 20; só a entrada por tecla o grava, `0x01E4CF7E`), o ABR volta a valer.
 - **O cabo grava também o setor dos VFOs:** a janela vai até `0xD3FFF`.
+- **O MIC GAIN**, pedido do dono depois de ouvir o ganho do microfone mudado pelo cabo (o `0xF210`
+  da calibração de 30 para 18 e para 31: "mudou bastante"). Item novo logo depois do NOISE
+  REDUCTION, com HIGH, MID e LOW, que põem 31, 25 e 19 no ganho que o firmware escreve no
+  registrador `0x7D` a cada transmissão. O nível fica no `0x9033` do bloco de ajustes, um byte que o
+  firmware não usa. Vale na partida (depois da cópia da calibração, que fica intacta no chip), no
+  menu, e também no retorno aos ajustes de fábrica e no upload do CHIRP: o `gancho_ajustes` entra na
+  gravação dos ajustes desses dois caminhos (uma chamada em `0x01E4845A` e um `goto` em
+  `0x01E43A50`). Detalhes na [seção 19](engenharia-reversa.md#19-o-ganho-do-microfone-e-o-mic-gain-v49)
+  da engenharia reversa.
 - O build passou ("tudo certo"), a pilha é a de fábrica nas três raízes, o ponto mais fundo dos
   menus foi de 628 para 636 B (abaixo dos 740 B de fábrica) e as 85 telas da prévia saem iguais, com
   uma nova (a C em VFO).

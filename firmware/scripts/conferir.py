@@ -172,7 +172,7 @@ sitios_vozes = ({montar.ESPECTRO_EM} | {s for s, _, _, _ in montar.ESPECTRO_CHAM
 sitios_livre = ({s for s, _ in montar.REALCE_SITIOS_GANCHO} | {s for s, _ in montar.LIMPA_SITIOS} | {s_ for s_, _, _ in montar.ENVIA_SITIOS}
                | {e for e, _, _, _, _ in montar.TELA_DESVIOS} | {s for s, _, _, _ in montar.ESPECTRO_B_CHAMADAS}
                | {e for e, _, _, _ in montar.ESPECTRO_B_FUNCOES}
-               | {s for s, _, _, _ in montar.CHAMADAS_LIVRE})
+               | {s for s, _, _, _ in montar.CHAMADAS_LIVRE + montar.GOTOS_LIVRE})
 imagens = []
 for e in entradas:
     if e['type'] in jlfw.FLASH_TYPES:
@@ -499,6 +499,14 @@ for sitio, era, gancho, oque in montar.CHAMADAS_LIVRE:
     print(f'4r. {sitio:#x}: {era:#x} -> {gancho} ({oque}): ' + ('ok' if ok else 'FALHOU'))
     if not ok:
         erros.append(f'gancho errado em {sitio:#x} ({oque})')
+    previsto_tripla.append((sitio, sitio + 3, oque))
+for sitio, era, gancho, oque in montar.GOTOS_LIVRE:
+    o = sitio - montar.BASE_APP
+    ok = (bytes(app_velho[o:o + 4]) == montar.monta_goto(sitio, era)
+          and bytes(app[o:o + 4]) == montar.monta_goto(sitio, montar.S[gancho]))
+    print(f'4r. {sitio:#x}: goto {era:#x} -> {gancho} ({oque}): ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append(f'goto errado em {sitio:#x} ({oque})')
     previsto_tripla.append((sitio, sitio + 3, oque))
 
 if montar.SCAN_REDESENHA:

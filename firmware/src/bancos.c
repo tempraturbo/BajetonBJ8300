@@ -134,6 +134,7 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 #define NA_LIVRE_COD   __attribute__((section(".livre.bancos.text")))
 #define DADO_NA_LIVRE  __attribute__((section(".livre.bancos.rodata")))
 unsigned watch_vista(void);
+void aplica_mic(void);                    /* o ganho do microfone (v49, MIC GAIN) */
 #define MAPA_EXISTE    ((volatile u8 *)0x00015D8B)           /* 120 B: canal esta gravado */
 #define MAPA_BUSCA     ((volatile u8 *)0x00015D12)           /* 120 B: canal entra na busca */
 #define ZONAS_EXISTE   (*(volatile u16 *)0x00015D10)         /* mascaras por zona, montadas junto */
@@ -527,6 +528,7 @@ void gancho_partida(void)
 {
     FIM_DA_CARGA();
     IDIOMA = 0;
+    aplica_mic();                          /* por cima da copia da calibracao (MIC GAIN) */
     if (watch_vista() == WATCH_SINGLE)     /* no SINGLE a dupla escuta fica desligada (WATCH, abaixo) */
         TDR = 0;
     aplica_filtro(0);
@@ -1194,6 +1196,50 @@ NA_LIVRE_COD void gancho_ab(void)
         return;
     }
     TROCA_AB(1);                             /* B -> A: fora do TRIPLE, ou a C em canal vazio */
+}
+
+/* ---------- MIC GAIN: o ganho do microfone (v49) ----------
+ * A cada transmissao (0x01E477D8) o firmware poe nos 6 bits de baixo do registrador 0x7D do chip de
+ * radio (a sensibilidade do microfone; no BK4819, bits 4..0, de 0 a 31 em passos de 0,5 dB) o byte
+ * b[0x706C], que a partida copia do 0xF210 da calibracao de fabrica (0x01E561BE); nada mais le nem
+ * grava esse byte. O MIC GAIN escolhe um de tres niveis, guardado no byte 0x9033 do bloco de ajustes
+ * (b[0x14BDF], que o firmware nao usa: fora as copias do bloco - gravar ajustes, padrao, partida e
+ * cabo -, nada o le nem o grava, conferido no desmontado inteiro), e o poe em b[0x706C] na partida
+ * (todo caminho ate o gancho da partida passa pela copia da calibracao, 0x01E561CC) e na hora em que
+ * muda. A saida do menu grava os ajustes no chip (0x01E3C2B0), e o CHIRP o le e grava no bloco
+ * 0x9000. A calibracao de fabrica nao muda. 0, o padrao, e HIGH: o topo, perto dos 30 de fabrica. */
+#define MIC_NIVEL      (*(volatile u8 *)0x00014BDF)
+#define MIC_GANHO      (*(volatile u8 *)0x0000706C)
+DADO_NA_LIVRE const char titulo_mic[] = "MIC GAIN";
+DADO_NA_LIVRE const char *const mic_opcoes[3] = {"HIGH", "MID", "LOW"};
+DADO_NA_LIVRE static const u8 mic_ganho[3] = {31, 25, 19};   /* o topo, -3 dB e -6 dB */
+
+NA_LIVRE_COD u16 mic_le(void)
+{
+    return MIC_NIVEL < 3 ? MIC_NIVEL : 0;
+}
+
+NA_LIVRE_COD void aplica_mic(void)
+{
+    MIC_GANHO = mic_ganho[mic_le()];
+}
+
+NA_LIVRE_COD void mic_grava(void)
+{
+    unsigned n = VALOR;
+
+    MIC_NIVEL = n < 3 ? n : 0;
+    aplica_mic();                          /* vale ja na proxima transmissao */
+}
+
+/* Os ajustes que mudam por fora do menu tambem valem na hora: o 'W' do bloco 0x9000 pelo cabo (o
+ * upload do CHIRP) termina num goto para a gravacao dos ajustes (0x01E43A50), e o retorno aos ajustes
+ * de fabrica os grava com uma chamada (0x01E4845A), sem reiniciar o radio. Os dois passam por aqui: o
+ * ganho do nivel novo, e a gravacao de fabrica (0x01E3AB36, que nao le registrador de entrada). */
+NA_LIVRE_COD void gancho_ajustes(void)
+{
+    aplica_mic();
+    SALVA_AJUSTES();
 }
 
 /* ---------- a luz no espectro (v49) ----------

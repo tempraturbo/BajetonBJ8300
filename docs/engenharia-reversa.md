@@ -67,7 +67,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | Faixa | Conteúdo |
 |---|---|
 | `0x00000–0x09FFF` | 960 canais de 32 B |
-| `0x0A000–0x0FFFF` | ajustes; `0x0F000–0x0F24F` é calibração de fábrica |
+| `0x0A000–0x0FFFF` | ajustes; `0x0F000–0x0F24F` é calibração de fábrica (potência de TX em `0xF000–0xF0BF`, [seção 20](#20-a-potência-de-tx-mapa-só-leitura); ganho do microfone em `0xF210`, [seção 19](#19-o-ganho-do-microfone-e-o-mic-gain-v49)) |
 | `0x10000–0x1AFFF` | **imagem de abertura**: 160×138 em RGB565 little-endian, 44160 B |
 | `0x20000–0x99FFF` | fontes e textos em chinês (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 registros de 60 B que o firmware usa |
@@ -184,6 +184,8 @@ em r0, origem em r1, tamanho em r2). Só leitura. Foi ela que mostrou o caso das
 | `0x00015367`, `0x0001536F` | flags de "redesenhar" |
 | `0x00016671` / `0x0001666C` | pacote do cabo / comprimento recebido |
 | `0x00014B83` | roger: 0 OFF, 1 BEEP, 2 TONE1200; 3 = BEEP 2 (v22) |
+| `0x00014BDF` | MIC GAIN: 0 HIGH, 1 MID, 2 LOW (v49; o `0x9033` dos ajustes, seção 19) |
+| `0x0000706C` | ganho do microfone posto no registrador `0x7D` a cada TX (cópia do `0xF210`; desde a v49, do MIC GAIN) |
 | `0x00015E2C` / `0x000129A4` | scramble do canal ou VFO atual / o da sintonia: 0 OFF, 1 3400 Hz, 2 2900 Hz, 3–8 = 2700, 2800, 3000…3300 Hz (v25) |
 | `0x01E68B18` | frequências de inversão de fábrica (u16, Hz × 10,32444): 35103 = 3400 Hz e 36135 = 3500 Hz; desde a v25 ninguém a lê (seção 13) |
 | `0x0001533D` | modo da tela (20 = espectro) |
@@ -1009,3 +1011,67 @@ e desligada só a que está em evidência.
 (`0x01E4826E`, `0x01E481CC` e `0x01E4D44C`: a chamada de fábrica antes, a do gancho depois; e, desde
 a v49, a da luz, `0x01E46578`); a `4b`
 confere o ponteiro da tabela do menu; a pilha com os ganchos é a de fábrica nas três raízes.
+
+## 19. O ganho do microfone e o MIC GAIN (v49)
+
+**De fábrica.** O ganho do microfone fica nos 6 bits de baixo do registrador `0x7D` do chip de
+rádio, escrito pela rotina de registrador `0x01E39D82(reg, valor)`. A partida escreve `0xE912` nele
+(`0x01E566A4`; 18 nos bits de baixo), mas isso só vale até a primeira transmissão: a cada TX
+(`0x01E477D8`), o firmware lê o registrador, troca os 6 bits de baixo por `b[0x706C]` e o grava de
+volta. O `0x706C` é uma cópia da calibração de fábrica: a partida lê 16 B de `0xF210` do chip de
+dados para lá (`0x01E561BE`..`0x01E561CC`). No rádio de teste o `0xF210` valia **30**. Nem o menu
+nem o CHIRP de fábrica mexem nele (o CHIRP baixa a calibração, `0xF000..0xF24F`, e não a grava).
+
+**A escala.** O firmware escreve 6 bits, e a folha de dados do BK4819 dá a sensibilidade do
+microfone nos bits 4 a 0 (0 a 31, em degraus de 0,5 dB). Os outros registradores que o firmware
+usa batem com esse chip (`0x36` amplificador, `0x43` filtro, `0x47`/`0x48` áudio, `0x71` scramble),
+mas não há prova direta do chip no firmware: nenhum texto com o nome, nenhuma leitura da
+identificação. Por isso o MIC GAIN não passa de 31. No rádio de teste, pelo cabo, o `0xF210` foi a 18
+e depois a 31, e a diferença ouvida (18 → 31: "mudou bastante") combina com essa escala.
+
+**O item MIC GAIN** (v49, logo depois do NOISE REDUCTION, no molde do TDR): HIGH, MID e LOW, que
+põem **31, 25 e 19** em `b[0x706C]`. O nível fica em `b[0x14BDF]`, o `0x9033` do bloco de ajustes
+(gravado com eles por `0x01E3AB36` e servido pelo cabo da RAM, seção 4). Nada no firmware lê ou
+grava esse byte fora das cópias do bloco, conferido no desmontado inteiro. A tabela de ajustes
+padrão o deixa em 171, e qualquer valor acima de 2 vale HIGH (`mic_le`). Quem põe o ganho é o
+`aplica_mic`, chamado:
+
+- na partida, pelo `gancho_partida`, que roda depois da cópia da calibração (todo caminho até ele
+  passa por `0x01E561CC`): o MIC GAIN substitui o `0xF210`, que fica intacto no chip;
+- no set do item (`mic_grava`): vale na próxima transmissão, sem desligar;
+- no retorno aos ajustes de fábrica (`0x01E4842E`), que grava os ajustes com uma chamada em
+  `0x01E4845A`, e no `W` do bloco `0x9000` pelo cabo, que termina num `goto` para a mesma gravação
+  em `0x01E43A50` (só o ramo do `0x9000` chega ali, `0x01E439F2`). As duas passam pelo
+  `gancho_ajustes`, que põe o ganho do nível novo e chama a gravação de fábrica (`0x01E3AB36` não
+  lê registrador de entrada). Um upload do CHIRP vale na hora.
+
+**Conferido no build** (`conferir.py`): a `4r` confere a chamada de `0x01E4845A` e o `goto` de
+`0x01E43A50` byte a byte, os de fábrica antes e os do gancho depois. O `gancho_ajustes` usa 296 B de
+pilha no ponto mais fundo, abaixo dos 740 B de fábrica da interface.
+
+## 20. A potência de TX (mapa, só leitura)
+
+Mapeada a pedido do dono para saber se o H e o L ficam dentro dos limites; nada disso é mudado pelo
+firmware modificado.
+
+- **O registrador.** `0x01E44526(bias)` escreve o `0x36` do chip de rádio: com bias 0 (o fim da TX,
+  `0x01E44810`) põe 127; senão, `(bias << 8) | ganho`, com o ganho por nível na tabela
+  `0x01E5BE4A` = {`0xFF` H, `0xD7` M, `0xE8` L}, indexada por `b[0x1299C] % 3` (0 H, 1 M, 2 L).
+- **O bias** vem de tabelas de 16 B por faixa e nível, escolhidas na TX (`0x01E47800`..`0x01E478BA`)
+  pela frequência, com ponteiros a partir de `0x01E5FB60`:
+
+  | Faixa | Índice | Tabelas H, M, L na RAM |
+  |---|---|---|
+  | abaixo de 200 MHz | (MHz − 130) / 3, até 15 (abaixo de 130, 0) | `0x710C`, `0x711C`, `0x712C` |
+  | 200 a 299 MHz | (MHz − 200) / 5, até 12 | `0x70DC`, `0x70EC`, `0x70FC` |
+  | 300 a 399 MHz | abaixo de 350, 0; senão (MHz − 350) / 5 | `0x707C`, `0x708C`, `0x709C` |
+  | 400 MHz ou mais | (MHz − 400) / 10, até 12 | `0x70AC`, `0x70BC`, `0x70CC` |
+
+- **As tabelas são a calibração de fábrica**: a partida (`0x01E5609A` em diante) copia as linhas de
+  16 B de `0xF000..0xF0BF` do chip de dados para a RAM (`0xF000` → `0x70AC`, `0xF010` → `0x710C`,
+  `0xF020` → `0x70DC`, `0xF030` → `0x707C`, `0xF040` → `0x70BC`, `0xF050` → `0x711C`, `0xF060` →
+  `0x70EC`, `0xF070` → `0x708C`, `0xF080` → `0x70CC`, `0xF090` → `0x712C`, `0xF0A0` → `0x70FC`,
+  `0xF0B0` → `0x709C`).
+- **No rádio de teste** (calibração lida pelo cabo): H entre 218 e 250, M entre 186 e 201, L entre
+  158 e 166, num bias de 0 a 255 (255 só nos degraus que o índice nunca alcança). O firmware não
+  sabe quantos watts isso dá: a saída em W depende do amplificador e só um wattímetro mede.
