@@ -71,9 +71,8 @@ FIRMWARE(RECARREGA_LADOS, 0x01E3A812); void RECARREGA_LADOS(void);
 FIRMWARE(FIM_DA_CARGA, 0x01E3951C); void FIM_DA_CARGA(void);     /* ultima etapa da partida */
 FIRMWARE(AVANCA_SCAN, 0x01E458E4);  void AVANCA_SCAN(void);      /* proximo canal da varredura */
 FIRMWARE(DADOS_CABO, 0x01E43970);   void DADOS_CABO(unsigned);   /* 'R' (0) e 'W' (1) do cabo */
-/* Tela: o envio ao LCD (o espectro), e a limpeza e a saida do editor de texto, que o CH-NAME faz no
- * fim do set dele e o BANK NAME repete. A tela principal mora no tela.c. */
-FIRMWARE(ENVIA, 0x01E3ADBC);        void ENVIA(void);
+/* Tela: a limpeza e a saida do editor de texto, que o CH-NAME faz no fim do set dele e o BANK NAME
+ * repete. A tela principal, as outras e o espectro (v41) moram no tela.c. */
 FIRMWARE(LIMPA, 0x01E3ACBA);        void LIMPA(unsigned);
 FIRMWARE(SAI_DO_EDITOR, 0x01E3C7AA); void SAI_DO_EDITOR(void);
 /* Espectro: o que o firmware faz para voltar a varrer quando o sinal achado cai (0x01E4AEFC) -
@@ -90,13 +89,6 @@ FIRMWARE(FILTRO, 0x01E4A980);          void FILTRO(unsigned);            /* filt
 FIRMWARE(JANELA_ESPECTRO, 0x01E4AA3C); void JANELA_ESPECTRO(u32);        /* centra: inicio, fim, passo, limite */
 FIRMWARE(MOSTRA_FREQ, 0x01E45D96);     void MOSTRA_FREQ(u32);            /* a frequencia grande do topo */
 FIRMWARE(ROTULOS_FREQ, 0x01E4AB2A);    void ROTULOS_FREQ(u32, u32);      /* as do comeco e do fim, embaixo */
-FIRMWARE(JANELA, 0x01E3AD34);          void JANELA(unsigned, unsigned, unsigned, unsigned, unsigned, unsigned);
-/* Retangulo x0..x1, y0..y1 (inclusivos, em qualquer ordem) na janela aberta, na cor do 5o argumento. */
-FIRMWARE(RETANGULO, 0x01E4AAA8);       void RETANGULO(unsigned, unsigned, unsigned, unsigned, unsigned);
-FIRMWARE(ESCREVE, 0x01E3B834);         void ESCREVE(unsigned, unsigned, const char *, unsigned, unsigned);
-/* Uma letra no buffer da janela aberta: (y, x, largura, altura, bits, fundo, frente), com os bits em
- * faixas de 8 linhas (docs/mapa-da-tela.md, secao 10). O ESCREVE a chama sempre com frente branca. */
-FIRMWARE(GLIFO, 0x01E388EC);           void GLIFO(unsigned, unsigned, unsigned, unsigned, const u8 *, unsigned, unsigned);
 /* Roger: as duas rotinas que o laco do BEEP de fabrica usa (0x01E44644 e 0x01E4464A). */
 FIRMWARE(TOM, 0x01E43B4E);             void TOM(unsigned, unsigned);     /* freq. dos 2 geradores, Hz x 10.32444 */
 /* A espera conta em unidades de 2 ms (v22 tocava cada tom do BEEP 2 por 200 ms em vez de 100): o
@@ -159,8 +151,6 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 #define ESP_INICIO     (*(volatile u32 *)0x000148EC)         /* 84204 */
 #define ALTURAS        ((volatile u8 *)0x0001551B)           /* 87323: 160 colunas do grafico, 0..64 */
 #define ESP_PEDACO     (*(volatile u8 *)0x00014697)          /* 83607: qual das 5 faixas de 32 colunas o laco desenha */
-#define FORMATO_FREQ   ((const char *)0x01E5FF26)            /* "%03d.%05d", o de MOSTRA_FREQ e ROTULOS_FREQ */
-#define FONTE_12       0x00086BC0u                           /* glifos 6 x 12 no chip de dados, 12 B por codigo */
 /* Configuracao do espectro (0x6EC0, 73 bytes que o firmware grava na saida e le na partida). */
 #define CFG_PONTOS     (*(volatile u32 *)0x00006EC4)         /* 28356: 0..3 = 160 >> n; nossos 4 = 640, 5 = 320 */
 #define CFG_PASSO      (*(volatile u32 *)0x00006EC8)         /* 28360: 0..4 os de fabrica; nosso 5 = 10 kHz */
@@ -185,12 +175,8 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 #define TAM_NOME     12
 #define NUM_ZONAS    15                    /* 15 x 64 = 960; as mascaras por zona cobrem isso */
 #define TAM_PEDACO   24                    /* le o mapa de um banco em pedacos; 120 = 5 x 24 */
-/* Barra do ponto que o espectro esta varrendo: branca, contra o azul das outras (0x3B15), o verde
- * da linha do limite (0x07E0) e o fundo preto, com 3 px no minimo para aparecer onde nao ha sinal. */
-#define COR_BARRA_ATUAL  0xFFFFu
+/* Altura minima da barra do ponto que o espectro esta varrendo, para aparecer onde nao ha sinal. */
 #define MINIMO_ATUAL     3
-/* O verde do tema novo (#34D399 do rascunho, em RGB565), na frequencia do pico do espectro. */
-#define VERDE_TEMA       0x3693u
 
 /* ---------- onde os bancos ficam gravados ----------
  * Setores proprios depois da area que o firmware usa em 0xC0000 (64 registros de 60 B, que ele le
@@ -516,15 +502,16 @@ void gancho_scan(void)
  * para ca (secao 15 de docs/engenharia-reversa.md; o conferir.py confere as chamadas, 2b e 4g). */
 #define NAS_VOZES       __attribute__((section(".vozes.text")))
 #define DADO_NAS_VOZES  __attribute__((section(".vozes.rodata")))
+/* As pecas da tela B do espectro moram no tela.o (telas.c, v41): os ganchos daqui so as chamam. */
+void b_esp_rotulos(unsigned n, unsigned p);
+void b_esp_pico(u32 f);
+void b_esp_coluna(unsigned x, unsigned topo, unsigned atual);
+
 #define PASSOS    6
 #define LARGURAS  6
 DADO_NAS_VOZES static const u16 passo_de[PASSOS] = {625, 833, 1250, 2000, 2500, 1000};   /* em 10 Hz */
 DADO_NAS_VOZES static const u8 filtro_de[PASSOS] = {2, 1, 1, 0, 0, 1};    /* os de fabrica (0x01E60460) + 10k = 8.33/12.5 */
 DADO_NAS_VOZES static const u8 passo_seguinte[PASSOS] = {1, 5, 3, 4, 0, 2};   /* 6.25 8.33 10 12.5 20 25 */
-/* Os textos dentro da propria tabela, e nao ponteiros para cadeias: cadeia literal iria para o
- * .rodata, na area do fim da imagem. */
-DADO_NAS_VOZES static const char rotulo_passo[PASSOS][6] = {"6.25k", "8.33k", "12.5k", "20.0k", "25.0k", "10.0k"};
-DADO_NAS_VOZES static const char rotulo_pontos[LARGURAS][6] = {"x160 ", " x80 ", " x40 ", " x20 ", "x640 ", "x320 "};
 
 NAS_VOZES static unsigned cfg_pontos(void)
 {
@@ -571,23 +558,11 @@ NAS_VOZES unsigned espectro_passo(void)
     return passo_de[cfg_passo()] * sub_pontos();
 }
 
-/* No lugar de 0x01E4ABDC: os rotulos da quantidade de pontos e do passo, com as mesmas janelas do
- * firmware - as tabelas sao as nossas. O firmware copiava o texto com "%s " para um buffer; aqui ele
- * vai direto, porque a janela ja e limpa de preto e o espaco a mais so pintava preto (e passava da
- * janela de 32 px: "x160 " + espaco sao 36). O passo desce de y 34 para 37, a altura do pico e do
- * dBm na segunda linha (o de pontos ja estava na da frequencia, y 20). */
+/* No lugar de 0x01E4ABDC: os rotulos da quantidade de pontos e do passo, pelas nossas tabelas (os
+ * indices novos vao alem das de fabrica), desenhados pela tela B. */
 NAS_VOZES void espectro_rotulos(unsigned n, unsigned p)
 {
-    if (n >= LARGURAS)
-        n = 0;
-    if (p >= PASSOS)
-        p = 0;
-    JANELA(0, 32, 17, 33, 1, 0);
-    ESCREVE(20, 1, rotulo_pontos[n], 12, 0);
-    ENVIA();
-    JANELA(0, 32, 33, 49, 1, 0);
-    ESCREVE(37, 1, rotulo_passo[p], 12, 0);
-    ENVIA();
+    b_esp_rotulos(n < LARGURAS ? n : 0, p < PASSOS ? p : 0);
 }
 
 /* Nas chamadas do proximo ponto (0x01E4AF86, que serve a varredura e a retomada, e 0x01E4C6B8, da
@@ -636,44 +611,12 @@ NAS_VOZES static unsigned largura_ponto(void)
     return 160 / espectro_pontos();
 }
 
-/* A segunda linha do espectro e do pico da passada: ela fica onde o firmware punha o dBm, que foi
- * para a direita dela (x 112..160, embaixo do AM/FM). Fonte de 12 (6 px por caractere), centrada
- * embaixo da frequencia grande. A janela da frequencia grande (y 20..38) cobre a primeira linha
- * desta, que nao tem pixel aceso: e a mesma sobreposicao que o dBm de fabrica ja tinha. */
-NAS_VOZES static void janela_pico(void)
-{
-    JANELA(40, 112, 36, 48, 1, 0);
-}
-
-/* Texto em cor, na fonte de 12 (6 x 12): o caminho ASCII do ESCREVE de fabrica (0x01E3B9E6..
- * 0x01E3BA1A) - le os 12 bytes do glifo no chip de dados e desenha com o GLIFO -, com a cor da letra
- * que se pede no lugar do branco fixo. Codigo fora de 32..126 nao tem glifo nessa fonte: fica o
- * espaco, sem desenho. */
-NAS_VOZES static void escreve_cor(unsigned y, unsigned x, const char *texto, unsigned fundo, unsigned frente)
-{
-    u8 glifo[12];
-
-    for (; *texto; texto++, x += 6) {
-        unsigned c = (u8)*texto;
-
-        if (c - 32 > 126 - 32)
-            continue;
-        LE_FLASH(FONTE_12 + c * 12, glifo, 12);
-        GLIFO(y, x, 6, 12, glifo, fundo, frente);
-    }
-}
-
 /* No lugar da chamada que mostra o pico na volta ao comeco da janela (0x01E4AEA4, que ia para
- * MOSTRA_FREQ): a frequencia do pico da passada que terminou vai para a segunda linha, no verde do
- * tema, e fica ate a passada seguinte terminar. O formato e o do firmware. */
+ * MOSTRA_FREQ): a frequencia do pico da passada que terminou vai para a segunda linha, em verde, e
+ * fica ate a passada seguinte terminar. */
 NAS_VOZES void mostra_pico(u32 freq)
 {
-    char texto[12];
-
-    janela_pico();
-    SPRINTF(texto, FORMATO_FREQ, freq / 100000, freq % 100000);
-    escreve_cor(37, 51, texto, 0, VERDE_TEMA);
-    ENVIA();
+    b_esp_pico(freq);
 }
 
 /* Nas chamadas que centram a janela pela frequencia digitada (0x01E4C054) e na entrada do
@@ -682,25 +625,24 @@ NAS_VOZES void mostra_pico(u32 freq)
 NAS_VOZES void gancho_janela(u32 centro)
 {
     zera((void *)ALTURAS, 160);
-    janela_pico();
-    ENVIA();
+    b_esp_pico(0);
     JANELA_ESPECTRO(centro);
 }
 
 /* Nas cinco chamadas que desenham as barras (0x01E4D600, 0x01E4D644, 0x01E4D688, 0x01E4D6CC,
  * 0x01E4D710), no lugar de 0x01E4AAA8: o laco principal redesenha uma faixa de 32 colunas por volta
  * (ESP_PEDACO, 0 a 4), e cada barra chega com x relativo a faixa (x0 = x1), a base e o topo (64 menos
- * a altura). As colunas do ponto que a varredura esta medindo saem na cor da barra atual. */
-NAS_VOZES void gancho_coluna(unsigned x0, unsigned x1, unsigned base, unsigned topo, unsigned cor)
+ * a altura); a cor vai na pilha e nao serve mais. As colunas do ponto que a varredura esta medindo
+ * saem em branco, com 3 px no minimo para aparecer onde nao ha sinal. */
+NAS_VOZES void gancho_coluna(unsigned x0, unsigned x1, unsigned base, unsigned topo)
 {
-    unsigned largura = largura_ponto();
+    unsigned largura = largura_ponto(), atual = ESP_PEDACO * 32 + x0 - ESP_INDICE * largura < largura;
 
-    if (ESP_PEDACO * 32 + x0 - ESP_INDICE * largura < largura) {
-        cor = COR_BARRA_ATUAL;
-        if (topo > 64 - MINIMO_ATUAL)
-            topo = 64 - MINIMO_ATUAL;
-    }
-    RETANGULO(x0, x1, base, topo, cor);
+    if (atual && topo > 64 - MINIMO_ATUAL)
+        topo = 64 - MINIMO_ATUAL;
+    b_esp_coluna(x0, topo, atual);
+    (void)x1;
+    (void)base;
 }
 
 /* No lugar da chamada da varredura no laco principal (0x01E4D5B2). De fabrica cada ponto custa

@@ -230,29 +230,23 @@ static unsigned indice(unsigned c)
 
 /* O tamanho medio (v38), entre o 1x (7 de altura) e o 2x (14): e = MEDIA. A mesma letra, com cada
  * coluna de haste (4 pontos acesos ou mais) e cada coluna vazia com 2 px e as outras com 1, e a 2a e a
- * 6a linha com 2 px - 9 de altura, o traco vertical do 2x e o horizontal do 1x. 1 px entre letras. */
+ * 6a linha com 2 px - 9 de altura, o traco vertical do 2x e o horizontal do 1x. Letra sem haste (S, Z,
+ * 2) ganha os 2 px nas duas colunas das pontas, senao sai fina e mais estreita que as outras (v40).
+ * A largura de cada coluna vem pronta do fonte.py (fonte_b_media). 1 px entre letras. */
 #define MEDIA         0
 #define ALTURA_MEDIA  9
+#define COLUNA_MEDIA(k) (1 + (fonte_b_media[(k) >> 3] >> ((k) & 7) & 1))
 static const u8 linha_media[8] = {0, 1, 3, 4, 5, 6, 8, 9};
-
-static unsigned coluna_media(unsigned b)
-{
-    unsigned n;
-
-    for (n = 0; b; b >>= 1)
-        n += b & 1;
-    return n >= 4 || n == 0 ? 2 : 1;
-}
 
 /* Quanto uma letra anda: a largura dela mais o espaco depois. */
 static unsigned avanco(unsigned l, unsigned e)
 {
-    unsigned i, a = 1;
+    unsigned k = l >> 3, fim = k + (l & 7), a = 1;
 
     if (e)
         return ((l & 7) + 1) * e;
-    for (i = 0; i < (l & 7); i++)
-        a += coluna_media(fonte_b_colunas[(l >> 3) + i]);
+    for (; k < fim; k++)
+        a += COLUNA_MEDIA(k);
     return a;
 }
 
@@ -274,17 +268,14 @@ static unsigned letra(unsigned x, unsigned y, unsigned c, unsigned e, unsigned c
  * principal: junta, as duas contas guardavam mais registradores e o quadro dela crescia. */
 SEPARADA static unsigned letra_media(unsigned x, unsigned y, unsigned c, unsigned cor)
 {
-    unsigned l = fonte_b_letra[indice(c)], i, b, r, w, a = 1;
+    unsigned l = fonte_b_letra[indice(c)], k = l >> 3, fim = k + (l & 7), x0 = x, w, b, r;
     unsigned ve = y < JAN_Y1 && y + ALTURA_MEDIA > JAN_Y0;
 
-    for (i = 0; i < (l & 7); i++, a += w, x += w) {
-        b = fonte_b_colunas[(l >> 3) + i];
-        w = coluna_media(b);
-        for (r = 0; ve && x < JAN_X1 && b; b >>= 1, r++)
+    for (; k < fim; k++, x += w)
+        for (w = COLUNA_MEDIA(k), b = fonte_b_colunas[k], r = 0; ve && x < JAN_X1 && b; b >>= 1, r++)
             if (b & 1)
                 retangulo(x, y + linha_media[r], x + w, y + linha_media[r + 1], cor);
-    }
-    return a;
+    return x - x0 + 1;
 }
 
 COLADA static unsigned texto(unsigned x, unsigned y, const char *s, unsigned e, unsigned cor)
@@ -671,6 +662,79 @@ void tela_b_digitando(void)
 
 #include "telas.c"
 
+/* ---------- o espectro (modo 20, v41): as pecas estao no telas.c ---------- */
+/* Cada pedaco na janela dele, cheia do fundo, e ao LCD. */
+#define PEDACO_B(x0, x1, y0, y1, desenho)                         \
+    do {                                                            \
+        janela_b(x0, x1, y0, y1, COR_FUNDO);                        \
+        desenho;                                                    \
+        ENVIA();                                                    \
+    } while (0)
+
+/* As rotinas de fabrica trocadas inteiras (um goto na entrada, montar.py: ESPECTRO_B_FUNCOES). So o
+ * espectro as chama (docs/engenharia-reversa.md, secao 11), e elas so desenhavam. */
+void b_esp_freq(u32 f)                      /* 0x01E45D96 (MOSTRA_FREQ) */
+{
+    PEDACO_B(ESP_X_FREQ, ESP_X_MODO, ESP_L1, ESP_L2, esp_freq(f, 0));
+}
+
+void b_esp_digitos(void)                    /* 0x01E4AFC2, teclas 16 e 18 */
+{
+    PEDACO_B(ESP_X_FREQ, ESP_X_MODO, ESP_L1, ESP_L2, esp_freq(0, 1));
+}
+
+void b_esp_modo(u32 m)                      /* 0x01E4B04C, entrada e tecla 23 */
+{
+    PEDACO_B(ESP_X_MODO, 160, ESP_L1, ESP_L2, esp_modo(m));
+}
+
+void b_esp_dbm(int v)                       /* 0x01E4ADFE */
+{
+    PEDACO_B(ESP_X_DBM, 160, ESP_L2, ESP_GRAFICO, esp_dbm(v));
+}
+
+void b_esp_eixo(u32 inicio, u32 fim)        /* 0x01E4AB2A (ROTULOS_FREQ) */
+{
+    PEDACO_B(0, 160, ESP_EIXO, 128, esp_eixo(inicio, fim));
+}
+
+/* Os ganchos do espectro no bancos.c (no .vozes) desenham por aqui: os rotulos (a rotina dele troca
+ * 0x01E4ABDC), o pico da passada (f = 0 so o apaga, na janela nova) e cada coluna das barras, com x
+ * relativo a fatia aberta e o topo de fabrica (64 menos a altura). */
+void b_esp_rotulos(unsigned n, unsigned p)
+{
+    PEDACO_B(0, ESP_X_FREQ, ESP_L1, ESP_L2, esp_pontos(n));
+    PEDACO_B(0, ESP_X_PICO, ESP_L2, ESP_GRAFICO, esp_passo(p));
+}
+
+void b_esp_pico(u32 f)
+{
+    PEDACO_B(ESP_X_PICO, ESP_X_DBM, ESP_L2, ESP_GRAFICO, if (f) esp_pico(f));
+}
+
+void b_esp_coluna(unsigned x, unsigned topo, unsigned atual)
+{
+    esp_coluna(JAN_X0 + x, topo < 64 ? 64 - topo : 0, atual);
+}
+
+/* No lugar da janela de cada uma das 5 fatias do grafico (32 x 64, cheia de preto pela cor 0 que o
+ * laco poe na pilha): o painel e a grade. A janela e a de fabrica (4 KB, cabe no buffer), entao vai
+ * direto ao JANELA(): pelo janela_b() com outra cor, a cor deixava de ser constante nele e voltava a
+ * ir pela pilha, e o quadro da desenha() crescia 8 B. */
+void gancho_fatia(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
+{
+    JANELA(x0, x1, y0, y1, 1, COR_PAINEL);
+    esp_grade(x0, x1);
+}
+
+/* No lugar da linha do limite de cada fatia (0x01E4D72E: retangulo 0..31 x y..y em 0x07E0, relativo
+ * a fatia): tracejada em ambar. */
+void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
+{
+    esp_limite(JAN_X0 + x0, JAN_X0 + x1 + 1, JAN_Y0 + y0);
+    (void)y1;
+}
+
 #ifndef PREVIA
 /* ---------- ligacao com o firmware ----------
  * Treze rotinas que desenham a tela de dois VFOs ganham um desvio na entrada (DESVIO, abaixo). O
@@ -890,9 +954,11 @@ u32 b_scanqt(u32 rodando)
 /* No lugar do envia() que manda "Radio Initialization / Please Wait..." na partida do radio
  * (0x01E4A7D4; o modo ja e o 2, gravado em 0x01E4A612) e na troca de modulacao (0x01E3DEBE em
  * chines, 0x01E3DEEA em ingles: o set do item Modulation do menu do radio, 0x01E3DE52, que antes
- * redesenha a tela de um VFO de fabrica - a espera cobre a tela inteira). */
+ * redesenha a tela de um VFO de fabrica - a espera cobre a tela inteira). As duas vem logo antes de o
+ * chip do radio iniciar: e aqui que os ajustes guardados sao conferidos (confere_radio, telas.c). */
 void gancho_radio_inicio(void)
 {
+    confere_radio();
     telas_faixa(TELA_INICIO_RADIO, 0, 128, 0, 0);
 }
 
@@ -924,6 +990,13 @@ void gancho_tensao(void)
     }
 }
 
+/* No lugar da limpeza de fabrica na entrada do espectro (0x01E4CFE2, LIMPA(0): a faixa de cima em
+ * cinza e o resto em preto): o fundo e a barra de cima da tela B. */
+void gancho_espectro_limpa(void)
+{
+    telas_faixa(20, 0, 128, 0, 0);
+}
+
 /* 0x01E3C132(0): a tela inteira. Ela zera o estado de TX (0x01E3C1D4); o gancho tambem. Com 1 e a
  * tela de um VFO, que fica a de fabrica. */
 u32 b_tela(u32 um_vfo)
@@ -935,13 +1008,19 @@ u32 b_tela(u32 um_vfo)
     return 1;
 }
 
+/* A barra de cima e a da tela B na tela de dois VFOs, nas outras telas e, desde a v41, no espectro. */
+static unsigned barra_b(void)
+{
+    return ativa() || telas_modo() || MODO_TELA == 20;
+}
+
 /* 0x01E3B05C, a barra de cima; 0x01E3B03E e 0x01E3AE50, o nivel da bateria e o cadeado, que se
  * redesenham sozinhos - os tres leem o estado da RAM. */
 u32 b_barra(void)
 {
     struct estado e;
 
-    if (!ativa() && !telas_modo())
+    if (!barra_b())
         return 0;
     le_estado(&e);
     desenha(&e, 0, ALTURA_ESTADO);
@@ -954,7 +1033,7 @@ u32 b_bateria(u32 nivel)
 {
     struct estado e;
 
-    if (!ativa() && !telas_modo())
+    if (!barra_b())
         return 0;
     le_estado(&e);
     e.bateria = nivel;
@@ -967,7 +1046,7 @@ u32 b_monitor(u32 ligado)
 {
     struct estado e;
 
-    if (!ativa() && !telas_modo())
+    if (!barra_b())
         return 0;
     le_estado(&e);
     e.mo = ligado != 0;
@@ -1026,10 +1105,12 @@ u32 b_lado(void)
 
 /* 0x01E3B592(estado, nivel, lado, janela propria), o medidor; fora da tela inteira e da TX (que sao
  * nossas), so o RX chama (0x01E45328). O nivel que vem e o que vale (o MO passa 10, 0x01E4532C), e a
- * barra de cima acompanha, pelo RX. */
+ * barra de cima acompanha, pelo RX. No espectro so a tecla MO chega aqui (o laco do sinal so chama o
+ * medidor nos modos 0 e 3, 0x01E46216), e a de fabrica desenharia o medidor por cima do grafico: so
+ * a barra. */
 u32 b_medidor(u32 estado, u32 nivel, u32 lado)
 {
-    unsigned outra = telas_modo() != 0;
+    unsigned outra = telas_modo() != 0 || MODO_TELA == 20;
 
     if (!ativa() && !outra)
         return 0;

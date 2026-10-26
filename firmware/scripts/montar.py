@@ -186,6 +186,13 @@ NOP_SITIOS = (
     (0x01E3DF10, 'radio: o "Please Wait..." da troca de modulacao, ja na espera da tela B'),
 )
 NOP = bytes.fromhex('00000000')
+
+# A troca de banda do radio (0x01E3DDBA) desliga o chip e espera 0,6 s (0x01E3DBCC) e depois espera
+# mais duas vezes 1,5 s (ESPERA_2MS(750)) antes de liga-lo, nos dois caminhos: SSB (0x01E3DDE0,
+# 0x01E3DDEC) e FM/AM (0x01E3DE06, 0x01E3DE12). Na v40 cada uma das duas vira 0,25 s: "r0 = 750" vira
+# "r0 = 125", a mesma instrucao (imediato de 16 bits), e a troca de modulacao fica ~2,5 s mais rapida.
+ESPERAS_RADIO = (0x01E3DDE0, 0x01E3DDEC, 0x01E3DE06, 0x01E3DE12)
+ESPERA_ANTES, ESPERA_NOVA = bytes.fromhex('40e0ee02'), bytes.fromhex('40e07d00')
 ENVIA_GANCHOS = tuple(sorted({g for _, g, _ in ENVIA_SITIOS}))
 TELA_SIMBOLOS = tuple(d for _, _, d, _, _ in TELA_DESVIOS) + tuple(sorted({g for _, _, _, g, _ in TELA_DESVIOS}))
 # O que o firmware chama no tela.o: os desvios, os ganchos e o envio e a limpeza da tela principal.
@@ -434,19 +441,6 @@ ESPECTRO_CHAMADAS = (
     (0x01E4D6CC, 0x01E4AAA8, 'gancho_coluna', 'barras da faixa 3 do grafico'),
     (0x01E4D710, 0x01E4AAA8, 'gancho_coluna', 'barras da faixa 4 do grafico'),
 )
-# O dBm (0x01E4ADFE) sai do meio da segunda linha do espectro, que passa a ser do pico da passada,
-# para a direita dela, embaixo do AM/FM (que vai ate y 31: janela 127..159 x 17..49, texto em y 20).
-# A janela vai de x 40..120 para 112..160, na mesma altura (36..48), e o texto de x 56 para 116:
-# "-111dBm", 7 caracteres de 6 px, termina em 158. E a janela do AM/FM (0x01E4B04C, chamada so pela
-# tecla 23 e pela entrada do espectro) ia ate y 49 e limpava de preto o dBm a partir de x 127; o
-# texto dela e de 12 px em y 20, entao ela passa a terminar em 33, como a do "x160" (v34). Quatro
-# "rX = imm8" de 2 bytes (sitio, registrador, de fabrica, novo, o que e).
-DBM_IMEDIATOS = (
-    (0x01E4AE12, 0, 40, 112, 'x0 da janela'),
-    (0x01E4AE14, 1, 120, 160, 'x1 da janela'),
-    (0x01E4AE30, 1, 56, 116, 'x do texto'),
-    (0x01E4B066, 3, 49, 33, 'y1 da janela do AM/FM, que apagava o dBm'),
-)
 # Roger BEEP 2 e BEEP 3, na rotina de fim de transmissao 0x01E44604 (sitio, bytes de fabrica, o que vira):
 #  - 0x01E4461E: "if (r0 != 1) goto 388" vira "if (r0 == 0) goto 388" (mesmo destino, 0x01E447A6):
 #    os valores 3 e 4 passam a entrar no caminho do BEEP; o 2 ja foi desviado antes, para o TONE1200.
@@ -466,6 +460,35 @@ ESPECTRO_FUNCOES = (
     (0x01E4ABDC, bytes.fromhex('7904e29b'), 'espectro_rotulos', 'rotulos dos pontos e do passo'),
 )
 
+# v41, o espectro na tela B (src/telas.c e src/tela.c), com destino no .livre. Cada rotina de fabrica
+# que desenha um pedaco dele e trocada inteira (goto de 4 bytes na entrada), e a limpeza da entrada, a
+# janela de cada fatia do grafico e a linha do limite sao chamadas trocadas. Provado no desmontado de
+# fabrica (docs/engenharia-reversa.md, secao 11): todo sitio so e alcancado pelas portas do modo 20
+# (o caso 20 do tbh dos modos, o caso 36 do das acoes de tecla, a queda do "se o modo nao for 20" do
+# laco principal e o "se o modo for 20" do laco do sinal, 0x01E46B8E); as cinco rotinas so sao
+# chamadas desses sitios, nenhuma constante aponta para elas, nada desvia para o meio delas, e elas so
+# desenhavam. Os quatro imediatos que a v26 e a v34 mudavam dentro do dBm e do AM/FM sairam com elas.
+ESPECTRO_B_CHAMADAS = (
+    (0x01E4CFE2, 0x01E3ACBA, 'gancho_espectro_limpa', 'limpeza na entrada'),
+    (0x01E4D5DA, 0x01E3AD34, 'gancho_fatia', 'janela da faixa 0 do grafico'),
+    (0x01E4D61E, 0x01E3AD34, 'gancho_fatia', 'janela da faixa 1 do grafico'),
+    (0x01E4D662, 0x01E3AD34, 'gancho_fatia', 'janela da faixa 2 do grafico'),
+    (0x01E4D6A6, 0x01E3AD34, 'gancho_fatia', 'janela da faixa 3 do grafico'),
+    (0x01E4D6EA, 0x01E3AD34, 'gancho_fatia', 'janela da faixa 4 do grafico'),
+    (0x01E4D72E, 0x01E4AAA8, 'gancho_limite', 'linha do limite'),
+)
+ESPECTRO_B_FUNCOES = (
+    (0x01E45D96, bytes.fromhex('7604e29b'), 'b_esp_freq', 'a frequencia (MOSTRA_FREQ)'),
+    (0x01E4AFC2, bytes.fromhex('7804e29b'), 'b_esp_digitos', 'a frequencia sendo digitada'),
+    (0x01E4B04C, bytes.fromhex('7704e29b'), 'b_esp_modo', 'AM/FM'),
+    (0x01E4ADFE, bytes.fromhex('7704e29b'), 'b_esp_dbm', 'o dBm'),
+    (0x01E4AB2A, bytes.fromhex('7804e29b'), 'b_esp_eixo', 'as pontas da janela (ROTULOS_FREQ)'),
+)
+ESPECTRO_B = (tuple(sorted({g for _, _, g, _ in ESPECTRO_B_CHAMADAS}))
+              + tuple(n for _, _, n, _ in ESPECTRO_B_FUNCOES))
+NA_LIVRE += ESPECTRO_B
+PRECISA += ESPECTRO_B
+
 # Realce do bloco do VFO em evidencia na tela principal. O gancho entra no ENVIO do pedaco para o
 # LCD (envia(), 0x01E3ADBC) e nao no preenchimento da janela, porque o fundo do texto nao vem de
 # janela(): as rotinas de texto enchem a celula de cada caractere com uma cor propria, preta fixa.
@@ -482,6 +505,20 @@ ESPECTRO_FUNCOES = (
 # ao trocar de A para B - passa por 0x01E3C132 e pelo desenhador de bloco 0x01E3BD04, que nao
 # tinham gancho nenhum. Era por isso que o verde so aparecia na barra e so ao mudar de canal.
 REALCE = True
+# Diagnostico (v39, travamento na troca para USB/LSB): com BJ8300_DIAG_GANCHOS no ambiente, o montar
+# so grava os grupos de ganchos de tela listados ali, separados por virgula - 'realce' (o envio e a
+# limpeza da tela de dois VFOs), 'tela13' (os 13 desvios da v35/v36), 'tela37' (os desvios da v37 em
+# diante) e 'envia' (as chamadas do envia() trocadas e o nop), ou um desvio pelo nome (desvio_medidor).
+# Vazio, nenhum. O resto - o registro dos decodificadores zerado e o tela.o na faixa - fica como esta.
+# Nao e versao para usar; o conferir.py acusa os ganchos que faltam. Sem a variavel, a versao normal.
+DIAG_GANCHOS = os.environ.get('BJ8300_DIAG_GANCHOS')
+
+
+def grava_grupo(grupo):
+    """Se o grupo de ganchos de tela entra nesta montagem (sempre, fora do diagnostico)."""
+    return DIAG_GANCHOS is None or grupo in DIAG_GANCHOS.split(',')
+
+
 REALCE_ERA = 0x01E3ADBC
 REALCE_SITIOS_GANCHO = (
     # desenhador de bloco (0x01E3BD04), um bloco por lado: frequencia, nome e o que o modo pedir
@@ -649,7 +686,8 @@ def main():
         escritas.append((ESPECTRO_EM, len(ESPECTRO_ANTES), 'gancho das teclas do espectro'))
         escritas += [(s, 4, f'espectro: {d}') for s, _, _, d in ESPECTRO_CHAMADAS]
         escritas += [(e, 4, f'espectro: {d}') for e, _, _, d in ESPECTRO_FUNCOES]
-    escritas += [(e, 2, f'dBm: {d}') for e, _, _, _, d in DBM_IMEDIATOS]
+        escritas += [(s, 4, f'espectro B: {d}') for s, _, _, d in ESPECTRO_B_CHAMADAS]
+        escritas += [(e, 4, f'espectro B: {d}') for e, _, _, d in ESPECTRO_B_FUNCOES]
     escritas += [(s, len(a), f'vozes: {d}') for s, a, _, d in VOZES_REMENDOS]
     escritas += [(ROGER_DESVIO_EM, 4, 'roger: valores 3 e 4 no caminho do BEEP'),
                  (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
@@ -668,6 +706,7 @@ def main():
     escritas += [(e, 4, f'tela B: {o}') for e, _, _, _, o in TELA_DESVIOS]
     escritas += [(s_, 4, o_) for s_, _, o_ in ENVIA_SITIOS]
     escritas += [(s_, 4, o_) for s_, o_ in NOP_SITIOS]
+    escritas += [(s_, 4, 'espera da troca de banda do radio') for s_ in ESPERAS_RADIO]
     escritas += [(LIVRE, len(tela), 'tela B no lugar dos decodificadores G.729 e MP3')]
     escritas += [(r, 4, f'tipo do {d} no registro dos decodificadores') for r, _, _, d in DECODIFICADORES]
     if TEXTOS_REVISADOS:
@@ -709,27 +748,19 @@ def main():
         app[o:o + 4] = monta_call(ESPECTRO_EM, S['gancho_tecla_espectro'])
         print(f"  gancho das teclas do espectro {ESPECTRO_EM:#x} -> {S['gancho_tecla_espectro']:#x} "
               '(setas parado num achado, OK e #)')
-        for sitio, era, gancho, oque in ESPECTRO_CHAMADAS:
+        for sitio, era, gancho, oque in ESPECTRO_CHAMADAS + ESPECTRO_B_CHAMADAS:
             o = sitio - BASE_APP
             antes = bytes(app[o:o + 4])
             if antes != monta_call(sitio, era):
                 raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {era:#x}: {antes.hex()}')
             app[o:o + 4] = monta_call(sitio, S[gancho])
             print(f'  espectro {sitio:#x}: chamada para {era:#x} -> {gancho} ({oque})')
-        for entrada, antes_esperado, nova, oque in ESPECTRO_FUNCOES:
+        for entrada, antes_esperado, nova, oque in ESPECTRO_FUNCOES + ESPECTRO_B_FUNCOES:
             o = entrada - BASE_APP
             if bytes(app[o:o + 4]) != antes_esperado:
                 raise SystemExit(f'{entrada:#x} nao comeca como esperado: {bytes(app[o:o + 4]).hex()}')
             app[o:o + 4] = monta_goto(entrada, S[nova])
             print(f'  espectro {entrada:#x}: rotina trocada por {nova} ({oque})')
-
-    # 3b. o dBm vai para a direita da segunda linha do espectro
-    for endereco, reg, antes, depois, oque in DBM_IMEDIATOS:
-        o = endereco - BASE_APP
-        if bytes(app[o:o + 2]) != monta_imm8(reg, antes):
-            raise SystemExit(f'{endereco:#x} nao e "r{reg} = {antes}": {bytes(app[o:o + 2]).hex()}')
-        app[o:o + 2] = monta_imm8(reg, depois)
-        print(f'  dBm do espectro {endereco:#x}: {oque} {antes} -> {depois}')
 
     # 3b2. vozes fora: os tres caminhos que tocam voz viram o "sem voz" de cada um
     for sitio, antes, depois, oque in VOZES_REMENDOS:
@@ -803,7 +834,7 @@ def main():
         print(f'  setas do menu invertidas em {len(SETAS)} sitios: a de cima passa a subir na lista')
 
     # 4b. realce do VFO selecionado: o gancho entra na chamada que pinta a faixa da barra
-    if REALCE:
+    if REALCE and grava_grupo('realce'):
         for sitio, oque in REALCE_SITIOS_GANCHO:
             o = sitio - BASE_APP
             antes = bytes(app[o:o + 4])
@@ -822,24 +853,34 @@ def main():
             print(f"  gancho da limpeza {sitio:#x} -> {S['gancho_limpa']:#x}: {oque}")
 
     # 4b2. a tela B: um goto na entrada de cada uma das treze rotinas, sobre os bytes de fabrica
-    for entrada, antes, desvio, _, oque in TELA_DESVIOS:
+    if DIAG_GANCHOS is not None:
+        print(f'  DIAGNOSTICO: so os ganchos de tela {DIAG_GANCHOS or "(nenhum)"} (nao e versao final)')
+    desvios = [x for i, x in enumerate(TELA_DESVIOS)
+               if grava_grupo('tela13' if i < 13 else 'tela37') or grava_grupo(x[2])]
+    for entrada, antes, desvio, _, oque in desvios:
         o = entrada - BASE_APP
         if bytes(app[o:o + len(antes)]) != antes:
             raise SystemExit(f'{entrada:#x} nao comeca com {antes.hex()}: {bytes(app[o:o + len(antes)]).hex()}')
         app[o:o + 4] = monta_goto(entrada, S[desvio])
         print(f'  tela B {entrada:#x} -> {desvio} ({S[desvio]:#x}): {oque}')
-    for sitio, gancho, oque in ENVIA_SITIOS:
+    for sitio, gancho, oque in ENVIA_SITIOS if grava_grupo('envia') else ():
         o = sitio - BASE_APP
         if bytes(app[o:o + 4]) != monta_call(sitio, ENVIA_ERA):
             raise SystemExit(f'{sitio:#x} nao e a chamada do envia(): {bytes(app[o:o + 4]).hex()}')
         app[o:o + 4] = monta_call(sitio, S[gancho])
         print(f'  {sitio:#x}: envia() -> {gancho} ({oque})')
-    for sitio, oque in NOP_SITIOS:
+    for sitio, oque in NOP_SITIOS if grava_grupo('envia') else ():
         o = sitio - BASE_APP
         if bytes(app[o:o + 4]) != monta_call(sitio, ENVIA_ERA):
             raise SystemExit(f'{sitio:#x} nao e a chamada do envia(): {bytes(app[o:o + 4]).hex()}')
         app[o:o + 4] = NOP
         print(f'  {sitio:#x}: envia() -> nop ({oque})')
+    for sitio in ESPERAS_RADIO:
+        o = sitio - BASE_APP
+        if bytes(app[o:o + 4]) != ESPERA_ANTES:
+            raise SystemExit(f'{sitio:#x} nao e "r0 = 750": {bytes(app[o:o + 4]).hex()}')
+        app[o:o + 4] = ESPERA_NOVA
+    print(f'  esperas da troca de banda do radio: {len(ESPERAS_RADIO)} de 1,5 s para 0,25 s')
 
     # 4b3. o tela.o na faixa dos decodificadores G.729 e MP3, e os dois fora do registro. Antes,
     # confere que cada registro e o de fabrica: o tipo e as quatro primeiras rotinas.

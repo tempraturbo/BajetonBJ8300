@@ -279,7 +279,8 @@ the [changelog](docs/changelog.md).
 
 | File | Status |
 |---|---|
-| `BJ8300_BANK_v39.anc` | **the newest, in test** — v36 + the other screens in theme B (menu with the medium font, name editor, radio, QT scan, DTMF and the power-on voltage), no Chinese language, both sides on a bank change and the `VERSION` menu at `V2.0T`; the radio still freezes when switching the modulation to USB/LSB ([changelog](docs/changelog.md)) |
+| `BJ8300_BANK_v41.anc` | **the newest** — v39 + the spectrum in theme B, the radio settings checked on entry and on every modulation switch, a modulation switch ~2.5 s faster and the S of the medium font — tested on the radio |
+| `BJ8300_BANK_v39.anc` | v36 + the other screens in theme B (menu with the medium font, name editor, radio, QT scan, DTMF and the power-on voltage), no Chinese language, both sides on a bank change and the `VERSION` menu at `V2.0T` — tested on the radio (a freeze when switching to USB/LSB came from what was saved in it: [changelog](docs/changelog.md), v40) |
 | `BJ8300_BANK_v36.anc` | v34 + the new main screen (theme B): a card for the highlighted side with the big frequency and the meter, colored tags for power, modulation and tones, and a top bar with only what is on; in the Chinese language the screen stays the stock one — tested on the radio |
 | `BJ8300_BANK_v34.anc` | v32 + the spectrum in the voice space, the green peak and the whole dBm on the AM/FM toggle; the last one with the stock main screen — tested on the radio |
 | `BJ8300_BANK_v32.anc` | v27 without the voices (and without the VOICE item), COIN roger (the coin), memory read over the cable; frees ~112 KB for the new screen theme — tested on the radio |
@@ -338,11 +339,12 @@ The toolchain path is in `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.3/...`)
 
 **Space budget:** the new code lives in three places, all at the same address in the 6 images:
 
-- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (v39 uses 2176);
+- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (v41 uses 2176);
 - **the space that was the voices'**, with the spectrum, but only inside the files C0 and C1
-  (1066 bytes), because the radio's loader refuses an image that changes more voice files;
+  (1066 bytes, of which v41 uses 674), because the radio's loader refuses an image that changes more
+  voice files;
 - **the place of the G.729 and MP3 decoders**, inside `app.bin`, with the B screens (38884 bytes, of
-  which they use 11650 in v39).
+  which they use 13234 in v41).
 
 The menu table is written where the original was. [docs/reverse-engineering.md](docs/reverse-engineering.md)
 explains how to measure it, where space was already saved and why these places are safe.

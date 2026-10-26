@@ -5,7 +5,74 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
-## v39 — 26/10 — o editor de nome na tela B, âmbar e TX vermelho 🧪 **em teste**
+## v41 — 26/10 — o espectro no tema B ✅
+
+Testada no rádio: "ficou excelente". É a última tela que faltava no tema novo.
+
+- **A mesma disposição da tela de fábrica, no tema B.** Embaixo da barra de cima:
+  - a linha 1 tem a quantidade de pontos numa etiqueta, a frequência que roda (grande, com os dois
+    últimos dígitos pequenos) e AM ou FM;
+  - a linha 2 tem o passo numa etiqueta, a frequência do pico da passada em verde, com um ▲, e o
+    dBm (o número em branco e a unidade em cinza);
+  - o gráfico (160 × 64) fica num painel verde-escuro com linhas de 1/4 em 1/4: barras verdes com o
+    topo claro, a coluna sendo medida em branco e a linha do limite tracejada em âmbar;
+  - embaixo, as duas pontas da janela, a linha de base e as marcas do começo, do meio e do fim.
+- **Cada pedaço pela rotina de fábrica que o desenha.** As cinco rotinas de desenho do espectro
+  são trocadas inteiras, com um `goto` na entrada: a frequência (`0x01E45D96`), os dígitos
+  digitados (`0x01E4AFC2`), o AM/FM (`0x01E4B04C`), o dBm (`0x01E4ADFE`) e as pontas
+  (`0x01E4AB2A`). Viram chamadas da tela B a limpeza da entrada (`0x01E4CFE2`), a janela de cada
+  uma das 5 fatias do gráfico e a linha do limite (`0x01E4D72E`). Os ganchos que já eram nossos
+  (rótulos, pico, barras) passaram a desenhar no tema B.
+- **Provado no desmontado** que só o modo 20 chega a esses sítios, que essas cinco rotinas só são
+  chamadas deles, que nenhuma constante aponta para elas e que nada desvia para o meio delas.
+  Tudo está na [seção 11 da engenharia reversa](engenharia-reversa.md#11-espectro).
+- **A barra de cima do tema B também no espectro.** Com a tecla MO no espectro, a rotina de
+  fábrica desenharia o medidor por cima do gráfico; na tela B só a barra acende.
+- **O `.vozes` caiu de 996 para 674 bytes**, porque o desenho passou para o `tela.o`. Saíram os
+  quatro imediatos que a v26 e a v34 mudavam dentro do dBm e do AM/FM, e a `4f` do formato e da
+  fonte de 12, que o pico não usa mais.
+- **Uma armadilha de pilha.** A primeira montagem passava 4 bytes do máximo de fábrica. O
+  `janela_b()` era sempre chamado com a cor de fundo, e o compilador tinha tirado esse argumento.
+  Chamado pela fatia com outra cor, o argumento voltou para a pilha e o quadro da `desenha()`
+  cresceu 8 bytes. A fatia passou a chamar o `JANELA()` de fábrica direto, e a pilha voltou a ser
+  a de fábrica nas três raízes.
+- **A prévia chama os próprios ganchos**, na ordem em que o firmware os chama (cenário 32), e a
+  imagem tem de sair igual à da tela composta (30).
+
+## v40 — 26/10 — os ajustes do rádio conferidos e a troca de modulação mais rápida ✔️ testada
+
+Testada no rádio: "funcionou tudo".
+
+- **O travamento da troca para USB/LSB dependia do que estava salvo no rádio, não do código.** A
+  v36, a v38 e a v39 travavam, e a v25 e a v34 não. Cada diagnóstico funcionou: montagens com só
+  uma parte dos ganchos, escolhidas pela variável `BJ8300_DIAG_GANCHOS` do `montar.py`. Depois a
+  própria v39, gravada de novo, também funcionou. O uso em SSB na v25 tinha regravado os ajustes, e
+  o valor que travava não ficou provado.
+- **Os ajustes do rádio passam por uma conferência** (`confere_radio`, no `telas.c`) na entrada no
+  rádio e em cada troca de modulação, antes de o chip receber os valores. Volta ao padrão o que
+  estiver fora dos limites que os próprios menus aceitam (`0x01E44C68`):
+  - banda, faixa do AM e o modo memória;
+  - o índice da memória do FM, do AM e do SSB;
+  - os passos do AM e do SSB e o LNA dos dois;
+  - o BFO do VFO e, em cada uma das 15 memórias do SSB, a largura e o BFO;
+  - as cópias que o chip recebe.
+
+  Valor válido não muda. A `4p` do `conferir.py` refaz os endereços novos dos bytes de fábrica. O
+  `deslocamento()` dela lia o registrador de destino junto com o deslocamento, e foi corrigido.
+- **A troca de modulação ficou ~2,5 s mais rápida.** A troca de banda do rádio (`0x01E3DDBA`)
+  desliga o chip, espera 0,6 s e espera mais duas vezes 1,5 s antes de ligá-lo. Cada uma das duas
+  passou para 0,25 s (`ESPERA_2MS(750)` virou 125, nos dois caminhos), conferida pela `4q`. No SSB,
+  o resto da espera é o envio do patch do chip por I2C.
+- **O S da fonte média.** Letra sem haste vertical (S, Z, 2) saía fina e mais estreita que as
+  outras. Agora as duas colunas das pontas dela têm 2 px. A largura de cada coluna vem pronta do
+  `fonte.py` (`fonte_b_media`), e a primeira versão, que contava os pontos a cada letra, passava
+  4 bytes da pilha.
+- **O item MEMCH do menu do rádio** (FM, AM e SSB) grava: o OK guarda a frequência atual no número
+  escolhido (no SSB, também a largura e o BFO), e "CH-xx" marca um número já usado. Ele não muda a
+  sintonia. As memórias se chamam pelo modo memória (a tecla de código 31, `0x01E4C8CA`), e o nome
+  das estações só vem pelo PC.
+
+## v39 — 26/10 — o editor de nome na tela B, âmbar e TX vermelho ✔️ testada
 
 O que o teste da v38 mostrou, corrigido. O menu `VERSION` mostra `Firmware: V2.0T`, a pedido do
 dono, desde a v38.
@@ -25,8 +92,9 @@ dono, desde a v38.
   tabela de símbolos do ELF) e dos desvios. A `.rodata` do `tela.o` fica intercalada com o código,
   e a cadeia dos ícones `abc` aparecia como um `goto` para fora.
 
-**Ainda aberto:** o rádio trava ao trocar a modulação de AM ou FM para USB ou LSB, e é preciso
-desligar. O que foi descartado está na v38.
+No primeiro teste o rádio travou ao trocar a modulação de AM ou FM para USB ou LSB. Gravada de
+novo, depois dos diagnósticos, ela funcionou: o travamento dependia do que estava salvo no rádio
+(ver a v40).
 
 ## v38 — 26/10 — o que a v37 mostrou ✔️ testada, com defeitos
 

@@ -439,6 +439,14 @@ hook runs it whole and silences its `envia()`, instead of repeating the logic.
 | `0x01E45A82(running)`, the QT scan | detour | `b_scanqt` | the title and the state |
 | `0x01E4DA88`, `0x01E4A93C` (DTMF) | `envia()` replaced | `gancho_dtmf` | the DTMF box, in place of the card of the side in use |
 | `0x01E55F40` (power-on) | `envia()` replaced | `gancho_tensao` | the voltage card |
+| `0x01E4CFE2`, the clear on entering the spectrum (v41) | replaced call | `gancho_espectro_limpa` | the background and the top bar |
+| `0x01E45D96`, `0x01E4AFC2`, `0x01E4B04C`, `0x01E4ADFE`, `0x01E4AB2A` (spectrum) | routine replaced whole | `b_esp_freq`, `b_esp_digitos`, `b_esp_modo`, `b_esp_dbm`, `b_esp_eixo` | the frequency or the digits, AM/FM, the dBm and the ends |
+| the 5 windows of the graph slices and the threshold line (`0x01E4D72E`) | replaced call | `gancho_fatia`, `gancho_limite` | the panel with the grid and the line dashed in amber |
+
+**Spectrum** (v41). Routine map and proof in [section 11 of the reverse engineering
+notes](reverse-engineering.md#11-spectrum). The top bar, battery and MO hooks draw the B bar in mode
+20 too, and the meter, which in the spectrum only the MO key reaches, lights only the bar (the
+factory one would draw it over the graph).
 
 **Menu.** The engine `0x01E489E0` builds the title at `0x15494` (26 B) and three rows at `0x154AF`
 (27 B each). Each row goes through `0x01E487BC(row, text, marker)`, which puts in front `02 10` (the
@@ -479,7 +487,11 @@ it cannot tell whether the editor just opened: the detour draws the whole editor
 The modulation change goes through the radio's own menu: the tables `0x01E61168` (FM and AM) and
 `0x01E6137C` (SSB), and the Modulation item's set is `0x01E3DE52`. It redraws the stock single-VFO
 screen and writes "Radio Initialization / Please Wait..." before starting the chip (`0x01E3DDBA`);
-in SSB, the receiver chip's patch runs from `0x01E64D40` to `0x01E68B18` (`0x01E3DC42`).
+in SSB, the receiver chip's patch runs from `0x01E64D40` to `0x01E68B18` (`0x01E3DC42`). The band
+switch powers the chip down, waits 0.6 s (`0x01E3DBCC`) and twice more 1.5 s before powering it
+up; since v40 each of those two is 0.25 s. During the screen B wait (entering the radio and
+switching modulation) the saved settings go through `confere_radio`: anything outside the limits of
+the factory setters (`0x01E44C68`) goes back to the default (v40, [changelog](changelog.md)).
 
 **DTMF** (the `#` key). The mode becomes 7 (`0x01E4CD06`), and the stock box opens at `0x01E4DA54`
 (on side A at y 28..68, on B at y 83..124); the digits are redrawn at `0x01E4A8D4`, from `0x14A3A`,
@@ -492,7 +504,9 @@ the voltage written over the 8th position, and the "ge" was lost.
 
 **The medium font.** The same 5×7 letter, with each stem column (4 or more lit dots) and each empty
 column 2 px wide and the others 1 px, and rows 2 and 6 2 px tall: 9 tall, the vertical stroke of 2x
-and the horizontal stroke of 1x, 1 px between letters. It lives in a separate `letra_media()`,
+and the horizontal stroke of 1x, 1 px between letters. A letter with no stem (S, Z, 2) gets the
+2 px in both end columns, otherwise it comes out thin (v40). The width of each column comes ready
+from `fonte.py`, one bit per column in `fonte_b_media`. It lives in a separate `letra_media()`,
 because next to `letra()` it made that function's frame grow, and `letra()` is at the end of the
 main screen's deepest path.
 

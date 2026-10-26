@@ -435,6 +435,14 @@ cala o `envia()` dela, em vez de repetir a lógica.
 | `0x01E45A82(rodando)`, o scan QT | desvio | `b_scanqt` | o título e o estado |
 | `0x01E4DA88`, `0x01E4A93C` (DTMF) | `envia()` trocado | `gancho_dtmf` | a caixa do DTMF, no lugar do cartão do lado em uso |
 | `0x01E55F40` (partida) | `envia()` trocado | `gancho_tensao` | o cartão da tensão |
+| `0x01E4CFE2`, a limpeza na entrada do espectro (v41) | chamada trocada | `gancho_espectro_limpa` | o fundo e a barra de cima |
+| `0x01E45D96`, `0x01E4AFC2`, `0x01E4B04C`, `0x01E4ADFE`, `0x01E4AB2A` (espectro) | rotina trocada inteira | `b_esp_freq`, `b_esp_digitos`, `b_esp_modo`, `b_esp_dbm`, `b_esp_eixo` | a frequência ou os dígitos, AM/FM, o dBm e as pontas |
+| as 5 janelas das fatias do gráfico e a linha do limite (`0x01E4D72E`) | chamada trocada | `gancho_fatia`, `gancho_limite` | o painel com a grade e a linha tracejada em âmbar |
+
+**Espectro** (v41). Mapa das rotinas e prova na [seção 11 da engenharia
+reversa](engenharia-reversa.md#11-espectro). A barra de cima, a pilha e o MO desenham a barra B
+também no modo 20, e o medidor, a que no espectro só a tecla MO chega, acende só a barra (a de
+fábrica o desenharia por cima do gráfico).
 
 **Menu.** O motor `0x01E489E0` monta o título em `0x15494` (26 B) e três linhas em `0x154AF`
 (27 B cada). Cada linha passa por `0x01E487BC(linha, texto, marcador)`, que põe na frente `02 10`
@@ -477,6 +485,10 @@ A troca de modulação passa pelo menu do próprio rádio: as tabelas `0x01E6116
 `0x01E6137C` (SSB), e o set do item Modulation é `0x01E3DE52`. Ele redesenha a tela de um VFO de
 fábrica e escreve "Radio Initialization / Please Wait..." antes de iniciar o chip
 (`0x01E3DDBA`); no SSB, o patch do chip receptor vai de `0x01E64D40` a `0x01E68B18` (`0x01E3DC42`).
+A troca de banda desliga o chip, espera 0,6 s (`0x01E3DBCC`) e mais duas vezes 1,5 s antes de
+ligá-lo; desde a v40 cada uma dessas duas é de 0,25 s. Na espera da tela B (entrada no rádio e
+troca de modulação) os ajustes guardados passam pela `confere_radio`: o que estiver fora dos
+limites dos setters de fábrica (`0x01E44C68`) volta ao padrão (v40, [histórico](historico.md)).
 
 **DTMF** (tecla `#`). O modo vira 7 (`0x01E4CD06`), e a caixa de fábrica abre em `0x01E4DA54` (no
 lado A em y 28..68, no B em y 83..124); os dígitos são redesenhados em `0x01E4A8D4`, os de
@@ -489,7 +501,9 @@ escrita sobre a 8ª posição, e o "ge" se perdia.
 
 **A fonte média.** A mesma letra 5×7, com cada coluna de haste (4 pontos acesos ou mais) e cada
 coluna vazia com 2 px e as outras com 1, e a 2ª e a 6ª linha com 2 px: 9 de altura, o traço
-vertical do 2x e o horizontal do 1x, 1 px entre letras. Fica numa `letra_media()` separada, porque
+vertical do 2x e o horizontal do 1x, 1 px entre letras. Letra sem haste (S, Z, 2) ganha os 2 px nas
+duas colunas das pontas, senão sai fina (v40). A largura de cada coluna vem pronta do `fonte.py`,
+um bit por coluna em `fonte_b_media`. Fica numa `letra_media()` separada, porque
 junto da `letra()` o quadro dela crescia, e ela está no fim do caminho mais fundo da tela principal.
 
 **Duas armadilhas que custaram versões:**

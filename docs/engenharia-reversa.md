@@ -453,6 +453,43 @@ byte de RAM nosso, e este firmware ainda não tem RAM comprovadamente livre.
   `escreve()` com a cor da letra no lugar do branco fixo (mapa em
   [mapa-da-tela.md](mapa-da-tela.md#10-texto-escreve-as-fontes-e-o-glifo)).
 
+**O desenho do espectro e o tema B (v41).** O firmware desenha o espectro em pedaços, cada um pela
+sua rotina e na sua janela:
+
+| Rotina | Janela de fábrica | Quem chama |
+|---|---|---|
+| limpeza `LIMPA(0)` (`0x01E3ACBA`) | faixa de cima `0x2965` (y 0..17) e o resto preto | entrada (`0x01E4CFE2`) |
+| frequência (`0x01E45D96`, `"%03d.%05d"` na fonte de 16) | 42..128 × 20..38 | entrada, fim da passada, achado, teclas 16 e 18, OK e #, e o fim da digitação no laço do sinal |
+| dígitos digitados (`0x01E4AFC2`, máscara `"---.-----"`) | a mesma | teclas 16 e 18 |
+| AM/FM (`0x01E4B04C(m)`, texto `0x01E5EBB4[m & 1]`) | 127..159 × 17..49 (33 desde a v34) | entrada e tecla 23 |
+| dBm (`0x01E4ADFE(v)`, `"%03ddBm"`) | 40..120 × 36..48 (112..160 desde a v26) | fim da passada, achado e cada volta parado num achado |
+| pontas (`0x01E4AB2A(início, fim)`) | 0..160 × 113..128: linha, marcas em x 14, 80 e 145, e as duas frequências | entrada, tecla 16, OK e # |
+| gráfico, no laço principal | 5 janelas de 32 × 64 em y 49..113, uma por volta, cheias de preto | `0x01E4D5DA`, `0x01E4D61E`, `0x01E4D662`, `0x01E4D6A6`, `0x01E4D6EA` |
+| barras (`0x01E4AAA8`) e a linha do limite (`0x07E0`) | x relativo à fatia, topo = 64 − altura | o `gancho_coluna` e `0x01E4D72E` |
+
+Na v41 as cinco rotinas da frequência, dos dígitos, do AM/FM, do dBm e das pontas são trocadas
+inteiras por um `goto` na entrada (`ESPECTRO_B_FUNCOES` no `montar.py`). A limpeza da entrada, as
+cinco janelas das fatias e a linha do limite viram chamadas trocadas (`ESPECTRO_B_CHAMADAS`). Os
+destinos ficam no `tela.o`, e os ganchos do `.vozes` (rótulos, pico, janela nova e barras) só
+chamam as peças de lá. Cada peça abre a sua janela e só desenha o que é dela: o pico e o dBm mudam
+em momentos diferentes, e não há RAM onde guardar um para redesenhar junto com o outro. A prova:
+
+- **Os sítios novos só são alcançados pelas portas do modo 20.** O fecho para trás (`so_por.py`)
+  de cada um para no caso 20 do `tbh` dos modos, no caso 36 das ações de tecla ou na queda do laço
+  principal.
+- **O sítio do laço do sinal** (`0x01E46E5C`) tem uma porta própria, o `if (r0 == 20)` de
+  `0x01E46B8E`, que lê `b[r6 + r9]`. A rotina vai de `0x01E4622A` a `0x01E48336`, e nada de fora
+  desvia para o meio dela. No grafo da rotina, montado com as tabelas dos `tbb`/`tbh`, todo caminho
+  da entrada até ali passa por `r9 = 3261` (`0x01E46544`) e por `r6 = 83584` (`0x01E46268`). O
+  `r9` não é escrito em outro lugar, e do `r6 += 3264` de `0x01E4726E` não se volta ali sem passar
+  de novo pelo `r6 = 83584`.
+- **As cinco rotinas só são chamadas desses sítios** (as chamadas de 4 bytes, varridas no `app.bin`
+  inteiro, e as de 2 bytes do dBm, no desmontado). Nenhuma constante de 32 bits aponta para elas,
+  nenhum desvio cai no meio delas e elas só desenham: janela, texto num buffer local, `envia()`.
+
+Os quatro imediatos que a v26 e a v34 mudavam dentro do dBm e do AM/FM saíram, porque as rotinas
+inteiras não rodam mais.
+
 ## 12. Roger
 
 O item ROGER do menu (índice 20 de fábrica) guarda o valor em **`b[0x14B83]`** (offset `0x17` do

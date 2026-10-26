@@ -457,6 +457,45 @@ byte of RAM of our own, and this firmware has no proven-free RAM yet.
   `escreve()` with the letter color instead of the fixed white (map in
   [screen-map.md](screen-map.md#10-text-escreve-the-fonts-and-the-glyph)).
 
+**How the spectrum is drawn, and theme B (v41).** The firmware draws the spectrum in pieces, each
+by its own routine and in its own window:
+
+| Routine | Factory window | Called by |
+|---|---|---|
+| clear `LIMPA(0)` (`0x01E3ACBA`) | top band `0x2965` (y 0..17) and the rest black | entry (`0x01E4CFE2`) |
+| frequency (`0x01E45D96`, `"%03d.%05d"` in the 16 px font) | 42..128 × 20..38 | entry, end of sweep, find, keys 16 and 18, OK and #, and the end of typing in the signal loop |
+| typed digits (`0x01E4AFC2`, mask `"---.-----"`) | the same | keys 16 and 18 |
+| AM/FM (`0x01E4B04C(m)`, text `0x01E5EBB4[m & 1]`) | 127..159 × 17..49 (33 since v34) | entry and key 23 |
+| dBm (`0x01E4ADFE(v)`, `"%03ddBm"`) | 40..120 × 36..48 (112..160 since v26) | end of sweep, find and every pass while stopped on a find |
+| ends (`0x01E4AB2A(start, end)`) | 0..160 × 113..128: line, marks at x 14, 80 and 145, and the two frequencies | entry, key 16, OK and # |
+| graph, in the main loop | 5 windows of 32 × 64 at y 49..113, one per pass, filled black | `0x01E4D5DA`, `0x01E4D61E`, `0x01E4D662`, `0x01E4D6A6`, `0x01E4D6EA` |
+| bars (`0x01E4AAA8`) and the threshold line (`0x07E0`) | x relative to the slice, top = 64 − height | `gancho_coluna` and `0x01E4D72E` |
+
+In v41 the five routines for the frequency, the digits, AM/FM, the dBm and the ends are replaced
+whole by a `goto` at the entry (`ESPECTRO_B_FUNCOES` in `montar.py`). The clear at the entry, the
+five slice windows and the threshold line become replaced calls (`ESPECTRO_B_CHAMADAS`). The
+targets live in `tela.o`, and the `.vozes` hooks (labels, peak, new window and bars) only call the
+pieces there. Each piece opens its own window and draws only what belongs to it: the peak and the
+dBm change at different moments, and there is no RAM to keep one in order to redraw it along with
+the other. The proof:
+
+- **The new sites are reached only through the mode 20 doors.** The backward closure
+  (`so_por.py`) of each one stops at case 20 of the modes `tbh`, at case 36 of the key actions or
+  at the fall-through of the main loop.
+- **The signal loop site** (`0x01E46E5C`) has a door of its own, the `if (r0 == 20)` at
+  `0x01E46B8E`, which reads `b[r6 + r9]`. The routine runs from `0x01E4622A` to `0x01E48336`, and
+  nothing outside jumps into its middle. In the routine's graph, built with the `tbb`/`tbh` tables,
+  every path from the entry to that point goes through `r9 = 3261` (`0x01E46544`) and
+  `r6 = 83584` (`0x01E46268`). `r9` is written nowhere else, and from the `r6 += 3264` at
+  `0x01E4726E` there is no way back there without passing `r6 = 83584` again.
+- **The five routines are called only from those sites** (the 4-byte calls, scanned across the
+  whole `app.bin`, and the 2-byte ones of the dBm, in the disassembly). No 32-bit constant points
+  at them, no branch lands in their middle, and they only draw: window, text in a local buffer,
+  `envia()`.
+
+The four immediates that v26 and v34 changed inside the dBm and AM/FM routines are gone, because
+the whole routines no longer run.
+
 ## 12. Roger
 
 The ROGER menu entry (stock index 20) keeps its value at **`b[0x14B83]`** (offset `0x17` of the

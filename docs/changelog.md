@@ -5,7 +5,75 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
-## v39 — Oct 26 — the name editor in screen B, amber and red TX 🧪 **in test**
+## v41 — Oct 26 — the spectrum in theme B ✅
+
+Tested on the radio: "it turned out excellent". It is the last screen the new theme was missing.
+
+- **The same layout as the factory screen, in theme B.** Below the top bar:
+  - line 1 has the number of points in a tag, the frequency being swept (large, with the last two
+    digits small) and AM or FM;
+  - line 2 has the step in a tag, the peak frequency of the sweep in green with a ▲, and the dBm
+    (the number in white, the unit in grey);
+  - the graph (160 × 64) sits on a dark green panel with lines at every quarter: green bars with a
+    light top, the column being measured in white and the threshold line dashed in amber;
+  - at the bottom, the two ends of the window, the baseline and marks at the start, middle and end.
+- **Each piece through the factory routine that draws it.** The five drawing routines of the
+  spectrum are replaced whole, with a `goto` at the entry: the frequency (`0x01E45D96`), the typed
+  digits (`0x01E4AFC2`), AM/FM (`0x01E4B04C`), the dBm (`0x01E4ADFE`) and the ends (`0x01E4AB2A`).
+  The clear at the entry (`0x01E4CFE2`), the window of each of the 5 graph slices and the threshold
+  line (`0x01E4D72E`) become calls into screen B. The hooks that were already ours (labels, peak,
+  bars) now draw in theme B.
+- **Proven in the disassembly** that only mode 20 reaches those sites, that the five routines are
+  called only from them, that no constant points at them and that nothing jumps into their middle.
+  It is all in [section 11 of the reverse engineering notes](reverse-engineering.md#11-spectrum).
+- **The theme B top bar in the spectrum too.** With the MO key in the spectrum, the factory routine
+  would draw the meter over the graph; in screen B only the bar lights up.
+- **`.vozes` went from 996 to 674 bytes**, because the drawing moved to `tela.o`. Gone are the four
+  immediates that v26 and v34 changed inside the dBm and AM/FM routines, and the `4f` check of the
+  format and of the 12 px font, which the peak no longer uses.
+- **A stack trap.** The first build went 4 bytes over the factory maximum. `janela_b()` was always
+  called with the background colour, and the compiler had dropped that argument. Called by the
+  slice with another colour, the argument went back on the stack and the frame of `desenha()` grew
+  8 bytes. The slice now calls the factory `JANELA()` directly, and the stack is back to the
+  factory one at all three roots.
+- **The preview calls the hooks themselves**, in the order the firmware calls them (scenario 32),
+  and the image has to come out the same as the composed screen (30).
+
+## v40 — Oct 26 — radio settings checked and a faster modulation switch ✔️ tested
+
+Tested on the radio: "everything worked".
+
+- **The freeze when switching to USB/LSB depended on what was saved in the radio, not on the
+  code.** v36, v38 and v39 froze, and v25 and v34 did not. Every diagnostic build worked: builds
+  with only part of the hooks, chosen by the `BJ8300_DIAG_GANCHOS` variable of `montar.py`. Then
+  v39 itself, flashed again, also worked. Using SSB under v25 had rewritten the settings, and the
+  value that froze it was never proven.
+- **The radio settings go through a check** (`confere_radio`, in `telas.c`) on entering the radio
+  and on every modulation switch, before the chip gets the values. Anything outside the limits the
+  menus themselves accept (`0x01E44C68`) goes back to the default:
+  - band, AM band and memory mode;
+  - the memory index of FM, AM and SSB;
+  - the AM and SSB steps and both LNAs;
+  - the VFO BFO and, in each of the 15 SSB memories, the bandwidth and the BFO;
+  - the copies the chip receives.
+
+  A valid value does not change. The `4p` check of `conferir.py` rebuilds the new addresses from the
+  factory bytes. Its `deslocamento()` read the destination register together with the offset, and
+  was fixed.
+- **The modulation switch got ~2.5 s faster.** The radio band switch (`0x01E3DDBA`) powers the chip
+  down, waits 0.6 s and waits twice more for 1.5 s before powering it up. Each of the two became
+  0.25 s (`ESPERA_2MS(750)` became 125, on both paths), checked by `4q`. On SSB, the rest of the
+  wait is the I2C upload of the chip patch.
+- **The S of the medium font.** Letters without a vertical stem (S, Z, 2) came out thin and
+  narrower than the others. Now their two end columns are 2 px wide. The width of each column comes
+  ready from `fonte.py` (`fonte_b_media`); the first version, which counted the dots for every
+  letter, went 4 bytes over the stack.
+- **The MEMCH item of the radio menu** (FM, AM and SSB) saves: OK stores the current frequency in
+  the chosen number (on SSB, also the bandwidth and the BFO), and "CH-xx" marks a number in use. It
+  does not change the tuning. Memories are recalled in memory mode (the key with code 31,
+  `0x01E4C8CA`), and station names only come from the PC.
+
+## v39 — Oct 26 — the name editor in screen B, amber and red TX ✔️ tested
 
 What the v38 test showed, fixed. Since v38 the `VERSION` menu shows `Firmware: V2.0T`, as the
 owner asked.
@@ -26,8 +94,9 @@ owner asked.
   ELF symbol table) and inside the detours. The `.rodata` of `tela.o` is interleaved with the code,
   and the string of the `abc` icons showed up as a `goto` outside.
 
-**Still open:** the radio freezes when switching the modulation from AM or FM to USB or LSB, and
-it has to be turned off. What was ruled out is under v38.
+In the first test the radio froze when switching the modulation from AM or FM to USB or LSB.
+Flashed again, after the diagnostics, it worked: the freeze depended on what was saved in the radio
+(see v40).
 
 ## v38 — Oct 26 — what v37 showed ✔️ tested, with defects
 

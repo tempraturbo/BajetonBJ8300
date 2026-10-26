@@ -168,7 +168,8 @@ funcoes = {a: n for n, a in montar.le_simbolos(os.path.join(
 sitios_vozes = ({montar.ESPECTRO_EM} | {s for s, _, _, _ in montar.ESPECTRO_CHAMADAS}
                 | {e for e, _, _, _ in montar.ESPECTRO_FUNCOES})
 sitios_livre = ({s for s, _ in montar.REALCE_SITIOS_GANCHO} | {s for s, _ in montar.LIMPA_SITIOS} | {s_ for s_, _, _ in montar.ENVIA_SITIOS}
-               | {e for e, _, _, _, _ in montar.TELA_DESVIOS})
+               | {e for e, _, _, _, _ in montar.TELA_DESVIOS} | {s for s, _, _, _ in montar.ESPECTRO_B_CHAMADAS}
+               | {e for e, _, _, _ in montar.ESPECTRO_B_FUNCOES})
 imagens = []
 for e in entradas:
     if e['type'] in jlfw.FLASH_TYPES:
@@ -508,34 +509,23 @@ if montar.ESPECTRO_TECLAS:
         print(f'4h. espectro {entrada:#x} trocada por {nova} ({oque}): ' + ('ok' if ok else 'FALHOU'))
         if not ok:
             erros.append(f'rotina do espectro mal trocada em {entrada:#x}')
-    # O dBm na direita da segunda linha: os tres imediatos, de fabrica e novos.
-    for endereco, reg, antes, depois, oque in montar.DBM_IMEDIATOS:
-        o = endereco - montar.BASE_APP
-        ok = (bytes(app_velho[o:o + 2]) == montar.monta_imm8(reg, antes)
-              and bytes(app[o:o + 2]) == montar.monta_imm8(reg, depois))
-        print(f'4h. dBm do espectro {endereco:#x}: {oque} {antes} -> {depois}: ' + ('ok' if ok else 'FALHOU'))
+    # v41, o espectro na tela B: as chamadas e as rotinas trocadas que vao para o .livre.
+    for sitio, era, gancho, oque in montar.ESPECTRO_B_CHAMADAS:
+        o = sitio - montar.BASE_APP
+        ok = (bytes(app_velho[o:o + 4]) == montar.monta_call(sitio, era)
+              and bytes(app[o:o + 4]) == montar.monta_call(sitio, montar.S[gancho]))
+        print(f'4h. espectro B {sitio:#x}: {era:#x} -> {gancho} ({oque}): ' + ('ok' if ok else 'FALHOU'))
         if not ok:
-            erros.append(f'dBm do espectro errado em {endereco:#x}')
-    previsto += [(e, e + 1, 'dBm do espectro') for e, _, _, _, _ in montar.DBM_IMEDIATOS]
-    # O formato que o pico empresta e o que a MOSTRA_FREQ carrega (0x01E45DB2), com o texto esperado.
-    formato = int(re.search(r'#define\s+FORMATO_FREQ\s+\(\(const char \*\)(0x[0-9A-Fa-f]+)\)', fonte).group(1), 16)
-    o = formato - montar.BASE_APP
-    ok = formato == imediato(0x01E45DB2) and bytes(app_velho[o:o + 10]) == b'%03d.%05d\0'
-    print(f'4f. FORMATO_FREQ = {formato:#x}, a MOSTRA_FREQ usa {imediato(0x01E45DB2):#x}, '
-          f'texto {bytes(app_velho[o:o + 10])!r}: ' + ('ok' if ok else 'FALHOU'))
-    if not ok:
-        erros.append('FORMATO_FREQ nao e o formato da MOSTRA_FREQ')
-    # O texto em cor (o pico) repete o caminho ASCII de 12 do ESCREVE de fabrica: a fonte e o
-    # "r1 = 551872" de 0x01E3B9EA, somado a codigo x 12 ("r0 = r1 * 0xC" em 0x01E3B9E6), e o GLIFO e o
-    # destino da chamada que desenha a letra, em 0x01E3BA16.
-    fonte12 = int(re.search(r'#define\s+FONTE_12\s+(0x[0-9A-Fa-f]+)u', fonte).group(1), 16)
-    o_mul, o_glifo = 0x01E3B9E6 - montar.BASE_APP, 0x01E3BA16 - montar.BASE_APP
-    ok = (fonte12 == imediato(0x01E3B9EA) and bytes(app_velho[o_mul:o_mul + 4]) == bytes.fromhex('e0e10c10')
-          and bytes(app_velho[o_glifo:o_glifo + 4]) == montar.monta_call(0x01E3BA16, declaradas_por_nome('GLIFO')))
-    print(f"4f. FONTE_12 = {fonte12:#x} (12 B por codigo) e GLIFO = {declaradas_por_nome('GLIFO'):#x}, os do "
-          'ESCREVE de 12 (0x01E3B9EA, 0x01E3B9E6, 0x01E3BA16): ' + ('ok' if ok else 'FALHOU'))
-    if not ok:
-        erros.append('FONTE_12 ou GLIFO nao sao os do ESCREVE de fabrica')
+            erros.append(f'chamada do espectro B errada em {sitio:#x}')
+    for entrada, antes, nova, oque in montar.ESPECTRO_B_FUNCOES:
+        o = entrada - montar.BASE_APP
+        ok = (bytes(app_velho[o:o + 4]) == antes
+              and bytes(app[o:o + 4]) == montar.monta_goto(entrada, montar.S[nova]))
+        print(f'4h. espectro B {entrada:#x} trocada por {nova} ({oque}): ' + ('ok' if ok else 'FALHOU'))
+        if not ok:
+            erros.append(f'rotina do espectro B mal trocada em {entrada:#x}')
+    previsto += [(s, s + 3, 'espectro B') for s, _, _, _ in montar.ESPECTRO_B_CHAMADAS]
+    previsto += [(e, e + 3, 'espectro B') for e, _, _, _ in montar.ESPECTRO_B_FUNCOES]
     previsto += [(s, s + 3, 'espectro') for s, _, _, _ in montar.ESPECTRO_CHAMADAS]
     previsto += [(e, e + 3, 'espectro') for e, _, _, _ in montar.ESPECTRO_FUNCOES]
     # Os enderecos que os ganchos do espectro usam, tirados das instrucoes do firmware que os usam
@@ -702,6 +692,16 @@ previsto_tela = [(e, e + 3, 'tela B') for e, _, _, _, _ in montar.TELA_DESVIOS]
 previsto_tela += [(s_, s_ + 3, o_) for s_, _, o_ in montar.ENVIA_SITIOS]
 previsto_tela += [(s_, s_ + 3, o_) for s_, o_ in montar.NOP_SITIOS]
 
+# 4q. as esperas da troca de banda do radio (v40): os 4 "r0 = 750" de fabrica viram "r0 = 125".
+ok = all(bytes(app_velho[e - montar.BASE_APP:e - montar.BASE_APP + 4]) == montar.ESPERA_ANTES
+         and bytes(app[e - montar.BASE_APP:e - montar.BASE_APP + 4]) == montar.ESPERA_NOVA
+         for e in montar.ESPERAS_RADIO)
+print(f'4q. as {len(montar.ESPERAS_RADIO)} esperas da troca de banda do radio: de 1,5 s para 0,25 s: '
+      + ('ok' if ok else 'FALHOU'))
+if not ok:
+    erros.append('esperas da troca de banda do radio erradas')
+previsto_tela += [(e, e + 3, 'espera da troca de banda') for e in montar.ESPERAS_RADIO]
+
 # 4n. o codigo novo nao tem dados em RAM (.data, .bss): nao ha RAM nossa, e o bancos.ld so poe codigo e
 # tabelas na flash. Uma variavel global sem const viraria uma dessas secoes e cairia num lugar qualquer.
 elf_bytes = open(os.path.splitext(codigo)[0] + '.elf', 'rb').read()
@@ -793,11 +793,11 @@ if not ok:
 
 
 def deslocamento(endereco):
-    """O deslocamento de um "rX = b[rY+imm]" (50 ee + 2 bytes: rY no nibble alto do 3o byte, o
-    deslocamento no 4o e no nibble baixo do 3o) do firmware de fabrica."""
+    """O deslocamento de um "rX = b[rY+imm]" (50 ee + 2 bytes: rY no nibble alto do 3o byte, rX no do
+    4o, e o deslocamento nos dois nibbles baixos, o do 4o em cima) do firmware de fabrica."""
     o = endereco - montar.BASE_APP
     assert app_velho[o:o + 2] == b'\x50\xee', hex(endereco)
-    return app_velho[o + 3] << 4 | app_velho[o + 2] & 0x0F
+    return (app_velho[o + 3] & 0x0F) << 4 | app_velho[o + 2] & 0x0F
 
 
 # 4p. os enderecos de RAM do radio (e do editor de nome) no telas.c (v38; na v37 seis sairam errados, lidos sem o indice
@@ -820,6 +820,14 @@ radio_ram = [
     ('RADIO_ITEM', imediato(0x01E49344) + (imediato16(0x01E49340) << 2)),
     ('DIGITA_MODO', imediato(0x01E49094) + imediato16(0x01E4909C)),
     ('EDITOR_MODO', imediato(0x01E48728) + imediato16(0x01E48724)),
+    # v40, a conferencia dos ajustes do radio
+    ('RADIO_MEM_FM', imediato(0x01E49186) + deslocamento(0x01E4923A)),
+    ('RADIO_MEM_AM', imediato(0x01E49186) + deslocamento(0x01E491A8)),
+    ('RADIO_MEM_SSB', imediato(0x01E49186) + deslocamento(0x01E491C8)),
+    ('RADIO_LNA_AM', imediato(0x01E3DA1E) + deslocamento(0x01E3DA6A)),
+    ('RADIO_LNA_SSB', imediato(0x01E3DCC8) + deslocamento(0x01E3DCCE)),
+    # "r3 = r1 + 68" (0x01E3DB42) e "r3 = h[r3+4]" (0x01E3DB4E): o BFO do VFO e o LNA do AM + 4
+    ('RADIO_BFO_VFO', imediato(0x01E3DA1E) + deslocamento(0x01E3DA6A) + 4),
 ]
 errados = [f'{n} {define(n):#x} (o firmware le {a:#x})' for n, a in radio_ram if define(n) != a]
 print(f'4p. {len(radio_ram)} enderecos de RAM do radio refeitos dos bytes de fabrica: '

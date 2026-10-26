@@ -256,6 +256,18 @@ int main(int argc, char **argv)
         telas_b(1, 0);
         grava("11-menu-titulo-longo");
 
+        /* o item de memoria do menu do radio (0x01E3D20E): S, Z e 2 da fonte media sem haste (v40) */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "SSBMEMCH");
+        memoria[0x14BFA] = 0;
+        LINHA(0, 1, "CH-01");
+        LINHA(1, 2, "02");
+        LINHA(2, 1, "03");
+        memoria[0x14C10] = 1;
+        telas_b(1, 0);
+        grava("29-menu-ssbmemch");
+
         /* o BANK (bancos.c, bank_exibe): o banco ligado vem com o byte 0x01 no fim */
         BASE_TELAS();
         memoria[0x1533D] = 1;
@@ -380,6 +392,69 @@ int main(int argc, char **argv)
         memoria[0x1533D] = 2;
         telas_b(TELA_INICIO_RADIO, 0);
         grava("17-radio-iniciando");
+
+        /* o espectro (modo 20): 160 pontos de 6,25 kHz em 145 MHz, um sinal forte que passou do
+         * limite e um fraco, o ruido embaixo, a coluna 95 sendo medida */
+        {
+            static struct espectro_previa p;
+            unsigned c;
+
+            p.inicio = 14500000;
+            p.fim = 14500000 + 159 * 625;
+            p.atual = 95;
+            p.freq = p.inicio + p.atual * 625;
+            p.pico = p.inicio + 70 * 625;
+            p.dbm = -71;
+            p.limite = 40;
+            for (c = 0; c < 160; c++) {
+                int d1 = (int)c - 70, d2 = (int)c - 124, h = 3 + (c * 7 + c / 3) % 5;
+
+                h += d1 * d1 < 36 ? 50 - d1 * d1 : 0;
+                h += d2 * d2 < 16 ? 22 - 3 * (d2 < 0 ? -d2 : d2) : 0;
+                p.alturas[c] = h > 64 ? 64 : h;
+            }
+            BASE_TELAS();
+            memoria[0x1533D] = 20;
+            espectro_b(&p);
+            grava("30-espectro");
+
+            /* o mesmo pelos ganchos, na ordem em que o firmware os chama: a entrada (a limpeza e
+             * os pedacos de cima e de baixo), as 5 fatias do grafico (janela, cada coluna com x
+             * relativo e o topo de fabrica, a linha do limite) e, no fim da passada, o dBm e o pico.
+             * Tem de sair igual ao 30. */
+            {
+                unsigned k, i;
+
+                BASE_TELAS();
+                memoria[0x1533D] = 20;
+                telas_b(20, 0);
+                b_esp_freq(p.freq);
+                b_esp_rotulos(p.pontos, p.passo);
+                b_esp_modo(p.modo);
+                b_esp_eixo(p.inicio, p.fim);
+                for (k = 0; k < 5; k++) {
+                    gancho_fatia(k * 32, k * 32 + 32, 49, 113);
+                    for (i = 0; i < 32; i++)
+                        b_esp_coluna(i, 64 - p.alturas[k * 32 + i], k * 32 + i == p.atual);
+                    gancho_limite(0, 31, 64 - p.limite, 64 - p.limite);
+                    ENVIA();
+                }
+                b_esp_dbm(p.dbm);
+                b_esp_pico(p.pico);
+                grava("32-espectro-pelos-ganchos");
+            }
+
+            BASE_TELAS();
+            memoria[0x1533D] = 20;
+            strcpy((char *)&memoria[0x14A3A], "1452");
+            memoria[0x14A35] = 4;
+            p.digitando = 1;
+            p.pontos = 2;
+            p.passo = 5;
+            p.modo = 1;
+            espectro_b(&p);
+            grava("31-espectro-digitando-am");
+        }
 
         /* o DTMF (modo 7) sobre o lado em evidencia, A e depois B */
         limpa();

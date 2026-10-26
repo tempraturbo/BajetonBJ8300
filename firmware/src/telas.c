@@ -415,6 +415,74 @@ SEPARADA static void radio_cena(unsigned item, unsigned mostra)
         }
 }
 
+/* ---------- os ajustes do radio, antes de o chip iniciar (v40) ----------
+ * O firmware manda ao chip a largura, o BFO e o LNA guardados na memoria do radio sem conferir - so a
+ * frequencia do SSB e corrigida (0x01E3DB74) -, e um BW fora de 0..5 o faz ler alem da tabela de
+ * filtros (0x01E3D916). Um estado assim travou o radio na entrada em SSB ate a v39 (o valor exato nao
+ * ficou provado: o uso em SSB na v25 regravou tudo antes que desse para ler). Aqui cada um volta ao
+ * padrao quando sai dos limites que os setters de fabrica usam (0x01E44C68: passo do AM ate 3 e do SSB
+ * ate 5, BW ate 5, LNA ate 36, BFO de -32760 a 27240), e cada indice de memoria volta a 0 fora das 15
+ * (o maximo do item MEMCH). Valor valido nao muda. */
+#define RADIO_MEM_FM     RAM(u8, 0x000129F8)    /* b[0x129D8 + 32], 0x01E4923A: a memoria do FM */
+#define RADIO_MEM_AM     RAM(u8, 0x00012A1A)    /* b[0x129D8 + 66], 0x01E491A8 */
+#define RADIO_LNA_AM     RAM(u8, 0x00012A1C)    /* b[0x129D8 + 68], 0x01E3DA6A */
+#define RADIO_BFO_VFO    RAM(u16, 0x00012A20)   /* h[0x129D8 + 68 + 4], 0x01E3DB42/0x01E3DB4E: o do VFO no SSB */
+#define RADIO_SSB_MEMS   0x00012A22u            /* 0x129D8 + 74 (0x01E3DB12): 15 de 5 B, freq (2), BW, BFO (2) */
+#define RADIO_MEM_SSB    RAM(u8, 0x00012A6D)    /* b[0x129D8 + 149], 0x01E491C8 */
+#define RADIO_LNA_SSB    RAM(u8, 0x00012A70)    /* b[0x129D8 + 152], 0x01E3DCCE */
+#define MEMORIAS_RADIO   15
+
+#ifndef PREVIA
+/* O BFO que o setter de fabrica aceita: (u16)(v + 0x7FF8) <= 60000 (0x01E44ED6). */
+static unsigned bfo_vale(unsigned v)
+{
+    return (u16)(v + 0x7FF8) <= 60000;
+}
+
+static void confere_radio(void)
+{
+    unsigned i;
+
+    if (RADIO_BANDA > 4)
+        RADIO_BANDA = 0;
+    if (RADIO_FAIXA_AM > 3)
+        RADIO_FAIXA_AM = 0;
+    if (RADIO_MEMORIAS > 1)
+        RADIO_MEMORIAS = 0;
+    if (RADIO_MEM_FM >= MEMORIAS_RADIO)
+        RADIO_MEM_FM = 0;
+    if (RADIO_MEM_AM >= MEMORIAS_RADIO)
+        RADIO_MEM_AM = 0;
+    if (RADIO_MEM_SSB >= MEMORIAS_RADIO)
+        RADIO_MEM_SSB = 0;
+    if (RADIO_PASSO_AM > 3)
+        RADIO_PASSO_AM = 0;
+    if (RADIO_PASSO_SSB > 5)
+        RADIO_PASSO_SSB = 0;
+    if (RADIO_LNA_AM > 36)
+        RADIO_LNA_AM = 0;
+    if (RADIO_LNA_SSB > 36)
+        RADIO_LNA_SSB = 0;
+    if (!bfo_vale(RADIO_BFO_VFO))
+        RADIO_BFO_VFO = 0;
+    for (i = 0; i < MEMORIAS_RADIO; i++) {
+        u32 m = RADIO_SSB_MEMS + i * 5;
+
+        if (RAM(u8, m + 2) > 5)
+            RAM(u8, m + 2) = 4;                 /* a largura do VFO no SSB (0x01E3DB62) */
+        if (!bfo_vale(RAM(u8, m + 3) | RAM(u8, m + 4) << 8))
+            RAM(u8, m + 3) = RAM(u8, m + 4) = 0;
+    }
+    /* e as copias que o chip vai receber, que a entrada e a troca de modulacao ja encheram */
+    if (RADIO_LARGURA > 5)
+        RADIO_LARGURA = 4;
+    if (RADIO_LNA > 36)
+        RADIO_LNA = 0;
+    if (!bfo_vale(RADIO_BFO))
+        RADIO_BFO = 0;
+}
+#endif
+
 /* A espera da partida do radio (0x01E4A780) e da troca de modulacao (0x01E3DE52): no lugar de
  * "Radio Initialization / Please Wait...". */
 SEPARADA static void radio_inicio_cena(void)
@@ -461,8 +529,9 @@ static void cena_telas(const struct telas *t)
         radio_cena(t->item, t->variante);
     else if (t->modo == 17)
         scanqt_cena(t->variante);
-    else
+    else if (t->modo == TELA_INICIO_RADIO)
         radio_inicio_cena();
+    /* no espectro (20) so a barra: cada pedaco vem depois, pela rotina dele */
 }
 
 /* As linhas [y0, y1) da tela, em janelas de ate 32 linhas. */
@@ -512,7 +581,168 @@ SEPARADA static void tensao_cena(unsigned decimos)
     texto(80 - largura(s, 3) / 2, 66, s, 3, COR_BRANCO);
 }
 
+/* ---------- o espectro (modo 20, v41) ----------
+ * O firmware desenha o espectro em pedacos, cada um pela sua rotina e na sua janela (secao 11 de
+ * docs/engenharia-reversa.md). A tela B troca cada pedaco pelo seu, na mesma ordem dos de fabrica:
+ *   y  16..35   a quantidade de pontos, a frequencia (ou o que se digita) e AM/FM;
+ *   y  35..49   o passo, a frequencia do pico da passada e o dBm;
+ *   y  49..113  o grafico, 160 x 64, que o laco de fabrica redesenha em 5 fatias de 32 colunas;
+ *   y 113..128  as pontas da janela.
+ * Cada pedaco so desenha o que e dele, numa janela so dele: o pico e o dBm, por exemplo, mudam em
+ * momentos diferentes, e nao ha RAM onde guardar um para redesenhar junto com o outro. */
+#define ESP_L1       ALTURA_ESTADO
+#define ESP_L2       35
+#define ESP_GRAFICO  49
+#define ESP_EIXO     113
+#define ESP_X_FREQ   34                    /* [0, 34) pontos, [34, 134) frequencia, [134, 160) AM/FM */
+#define ESP_X_MODO   134
+#define ESP_X_PICO   44                    /* [0, 44) passo, [44, 114) pico, [114, 160) dBm */
+#define ESP_X_DBM    114
+#define COR_PAINEL   COR_CARTAO
+
+/* A frequencia (em 10 Hz) grande, com os dois ultimos digitos pequenos; digitando, a mascara de
+ * fabrica (0x01E4AFC2: "---.-----") com os digitos por cima, na ordem. */
+static void esp_freq(u32 f, unsigned digitando)
+{
+    char s[12], d[8], pequeno[3];
+    unsigned i, x;
+
+    if (digitando) {
+        for (i = 0; i < DIGITADOS && i < sizeof d - 1; i++)
+            d[i] = RAM(u8, DIGITOS + i);
+        d[i] = 0;
+        digitados(s, "---.-----", d);
+    } else {
+        frequencia(s, f, 5);
+    }
+    pequeno[0] = s[7];
+    pequeno[1] = s[8];
+    pequeno[2] = s[7] = 0;
+    x = texto(ESP_X_FREQ + 4, ESP_L1 + 3, s, 2, COR_BRANCO) + 1;
+    texto(x, ESP_L1 + 10, pequeno, 1, COR_CINZA);
+}
+
+static void esp_pontos(unsigned n)
+{
+    static const char rotulos[6][5] = {"X160", "X80", "X40", "X20", "X640", "X320"};
+
+    etiqueta(3, ESP_L1 + 4, rotulos[n < 6 ? n : 0], COR_CHIP_CANAL, COR_TEXTO, 0);
+}
+
+/* A modulacao do espectro ([0x6ED4]): a de fabrica (0x01E4B04C) escolhe o texto por m & 1, "FM" ou
+ * "AM" (a tabela 0x01E5EBB4 tem so os dois). */
+static void esp_modo(unsigned m)
+{
+    etiqueta(157, ESP_L1 + 4, m & 1 ? "AM" : "FM", COR_CHIP_RX, COR_TEXTO_RX, 1);
+}
+
+static void esp_passo(unsigned p)
+{
+    static const char rotulos[6][6] = {"6.25K", "8.33K", "12.5K", "20.0K", "25.0K", "10.0K"};
+
+    etiqueta(3, ESP_L2 + 2, rotulos[p < 6 ? p : 0], COR_CHIP_CANAL, COR_TEXTO, 0);
+}
+
+static void esp_pico(u32 f)
+{
+    char s[12];
+    unsigned x = texto(ESP_X_PICO + 3, ESP_L2 + 4, ICONE_PICO, 1, COR_VERDE) + 2;
+
+    frequencia(s, f, 5);
+    texto(x, ESP_L2 + 4, s, 1, COR_VERDE);
+}
+
+/* O dBm do firmware ("%03ddBm"): o numero em branco e a unidade em cinza, encostados a direita. */
+static void esp_dbm(int v)
+{
+    char s[8], *p = s;
+    unsigned x = 157 - largura("DBM", 1);
+
+    if (v < 0)
+        *p++ = '-';
+    numero(p, v < 0 ? -v : v, v < 0 ? 2 : 3);
+    texto(x, ESP_L2 + 4, "DBM", 1, COR_CINZA);
+    texto(x - 2 - largura(s, 1), ESP_L2 + 4, s, 1, COR_BRANCO);
+}
+
+/* As pontas da janela, embaixo do grafico, com a linha de base e as marcas do comeco, do meio e do
+ * fim (as tres de fabrica, x 14, 80 e 145, ficavam embaixo das pontas). */
+static void esp_eixo(u32 inicio, u32 fim)
+{
+    char s[12];
+
+    pinta(0, ESP_EIXO, 160, ESP_EIXO + 1, COR_LINHA);
+    pinta(0, ESP_EIXO + 1, 1, ESP_EIXO + 4, COR_LINHA);
+    pinta(79, ESP_EIXO + 1, 81, ESP_EIXO + 4, COR_LINHA);
+    pinta(159, ESP_EIXO + 1, 160, ESP_EIXO + 4, COR_LINHA);
+    frequencia(s, inicio, 5);
+    texto(2, ESP_EIXO + 6, s, 1, COR_CINZA);
+    frequencia(s, fim, 5);
+    texto(158 - largura(s, 1), ESP_EIXO + 6, s, 1, COR_CINZA);
+}
+
+/* O grafico, em coordenadas da tela, sobre o painel: as linhas de 1/4 em 1/4 de [x0, x1), uma coluna
+ * (altura 0..64; a que esta sendo medida em branco, as outras em verde com o topo claro) e a linha
+ * do limite em y, tracejada em ambar. */
+static void esp_grade(unsigned x0, unsigned x1)
+{
+    unsigned y;
+
+    for (y = ESP_GRAFICO + 16; y < ESP_GRAFICO + 64; y += 16)
+        pinta(x0, y, x1, y + 1, COR_CHIP_CANAL);
+}
+
+static void esp_coluna(unsigned x, unsigned altura, unsigned atual)
+{
+    unsigned topo = ESP_GRAFICO + 64 - altura;
+
+    if (!altura)
+        return;
+    pinta(x, topo, x + 1, ESP_GRAFICO + 64, atual ? COR_BRANCO : COR_SEG_VERDE);
+    if (!atual)
+        pinta(x, topo, x + 1, topo + 1, COR_TEXTO_RX);
+}
+
+static void esp_limite(unsigned x0, unsigned x1, unsigned y)
+{
+    for (x0 &= ~3u; x0 < x1; x0 += 4)
+        pinta(x0, y, x0 + 2, y + 1, COR_TEXTO_AMBAR);
+}
+
 #ifdef PREVIA
+/* O espectro inteiro, so na previa: no radio cada pedaco vem pela sua rotina. */
+struct espectro_previa {
+    u32 freq, pico, inicio, fim;
+    int dbm;
+    u8 pontos, passo, modo, digitando, atual, limite;
+    u8 alturas[160];
+};
+
+void espectro_b(const struct espectro_previa *p)
+{
+    struct estado e;
+    unsigned y, x;
+
+    le_estado(&e);
+    for (y = 0; y < 128; y += 32) {
+        janela_b(0, 160, y, y + 32, COR_FUNDO);
+        barra_estado(&e);
+        esp_pontos(p->pontos);
+        esp_freq(p->freq, p->digitando);
+        esp_modo(p->modo);
+        esp_passo(p->passo);
+        esp_pico(p->pico);
+        esp_dbm(p->dbm);
+        pinta(0, ESP_GRAFICO, 160, ESP_GRAFICO + 64, COR_PAINEL);
+        esp_grade(0, 160);
+        for (x = 0; x < 160; x++)
+            esp_coluna(x, p->alturas[x], x == p->atual);
+        esp_limite(0, 160, ESP_GRAFICO + 64 - p->limite);
+        esp_eixo(p->inicio, p->fim);
+        ENVIA();
+    }
+}
+
 /* A previa desenha a tela inteira de cada modo, lendo a RAM imitada. */
 void telas_b(unsigned modo, unsigned variante)
 {
