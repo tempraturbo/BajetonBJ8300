@@ -58,6 +58,26 @@ drawing code that goes into the radio.
 | 🔌 **Dedicated CHIRP driver** | Reads and writes the banks (**Banks** tab), their names, and the new roger and scramble, in a single cable session. It refuses to write to a radio with the stock firmware ([how to use](#-how-to-use-chirp-with-this-firmware)) |
 | 🧰 **Extended cable command** | Reads the whole data chip (24-bit address) and writes only to the banks area. It is what the CHIRP driver uses |
 
+### 🖥️ The new screen, screen by screen
+
+V2.0T replaces **every** screen of the stock firmware with a dark green theme, with coloured tags
+and a font of its own:
+
+| Screen | What changed |
+|---|---|
+| **Main** (both sides) | The highlighted side sits in a **green-bordered card**, with the name, the channel, the **big frequency** (the last two digits small) and a **20-segment meter** (green, yellow and red). The other side is compact, in a thin strip. Coloured tags: power (**H** red, **M** amber, **L** green), FM/AM, tone (CT/DCS), narrow band, offset, scramble and zone |
+| **Top bar** | Shows **only what is on**: RX and TX in a tag with a dot (green on RX, red on TX), dual watch (DW), VOX, MO, noise reduction (NR), DTMF ST, Bluetooth and the lock; the **voltage in volts** and the battery, which gets a red outline and blinks when low |
+| **Transmitting** | The big line switches to the transmit frequency, and the meter turns **red, filled by the power** |
+| **Typing** | The frequency is typed in its place, over the `---.---` mask; the channel, in the channel tag |
+| **DTMF** (`#` key) | An amber box in place of the card of the side in use, with the digits |
+| **Menus** | A medium font, easier to read; the item number in a green tag and the title in large type; three options, the one under the cursor in a card and the **saved value marked with a green dot**. Changing the value, the card gets the green border and the arrows, with no blinking. At the top, the highlighted side summed up |
+| **Name editor** (BANK NAME, CH-NAME) | The text in a card, in large type when it fits, with the amber cursor, how many characters out of how many and the mode (`abc`, `ABC`, `123`, switched with `#`) in an amber tag |
+| **Banks** (BANK, BANK CH) | The banks that are on, and the banks the channel is in, in **amber** |
+| **FM/AM/SSB radio** | A 9-step S meter, the band in a tag, the **big frequency** with its unit, the station name in a card (with no name, `NO STATION NAME` instead of `Unknow`), and **STEP, BW, LNA and BFO in four cards**, the one being changed in amber. `SEEK...` and the start-up wait (`RADIO STARTING...`) in the new theme too |
+| **Spectrum** | The running frequency in large type, points and step in tags, the **sweep peak in green** with the dBm, the graph on a panel with a grid, the measured column in white, the **threshold line dashed in amber** and the ends of the window at the bottom |
+| **QT scan** (EXIT held) | The title, what it searches for (CTCSS / DCS) and the state, RUNNING in a green card or STOP in amber |
+| **Power-on** | With the power-on message set to voltage, the voltage shows in a card, in volts |
+
 ### ⚡ Improvements
 
 | What | Detail |
@@ -73,6 +93,8 @@ drawing code that goes into the radio.
 | V0.12 problem | In V2.0T |
 |---|---|
 | During scan, the signal bar froze on the last channel found, and the channel number got out of step with the name | The screen follows every channel of the sweep |
+| At power-on with the voltage, the `   Voltage` text had the voltage written over it, and the "ge" was lost | `VOLTAGE` in full, with the voltage in a card |
+| On the radio, a station with no name showed as `Unknow` | `NO STATION NAME` |
 
 ### ➖ Removed
 

@@ -59,6 +59,26 @@ desenho que vai para o rádio.
 | 🔌 **Driver do CHIRP próprio** | Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, numa sessão só pelo cabo. Recusa gravar num rádio com firmware de fábrica ([como usar](#-como-usar-o-chirp-com-este-firmware)) |
 | 🧰 **Comando estendido no cabo** | Leitura do chip de dados inteiro (endereço de 24 bits) e gravação só na área dos bancos. É o que o driver do CHIRP usa |
 
+### 🖥️ A tela nova, tela por tela
+
+A V2.0T troca **todas** as telas do firmware de fábrica por um tema escuro em verde, com etiquetas
+coloridas e uma fonte própria:
+
+| Tela | O que mudou |
+|---|---|
+| **Principal** (os dois lados) | O lado em evidência fica num **cartão de borda verde**, com o nome, o canal, a **frequência grande** (os dois últimos dígitos pequenos) e um **medidor de 20 segmentos** (verde, amarelo e vermelho). O outro lado fica compacto, numa faixa fina. Etiquetas coloridas: potência (**H** vermelho, **M** âmbar, **L** verde), FM/AM, tom (CT/DCS), banda estreita, deslocamento, scramble e zona |
+| **Barra de cima** | Mostra **só o que está ligado**: RX e TX numa etiqueta com bolinha (verde no RX, vermelha no TX), dupla escuta (DW), VOX, MO, redução de ruído (NR), DTMF ST, Bluetooth e cadeado; a **tensão em volts** e a bateria, que fica com contorno vermelho e pisca quando está fraca |
+| **Transmitindo** | A linha grande passa para a frequência de transmissão, e o medidor fica **vermelho, cheio pela potência** |
+| **Digitando** | A frequência entra no lugar dela, sobre a máscara `---.---`; o canal, na etiqueta do canal |
+| **DTMF** (tecla `#`) | Uma caixa âmbar no lugar do cartão do lado em uso, com os dígitos |
+| **Menus** | Uma fonte média, mais legível; o número do item numa etiqueta verde e o título grande; três opções, a do cursor num cartão e o **valor gravado marcado com um ponto verde**. Mudando o valor, o cartão ganha a borda verde e as setas, sem piscar. Em cima, o lado em evidência resumido |
+| **Editor de nome** (BANK NAME, CH-NAME) | O texto num cartão, em tamanho grande quando cabe, com o cursor âmbar, quantos caracteres de quantos e o modo (`abc`, `ABC`, `123`, trocado pelo `#`) numa etiqueta âmbar |
+| **Bancos** (BANK, BANK CH) | Os bancos ligados, e os bancos em que o canal está, em **âmbar** |
+| **Rádio FM/AM/SSB** | Medidor S de 9 degraus, a banda numa etiqueta, a **frequência grande** com a unidade, o nome da estação num cartão (sem nome, `NO STATION NAME` no lugar do `Unknow`), e **STEP, BW, LNA e BFO em quatro cartões**, o que está sendo mudado em âmbar. O `SEEK...` e a espera da partida (`RADIO STARTING...`) também no tema novo |
+| **Espectro** | A frequência que roda em tamanho grande, pontos e passo em etiquetas, o **pico da passada em verde** com o dBm, o gráfico num painel com grade, a coluna medida em branco, a **linha do limite tracejada em âmbar** e as pontas da janela embaixo |
+| **Scan QT** (EXIT segurado) | O título, o que ele procura (CTCSS / DCS) e o estado, RUNNING num cartão verde ou STOP em âmbar |
+| **Partida** | Com a mensagem de partida em tensão, a tensão aparece num cartão, em volts |
+
 ### ⚡ Melhorias
 
 | O que | Detalhe |
@@ -74,6 +94,8 @@ desenho que vai para o rádio.
 | Problema da V0.12 | Na V2.0T |
 |---|---|
 | Durante o scan, a barra de sinal ficava congelada no último canal achado, e o número do canal descasava do nome | A tela acompanha cada canal da varredura |
+| Na partida com a tensão, o texto `   Voltage` tinha a tensão escrita por cima, e o "ge" sumia | `VOLTAGE` inteiro, com a tensão num cartão |
+| No rádio, estação sem nome aparecia como `Unknow` | `NO STATION NAME` |
 
 ### ➖ Removido
 
