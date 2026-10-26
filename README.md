@@ -1,45 +1,61 @@
-# Baojie BJ-8300 — firmware v1.0T, bancos de canais e driver do CHIRP
+# Baojie BJ-8300 — firmware V2.0T: tela nova, bancos de canais e driver do CHIRP
 
 <p align="center">
   <a href="README.en.md"><img src="docs/imagens/botao-english.svg" alt="English version" height="56"></a>
 </p>
 
 Firmware modificado para o rádio **Baojie/Bajeton BJ-8300** (JieLi AC695X, CPU pi32v2), feito por
-engenharia reversa do firmware de fábrica **V0.12**, sem documentação do fabricante. Traz **16
-bancos de canais de verdade**, scramble compatível com o Baofeng UV-17L, espectro mais rápido e um
-**driver do CHIRP** próprio. O "T" da versão é de **Tempra**.
+engenharia reversa do firmware de fábrica **V0.12**, sem documentação do fabricante. Traz **uma
+tela nova em todas as telas do rádio**, **16 bancos de canais de verdade**, scramble compatível com o
+Baofeng UV-17L, espectro mais rápido e um **driver do CHIRP** próprio. O "T" da versão é de
+**Tempra**.
 
 > [!TIP]
-> ## 🎉 v1.0T — a primeira versão estável
+> ## 🎉 V2.0T — a tela nova
 >
-> **[⬇️ Baixar a v1.0T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T)**
+> **[⬇️ Baixar a V2.0T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.0T)**
 >
 > | Arquivo do release | Para que serve |
 > |---|---|
-> | `BJ8300_BANK_v1.0T.anc` | o firmware, para gravar no rádio |
-> | `bj8300_v1.0TEMPRA.py` | o módulo do CHIRP para este firmware |
+> | `BJ8300_BANK_v2.0T.anc` | o firmware, para gravar no rádio |
+> | `bj8300_v1.0TEMPRA.py` | o módulo do CHIRP para este firmware (o nome do modelo continua o mesmo) |
 > | `BinTalk-V1.1.zip` | o gravador (BinTe ANC Bootloader) |
 > | `CH340-driver.zip` | o driver do cabo de programação USB |
 >
 > Testada no rádio. Para gravar: [passo a passo](#-como-gravar-o-firmware-passo-a-passo). Para o
-> CHIRP: [passo a passo](#-como-usar-o-chirp-com-este-firmware).
+> CHIRP: [passo a passo](#-como-usar-o-chirp-com-este-firmware). A [v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T), com a tela
+> de fábrica, continua disponível.
 
 💚 **Gostou do projeto?** [Apoie com uma doação pelo PayPal](#-apoie-o-projeto) — qualquer valor
 ajuda a próxima versão a sair.
 
 ---
 
-## ✨ O que mudou da V0.12 de fábrica para a v1.0T
+## 📺 A cara nova
+
+| | |
+|:---:|:---:|
+| <img src="docs/imagens/tela-inicio.png" alt="Tela principal no tema novo" width="360"> | <img src="docs/imagens/tela-espectro.png" alt="Espectro no tema novo" width="360"> |
+| **Tela principal:** os dois lados, com o A em evidência recebendo; na barra de cima só o que está ligado (RX, dupla escuta, redução de ruído, Bluetooth) | **Espectro:** a frequência que roda, o pico da passada em verde com o dBm, as barras com a coluna medida em branco e a linha do limite em âmbar |
+| <img src="docs/imagens/tela-radio.png" alt="Rádio FM/AM/SSB no tema novo" width="360"> | <img src="docs/imagens/tela-menu.png" alt="Menu no tema novo" width="360"> |
+| **Rádio** em LSB, mudando o BFO: medidor S, a banda, a frequência grande e os ajustes em cartões | **Menu BANK:** o lado em evidência resumido em cima, o item numa etiqueta e os bancos ligados em âmbar |
+
+As imagens saem da prévia no PC ([firmware/previa/](firmware/previa/)), que roda o mesmo código de
+desenho que vai para o rádio.
+
+## ✨ O que mudou da V0.12 de fábrica para a V2.0T
 
 ### 🆕 Recursos novos
 
 | Recurso | Como fica no rádio |
 |---|---|
+| 🖥️ **Tela nova em todo o rádio** | Todas as telas foram redesenhadas: a principal (o lado em evidência num cartão com a frequência grande e o medidor, etiquetas coloridas de potência, modulação e tons, e a barra de cima só com o que está ligado), os menus e o editor de nome, o rádio FM/AM/SSB, o scan QT, o DTMF, o espectro e a tensão na partida ([veja acima](#-a-cara-nova)) |
 | 🗂️ **16 bancos de canais** | Cada banco tem **nome de 12 caracteres**, e um canal pode estar em **quantos bancos quiser**. Dá para ligar **vários bancos ao mesmo tempo**: o sobe/desce e a busca passam a ver só os canais dos bancos ligados. Sem nenhum ligado, o rádio funciona como de fábrica. Menus novos: `BANK`, `BANK NAME` e `BANK CH` ([como usar](#usando-os-bancos-no-rádio)) |
 | 🔐 **Scramble com 8 frequências** | O `SCRAMBLE` passa de OFF/ON para **OFF e de 2700 a 3400 Hz, de 100 em 100**, em ordem crescente. O **3400 Hz** é o ON de fábrica (fala com outros BJ-8300), e os **modos 1, 2 e 3 do Baofeng UV-17L** caem, cada um, numa dessas frequências. Testado com os três modos |
-| 🔔 **Roger BEEP 2** | O `ROGER` ganha uma quarta opção: OFF, BEEP 1 (o de fábrica), **BEEP 2** (quatro tons: 1125, 1857, 1359 e 931 Hz, ~0,4 s no total) e TONE1200 |
+| 🔔 **Roger BEEP 2 e COIN** | O `ROGER` ganha duas opções: OFF, BEEP 1 (o de fábrica), **BEEP 2** (quatro tons: 1125, 1857, 1359 e 931 Hz, ~0,4 s no total), **COIN** (a moeda) e TONE1200 |
 | 📊 **Espectro com 320 e 640 pontos** e **passo de 10 kHz** | Além dos 160 pontos de fábrica, para ver uma faixa maior de uma vez |
 | 📈 **Pico seguro no espectro** | A barra sobe na hora e, quando o sinal some, desce aos poucos |
+| 🎯 **Espectro que mostra mais** | A coluna que está sendo medida em branco, a frequência que roda no alto, a frequência do pico de cada passada em verde, com o dBm |
 | 🔌 **Driver do CHIRP próprio** | Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, numa sessão só pelo cabo. Recusa gravar num rádio com firmware de fábrica ([como usar](#-como-usar-o-chirp-com-este-firmware)) |
 | 🧰 **Comando estendido no cabo** | Leitura do chip de dados inteiro (endereço de 24 bits) e gravação só na área dos bancos. É o que o driver do CHIRP usa |
 
@@ -48,13 +64,14 @@ ajuda a próxima versão a sair.
 | O que | Detalhe |
 |---|---|
 | 🚀 **Espectro duas vezes mais rápido** | 160 pontos em ≈ 2,5 s. E, parado num sinal achado, a seta continua a varredura sem mexer no limite |
-| 🟩 **Realce do VFO selecionado** | O bloco do lado ativo (nome, frequência e barra de sinal) ganha fundo verde; o outro continua preto |
+| 🟩 **Lado em evidência destacado** | O lado ativo fica num cartão de borda verde, com a frequência grande e o medidor; o outro fica compacto |
+| 📻 **Rádio FM/AM/SSB** | A troca de modulação ficou ~2,5 s mais rápida, e os ajustes salvos (passo, largura, LNA, BFO e as memórias) são conferidos ao entrar e a cada troca: valor fora dos limites dos menus volta ao padrão |
 | ↕️ **Setas do menu invertidas** | A seta de cima passa a subir na lista, em vez de avançar o valor |
-| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`). O menu `VERSION` mostra `Firmware: V1.0T` |
+| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`). O menu `VERSION` mostra `Firmware: V2.0T` |
 
 ### 🐞 Correções
 
-| Problema da V0.12 | Na v1.0T |
+| Problema da V0.12 | Na V2.0T |
 |---|---|
 | Durante o scan, a barra de sinal ficava congelada no último canal achado, e o número do canal descasava do nome | A tela acompanha cada canal da varredura |
 
@@ -63,6 +80,8 @@ ajuda a próxima versão a sair.
 | O que | Por quê |
 |---|---|
 | Itens de menu `ZONE` e `Zone Or Channel` | Os bancos fazem o papel das zonas, com mais liberdade. A função de zona continua no firmware, e o driver do CHIRP sempre grava **Full Channel**, para o rádio nunca ficar preso em modo zona |
+| As vozes e o item `VOICE` | A pedido: o rádio deixa de falar os números e os modos, e o espaço delas guarda parte do código novo |
+| O idioma chinês e o item `LANGUAGE` | A tela nova só tem letras latinas; o rádio fica sempre em inglês |
 
 ### 🔒 O que não muda
 
@@ -96,8 +115,8 @@ o firmware nem chega a ligar, mas ele **nunca foi testado**.
 Precisa de um PC com Windows e do **cabo de programação USB** do rádio (o de chip CH340, o mesmo do
 CPS de fábrica).
 
-**1. Baixe os arquivos.** Na [página do release v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T),
-baixe o `BJ8300_BANK_v1.0T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
+**1. Baixe os arquivos.** Na [página do release V2.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.0T),
+baixe o `BJ8300_BANK_v2.0T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
 o `CH340-driver.zip`. Descompacte os zips. (Os mesmos arquivos estão no repositório, em
 `firmware/releases/`, `tools/anc-bootloader/` e `tools/ch340-driver/`.)
 
@@ -112,7 +131,7 @@ Feche antes qualquer programa que use a porta COM (CHIRP, CPS).
 
 <p align="center"><img src="docs/imagens/gravador.png" alt="Janela do gravador BinTalk V1.1" width="300"></p>
 
-- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v1.0T.anc`.
+- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v2.0T.anc`.
 - **Port:** a COM do cabo (a do passo 2).
 - **Baudrate:** **115200** (já vem assim).
 
@@ -122,7 +141,7 @@ o rádio **segurando PTT2 + o botão de atalho**, até aparecer `UPDATE` na tela
 **5. Grave.** Clique em **Update** e espere. O log mostra `Update Mode` → `Baudrate OK` →
 `Update 3%` → `Jump To Loader` → `Progress 100%` → `Finish`. Não desconecte nada no meio.
 
-**6. Confira.** Desligue e ligue o rádio. No menu `VERSION` deve aparecer `Firmware: V1.0T`, e os
+**6. Confira.** Desligue e ligue o rádio. No menu `VERSION` deve aparecer `Firmware: V2.0T`, e os
 itens `BANK`, `BANK NAME` e `BANK CH` aparecem no menu.
 
 **Se der `Retry1..5 / Failure!`:** desligue o rádio, confira que nenhum outro programa está com a
@@ -133,7 +152,7 @@ porta COM, volte ao passo 4 e tente de novo.
 ## 📻 Como usar o CHIRP com este firmware
 
 > [!CAUTION]
-> **Com a v1.0T, use só o módulo `bj8300_v1.0TEMPRA.py` deste release.**
+> **Com a V2.0T (e com a v1.0T), use só o módulo `bj8300_v1.0TEMPRA.py` do release.**
 >
 > - **Não use os modelos de fábrica do CHIRP** que servem para o BJ-8300 de fábrica (**Bajeton
 >   BJ7800** e **Radtel RT-920**). Eles não leem nem gravam os bancos, e não conhecem o roger BEEP
@@ -277,13 +296,14 @@ quê, está no [histórico](docs/historico.md).
 
 | Arquivo | Estado |
 |---|---|
-| `BJ8300_BANK_v41.anc` | **a mais nova** — v39 + o espectro no tema B, os ajustes do rádio conferidos na entrada e na troca de modulação, a troca de modulação ~2,5 s mais rápida e o S da fonte média — testado no rádio |
+| `BJ8300_BANK_v2.0T.anc` | **estável, a recomendada** — a v41 com o nome da versão (mesmo arquivo); use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v41.anc` | v39 + o espectro no tema B, os ajustes do rádio conferidos na entrada e na troca de modulação, a troca de modulação ~2,5 s mais rápida e o S da fonte média — testado no rádio |
 | `BJ8300_BANK_v39.anc` | v36 + as outras telas no tema B (menu com a fonte média, editor de nome, rádio, scan QT, DTMF e a tensão na partida), sem o idioma chinês, os dois lados no banco e o menu `VERSION` em `V2.0T` — testado no rádio (um travamento na troca para USB/LSB vinha do que estava salvo nele: [histórico](docs/historico.md), v40) |
 | `BJ8300_BANK_v36.anc` | v34 + a tela principal nova (tema B): cartão do lado em evidência com a frequência grande e o medidor, etiquetas coloridas de potência, modulação e tons, e a barra de cima só com o que está ligado; no idioma chinês a tela fica a de fábrica — testado no rádio |
 | `BJ8300_BANK_v34.anc` | v32 + o espectro no espaço das vozes, o pico em verde e o dBm inteiro na troca de AM/FM; a última com a tela principal de fábrica — testado no rádio |
 | `BJ8300_BANK_v32.anc` | v27 sem as vozes (e sem o item VOICE), roger COIN (a moeda), leitura de memória pelo cabo; abre ~112 KB de espaço para o tema novo da tela — testado no rádio |
 | `BJ8300_BANK_v27.anc` | v1.0T + espectro com a barra atual em branco, a frequência que roda, a linha do pico e o dBm à direita; roger BEEP 3 (a moeda, chamada de COIN desde a v31) — testado no rádio |
-| `BJ8300_BANK_v1.0T.anc` | **estável** — a v25 com o nome da versão (mesmo arquivo); use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v1.0T.anc` | a primeira estável, com a tela de fábrica — a v25 com o nome da versão (mesmo arquivo) |
 | `BJ8300_BANK_v24.anc` | v23 + scramble 2900 Hz (o do Baofeng UV-17L no modo 3) — testado no rádio |
 | `BJ8300_BANK_v23.anc` | v21 + roger BEEP 2 — testado no rádio |
 | `BJ8300_BANK_v21.anc` | v19 + espectro duas vezes mais rápido, passo de 10 kHz, 320 e 640 pontos e pico seguro; verde do realce mais escuro (a v20 sem o bootloop; a v20 foi retirada) — testado no rádio |
@@ -380,9 +400,9 @@ docs/           engenharia reversa, histórico, mapa da tela, imagens e notas de
 
 ## 💚 Apoie o projeto
 
-A v1.0T nasceu de muitas horas de engenharia reversa: o firmware de fábrica aberto byte a byte, sem
-nenhuma documentação do fabricante, cada rotina mapeada no desmontado e 25 versões, quase todas
-gravadas e testadas num rádio de verdade, até chegar a uma versão estável. Tudo aqui é e vai
+Este firmware nasceu de muitas horas de engenharia reversa: o firmware de fábrica aberto byte a
+byte, sem nenhuma documentação do fabricante, cada rotina mapeada no desmontado e 41 versões, quase
+todas gravadas e testadas num rádio de verdade, até chegar à tela nova. Tudo aqui é e vai
 continuar **livre e gratuito**, para usar, estudar e modificar.
 
 Se o seu BJ-8300 ficou melhor — os bancos organizaram seus canais, o scramble passou a falar com o

@@ -5,6 +5,17 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V2.0T — 26/10 — a tela nova ✅
+
+A v41 virou a **V2.0T**, a segunda versão estável. É o mesmo arquivo, byte a byte (sha256
+`57dcf09b…`), agora com o nome da versão: `firmware/releases/BJ8300_BANK_v2.0T.anc`. O menu
+`VERSION` do rádio já mostra `Firmware: V2.0T` desde a v38.
+
+Publicada no [release V2.0T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.0T), junto com o módulo do CHIRP, o gravador e o driver
+do cabo. O README ganhou a seção "A cara nova", com quatro telas tiradas da prévia (a principal, o
+espectro, o rádio e o menu BANK), e o que mudou desde a V0.12 passou a contar a tela nova, o
+espectro, o rádio, o roger COIN e o que saiu (as vozes e o idioma chinês).
+
 ## v41 — 26/10 — o espectro no tema B ✅
 
 Testada no rádio: "ficou excelente". É a última tela que faltava no tema novo.

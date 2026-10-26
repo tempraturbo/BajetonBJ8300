@@ -5,6 +5,18 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V2.0T — Oct 26 — the new screen ✅
+
+v41 became **V2.0T**, the second stable release. It is the same file, byte for byte (sha256
+`57dcf09b…`), now under the version's name: `firmware/releases/BJ8300_BANK_v2.0T.anc`. The radio's
+`VERSION` menu has shown `Firmware: V2.0T` since v38.
+
+Published in the [V2.0T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.0T), together with the CHIRP module, the flasher and the
+cable driver. The README gained the "new look" section, with four screens taken from the preview
+(the main one, the spectrum, the radio and the BANK menu), and what changed since V0.12 now covers
+the new screen, the spectrum, the radio, the COIN roger and what was removed (the voices and the
+Chinese language).
+
 ## v41 — Oct 26 — the spectrum in theme B ✅
 
 Tested on the radio: "it turned out excellent". It is the last screen the new theme was missing.
