@@ -72,8 +72,8 @@ by looking for where content starts mirroring address 0:
 | `0x20000–0x99FFF` | fonts and Chinese text (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 records of 60 B used by the firmware |
 | **`0xC1000–0xD1FFF`** | **the banks** (header + 16 sectors of 4 KB) |
-| **`0xD2000–0xD2FFF`** | **the WATCH record** (v43; the cable writes it since v46; [section 18](#18-dual-watch-and-triple-v42-to-v45)) |
-| **`0xD3000–0xD3FFF`** | **C's VFOs** (v49: C's and the saved B's; [section 18](#18-dual-watch-and-triple-v42-to-v45)) |
+| **`0xD2000–0xD2FFF`** | **the WATCH record** (v43; the cable writes it since v46; [section 18](#18-dual-watch-and-triple-v42-to-v50)) |
+| **`0xD3000–0xD3FFF`** | **C's VFOs** (v49: C's and the saved B's; [section 18](#18-dual-watch-and-triple-v42-to-v50)) |
 | `0xFA000` | 4 KB used by the firmware |
 | free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -185,6 +185,8 @@ destination in r0, source in r1, size in r2). Read only. It is what showed the v
 | `0x00014B83` | roger: 0 OFF, 1 BEEP, 2 TONE1200; 3 = BEEP 2 (v22) |
 | `0x00014BDF` | MIC GAIN: 0 HIGH, 1 MID, 2 LOW (v49; `0x9033` of the settings, section 19) |
 | `0x0000706C` | microphone gain put into register `0x7D` on every TX (copy of `0xF210`; since v49, of MIC GAIN) |
+| `0x00014B7F` | TX-A/B (`0x9013` of the settings): 0 OFF, 1 A, 2 B; since v50, 3 = C (section 18) |
+| `0x00015384` | PTT side-swap flag: 1 = swapped (swaps back at the end of TX); bits 7 and 6 = TX on the third, the side's power in bits 0..3 (v50) |
 | `0x00015E2C` / `0x000129A4` | scramble of the current channel or VFO / the tuned one: 0 OFF, 1 3400 Hz, 2 2900 Hz, 3–8 = 2700, 2800, 3000…3300 Hz (v25) |
 | `0x01E68B18` | stock inversion frequencies (u16, Hz × 10.32444): 35103 = 3400 Hz and 36135 = 3500 Hz; since v25 nothing reads it (section 13) |
 | `0x0001533D` | screen mode (20 = spectrum) |
@@ -915,7 +917,7 @@ The radio always runs in English, as the owner asked:
 The CHIRP driver hides the language setting. `conferir.py` checks in `4o` that the byte the hook
 zeroes is the one LANGUAGE's get reads and that the item left the table.
 
-## 18. Dual watch and TRIPLE (v42 to v45)
+## 18. Dual watch and TRIPLE (v42 to v50)
 
 The firmware only has two sides, A and B. WATCH picks how many frequencies the main screen shows
 (SINGLE, DUAL or TRIPLE), and TRIPLE adds a third one, C, without touching the dual watch engine:
@@ -1021,10 +1023,40 @@ WATCH set to SINGLE clears TDR, the TDR item's setter (item 7, `tdr_grava` inste
 `0x01E3957C`) keeps it at 0, and power-up clears it again. In DUAL and TRIPLE, on listens to all of
 them, and off only to the one in focus.
 
+**TX-A/B/C (v50).** The stock TX-A/B (item 44, `b[0x14B7F]`: 0 OFF, 1 A, 2 B) picks the PTT side and
+only works with the watch on. PTT press (`0x01E43E8A`) tests TDR (`0x01E43F86`), reads the byte
+(`0x01E43F92`) and, if the side (value − 1) is not in focus, swaps the sides (`0x01E40E52(0)`,
+saving nothing) and sets `b[0x15384] = 1`, which swaps back at the end of TX (`0x01E473DC`) and on a
+refused TX (`0x01E411A6`); boot clears the flag (`0x01E56B3A`). An earlier part of the same routine
+does the same with the side of the PTT pressed (`b[0x15383]`), and that one wins. The item's get and
+set only copy the byte, and nothing else reads it. With C (3), the stock arithmetic would swap the
+sides on every PTT, so the read becomes `call gancho_tx_abc` + nop:
+
+| With TX-A/B/C on | In DUAL / SINGLE | In TRIPLE |
+|---|---|---|
+| OFF, A | as stock | as stock |
+| B | as stock | side B, or the third if C is on side B |
+| C | nothing (as OFF) | side B if C is on it, else the third |
+
+The third transmits with no swap and no write: `gancho_tx_abc` sets bit 7 of `b[0x15384]` (only if
+it was clear) and returns 0. TX start (`0x01E41022`) disarms dual watch (`0x01E3FDE4`, at
+`0x01E410EA`) and then reads the decoded TX frequency (`b[0x15341]`, written by the decoder
+`0x01E38DE6`); there `gancho_tx_desarma` puts the third in the current slot (the round-robin's own
+`poe_terceira`) and its power on the side in focus. TX takes the power from `b[0x15E30 + side in
+focus]` (`0x01E475A2`, stored in `b[0x1299C]` by `0x01E43FCA`), and the decoder only writes it in a
+special case (`b[0x153A1] = 165`); a channel's or VFO's power is the low nibble of byte 14 of the
+raw channel (`0x15E52`) or byte 16 of the VFO (`0x15E90`), as the stock loaders take it
+(`0x01E3A6D0`, `0x01E3A682`). The side's power goes in bits 0..3 of the flag, with bit 6. Both
+swap-backs (`0x01E411AE` and `0x01E473EE`) go through `gancho_tx_volta`: with bit 7, they give the
+power back, bring the shadow of the side in focus back to the current slot (`0x01E3FD9E`) and, in
+mode 0, redraw the screen; without it, the stock swap-back. On screen B, TX on the third leaves the
+card as it is and paints the third's strip red.
+
 **Checked at build time** (`conferir.py`): `4r` checks the three swapped call sites byte by byte
-(`0x01E4826E`, `0x01E481CC` and `0x01E4D44C`: the stock call before, the hook's after; and, since
-v49, the light's, `0x01E46578`); `4b` checks
-the menu table pointer; the stack with the hooks is the stock one at all three roots.
+(`0x01E4826E`, `0x01E481CC` and `0x01E4D44C`: the stock call before, the hook's after; since v49,
+the light's, `0x01E46578`; and since v50 the TX-A/B/C ones: `0x01E410EA`, `0x01E411AE`,
+`0x01E473EE` and the read replaced by a call and nop at `0x01E43F92`); `4b` checks the menu table
+pointer; the stack with the hooks is the stock one at all three roots.
 
 ## 19. Microphone gain and MIC GAIN (v49)
 

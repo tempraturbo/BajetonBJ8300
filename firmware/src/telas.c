@@ -57,7 +57,7 @@ SEPARADA static void resumo(const struct estado *e, unsigned y)
     pinta(3, y, 157, y + ALTURA_RESUMO, COR_VERDE);
     pinta(4, y + 1, 156, y + ALTURA_RESUMO - 1, COR_CARTAO);
     pinta(8, y + 4, 19, y + 15, COR_VERDE);
-    letra(11, y + 6, 'A' + i, 1, COR_FUNDO);
+    letra(11, y + 6, 'A' + LETRA(e, i), 1, COR_FUNDO);   /* a C no lado B e a C (v50) */
     if (!l->canal || l->exibicao == 1)
         frequencia(s, l->freq, 5);
     else if (l->exibicao == 0)

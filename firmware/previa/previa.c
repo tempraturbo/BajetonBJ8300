@@ -335,6 +335,18 @@ int main(int argc, char **argv)
     grava("38c-triple-c-em-vfo");
     previa_terceira = 4;
 
+    /* v50: TX-A/B/C em C, com o A em evidencia - a TX sai da C (a marca 0x15384 com os bits 7 e 6), o
+     * cartao do A fica como esta e a faixa da C fica vermelha; na barra, TX */
+    limpa();
+    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    memoria[0x14B70] = 1;
+    memoria[0x14685] = 2;              /* transmitindo */
+    memoria[0x15384] = 0xC0;           /* na terceira */
+    tela_b();
+    tela_b_medidor(1, 10, 0);
+    grava("38d-triple-tx-na-c");
+
     /* a C em evidencia (tecla A/B): ela no lado B, e o B (canal 10) fora, como terceira */
     {
         static const u8 canal10[32] = {0x50, 0x62, 0x25, 0x46, 0x50, 0x62, 0x25, 0x46};
@@ -419,6 +431,22 @@ int main(int argc, char **argv)
         memoria[0x14C10] = 1;
         telas_b(1, 0);
         grava("11-menu-titulo-longo");
+
+        /* v50: o TX-A/B/C, com a C em evidencia (TRIPLE, a C no lado B): o resumo de cima com o selo C
+         * (ate a v49 saia B) */
+        BASE_TELAS();
+        previa_vista = 3;
+        memoria[0x15E04] = 1;
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "TX-A/B/C");
+        memoria[0x14BFA] = 46;
+        LINHA(0, 1, "B");
+        LINHA(1, 2, "C");
+        LINHA(2, 1, "OFF");
+        memoria[0x14C10] = 1;
+        telas_b(1, 0);
+        grava("11b-menu-txabc-com-a-c");
+        previa_vista = 0;
 
         /* o item de memoria do menu do radio (0x01E3D20E): S, Z e 2 da fonte media sem haste (v40) */
         BASE_TELAS();

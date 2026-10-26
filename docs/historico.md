@@ -5,6 +5,44 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v50 — 26/10 — o TX-A/B/C e o selo C no menu ⏳ espera teste no rádio
+
+Os dois pedidos do dono depois de usar a v49.
+
+- **TX-A/B/C.** O TX-A/B de fábrica (item 44; `b[0x14B7F]`, o `0x9013` dos ajustes: 0 OFF, 1 A,
+  2 B) escolhe em que lado o PTT transmite, e só vale com a escuta ligada (TDR/TTR). Na ida do PTT
+  (`0x01E43E8A`), se o lado escolhido não está em evidência, o firmware troca os lados
+  (`0x01E40E52(0)`, que não grava nada) e marca `b[0x15384] = 1`. No fim da TX (`0x01E473DC`) e na TX
+  recusada (`0x01E411A6`), com a marca, ele destroca. O get e o set do item só copiam o byte, e nada
+  mais o lê (rastreio de base + deslocamento no desmontado inteiro). O item ganha o C, vira
+  **TX-A/B/C** (quatro opções, título novo) e continua no mesmo byte.
+- **A TX na terceira, só pela RAM.** A letra que não está em nenhum dos dois lados (a C, ou o B
+  quando a C está no lado B) é a terceira. Levá-la ao lado B a cada PTT, como a tecla A/B faz,
+  gravaria dois setores na ida e dois na volta. Por isso a TX sai dela como o rodízio a ouve:
+  - a leitura do TX-A/B na ida do PTT (`0x01E43F92`, "r0 = 1279; r0 = b[r4+r0]") vira
+    `call gancho_tx_abc` + nop, que devolve ao trecho de fábrica o lado (1 A, 2 B) ou 0 e, para a
+    terceira, marca `b[0x15384]` com o bit 7;
+  - o início da TX (`0x01E41022`) desarma a dupla escuta (`0x01E3FDE4`, em `0x01E410EA`) e só
+    depois lê a frequência de TX decodificada (`b[0x15341]`, escrita pela decodificação
+    `0x01E38DE6`). Ali, `gancho_tx_desarma` põe a terceira na corrente e a potência dela no lado em
+    evidência, porque a TX tira a potência de `b[0x15E30 + lado em evidência]` (`0x01E475A2`). A de
+    cada canal ou VFO é o nibble baixo do byte 14 do canal cru ou do 16 do VFO (`0x01E3A6D0`,
+    `0x01E3A682`). A do lado fica guardada na marca;
+  - as duas destrocas (`0x01E411AE` e `0x01E473EE`) passam por `gancho_tx_volta`: com a terceira na
+    corrente, devolvem a potência e o lado em evidência à corrente (`0x01E3FD9E`) e refazem a tela;
+    sem a marca, a destroca de fábrica. O firmware zera a marca logo depois delas, e a partida
+    também (`0x01E56B3A`).
+- **Quem ganha.** Fora do TRIPLE o C não vale (fica como OFF). Se o PTT já trocou de lado antes do
+  TX-A/B (a marca já posta), ele ganha, como no firmware de fábrica.
+- **Na tela**, a TX na terceira deixa o cartão do lado em evidência como está e pinta a faixa da
+  terceira de vermelho; na barra, TX.
+- **O selo do resumo no topo do menu e do scan QT** mostrava B com a C em evidência: o resumo
+  desenhava a letra do lado (`'A' + lado`), e não a de `LETRA()`, que o cartão e as faixas já usam.
+- O build passou ("tudo certo", com a `4r` conferindo os quatro sítios novos), a pilha é a de
+  fábrica nas três raízes, o ponto mais fundo dos menus foi de 636 para 644 B (abaixo dos 740 B de
+  fábrica), e as 43 telas da prévia saem iguais, com duas novas (a TX na C e o menu TX-A/B/C com a
+  C em evidência).
+
 ## Driver do CHIRP — 26/10 — VFO A/B/C Channel, o VFO C, o NR e a Voice Privacy do A
 
 - **Settings em outra ordem, a pedido do dono.** O VFO A/B Channel virou **VFO A/B/C Channel** e,

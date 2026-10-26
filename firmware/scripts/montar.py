@@ -206,7 +206,7 @@ PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho
            'canal_c_le', 'canal_c_grava', 'canal_c_exibe', 'titulo_canal_c',
            'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'menu_tabela', 'gancho_troca_dw',
            'gancho_volta_dw', 'gancho_ab', 'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic',
-           'gancho_ajustes',
+           'gancho_ajustes', 'gancho_tx_abc', 'gancho_tx_desarma', 'gancho_tx_volta', 'titulo_txabc', 'txabc_opcoes',
            'scramble_le', 'scramble_grava', 'scramble_freqs', 'scramble_valor', 'scramble_posicao',
            'scramble_opcoes', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
            'gancho_partida', 'canal_exibe', 'canal_le', 'canal_grava',
@@ -336,11 +336,17 @@ SCRAMBLE_ITEM = 47
 # fabrica (0x01E3957C) so grava o byte. O MDF-A (indice 42) e o molde do MDF-C.
 TDR_ITEM = 7
 MDF_A_ITEM = 42
+# O TX-A/B (indice 44: OFF, A e B) vira TX-A/B/C (v50): quatro opcoes, com o C, e o titulo novo. O get
+# e o set de fabrica (0x01E3CA30 / 0x01E3CA40) so copiam o byte b[0x14B7F] e ficam; o C so vale no
+# PTT, pelos ganchos da TX (bancos.c).
+TX_AB_ITEM = 44
 ITENS_MUDADOS = {ROGER_ITEM: dict(maximo=5, get='roger_le', set='roger_grava',
                                   exibe='roger_opcoes', opcoes_cn='roger_opcoes'),
                  TDR_ITEM: dict(set='tdr_grava'),
                  SCRAMBLE_ITEM: dict(maximo=9, get='scramble_le', set='scramble_grava',
-                                     exibe='scramble_opcoes', opcoes_cn='scramble_opcoes')}
+                                     exibe='scramble_opcoes', opcoes_cn='scramble_opcoes'),
+                 TX_AB_ITEM: dict(maximo=4, nome='titulo_txabc', nome_cn='titulo_txabc',
+                                  exibe='txabc_opcoes', opcoes_cn='txabc_opcoes')}
 
 # Na rotina que aplica o scramble (0x01E408E2), o trecho que escolhe a frequencia de inversao:
 #   0x01E4092E  40 21              r0 = 1
@@ -484,6 +490,20 @@ CHAMADAS_LIVRE = TRIPLE_CHAMADAS + ((LUZ_EM, LUZ_ERA, 'gancho_luz', 'luz acesa n
 AJUSTES_ERA = 0x01E3AB36
 CHAMADAS_LIVRE += ((0x01E4845A, AJUSTES_ERA, 'gancho_ajustes', 'ajustes de fabrica: o MIC GAIN na hora'),)
 GOTOS_LIVRE = ((0x01E43A50, AJUSTES_ERA, 'gancho_ajustes', 'ajustes pelo cabo: o MIC GAIN na hora'),)
+# v50: o TX-A/B/C (bancos.c). O inicio da TX desarma a dupla escuta no lado em evidencia (0x01E3FDE4,
+# que nao recebe argumento, chamada em 0x01E410EA) e so depois le a frequencia de TX decodificada
+# (b[0x15341]); as duas destrocas do PTT, 0x01E40E52(0) na TX recusada (0x01E411AE) e no fim da TX
+# (0x01E473EE), so acontecem com a marca b[0x15384], que o firmware zera logo depois delas.
+TX_TROCA_ERA = 0x01E40E52
+CHAMADAS_LIVRE += ((0x01E410EA, 0x01E3FDE4, 'gancho_tx_desarma', 'TX-A/B/C: a terceira no inicio da TX'),
+                   (0x01E411AE, TX_TROCA_ERA, 'gancho_tx_volta', 'TX-A/B/C: a destroca na TX recusada'),
+                   (0x01E473EE, TX_TROCA_ERA, 'gancho_tx_volta', 'TX-A/B/C: a destroca no fim da TX'))
+# Instrucoes trocadas por uma chamada e nop no resto: na ida do PTT, a leitura do TX-A/B ("r0 = 1279;
+# r0 = b[r4+r0]", 0x01E43F92) vira "call gancho_tx_abc; nop; nop". O r0 que ele devolve e o que o
+# trecho de fabrica testa em seguida (0x01E43F9A); r1..r3 sao escritos antes de lidos, e o r4 (a base
+# 0x14680) a chamada preserva.
+CHAMADAS_NO_LUGAR = ((0x01E43F92, bytes.fromhex('40e0ff04d8ee4000'), 'gancho_tx_abc',
+                      'TX-A/B/C: a leitura do TX-A/B na ida do PTT'),)
 
 # Gancho das teclas do espectro: parado num sinal achado, a seta continua a varredura em vez de
 # mexer no limite. Entra no lugar do "r1 = r0 - 16" que escolhe o caso do tbh das teclas do modo
@@ -567,7 +587,8 @@ NA_LIVRE += (TABELA_SIMBOLO,)              # v43: a tabela do menu, dado no .liv
 NA_LIVRE += ('watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
              'canal_c_le', 'canal_c_grava', 'canal_c_exibe', 'titulo_canal_c',
              'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'gancho_troca_dw', 'gancho_volta_dw', 'gancho_ab',
-             'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic', 'gancho_ajustes')
+             'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic', 'gancho_ajustes',
+             'gancho_tx_abc', 'gancho_tx_desarma', 'gancho_tx_volta', 'titulo_txabc', 'txabc_opcoes')
 PRECISA += ESPECTRO_B
 
 # Realce do bloco do VFO em evidencia na tela principal. O gancho entra no ENVIO do pedaco para o
@@ -819,6 +840,7 @@ def main():
     escritas += [(s_, 4, o_) for s_, o_ in NOP_SITIOS]
     escritas += [(s_, 4, 'espera da troca de banda do radio') for s_ in ESPERAS_RADIO]
     escritas += [(s_, 4, o_) for s_, _, _, o_ in CHAMADAS_LIVRE + GOTOS_LIVRE]
+    escritas += [(s_, len(a_), o_) for s_, a_, _, o_ in CHAMADAS_NO_LUGAR]
     escritas += [(LIVRE, len(tela), 'tela B no lugar dos decodificadores G.729 e MP3')]
     escritas += [(r, 4, f'tipo do {d} no registro dos decodificadores') for r, _, _, d in DECODIFICADORES]
     if TEXTOS_REVISADOS:
@@ -866,6 +888,13 @@ def main():
             raise SystemExit(f'{sitio:#x} nao e o goto esperado para {era:#x}: {antes.hex()}')
         app[o:o + 4] = monta_goto(sitio, S[gancho])
         print(f"  {sitio:#x}: goto {era:#x} -> {gancho} {S[gancho]:#x} ({oque})")
+    for sitio, era, gancho, oque in CHAMADAS_NO_LUGAR:
+        o = sitio - BASE_APP
+        antes = bytes(app[o:o + len(era)])
+        if antes != era:
+            raise SystemExit(f'{sitio:#x} nao e o trecho esperado ({era.hex()}): {antes.hex()}')
+        app[o:o + len(era)] = monta_call(sitio, S[gancho]) + NOP[:len(era) - 4]
+        print(f"  {sitio:#x}: {era.hex()} -> call {gancho} {S[gancho]:#x} + nop ({oque})")
 
     if ESPECTRO_TECLAS:
         o = ESPECTRO_EM - BASE_APP

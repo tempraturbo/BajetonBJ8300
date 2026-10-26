@@ -5,6 +5,45 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v50 — Oct 26 — TX-A/B/C and the C label in the menu ⏳ waiting for the radio test
+
+The owner's two requests after using v49.
+
+- **TX-A/B/C.** The stock TX-A/B (item 44; `b[0x14B7F]`, `0x9013` of the settings: 0 OFF, 1 A, 2 B)
+  picks the side PTT transmits on, and only works with the watch on (TDR/TTR). On PTT press
+  (`0x01E43E8A`), if the chosen side is not in focus, the firmware swaps the sides (`0x01E40E52(0)`,
+  which saves nothing) and sets `b[0x15384] = 1`. At the end of TX (`0x01E473DC`) and on a refused
+  TX (`0x01E411A6`), with the flag set, it swaps back. The item's get and set only copy the byte,
+  and nothing else reads it (base + offset trace over the whole disassembly). The item gets C,
+  becomes **TX-A/B/C** (four options, new title) and keeps the same byte.
+- **TX on the third, in RAM only.** The letter on neither side (C, or B when C is on side B) is the
+  third. Taking it to side B on every PTT, as the A/B key does, would write two sectors on the way
+  and two on the way back. So TX comes out of it the way the round-robin listens to it:
+  - the TX-A/B read on PTT press (`0x01E43F92`, "r0 = 1279; r0 = b[r4+r0]") becomes
+    `call gancho_tx_abc` + nop, which returns to the stock code the side (1 A, 2 B) or 0 and, for
+    the third, sets bit 7 of `b[0x15384]`;
+  - TX start (`0x01E41022`) disarms dual watch (`0x01E3FDE4`, at `0x01E410EA`) and only then reads
+    the decoded TX frequency (`b[0x15341]`, written by the decoder `0x01E38DE6`). There,
+    `gancho_tx_desarma` puts the third in the current slot and its power on the side in focus,
+    because TX takes the power from `b[0x15E30 + side in focus]` (`0x01E475A2`). Each channel's or
+    VFO's power is the low nibble of byte 14 of the raw channel or byte 16 of the VFO
+    (`0x01E3A6D0`, `0x01E3A682`). The side's own is kept in the flag;
+  - both swap-backs (`0x01E411AE` and `0x01E473EE`) go through `gancho_tx_volta`: with the third in
+    the current slot, they give the power back, bring the side in focus back to the current slot
+    (`0x01E3FD9E`) and redraw the screen; without the flag, the stock swap-back. The firmware clears
+    the flag right after them, and so does boot (`0x01E56B3A`).
+- **Who wins.** Outside TRIPLE, C does nothing (it acts as OFF). If PTT already swapped sides before
+  TX-A/B (the flag already set), that wins, as in the stock firmware.
+- **On screen**, TX on the third leaves the card of the side in focus as it is and paints the
+  third's strip red; the top bar shows TX.
+- **The label of the summary at the top of the menu and QT scan** showed B with C in focus: the
+  summary drew the side's letter (`'A' + side`), not the one from `LETRA()`, which the card and the
+  strips already use.
+- The build passed ("tudo certo", with `4r` checking the four new sites), the stack is the stock
+  one at all three roots, the menus' deepest point went from 636 to 644 bytes (below the stock
+  740), and the preview's 43 screens come out the same, plus two new ones (TX on C and the TX-A/B/C
+  menu with C in focus).
+
 ## CHIRP driver — Oct 26 — VFO A/B/C Channel, VFO C, NR and VFO A's Voice Privacy
 
 - **Settings in another order, at the owner's request.** VFO A/B Channel became **VFO A/B/C

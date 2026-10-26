@@ -1065,21 +1065,13 @@ NA_LIVRE_COD void gancho_troca_dw(void)
     DECODIFICA();
 }
 
-/* Na volta do outro lado (0x01E481CC, logo depois de b[0x15378] = 0): no TRIPLE, se nao vem da
- * terceira, vai a ela; senao, a volta de fabrica ao lado em evidencia. */
-NA_LIVRE_COD void gancho_volta_dw(void)
+/* A terceira (t, de terceira()) na corrente, decodificada: e o que o rodizio ouve e, desde a v50, o
+ * que o PTT transmite com o TX-A/B/C nela. */
+NA_LIVRE_COD static void poe_terceira(u32 t)
 {
-    u32 t = terceira();
     unsigned lado = !LADO_B;
     u8 potencia;
 
-    if (t == 0xFFFF || RODIZIO == 2) {
-        RODIZIO = 0;
-        VOLTA_DW();
-        return;
-    }
-    RODIZIO = 2;
-    DW_OUTRO = 1;                            /* continua fora do lado em evidencia */
     if (t & TERCEIRA_VFO) {                  /* como o carregador de VFO de fabrica: os 32 B do registro */
         LE_FLASH(POS_VFO(t & TERCEIRA_DO_B), CORRENTE_VFO, 32);
         CORRENTE_MODO = 0;
@@ -1093,6 +1085,22 @@ NA_LIVRE_COD void gancho_volta_dw(void)
     DECODIFICA();
     POTENCIA_LADO[lado] = potencia;
     LADO_B = !lado;
+}
+
+/* Na volta do outro lado (0x01E481CC, logo depois de b[0x15378] = 0): no TRIPLE, se nao vem da
+ * terceira, vai a ela; senao, a volta de fabrica ao lado em evidencia. */
+NA_LIVRE_COD void gancho_volta_dw(void)
+{
+    u32 t = terceira();
+
+    if (t == 0xFFFF || RODIZIO == 2) {
+        RODIZIO = 0;
+        VOLTA_DW();
+        return;
+    }
+    RODIZIO = 2;
+    DW_OUTRO = 1;                            /* continua fora do lado em evidencia */
+    poe_terceira(t);
 }
 
 /* Para a tela B: o lado fora de evidencia (ou a terceira) esta recebendo, e se e a terceira. */
@@ -1253,6 +1261,80 @@ NA_LIVRE_COD void gancho_luz(unsigned acende)
 {
     if (MODO_TELA != 20)
         LUZ(acende);
+}
+
+/* ---------- TX-A/B/C: o PTT transmite no A, no B ou na C (v50) ----------
+ * O TX-A/B de fabrica (item 44; b[0x14B7F], o 0x9013 dos ajustes: 0 OFF, 1 A, 2 B) so vale com o TDR
+ * ligado. Na ida do PTT (0x01E43F86..0x01E43FBC), se o lado escolhido nao esta em evidencia, o firmware
+ * troca os lados (0x01E40E52(0), que nao grava nada) e marca b[0x15384] = 1; no fim da TX (0x01E473DC) e
+ * na TX recusada (0x01E411A6), com a marca, destroca e a zera. O get e o set do item so copiam o byte, e
+ * nada mais o le (conferido no desmontado inteiro). O item ganha o C (3) e vira TX-A/B/C.
+ *
+ * A letra que nao esta em nenhum dos dois lados - a C, ou o B quando a C esta no lado B - e a terceira.
+ * Para ela nao ha troca nem gravacao: a TX sai dela pela RAM, como o rodizio a ouve. A leitura do TX-A/B
+ * na ida do PTT (0x01E43F92) vira gancho_tx_abc, que devolve ao trecho de fabrica o lado (1 A, 2 B) ou 0,
+ * e para a terceira marca b[0x15384] com TX_TERCEIRA (se a marca ja estava posta, o PTT ja trocou de lado
+ * e ganha, como no firmware de fabrica). O inicio da TX (0x01E41022) desarma a dupla escuta no lado em
+ * evidencia (0x01E3FDE4, em 0x01E410EA) e so depois le a frequencia de TX decodificada (b[0x15341],
+ * escrita pela decodificacao 0x01E38DE6): ali gancho_tx_desarma poe a terceira na corrente e a potencia
+ * dela no lado em evidencia - a TX tira a potencia de b[0x15E30 + lado em evidencia] (0x01E475A2), e a
+ * de cada canal ou VFO e o nibble baixo do byte 14 do canal cru ou do 16 do VFO (0x01E3A6D0, 0x01E3A682)
+ * -, guardando a do lado na marca. As duas destrocas (0x01E411AE e 0x01E473EE) passam por
+ * gancho_tx_volta: com a terceira na corrente, devolvem a potencia e o lado em evidencia a corrente
+ * (0x01E3FD9E) e refazem a tela; sem a marca, a destroca de fabrica. O firmware zera a marca logo depois
+ * delas, e a partida tambem (0x01E56B3A). */
+#define TX_ABC         (*(volatile u8 *)0x00014B7F)
+#define TX_TROCA       (*(volatile u8 *)0x00015384)
+#define TX_TERCEIRA    0x80u                 /* a TX vai a terceira */
+#define TX_NA_TERCEIRA 0x40u                 /* e ela esta na corrente; bits 0..3, a potencia do lado */
+DADO_NA_LIVRE const char titulo_txabc[] = "TX-A/B/C";
+DADO_NA_LIVRE const char *const txabc_opcoes[4] = {"OFF", "A", "B", "C"};
+
+NA_LIVRE_COD unsigned gancho_tx_abc(void)
+{
+    unsigned t = TX_ABC;                     /* 0 OFF, 1 A, 2 B, 3 C */
+    struct vigia v;
+
+    le_vigia(&v);
+    if (t > 3 || (t == 3 && v.modo != WATCH_TRIPLE))
+        return 0;                            /* fora do TRIPLE nao ha C */
+    if (v.modo != WATCH_TRIPLE || t < 2)
+        return t;
+    if ((t == 3) == (v.c_no_b != 0))         /* a letra esta no lado B */
+        return 2;
+    if (TX_TROCA == 0 && terceira_de(&v) != 0xFFFF)
+        TX_TROCA = TX_TERCEIRA;
+    return 0;
+}
+
+NA_LIVRE_COD void gancho_tx_desarma(void)
+{
+    u32 t;
+    unsigned potencia;
+
+    PARA_DW();
+    if (TX_TROCA != TX_TERCEIRA || (t = terceira()) == 0xFFFF)
+        return;
+    potencia = POTENCIA_LADO[LADO_B] & 0x0F;
+    poe_terceira(t);
+    POTENCIA_LADO[LADO_B] = (CORRENTE_MODO ? CORRENTE_CRU[14] : CORRENTE_VFO[16]) & 0x0F;
+    TX_TROCA = TX_TERCEIRA | TX_NA_TERCEIRA | potencia;
+}
+
+NA_LIVRE_COD void gancho_tx_volta(unsigned r0)
+{
+    unsigned m = TX_TROCA;
+
+    if (!(m & TX_TERCEIRA)) {
+        TROCA_AB(r0);
+        return;
+    }
+    if (m & TX_NA_TERCEIRA) {
+        POTENCIA_LADO[LADO_B] = m & 0x0F;
+        VOLTA_DW();
+        if (MODO_TELA == 0)
+            TELA_INTEIRA();
+    }
 }
 
 /* ---------- scramble: 8 frequencias de inversao, de 2700 a 3400 Hz ----------
