@@ -39,12 +39,14 @@
 # ---------------------------------------------------------------------------------------------
 
 import logging
+import re
 import struct
 
-from chirp import chirp_common, directory, errors, memmap
+from chirp import bitwise, chirp_common, directory, errors, memmap
 from chirp.drivers import radtel_rt900
-from chirp.settings import MemSetting, RadioSetting, RadioSettingGroup, RadioSettingSubGroup, \
-    RadioSettingValueBoolean, RadioSettingValueInteger, RadioSettingValueList, RadioSettingValueString
+from chirp.settings import InvalidValueError, MemSetting, RadioSetting, RadioSettingGroup, RadioSettingSubGroup, \
+    RadioSettingValueBoolean, RadioSettingValueInteger, RadioSettingValueList, RadioSettingValueMap, \
+    RadioSettingValueString
 
 LOG = logging.getLogger(__name__)
 
@@ -71,7 +73,27 @@ WATCH_SECTOR = 0x0D2000
 WATCH_MAGIC = b'WTC1'
 WATCH_LEN = 14                                 # magic, mode, MDF-C, C channel, C on B, -, B channel, sum
 WATCH_BASE = BLOB_BASE + BLOB_SIZE             # one 64-byte block in the .img, after the banks
-IMAGE_SIZE = WATCH_BASE + EXT_BLOCK
+WATCH_C_VFO = 0x01                             # record byte 9 (firmware v49): C is in VFO mode
+WATCH_B_VFO = 0x02                             # ... and B, saved while C is on side B, was in VFO mode
+
+# --- VFO C (firmware v49; struct vfc in bancos.c): C's VFO and the one B had when C went to side B,
+# each in the radio's 32-byte VFO format (struct vfo, as VFO A and B at 0x8000) ---
+VFC_SECTOR = 0x0D3000
+VFC_MAGIC = b'VFC1'
+VFO_LEN = 32
+VFC_LEN = 4 + 2 * VFO_LEN + 2                  # magic, C's VFO, B's saved VFO, sum
+VFC_BLOCKS = 2                                 # 70 bytes travel in two 64-byte cable blocks
+VFC_BASE = WATCH_BASE + EXT_BLOCK              # in the .img, after the WATCH block
+IMAGE_SIZE = VFC_BASE + VFC_BLOCKS * EXT_BLOCK
+VFC_LAYOUT = """
+#seekto 0x%X;
+struct {
+  u8 magic[4];
+  struct vfo c;
+  struct vfo b;
+  ul16 sum;
+} vfc;
+"""
 WATCH_OPTIONS = ['SINGLE', 'DUAL', 'TRIPLE']   # the radio's menu order
 WATCH_VALUES = [1, 0, 2]                       # list position -> value in the record (0 DUAL)
 WATCH_SINGLE = 1
@@ -267,6 +289,17 @@ class _WatchStore(object):
     def c_on_side_b(self):
         return self._record(self.block())[8] != 0
 
+    def c_in_vfo(self):
+        return bool(self._record(self.block())[9] & WATCH_C_VFO)
+
+    def b_in_vfo(self):
+        """B's work mode while C is on side B (the radio keeps C's in B's slot meanwhile)."""
+        return bool(self._record(self.block())[9] & WATCH_B_VFO)
+
+    def set_c_in_vfo(self, in_vfo):
+        flags = self._record(self.block())[9] & ~WATCH_C_VFO
+        self._set(9, bytes([flags | (WATCH_C_VFO if in_vfo else 0)]))
+
     def set_mode(self, mode):
         self._set(4, bytes([mode]))
 
@@ -277,14 +310,63 @@ class _WatchStore(object):
         self._set(6, struct.pack('<H', channel))
 
     def merged(self, in_radio):
-        """The block to upload: this image's mode, MDF-C and C channel over the radio's current
-        record (C on side B and B's channel). None if the image has no record of its own."""
+        """The block to upload: this image's mode, MDF-C, C channel and C's work mode over the
+        radio's current record (C on side B, B's channel and B's work mode). C's work mode stays
+        the radio's while C is on side B: it lives in B's slot then. None if the image has no
+        record of its own."""
         if not self.valid(self.block()):
             return None
         mine = self._record(self.block())
         rec = self._record(in_radio)
         rec[4:8] = mine[4:8]
+        if not rec[8]:
+            rec[9] = rec[9] & ~WATCH_C_VFO | mine[9] & WATCH_C_VFO
         return self._block(rec)
+
+
+class _VfcStore(object):
+    """The VFO C block inside the image (struct vfc in bancos.c, sector 0xD3000): C's VFO and the
+    one B had when C went to side B. Read through radio._vfc (the base class's VFO layout).
+
+    The radio creates it the first time C goes to side B, with C starting as a copy of B's VFO,
+    and so does a change to VFO C here (materialize). C's VFO is CHIRP's; B's saved one belongs to
+    the radio, and while C is on side B the whole block does (merged()).
+    """
+
+    def __init__(self, radio):
+        self._radio = radio
+
+    def block(self):
+        return bytes(self._radio._mmap[VFC_BASE:VFC_BASE + VFC_BLOCKS * EXT_BLOCK])
+
+    @staticmethod
+    def valid(block):
+        return (block[:4] == VFC_MAGIC and _checksum(block[:VFC_LEN - 2]) ==
+                struct.unpack('<H', block[VFC_LEN - 2:VFC_LEN])[0])
+
+    @staticmethod
+    def _sealed(rec):
+        rec[VFC_LEN - 2:VFC_LEN] = struct.pack('<H', _checksum(bytes(rec[:VFC_LEN - 2])))
+        return bytes(rec) + b'\xff' * (VFC_BLOCKS * EXT_BLOCK - VFC_LEN)
+
+    def materialize(self):
+        """Before the first change to VFO C: the block, with C and B's saved one as B's VFO."""
+        if not self.valid(self.block()):
+            b = bytes(self._radio._mmap[0x8000 + VFO_LEN:0x8000 + 2 * VFO_LEN])   # vfo.b
+            self._radio._mmap[VFC_BASE] = self._sealed(bytearray(VFC_MAGIC + b + b + b'\x00\x00'))
+
+    def seal(self):
+        """After a change through radio._vfc: the sum again."""
+        self._radio._mmap[VFC_BASE] = self._sealed(bytearray(self.block()[:VFC_LEN]))
+
+    def merged(self, in_radio, c_on_side_b):
+        """The blocks to upload: this image's C VFO over the radio's block (B's saved VFO). None
+        if the image has no block of its own, or C is on side B in the radio."""
+        if c_on_side_b or not self.valid(self.block()):
+            return None
+        rec = bytearray(in_radio[:VFC_LEN] if self.valid(in_radio) else self.block()[:VFC_LEN])
+        rec[4:4 + VFO_LEN] = self.block()[4:4 + VFO_LEN]
+        return self._sealed(rec)
 
 
 class BJ8300Bank(chirp_common.NamedBank):
@@ -435,6 +517,26 @@ class _BankCableMixin(object):
                 'The radio did not keep WATCH, CH-C and MDF-C: they need the BJ8300_BANK firmware '
                 'v46 or later. Channels, settings and banks were written.')
 
+    def _read_vfc(self):
+        return b''.join(self._read_extended(VFC_SECTOR + i * EXT_BLOCK) for i in range(VFC_BLOCKS))
+
+    def _upload_vfc(self):
+        """Writes VFO C only when this image has its block, C is not on side B in the radio (then
+        the block is the radio's: C lives in B's slots and the block keeps B's VFO), and C's VFO
+        changes. Two 64-byte blocks, the first one erasing the sector; read back, because up to
+        v48 the firmware ignores the write (and still acknowledges it)."""
+        c_on_side_b = _WatchStore._record(self._read_extended(WATCH_SECTOR))[8] != 0
+        in_radio = self._read_vfc()
+        data = _VfcStore(self).merged(in_radio, c_on_side_b)
+        if data is None or data[:VFC_LEN] == in_radio[:VFC_LEN]:
+            return
+        for i in range(VFC_BLOCKS):
+            self._write_extended(VFC_SECTOR + i * EXT_BLOCK, data[i * EXT_BLOCK:(i + 1) * EXT_BLOCK])
+        if self._read_vfc()[:VFC_LEN] != data[:VFC_LEN]:
+            raise errors.RadioError(
+                'The radio did not keep VFO C: it needs the BJ8300_BANK firmware v49 or later. '
+                'Channels, settings, banks and WATCH were written.')
+
 
 # --- roger: the banks firmware adds BEEP 2 and COIN ---
 # The radio keeps the roger in the whole byte at 0x9017: 0 OFF, 1 BEEP, 2 TONE1200, and the new
@@ -485,34 +587,68 @@ class _VfoScrambleSetting(MemSetting):
         vfo.scramble = vfo.scramble & 3 | (n & 1) << 2
 
 
-def _replace_setting(group, name, new):
+ON_SIDE_B_DOC = ('C is in focus on the radio right now (TRIPLE, on side B): its work mode and VFO '
+                 'live in side B\'s slots there, and B\'s own wait in the radio. Change C on the '
+                 'radio, or press A/B on it to move on to A and download again.')
+
+
+def _digits(digits):
+    """A VFO's frequency or offset: one decimal digit per byte, most significant first (the
+    base class's bcd_decode_freq). A byte that is not a digit counts as 0, so an erased block
+    shows 0 instead of failing."""
+    number = 0
+    for d in digits:
+        number = number * 10 + (int(d) if int(d) <= 9 else 0)
+    return number
+
+
+def _find(tree, name):
+    """(parent, element) of the setting or group called `name`, anywhere in the settings tree, or
+    (None, None). The top (RadioSettings) is a list of groups; a group maps name -> element."""
+    children = (tree.items() if isinstance(tree, RadioSettingGroup)
+                else [(g.get_name(), g) for g in tree])
+    for key, element in children:
+        if key == name:
+            return tree, element
+        # RadioSetting is a subclass of RadioSettingGroup in CHIRP: only real groups have children
+        if isinstance(element, RadioSettingGroup) and not isinstance(element, RadioSetting):
+            found = _find(element, name)
+            if found[1] is not None:
+                return found
+    return None, None
+
+
+def _take(tree, name):
+    """Takes the setting or group called `name` out of the tree and returns it (None if absent)."""
+    parent, element = _find(tree, name)
+    if element is not None:
+        if isinstance(parent, RadioSettingGroup):
+            del parent[element]
+        else:
+            parent.remove(element)
+    return element
+
+
+def _put(group, element, after=None):
+    """Puts element in group right after the element called `after`, or first (also when `after`
+    is not there)."""
+    group.append(element)
+    order = group._element_order
+    order.remove(element.get_name())
+    order.insert(order.index(after) + 1 if after in order else 0, element.get_name())
+
+
+def _replace_setting(tree, name, new):
     """Replaces the base class setting `name` with what new(old) returns, in the same tree spot."""
-    # the top (RadioSettings) is a list of groups; groups map name -> element
-    children = (group.items() if isinstance(group, RadioSettingGroup)
-                else [(g.get_name(), g) for g in group])
-    for key, element in children:
-        # RadioSetting is a subclass of RadioSettingGroup in CHIRP: test the setting first
-        if isinstance(element, RadioSetting):
-            if key == name:
-                group._elements[key] = new(element)    # same name and same position in the list
-                return True
-        elif isinstance(element, RadioSettingGroup) and _replace_setting(element, name, new):
-            return True
-    return False
-
-
-def _remove_setting(group, name):
-    """Removes the base class setting `name` from wherever it is in the tree."""
-    children = (group.items() if isinstance(group, RadioSettingGroup)
-                else [(g.get_name(), g) for g in group])
-    for key, element in children:
-        if isinstance(element, RadioSetting):
-            if key == name:
-                del group[element]
-                return True
-        elif isinstance(element, RadioSettingGroup) and _remove_setting(element, name):
-            return True
-    return False
+    parent, element = _find(tree, name)
+    if not isinstance(element, RadioSetting):
+        return False
+    element = new(element)                             # a MemSetting is named after its address
+    del parent._elements[name]
+    parent._elements[element.get_name()] = element
+    order = parent._element_order
+    order[order.index(name)] = element.get_name()      # same position in the list
+    return True
 
 
 def _roger_setting(old, roger):
@@ -521,6 +657,18 @@ def _roger_setting(old, roger):
                        RadioSettingValueList(ROGER_OPTIONS, current_index=position))
     rs.set_doc('End-of-transmission tone. BEEP 2 (four notes) and COIN (a game coin) come from '
                'the banks firmware; the others are the stock ones.')
+    return rs
+
+
+def _same_as_memsetting(old, path):
+    rs = MemSetting(path, old.get_shortname(), old.value)
+    rs.set_doc(old.__doc__ or '')
+    return rs
+
+
+def _noise_reduction_setting(old, nr):
+    rs = MemSetting('settings.unknown_9032', old.get_shortname(), RadioSettingValueBoolean(int(nr) & 1))
+    rs.set_doc(old.__doc__ or '')
     return rs
 
 
@@ -586,7 +734,8 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             'many banks as you like. Double-click a bank\'s column header to rename it. Each\n'
             'bank\'s name, channel count and on/off switch are also in Settings > Banks.\n'
             '\n'
-            'WATCH, CH-C and MDF-C are in Settings > Watch (they need firmware v46 or later).\n'
+            'WATCH, CH-C and MDF-C are in Settings > VFO A/B/C Channel, with MDF-A and MDF-B\n'
+            '(WATCH, CH-C and MDF-C need firmware v46 or later).\n'
             '\n'
             'Keep a copy of your first download before changing anything.')
         rp.pre_upload = (
@@ -608,6 +757,9 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             missing = IMAGE_SIZE - len(self._mmap)
             self._mmap = memmap.MemoryMapBytes(self._mmap.get_packed() + b'\xff' * missing)
         super().process_mmap()
+        # VFO C (firmware v49), with the base class's own VFO layout: read and written as A and B
+        vfo = re.search(r'struct vfo \{.*?\};', radtel_rt900.MEM_FORMAT, re.S).group(0)
+        self._vfc = bitwise.parse(vfo + VFC_LAYOUT % VFC_BASE, self._mmap).vfc
 
     # ONE SESSION for everything (learned the hard way, 2026-10-24): until then the driver read
     # channels and settings through the stock sync_in, which ends with 'E', and opened a second
@@ -621,7 +773,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         try:
             data = radtel_rt900.do_download(self)      # opens the session; stock channels/settings
             self._check_firmware()
-            blob = self._download_banks() + self._read_extended(WATCH_SECTOR)
+            blob = self._download_banks() + self._read_extended(WATCH_SECTOR) + self._read_vfc()
         except errors.RadioError:
             raise
         except Exception:
@@ -655,6 +807,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             self._upload_stock()
             self._upload_banks()
             self._upload_watch()
+            self._upload_vfc()
         except errors.RadioError:
             raise
         except Exception:
@@ -679,34 +832,223 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             if not _replace_setting(settings, 'vfo_%s_scramble' % side,
                                     lambda old: _vfo_scramble_setting(old, side, vfo)):
                 LOG.warning('VFO %s scramble not found in the base class', side.upper())
+        # The base class builds VFO A's Voice Privacy as a plain setting with no apply callback, and
+        # its set_settings only writes MemSettings and callbacks: CHIRP never wrote it (VFO B's is a
+        # MemSetting). Here it is one too.
+        if not _replace_setting(settings, 'vfo.a.voicepri',
+                                lambda old: _same_as_memsetting(old, 'vfo.a.voicepri')):
+            LOG.warning('VFO A voice privacy not found in the base class')
         # The banks firmware (v30 onwards) plays no voice prompt at all: their space holds code now,
         # and the radio's VOICE menu item is gone, so the setting would do nothing.
-        if not _remove_setting(settings, 'settings_voice'):
+        # The base class reads Noise reduction at 0x9031, a byte the BJ8300 never touches. The cable
+        # serves the 0x9000 block from RAM (0x01E43A94: bytes 0..31 from 0x14B6C, 32..63 from
+        # 0x14BCC), and the NOISE REDUCTION menu item keeps it at 0x14BDE (get 0x01E3D0E0, bit 0):
+        # 0x9032. The other 30 menu items in the block are where the base class has them.
+        nr = self._memobj.settings.unknown_9032
+        if not _replace_setting(settings, 'settings_noise_reduction',
+                                lambda old: _noise_reduction_setting(old, nr)):
+            LOG.warning('noise reduction setting not found in the base class')
+        if _take(settings, 'settings_voice') is None:
             LOG.warning('voice prompts setting not found in the base class')
         # The banks firmware (v37 onwards) is English only: the LANGUAGE menu item is gone and the
         # radio sets English at every power-on, whatever the memory holds.
-        if not _remove_setting(settings, 'settings_language'):
+        if _take(settings, 'settings_language') is None:
             LOG.warning('language setting not found in the base class')
+        self._vfo_settings(settings)
         settings.append(self._bank_settings())
-        settings.append(self._watch_settings())
         return settings
 
-    def _watch_settings(self):
-        """Settings > Watch: WATCH, CH-C and MDF-C, as the radio's menu items. Each one is only
-        written when it was changed on this page, like the bank settings."""
+    def _vfo_settings(self, settings):
+        """Settings > VFO A/B/C Channel: the base class VFO A/B Channel and FM/AM/SSB Modulation
+        come out of Specific to the top of the tree. WATCH goes first, MDF-A and MDF-B leave Basic
+        for their side's block, and C gets a block of its own (CH-C and MDF-C)."""
         store = _WatchStore(self)
-        group = RadioSettingGroup('watch', 'Watch')
+        abc = _take(settings, 'abblock')
+        if abc is None:
+            LOG.warning('VFO A/B Channel not found in the base class')
+            abc = RadioSettingGroup('abblock', '')
+        abc.set_shortname('VFO A/B/C Channel')
+        moved = [abc] + [g for g in [_take(settings, 'ssbblock')] if g is not None]
+        at = next((i + 1 for i, g in enumerate(settings) if g.get_name() == 'spec'), len(settings))
+        settings[at:at] = moved
 
+        _put(abc, self._watch_mode_setting(store))
+        ttr = _take(settings, 'settings_tdr')
+        if ttr is None:
+            LOG.warning('TDR setting not found in the base class')
+        else:
+            ttr.set_shortname('TTR (Transmitter Triple Receiver)')     # the radio's TDR menu item
+            ttr.set_doc('On: the radio listens to every frequency on the screen, each for the same '
+                        'time (A and B in DUAL; A, B and C in TRIPLE). Off: only the one in focus. '
+                        'In SINGLE it stays off (the upload turns it off).')
+            _put(abc, ttr, after='watch_mode')
+        for side in 'ab':
+            block = abc['%schannel' % side] if '%schannel' % side in abc else None
+            mdf = _take(settings, 'settings_mdf' + side) if block is not None else None
+            if mdf is None:
+                LOG.warning('VFO %s Channel or MDF-%s not found in the base class', side.upper(),
+                            side.upper())
+                continue
+            mdf.set_shortname('Memory Display Format %s (MDF-%s)' % (side.upper(), side.upper()))
+            _put(block, mdf, after='settings_vfomr' + side)
+        # VFO C (firmware v49) has the same options as A and B, plus CH-C. While C is on side B in
+        # the radio, its work mode and VFO live in B's slots, and the VFO C block keeps B's own:
+        # both blocks show the radio's truth, read only (like CH-C), until A/B moves C off side B.
+        on_b = store.c_on_side_b()
+        has_vfc = _VfcStore.valid(_VfcStore(self).block())
+        if on_b and has_vfc and 'bchannel' in abc:
+            self._b_saved_block(abc['bchannel'], store)
+        block = RadioSettingSubGroup('cchannel', 'VFO C Channel')
+        block.append(self._c_mode_setting(store, on_b))
+        block.append(self._mdf_c_setting(store))
+        block.append(self._channel_c_setting(store))
+        # without its block yet, C shows B's VFO: the radio starts C as a copy of it
+        shown = self._memobj.vfo.b if on_b or not has_vfc else self._vfc.c
+        for rs in self._vfo_fields('vfoc', 'C', shown, None if on_b else self._write_vfo_c):
+            block.append(rs)
+        abc.append(block)
+
+    def _b_saved_block(self, block, store):
+        """VFO B while C is on side B: B's work mode and VFO as the radio saved them (the WATCH
+        record and the VFO C block), read only; MDF-B stays where it is, the radio's setting."""
+        mdf = block['settings_mdfb'] if 'settings_mdfb' in block else None
+        for element in list(block.values()):
+            del block[element]
+        value = RadioSettingValueList(radtel_rt900.WORKMODE_LIST, current_index=0 if store.b_in_vfo() else 1)
+        value.set_mutable(False)
+        rs = RadioSetting('vfob_saved_mode', 'Work Mode', value)
+        rs.set_doc(ON_SIDE_B_DOC)
+        block.append(rs)
+        if mdf is not None:
+            block.append(mdf)
+        for rs in self._vfo_fields('vfob_saved', 'B', self._vfc.b, None):
+            block.append(rs)
+
+    def _c_mode_setting(self, store, on_b):
+        if on_b:                                   # C's work mode is B's slot in the radio now
+            value = RadioSettingValueList(radtel_rt900.WORKMODE_LIST,
+                                          current_index=int(self._memobj.settings.vfomrb))
+            value.set_mutable(False)
+        else:
+            value = RadioSettingValueList(radtel_rt900.WORKMODE_LIST,
+                                          current_index=0 if store.c_in_vfo() else 1)
+        rs = RadioSetting('watch_c_mode', 'Work Mode', value)
+        rs.set_doc(ON_SIDE_B_DOC if on_b else 'Set C Work Mode: its VFO (below) or the memory channel '
+                   'CH-C. Needs firmware v49 or later.')
+        rs.set_apply_callback(self._apply_c_mode)
+        return rs
+
+    def _apply_c_mode(self, setting):
+        if setting.value.changed() and setting.value.get_mutable():
+            _WatchStore(self).set_c_in_vfo(int(setting.value) == 0)
+
+    def _write_vfo_c(self, apply):
+        """A change to VFO C: its block first (the radio's first-time copy of B), then the sum."""
+        store = _VfcStore(self)
+        store.materialize()
+        apply(self._vfc.c)
+        store.seal()
+
+    def _vfo_freq_valid(self, value):
+        """The base class's VFO frequency check (freq_validate in its get_settings)."""
+        mode = self._memobj.opmode.radio_mode
+        vhf_lower = 18.0 if mode in [0x00, 0x56, 0xff] else 108.0
+        vhf_upper, uhf_lower = 299.99875, 300.0
+        uhf_upper = 999.99875 if mode in [0x00, 0x56] else 519.99875
+        hz = chirp_common.parse_freq(value)
+        if hz < vhf_lower * 1000000:
+            raise InvalidValueError("Can't be less than %i.0000" % vhf_lower)
+        if vhf_upper * 1000000 <= hz < uhf_lower * 1000000:
+            raise InvalidValueError("Can't be between %i.9975-%i.0000" % (vhf_upper - 1, uhf_lower))
+        if hz > uhf_upper * 1000000:
+            raise InvalidValueError("Can't be greater than %i.9975" % (uhf_upper - 1))
+        return chirp_common.format_freq(hz)
+
+    def _vfo_fields(self, prefix, side, shown, write):
+        """The VFO fields of a block, the same ones and the same conversions as the base class's
+        VFO A and B, for a VFO struct of the same layout: shown from `shown`; a change calls
+        write(f), and f gets the struct to write to. Read only when write is None."""
+        def field(name, label, value, apply, doc):
+            rs = RadioSetting('%s_%s' % (prefix, name), label, value)
+            rs.set_doc(doc % side)
+            if write is None:
+                value.set_mutable(False)
+            else:
+                def callback(setting):
+                    if setting.value.changed():
+                        write(lambda vfo: apply(vfo, setting))
+                rs.set_apply_callback(callback)
+            return rs
+
+        def lst(options, index):
+            return RadioSettingValueList(options, current_index=index)
+
+        def set_digits(digits, count, number):
+            for i in range(count - 1, -1, -1):
+                digits[i] = number % 10
+                number //= 10
+
+        def scramble(vfo, setting):
+            n = SCRAMBLE_VALUES[int(setting.value)]
+            vfo.unknown3 = n >> 1
+            vfo.scramble = vfo.scramble & 3 | (n & 1) << 2
+
+        freq = RadioSettingValueString(0, 10, chirp_common.format_freq(_digits(shown.freq) * 10))
+        freq.set_validate_callback(self._vfo_freq_valid)
+        nibble = int(shown.unknown3) << 1 | int(shown.scramble) >> 2
+        fields = [
+            field('freq', 'Frequency', freq,
+                  lambda vfo, s: set_digits(vfo.freq, 8, chirp_common.parse_freq(str(s.value)) // 10),
+                  'Set %s Band VFO frequency.'),
+            field('step', 'Tuning Step', RadioSettingValueMap(self._step_map, int(shown.step)),
+                  lambda vfo, s: setattr(vfo, 'step', s.value.get_mem_val()),
+                  'Set %s Band frequency Tuning Step.'),
+            field('txpower', 'TX Power', lst([str(x) for x in self.POWER_LEVELS], int(shown.txpower)),
+                  lambda vfo, s: setattr(vfo, 'txpower', int(s.value)), 'Set %s Band TX Power.'),
+            field('widenarr', 'Bandwidth', lst(self._bandwidth_list, int(shown.widenarr)),
+                  lambda vfo, s: setattr(vfo, 'widenarr', int(s.value)), 'Set %s Band Bandwidth.'),
+            field('rxtone', 'RX CTCSS/DCS',
+                  lst(self._code_list, self._code_list.index(self.decode(shown.rxtone))),
+                  lambda vfo, s: self.apply_vfo_tone(s, vfo, 'rxtone'),
+                  'Set %s Band RX CTCSS or DCS code.'),
+            field('txtone', 'TX CTCSS/DCS',
+                  lst(self._code_list, self._code_list.index(self.decode(shown.txtone))),
+                  lambda vfo, s: self.apply_vfo_tone(s, vfo, 'txtone'),
+                  'Set %s Band TX CTCSS or DCS code.'),
+            field('voicepri', 'Voice Privacy - Subtone Encryption', lst(self._voicepri_list, int(shown.voicepri)),
+                  lambda vfo, s: setattr(vfo, 'voicepri', int(s.value)),
+                  'Set %s Band Voice Privacy - subtone voice encryption.'),
+            field('offset', 'Offset (MHz)',
+                  RadioSettingValueString(0, 10, chirp_common.format_freq(_digits(shown.offset) * 1000)),
+                  lambda vfo, s: set_digits(vfo.offset, 6, chirp_common.parse_freq(str(s.value)) // 1000),
+                  'Set %s Band TX frequency offset value.'),
+            field('sftd', 'Offset Direction', lst(self._offset_list, int(shown.sftd)),
+                  lambda vfo, s: setattr(vfo, 'sftd', int(s.value)), 'Set %s Band TX frequency offset direction.'),
+            field('scode', 'S-CODE', lst(self._scode_list, int(shown.scode)),
+                  lambda vfo, s: setattr(vfo, 'scode', int(s.value)), 'Set the %s Band DTMF code ID to use for PTT ID.'),
+            field('scramble', 'Scramble',
+                  lst(SCRAMBLE_OPTIONS, SCRAMBLE_VALUES.index(nibble if nibble in SCRAMBLE_VALUES else 1)),
+                  scramble, SCRAMBLE_DOC.replace('%', '%%') + ' (%s Band)'),
+        ]
+        if self._has_am_per_channel:
+            fields.append(field('rxmod', 'RX Modulation', lst(self._rx_modulation_list, int(shown.rxmod)),
+                                lambda vfo, s: setattr(vfo, 'rxmod', int(s.value)), 'Set %s Band RX Modulation.'))
+        return fields
+
+    def _watch_mode_setting(self, store):
+        """WATCH, CH-C and MDF-C are the radio's menu items. Each one is only written when it was
+        changed in CHIRP, like the bank settings."""
         rs = RadioSetting('watch_mode', 'Watch (WATCH)', RadioSettingValueList(
             WATCH_OPTIONS, current_index=WATCH_VALUES.index(store.mode())))
         rs.set_doc('How many frequencies the main screen shows. SINGLE: only the one in focus, full '
                    'screen, and dual watch stays off (the upload turns TDR off). DUAL: A and B, as '
-                   'stock. TRIPLE: A, B and a third one, C (the channel below); the A/B key goes '
-                   'A, B, C. In DUAL and TRIPLE, TDR on listens to all of them, each for the same '
-                   'time, and TDR off only to the one in focus. Needs firmware v46 or later.')
+                   'stock. TRIPLE: A, B and a third one, C (VFO C Channel, below); the A/B key '
+                   'goes A, B, C. In DUAL and TRIPLE, TDR on listens to all of them, each for the '
+                   'same time, and TDR off only to the one in focus. Needs firmware v46 or later.')
         rs.set_apply_callback(self._apply_watch_mode)
-        group.append(rs)
+        return rs
 
+    def _channel_c_setting(self, store):
         value = RadioSettingValueInteger(1, NUM_CHANNELS, store.channel_c() + 1)
         if store.c_on_side_b():
             value.set_mutable(False)
@@ -716,17 +1058,17 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         else:
             doc = ('The memory channel shown and watched as C in TRIPLE. An empty channel is '
                    'skipped: TRIPLE then works as DUAL.')
-        rs = RadioSetting('watch_channel_c', 'C channel (CH-C)', value)
+        rs = RadioSetting('watch_channel_c', 'Channel (CH-C)', value)
         rs.set_doc(doc)
         rs.set_apply_callback(self._apply_watch_channel_c)
-        group.append(rs)
+        return rs
 
+    def _mdf_c_setting(self, store):
         rs = RadioSetting('watch_mdf_c', 'Memory Display Format C (MDF-C)', RadioSettingValueList(
             radtel_rt900.MDF_LIST, current_index=store.mdf_c()))
         rs.set_doc('How C is shown in TRIPLE, like MDF-A and MDF-B.')
         rs.set_apply_callback(self._apply_watch_mdf_c)
-        group.append(rs)
-        return group
+        return rs
 
     def _apply_watch_mode(self, setting):
         if setting.value.changed():

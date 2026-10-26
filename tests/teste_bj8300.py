@@ -57,6 +57,7 @@ def _stub_chirp():
         pass
 
     errors.RadioError = RadioError
+    bitwise = types.ModuleType('chirp.bitwise')     # o VFO C so e lido quando a imagem e montada
     errors.InvalidDataError = InvalidDataError
 
     chirp_common = types.ModuleType('chirp.chirp_common')
@@ -144,6 +145,13 @@ def _stub_chirp():
         def __init__(self, minimo, maximo, atual, autopad=True):
             self.v = atual
 
+    class RadioSettingValueMap(object):
+        def __init__(self, mapa, atual):
+            self.v = atual
+
+    class InvalidValueError(Exception):
+        pass
+
     class RadioSettingValueInteger(object):
         def __init__(self, minimo, maximo, atual):
             self.v = atual
@@ -156,6 +164,8 @@ def _stub_chirp():
     settings.RadioSettingValueList = RadioSettingValueList
     settings.RadioSettingValueString = RadioSettingValueString
     settings.RadioSettingValueInteger = RadioSettingValueInteger
+    settings.RadioSettingValueMap = RadioSettingValueMap
+    settings.InvalidValueError = InvalidValueError
 
     drivers = types.ModuleType('chirp.drivers')
     drivers.__path__ = []
@@ -182,7 +192,9 @@ def _stub_chirp():
     rt900._enter_programming_mode = lambda radio: None
     rt900._exit_programming_mode = lambda radio: None
 
+    chirp.bitwise = bitwise
     for nome, mod in (('chirp', chirp), ('chirp.memmap', memmap), ('chirp.errors', errors),
+                      ('chirp.bitwise', bitwise),
                       ('chirp.chirp_common', chirp_common), ('chirp.directory', directory),
                       ('chirp.settings', settings), ('chirp.drivers', drivers),
                       ('chirp.drivers.radtel_rt900', rt900)):

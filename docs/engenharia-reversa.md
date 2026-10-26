@@ -129,6 +129,13 @@ Gravação estendida só em `0xC1000..0xD3FFF` (até a v45, `0xD1FFF`; a v46 inc
 WATCH e a v49 os VFOs da C), apagando o setor quando o bloco começa nele. Qualquer outro endereço é ignorado sem escrever
 nada (provado com `tools/cabo/teste_cabo_grava.ps1`), e o ACK sai do mesmo jeito.
 
+**O bloco de ajustes `0x9000` vem da RAM.** O tratador do cabo trata o `0x9000` à parte
+(`0x01E439B4`): monta os 64 B da RAM (`0x01E43A94`: bytes 0..31 de `0x14B6C`, 32..63 de `0x14BCC`) e,
+na gravação, devolve para lá (`0x01E43A32`). No chip, os ajustes são um log de registros de 96 B
+(`0x9010 + n × 0x60`, gravado por `0x01E3AB36`). O NOISE REDUCTION (`b[0x14BDE]`, get `0x01E3D0E0`)
+cai em `0x9032`; o driver de base o lia em `0x9031`. Os outros 30 itens do menu do bloco batem.
+O `0x8000` é parecido: o cabo recarrega os VFOs de A e B do log (`0x01E3A5E8`) e manda `0x14E42`.
+
 **Leitura de memória (v31, diagnóstico).** No `R` estendido, endereço com o bit 22 ligado
 (`0x400000` em diante, que o chip de 1 MB não tem) devolve 64 B da memória do processador em
 `0x01E00000 + (endereço − 0x400000)`: o que o firmware enxerga da flash interna (e da RAM em

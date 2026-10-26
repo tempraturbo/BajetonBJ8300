@@ -5,6 +5,34 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 26 — VFO A/B/C Channel, VFO C, NR and VFO A's Voice Privacy
+
+- **Settings in another order, at the owner's request.** VFO A/B Channel became **VFO A/B/C
+  Channel** and, with FM/AM/SSB Modulation, moved out of BJ8300_v2.0TEMPRA Specific to the top of
+  the tree. WATCH and **TTR** (TDR, which left Specific) come first. The three MDFs each sit in their
+  side's block, always 2nd and with the same name (`Memory Display Format A (MDF-A)`…), and left
+  Basic Settings. The Watch group is gone.
+- **VFO C (firmware v49).** The VFO C Channel block has the same fields as A and B (Frequency,
+  Tuning Step, TX Power, Bandwidth, the tones, Voice Privacy, Offset, Offset Direction, S-CODE,
+  Scramble and RX Modulation), plus Work Mode, MDF-C and CH-C. The VFO format is the base driver's
+  own (its `struct vfo`), read over the new block of the `.img`.
+- **In the `.img`, the VFO C block (128 bytes, two cable blocks) goes after the WATCH one.** The
+  download reads it from `0xD3000`. Without it, VFO C shows B's, which is how the radio starts C, and
+  the first change creates the block. The upload only writes it when C's VFO changes and reads it
+  back; with firmware v46 to v48, it warns that it needs v49.
+- **With C on side B in the radio,** its mode and VFO are in B's slots, and the block keeps B's. VFO
+  C shows C's and VFO B shows the saved B, both read only, and the upload leaves the block alone.
+- **Noise reduction read from the right byte.** The base driver reads it at `0x9031`, a byte the
+  BJ-8300 does not use, and CHIRP showed it off with NR on. The cable builds the `0x9000` block from
+  RAM, and the NOISE REDUCTION item keeps it at `b[0x14BDE]`, which lands at `0x9032`. The other 30
+  menu items in the block were checked: all are where the base driver puts them.
+- **VFO A's Voice Privacy written.** In the base driver it is a setting with no callback, and its
+  `set_settings` only writes MemSettings and callbacks: the value never reached the radio (B's is a
+  MemSetting). Proven by running the base driver: with ENCRY2 applied, the field stays at 0.
+- New tests: in `teste_chirp_real`, 10c to 10c6 (the tree and NR) and 10k to 10o (VFO C, the mode,
+  C on side B and Voice Privacy); in `teste_clonagem`, 7 to 7f (the cable, with v49's window and
+  v46-v48's).
+
 ## v49 — Oct 26 — VFO C and the light on in the spectrum ⏳ in the code, no release yet
 
 At the owner's request, C now has the same options as A and B. Up to v48 it was only a memory

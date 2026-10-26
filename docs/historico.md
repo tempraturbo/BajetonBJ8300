@@ -5,6 +5,35 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 26/10 — VFO A/B/C Channel, o VFO C, o NR e a Voice Privacy do A
+
+- **Settings em outra ordem, a pedido do dono.** O VFO A/B Channel virou **VFO A/B/C Channel** e,
+  com o FM/AM/SSB Modulation, saiu de dentro do BJ8300_v2.0TEMPRA Specific para o topo da árvore. O
+  WATCH e o **TTR** (o TDR, que saiu do Specific) vêm primeiro. Os três MDF ficam cada um no bloco do
+  seu lado, sempre em 2º e com o mesmo nome (`Memory Display Format A (MDF-A)`…), e saíram do Basic
+  Settings. O grupo Watch deixou de existir.
+- **VFO C (firmware v49).** O bloco VFO C Channel tem os mesmos campos do A e do B (Frequency,
+  Tuning Step, TX Power, Bandwidth, os tons, Voice Privacy, Offset, Offset Direction, S-CODE,
+  Scramble e RX Modulation), mais o Work Mode, o MDF-C e o CH-C. O formato do VFO é o do próprio
+  driver de base (o `struct vfo` dele), lido sobre o bloco novo do `.img`.
+- **No `.img`, o bloco do VFO C (128 B, dois blocos do cabo) vai depois do do WATCH.** O download o
+  lê de `0xD3000`. Sem ele, o VFO C mostra o do B, que é como o rádio começa a C, e a primeira
+  mudança cria o bloco. O upload só o grava quando o VFO da C muda e o lê de volta; com o firmware
+  da v46 à v48, avisa que precisa da v49.
+- **Com a C no lado B no rádio,** o modo e o VFO dela estão nas vagas do B, e o bloco guarda os do B.
+  O VFO C mostra os da C e o VFO B mostra o B guardado, os dois só de leitura, e o upload não toca no
+  bloco.
+- **Noise reduction lido do byte certo.** O driver de base o lê em `0x9031`, um byte que o BJ-8300
+  não usa, e o CHIRP mostrava desligado com o NR ligado. O cabo monta o bloco `0x9000` da RAM, e o
+  item NOISE REDUCTION guarda em `b[0x14BDE]`, que cai em `0x9032`. Conferidos os outros 30 itens do
+  menu que moram no bloco: todos estão onde o driver de base os põe.
+- **Voice Privacy do VFO A gravada.** No driver de base ela é um ajuste sem callback, e o
+  `set_settings` dele só grava MemSettings e callbacks: o valor nunca chegava ao rádio (o do B é um
+  MemSetting). Provado rodando o driver de base: com ENCRY2 aplicado, o campo fica em 0.
+- Testes novos: no `teste_chirp_real`, do 10c ao 10c6 (a árvore e o NR) e do 10k ao 10o (o VFO C, o
+  modo, a C no lado B e a Voice Privacy); no `teste_clonagem`, do 7 ao 7f (o cabo, com a janela da
+  v49 e a da v46 à v48).
+
 ## v49 — 26/10 — o VFO C e a luz acesa no espectro ⏳ no código, sem release ainda
 
 A pedido do dono, a C passa a ter as mesmas opções do A e do B. Até a v48 ela era só um canal da

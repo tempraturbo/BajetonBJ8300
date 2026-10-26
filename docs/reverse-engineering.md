@@ -127,6 +127,14 @@ Extended writes are only accepted in `0xC1000..0xD3FFF` (up to v45, `0xD1FFF`; v
 WATCH record and v49 C's VFOs), erasing the sector when the block starts it. Any other address is ignored without
 writing anything (proven with `tools/cabo/teste_cabo_grava.ps1`), and the ACK goes out anyway.
 
+**The `0x9000` settings block comes from RAM.** The cable handler treats `0x9000` apart
+(`0x01E439B4`): it builds the 64 bytes from RAM (`0x01E43A94`: bytes 0..31 from `0x14B6C`, 32..63
+from `0x14BCC`) and, on a write, puts them back there (`0x01E43A32`). In the chip, the settings are
+a log of 96-byte records (`0x9010 + n × 0x60`, written by `0x01E3AB36`). NOISE REDUCTION
+(`b[0x14BDE]`, get `0x01E3D0E0`) lands at `0x9032`; the base driver read it at `0x9031`. The other 30
+menu items in the block match. `0x8000` is similar: the cable reloads A's and B's VFOs from the
+log (`0x01E3A5E8`) and sends `0x14E42`.
+
 **Memory read (v31, diagnostic).** In the extended `R`, an address with bit 22 set (`0x400000` and
 up, which the 1 MB chip does not have) returns 64 B of the processor's memory at
 `0x01E00000 + (address − 0x400000)`: what the firmware sees of the internal flash (and of the RAM

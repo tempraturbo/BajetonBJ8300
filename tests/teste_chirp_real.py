@@ -60,18 +60,26 @@ def imagem(ativos=0x0005, escolhido=2, bancos=((0, 'test', [42]), (2, 'bnk', [41
     return memmap.MemoryMapBytes(b'\x00' * bj.BLOB_BASE + b''.join(setores))
 
 
-def registro_watch(modo, mdf, canal, c_no_b=0, canal_b=0):
+def registro_watch(modo, mdf, canal, c_no_b=0, canal_b=0, vfo=0):
     """O bloco do WATCH como o firmware grava (struct vigia, grava_registro): 14 bytes e o resto apagado."""
-    reg = bytearray(bj.WATCH_MAGIC + struct.pack('<BBHBBH', modo, mdf, canal, c_no_b, 0, canal_b) + b'\x00\x00')
+    reg = bytearray(bj.WATCH_MAGIC + struct.pack('<BBHBBH', modo, mdf, canal, c_no_b, vfo, canal_b) + b'\x00\x00')
     reg[12:14] = struct.pack('<H', bj._checksum(bytes(reg[:12])))
     return bytes(reg) + b'\xff' * (bj.EXT_BLOCK - bj.WATCH_LEN)
 
 
 def watch_de(radio):
-    """WATCH, CH-C e MDF-C como a pagina Settings > Watch mostra, e se o CH-C aceita mudanca."""
+    """WATCH, CH-C e MDF-C como o Settings > VFO A/B/C Channel mostra, e se o CH-C aceita mudanca."""
     w = {s.get_name(): s for s in radio.get_settings().walk()}
     return (str(w['watch_mode'].value), int(w['watch_channel_c'].value), str(w['watch_mdf_c'].value),
             w['watch_channel_c'].value.get_mutable())
+
+
+def ajuste_de(radio, nome):
+    return {s.get_name(): s for s in radio.get_settings().walk()}[nome]
+
+
+def _VfcStore_valido(radio):
+    return bj._VfcStore.valid(bj._VfcStore(radio).block())
 
 
 def muda_watch(radio, **valores):
@@ -83,7 +91,7 @@ def muda_watch(radio, **valores):
     for nome, valor in valores.items():
         w[nome].value.set_value(valor)
     for s in ajustes.apply_to(radio._memobj):
-        if s.has_apply_callback() and s.get_name().startswith('watch_'):
+        if s.has_apply_callback() and s.get_name().startswith(('watch_', 'vfoc_')):
             s.run_apply_callback()
 
 
@@ -230,8 +238,8 @@ def main():
     reg4 = crua[bj.BLOB_BASE + 4 * bj.SECTOR_SIZE:bj.BLOB_BASE + 4 * bj.SECTOR_SIZE + bj.RECORD_LEN]
     confere('6b. banco 4 (que ganhou canal no 5j) com marca e soma que fecham',
             (reg4[:4], struct.unpack('<H', reg4[136:])[0]), (bj.BANK_MAGIC, bj._checksum(reg4[:136])))
-    confere('6c. tamanho da imagem = fabrica + 17 setores + o bloco do WATCH',
-            len(crua), bj.BLOB_BASE + (bj.NUM_BANKS + 1) * bj.SECTOR_SIZE + bj.EXT_BLOCK)
+    confere('6c. tamanho da imagem = fabrica + 17 setores + o bloco do WATCH + os 2 do VFO C',
+            len(crua), bj.BLOB_BASE + (bj.NUM_BANKS + 1) * bj.SECTOR_SIZE + 3 * bj.EXT_BLOCK)
 
     # 7. os pacotes do cabo (o que o radio vai receber)
     confere('7. comando de leitura de 0xC1000', bj._command(b'R', 0x0C1000),
@@ -337,29 +345,98 @@ def main():
 
     # 10. WATCH, CH-C e MDF-C (firmware v46): o registro WTC1, no bloco depois dos bancos
     r = bj.BJ8300(imagem())
-    confere('10. imagem sem WATCH ganha o bloco apagado depois dos bancos',
+    confere('10. imagem sem WATCH ganha os blocos apagados (WATCH e VFO C) depois dos bancos',
             (len(r._mmap), bytes(r._mmap[bj.WATCH_BASE:bj.IMAGE_SIZE])),
-            (bj.BLOB_BASE + 17 * bj.SECTOR_SIZE + 64, b'\xff' * 64))
+            (bj.BLOB_BASE + 17 * bj.SECTOR_SIZE + 3 * 64, b'\xff' * 3 * 64))
     confere('10b. sem registro: DUAL, a C no canal 1, MDF-C Name', watch_de(r), ('DUAL', 1, 'Name', True))
-    confere('10c. grupo Watch depois do Banks', [g.get_shortname() for g in r.get_settings()][-2:],
-            ['Banks', 'Watch'])
+    aj = r.get_settings()
+    confere('10c. VFO A/B/C Channel e FM/AM/SSB Modulation fora do Specific, no topo',
+            [g.get_shortname() for g in aj],
+            ['Basic Settings', 'DTMF Settings', 'BJ8300_v2.0TEMPRA Specific', 'VFO A/B/C Channel',
+             'FM/AM/SSB Modulation', 'Banks'])
+    abc = aj['abblock']
+    confere('10c2. o WATCH e o TTR primeiro no VFO A/B/C Channel, e um bloco para cada lado',
+            (abc.keys()[:2], abc['settings_tdr'].get_shortname(), 'settings_tdr' in aj['spec'],
+             [k for k, e in abc.items() if isinstance(e, settings.RadioSettingSubGroup)]),
+            (['watch_mode', 'settings_tdr'], 'TTR (Transmitter Triple Receiver)', False,
+             ['achannel', 'bchannel', 'cchannel']))
+    # o NOISE REDUCTION: o cabo entrega o 0x9000 da RAM (0x01E43A94), e o item do radio guarda em
+    # b[0x14BDE] (get 0x01E3D0E0), que la cai em 0x9032 - e nao em 0x9031, onde a base o le
+    r._mmap[0x9031] = 0
+    r._mmap[0x9032] = 1
+    nr = {s.get_name(): s for s in r.get_settings().walk()}
+    confere('10c4. Noise reduction lido de 0x9032 (o byte do radio), so ele',
+            (bool(nr['settings_unknown_9032'].value), nr['settings_unknown_9032'].get_shortname(),
+             'settings_noise_reduction' in nr),
+            (True, 'Noise reduction', False))
+    ajustes = r.get_settings()
+    {s.get_name(): s for s in ajustes.walk()}['settings_unknown_9032'].value.set_value(False)
+    ajustes.apply_to(r._memobj)
+    confere('10c5. e gravado em 0x9032, sem mexer em 0x9031', bytes(r._mmap[0x9031:0x9033]), b'\x00\x00')
+    r._mmap[0x9031] = 1
+    ajustes = r.get_settings()
+    {s.get_name(): s for s in ajustes.walk()}['settings_unknown_9032'].value.set_value(True)
+    ajustes.apply_to(r._memobj)
+    confere('10c6. ligar grava 1 em 0x9032 e deixa 0x9031 como estava', bytes(r._mmap[0x9031:0x9033]), b'\x01\x01')
+    confere('10c3. os 3 MDF so no bloco do lado, no mesmo lugar e com o mesmo nome',
+            ([abc[b].keys()[1] for b in ('achannel', 'bchannel', 'cchannel')],
+             [abc[b].values()[1].get_shortname() for b in ('achannel', 'bchannel', 'cchannel')],
+             sorted(s.get_name() for s in aj.walk() if 'mdf' in s.get_name())),
+            (['settings_mdfa', 'settings_mdfb', 'watch_mdf_c'],
+             ['Memory Display Format %s (MDF-%s)' % (x, x) for x in 'ABC'],
+             ['settings_mdfa', 'settings_mdfb', 'watch_mdf_c']))
     muda_watch(r, watch_mode='TRIPLE', watch_channel_c=5, watch_mdf_c='Frequency')
-    bloco = bytes(r._mmap[bj.WATCH_BASE:bj.IMAGE_SIZE])
+    bloco = bytes(r._mmap[bj.WATCH_BASE:bj.VFC_BASE])
     confere('10d. TRIPLE, canal 5 e Frequency no registro, como o firmware le', bloco,
             registro_watch(2, 1, 4))
     confere('10e. e lidos de volta pela pagina', watch_de(r), ('TRIPLE', 5, 'Frequency', True))
     muda_watch(r, watch_mode='SINGLE')
-    confere('10f. mudar so o WATCH deixa o resto do registro', r._mmap[bj.WATCH_BASE:bj.IMAGE_SIZE],
+    confere('10f. mudar so o WATCH deixa o resto do registro', r._mmap[bj.WATCH_BASE:bj.VFC_BASE],
             registro_watch(1, 1, 4))
     r._mmap[bj.WATCH_BASE] = registro_watch(2, 0, 9, 1, 3)    # a C esta no lado B, no radio
     confere('10g. com a C no lado B, o CH-C e so leitura', watch_de(r), ('TRIPLE', 10, 'Name', False))
     muda_watch(r, watch_mode='DUAL', watch_mdf_c='Channel')
     confere('10h. e mudar o WATCH e o MDF-C nao mexe na C no lado B nem no canal do B',
-            r._mmap[bj.WATCH_BASE:bj.IMAGE_SIZE], registro_watch(0, 2, 9, 1, 3))
+            r._mmap[bj.WATCH_BASE:bj.VFC_BASE], registro_watch(0, 2, 9, 1, 3))
     r._mmap[bj.WATCH_BASE] = registro_watch(7, 5, 2000)
     confere('10i. valores fora da faixa leem o padrao, como o firmware', watch_de(r), ('DUAL', 1, 'Name', True))
     r._mmap[bj.WATCH_BASE] = registro_watch(2, 1, 4)[:12] + b'\x00\x00' + b'\xff' * 50
     confere('10j. soma errada: registro invalido, DUAL', watch_de(r), ('DUAL', 1, 'Name', True))
+
+    # 10k. VFO C (firmware v49): as mesmas opcoes do A e do B, no bloco vfc depois do WATCH
+    r = bj.BJ8300(imagem())
+    r._mmap[0x8020] = bytes([1, 4, 6, 5, 2, 0, 0, 0])            # o VFO B em 146.52000
+    c = ajuste_de(r, 'vfoc_freq')
+    confere('10k. sem o bloco do VFO C: ele mostra o do B, e a C em canal',
+            (str(c.value), str(ajuste_de(r, 'watch_c_mode').value), _VfcStore_valido(r)),
+            ('146.520000', 'Channel Mode', False))
+    muda_watch(r, vfoc_freq='145.500000', vfoc_txpower='Low', watch_c_mode='VFO Mode')
+    vfo_b = bytes(r._mmap[0x8020:0x8040])
+    blk = bytes(r._mmap[bj.VFC_BASE:bj.VFC_BASE + bj.VFC_LEN])
+    confere('10l. mudar o VFO C cria o bloco: a C e a copia do B com a mudanca, o B guardado e o B',
+            (blk[:4], blk[4:12], blk[36:68] == vfo_b, _VfcStore_valido(r)),
+            (bj.VFC_MAGIC, bytes([1, 4, 5, 5, 0, 0, 0, 0]), True, True))
+    confere('10m. e lidos de volta pela pagina; o Work Mode da C no bit 0 do byte 9 do WATCH',
+            (str(ajuste_de(r, 'vfoc_freq').value), str(ajuste_de(r, 'vfoc_txpower').value),
+             str(ajuste_de(r, 'watch_c_mode').value), r._mmap[bj.WATCH_BASE + 9][0] & 1),
+            ('145.500000', 'Low', 'VFO Mode', 1))
+    # a C no lado B, no radio: o modo e o VFO dela estao nas vagas do B, e o bloco guarda os do B
+    r._mmap[bj.WATCH_BASE] = registro_watch(2, 0, 4, 1, 9, bj.WATCH_B_VFO)
+    r._mmap[0x8020] = bytes([1, 4, 7, 0, 0, 0, 0, 0])            # a vaga do B tem a C: 147.00000
+    aj = {s.get_name(): s for s in r.get_settings().walk()}
+    bloco_b = r.get_settings()['abblock']['bchannel']
+    confere('10n. com a C no lado B: o VFO C mostra o do lado B, o VFO B o guardado, so leitura',
+            (str(aj['vfoc_freq'].value), str(aj['vfob_saved_freq'].value), str(aj['vfob_saved_mode'].value),
+             bloco_b.keys()[:3], aj['vfoc_freq'].value.get_mutable(), aj['vfob_saved_freq'].value.get_mutable(),
+             aj['watch_c_mode'].value.get_mutable(), 'vfo.b.freq' in aj),
+            ('147.000000', '146.520000', 'VFO Mode', ['vfob_saved_mode', 'settings_mdfb', 'vfob_saved_freq'],
+             False, False, False, False))
+    # 10o. a Voice Privacy do VFO A: a da base nao tinha como ser gravada (sem callback, nao MemSetting)
+    r = bj.BJ8300(imagem())
+    aj = r.get_settings()
+    {s.get_name(): s for s in aj.walk()}['vfo_a_voicepri'].value.set_value('ENCRY2')
+    aj.apply_to(r._memobj)
+    confere('10o. Voice Privacy do VFO A gravada', int(r._memobj.vfo.a.voicepri), 2)
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')
