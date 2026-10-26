@@ -277,7 +277,9 @@ quê, está no [histórico](docs/historico.md).
 
 | Arquivo | Estado |
 |---|---|
-| `BJ8300_BANK_v32.anc` | **em teste** — v27 sem as vozes (e sem o item VOICE), roger COIN (a moeda), leitura de memória pelo cabo; abre ~112 KB de espaço para o tema novo da tela — testado no rádio |
+| `BJ8300_BANK_v36.anc` | **a mais nova** — v34 + a tela principal nova (tema B): cartão do lado em evidência com a frequência grande e o medidor, etiquetas coloridas de potência, modulação e tons, e a barra de cima só com o que está ligado; no idioma chinês a tela fica a de fábrica — testado no rádio |
+| `BJ8300_BANK_v34.anc` | v32 + o espectro no espaço das vozes, o pico em verde e o dBm inteiro na troca de AM/FM; a última com a tela principal de fábrica — testado no rádio |
+| `BJ8300_BANK_v32.anc` | v27 sem as vozes (e sem o item VOICE), roger COIN (a moeda), leitura de memória pelo cabo; abre ~112 KB de espaço para o tema novo da tela — testado no rádio |
 | `BJ8300_BANK_v27.anc` | v1.0T + espectro com a barra atual em branco, a frequência que roda, a linha do pico e o dBm à direita; roger BEEP 3 (a moeda, chamada de COIN desde a v31) — testado no rádio |
 | `BJ8300_BANK_v1.0T.anc` | **estável** — a v25 com o nome da versão (mesmo arquivo); use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v24.anc` | v23 + scramble 2900 Hz (o do Baofeng UV-17L no modo 3) — testado no rádio |
@@ -324,7 +326,7 @@ Precisa da toolchain da JieLi (clang para `pi32v2`) e de Python 3:
 sh firmware/build.sh
 ```
 
-Ele compila `firmware/src/bancos.c`, monta o `.anc` a partir do original e **confere** o
+Ele compila `firmware/src/bancos.c` e `firmware/src/tela.c`, monta o `.anc` a partir do original e **confere** o
 resultado: CRCs das 12 entradas, código e tabela de menus presentes e iguais nas 6 imagens de
 flash, itens de menu, todos os ganchos e remendos, textos, e que nenhum byte foi alterado fora dos
 trechos previstos — nem perto das áreas protegidas. A saída termina em `RESULTADO: tudo certo`, e
@@ -332,10 +334,20 @@ o build é reprodutível: o mesmo fonte dá o mesmo `.anc`, byte a byte.
 
 O caminho da toolchain está em `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.3/...`).
 
-**Orçamento de espaço:** o código novo mora na única área livre das 6 imagens, a partir de
-`0x01E96124`, com **3292 bytes**; a v1.0T usa 3012. A tabela de menus é gravada no lugar da
-original e não ocupa essa área. [docs/engenharia-reversa.md](docs/engenharia-reversa.md) explica
-como medir e onde já foi economizado.
+**Orçamento de espaço:** o código novo mora em três lugares, todos no mesmo endereço nas 6 imagens:
+
+- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a v36 usa 2144);
+- **o espaço que era das vozes**, com o espectro, mas só dentro dos arquivos C0 e C1 (1066 bytes),
+  porque o carregador do rádio recusa a imagem que muda mais arquivos de voz;
+- **o lugar do decodificador G.729**, dentro do `app.bin`, com a tela principal B (8424 bytes, dos
+  quais ela usa 5636).
+
+A tabela de menus é gravada no lugar da original. [docs/engenharia-reversa.md](docs/engenharia-reversa.md)
+explica como medir, onde já foi economizado e por que esses lugares são seguros.
+
+**Prévia da tela B no PC:** `python -I previa/previa.py <pasta>`, de dentro de `firmware/`, grava
+cada cenário da tela em PNG. Precisa do zig (`pip install ziglang`), que faz o papel de compilador
+de C.
 
 ---
 
@@ -343,7 +355,9 @@ como medir e onde já foi economizado.
 
 ```
 firmware/
-  src/          bancos.c (todo o código novo) e bancos.ld
+  src/          bancos.c (bancos, menus, espectro, cabo), tela.c (a tela principal B) e bancos.ld
+  fonte/        a fonte 5x7 da tela B e os ícones, em texto
+  previa/       prévia da tela B no PC
   scripts/      montagem (.anc), conferência, desassemblador, análise
   original/     BJ8300_V0.12.anc — firmware de fábrica
   releases/     .anc prontos para gravar

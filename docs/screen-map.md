@@ -43,7 +43,7 @@ That is why no stock call exceeds 32 full-width rows — the largest is exactly 
 
 Each text routine fills every character cell with its own background colour, **hard-coded black**.
 In the name drawer (`0x01E3BACE`) that is the `r8 = 0` at `0x01E3BAD8`, passed as the background
-both to the glyph drawer (`0x01E388F4`, sixth argument) and to the inter-character gap fill
+both to the glyph drawer (`0x01E388EC`, sixth argument) and to the inter-character gap fill
 (`0x01E38978`). The frequency routine (`0x01E3BB7A`) does the same with the `r8 = r3` it receives.
 
 The practical consequence, and v14's second defect: **changing the window colour does not paint the
@@ -256,3 +256,156 @@ the whole height. Also inside the area, and now green: rows 16..17 between the s
   paint them, thanks to the guard in section 3, but the highlight was not designed for them either.
 - The name window starts at x=7 on the partial update (`0x01E4B270`) and at x=0 on the full redraw
   (`0x01E3BF50`): a 7-pixel strip is left that only the full redraw repaints.
+
+## 10. Text: `escreve()`, the fonts and the glyph
+
+Mapped on 2026-10-25 for the new theme, which needs colored text.
+
+```
+escreve(y, x, text, size, background)                0x01E3B834
+    size 12, 16 or 24; x advances by each letter's width
+    the letter color is fixed: r10 = 0xFFFF (0x01E3B842), white
+glyph(y, x, width, height, bits, background, foreground)   0x01E388EC (14 callers)
+    draws nothing with height 0, width 0 or x > 160; clips the width to 160 - x
+    writes into the open window's buffer, through the cursor b[0x14604] (x) and b[0x14606] (y),
+    which 0x01E38724 clamps to 159 and 127 and converts through the window (b[0x14608],
+    b[0x1460A], h[0x14610]); a pixel that would fall outside the 10240 B buffer is not written
+```
+
+**The bits** come in bands of 8 rows. Each byte is a column, and bit k is row band × 8 + k, bit 0
+on top. The first band takes the first `width` bytes and the next band the following ones (loop at
+`0x01E38944..0x01E38974`). A set bit is drawn in the foreground color, a clear one in the
+background color.
+
+**The ASCII** (32 to 126) of each size:
+
+| Size | Letter | Bytes | From |
+|---|---|---|---|
+| 12 | 6 × 12 | 12 | data chip, `0x86BC0 + c × 12` (`0x01E3B9E6`) |
+| 16 | 8 × 16 | 16 | data chip, `0x5B5C0 + c × 16`, and each column moves down one row (`0x01E3B8D0..0x01E3B906`) |
+| 24 | 12 × 24 | 36, 48 apart | internal flash, `0x01E63B70 + (c − 32) × 48` (`0x01E3B868`) |
+
+Sizes 12 and 16 are read by `LE_FLASH` (`0x01E390AC`), and 24 by the ROM's `memcpy`
+(`0x021127A8`). Bytes from 161 up are Chinese (GB2312, two bytes), through other paths.
+
+To write in color it is enough to repeat the ASCII path with any foreground: `janela()`,
+`glyph()` letter by letter, and `envia()`. That is what `escreve_cor` in `bancos.c` does, in
+the 12 px font (v34, the spectrum's peak line).
+
+## 11. The data of the two-VFO screen
+
+Mapped on 2026-10-25 in the stock disassembly, for screen B (section 12). Global base `0x14680`.
+
+**Each side** (A = 0, B = 1) has a record at `0x14DC4 + side × 31` (`0x01E3BD88..0x01E3BD8E`):
+
+| Field | Where | Note |
+|---|---|---|
+| RX frequency | u32 at +0 | in 10 Hz; `%03d.%05d` with /100000 |
+| tone type | `b[+4]` | 0 none, 1 CT, other DCS |
+| TX frequency | u32 at +5 | the one the big line shows while transmitting (`0x01E40FE6`) |
+| shift | `b[+10]` | 1 "+", 2 "−" |
+| bandwidth | `b[+11]` | non-zero: "N" |
+| AM | `b[+12]` | 1 = AM, from 18 to 999.99999 MHz; 108 to 135.99999 MHz is always AM (`0x01E3B438..0x01E3B47E`) |
+| SC | `b[+13]` | non-zero and not AM: "SC" (meaning unproven) |
+| SCR | `b[+14] & 3` | non-zero: "SCR" (meaning unproven) |
+| name | 12 B at +15 | stops at 0 or 0xFF (`0x01E3BDCC..0x01E3BDE6`); empty: "Unnamed CH" |
+
+Outside the record:
+
+| Data | Where |
+|---|---|
+| highlighted side | `b[0x15E04]` |
+| work mode | nibble of `b[0x14B86]` (A low, B high): 1 = channel |
+| display | `b[0x14B79]` (A), `b[0x14B7A]` (B): 0 name, 1 frequency, 2 number |
+| channel number | `h[0x15E0C]` (A), `h[0x15E10]` (B), base 0 |
+| power | `b[0x15E30 + side]`: 0 H, 1 M, 2 L |
+| R/T | `b[0x15E28 + side]`: 1 R, 2 T (meaning unproven) |
+| language | `b[0x14B74]`: 1 = Chinese |
+| zone | with `b[0x14BD4]` = 0 it browses by zone; the zone is `b[0x14BDB + side]` |
+| TX state | `b[0x14685]`: 2 = transmitting (`0x01E40F1C`) |
+| typed digits | how many in `b[0x14A35]`, in ASCII from `0x14A3A` (`0x01E4B29C`, `0x01E4B1DE`) |
+
+**Top bar** (`0x01E3B05C`, background `0x2965`). Every icon is always drawn, and an off one gets a
+foreground in the background color:
+
+| Icon | Turned on by |
+|---|---|
+| VOX | `b[0x14B6E]` |
+| DW | `b[0x14B70]` (TDR) |
+| MO | `b[0x15370]` |
+| musical note | `b[0x14B75]`, the DTMFST item |
+| waves | `b[0x14BDE]`, the NOISE REDUCTION item (its get/set, `0x01E3D0E0`/`0x01E3D0F4`, is the only writer) |
+| Bluetooth | `b[0x14B89]` = 1 |
+| padlock | `b[0x14B87]` |
+| voltage | `b[0x149BC] × 444 / 1000`, in tenths of a volt (`0x01E3AFBE`) |
+| battery | level from `[0x149C0]`: above 6 counts as 3, 4 to 6 as 4, otherwise itself (`0x01E3B03E`); 0..3 = 1..4 bars, 4 = red outline only; with 5 and 6 the loop blinks the outline (`0x01E460B2..0x01E460F2`) |
+
+**Meter.** It is redrawn only when the signal step changes (`0x01E46166`: 5 steps, level
+2 × step + 2) or by the monitor, with level 10 (`0x01E4532C`). The full redraw leaves the bars empty,
+and the end of reception does not call the meter. While transmitting it is full by power
+(H 10, M 5, L 2).
+
+**Who redraws what.**
+
+- **The whole screen:** `0x01E3C132`, through the 17 callers of `0x01E3C290`; during a scan, through `0x01E3C278` on every channel.
+- **The highlighted side on a channel change:** `0x01E453E0`.
+- **One side and the info line:** `0x01E413BE` and `0x01E3B2C4`. The A/B key goes through `0x01E41486`.
+- **The meter:** `0x01E3B592`.
+- **Transmission:** `0x01E40F1C`.
+- **The numbers being typed:** `0x01E4B29C` and `0x01E4B1DE`.
+- **The top bar, the battery, MO and the padlock:** each has its own routine and window.
+
+## 12. Screen B (v35)
+
+Drawn by `firmware/src/tela.c`. Since v36 the code lives in place of the G.729 decoder, inside
+`app.bin` ([reverse engineering, section 16](reverse-engineering.md#16-g729-out-v36)); in v35 it was
+in the voice space, and the loader refused to flash it. From the firmware it only uses
+`janela()` and `envia()`; rectangles and letters it writes into the video buffer of the open window
+itself. The whole scene is drawn in bands of up to 32 rows, and whatever falls outside the window is
+clipped.
+
+**The firmware still decides when to draw.** Thirteen routines from section 11 get, at their entry,
+a `goto` to a detour in `tela.c`. The detour:
+
+1. saves `rets` and r0..r3, with the same instructions the firmware uses (`0x01E3C290` and `0x01E51358`);
+2. calls the C hook with the routine's arguments;
+3. if the hook drew screen B, returns to the caller with r0..r3 untouched;
+4. if not, redoes the stock instructions the `goto` covered and carries on with the routine.
+
+Screen B only draws when `layout()` is not 0 and outside the Chinese language, which the font does
+not have. In the menus, the single-VFO screen and the spectrum the routines run as always.
+
+| Routine | Hook | What screen B redraws |
+|---|---|---|
+| `0x01E3C132(0)`, the whole screen | `b_tela` | everything, and clears the TX state like it does |
+| `0x01E3B05C`, `0x01E3B03E`, `0x01E3AE50` | `b_barra` | the top bar |
+| `0x01E3AF1E(level)`, the battery | `b_bateria` | the bar, with the incoming level (the low-battery blink) |
+| `0x01E3AEB0(on)`, MO | `b_monitor` | the bar, with the incoming MO |
+| `0x01E453E0` | `b_evidencia` | the highlighted side |
+| `0x01E4B29C`, `0x01E4B1DE` | `b_digitando` | the highlighted side with the digits; only these show them, as in stock |
+| `0x01E413BE`, `0x01E3B2C4` | `b_lado` | both sides, since on the A/B key the card moves |
+| `0x01E3B592`, the meter | `b_medidor` | the side's meter with the incoming level, and the bar (RX) |
+| `0x01E40F1C`, transmission | `b_transmissao` | redoes its logic: writes the state before drawing, and draws the side and the bar (2) or everything (end) |
+
+**Proven in the disassembly before flashing:**
+
+- no branch or constant lands inside the covered bytes;
+- none of the thirteen reads arguments from the caller's stack;
+- they only change state in what the hook repeats (`b[0x14685]`);
+- stack: the maximum depth with screen B equals stock in the three contexts it is called from (the
+  UI routine `0x01E4B416`, 740 B; the signal loop `0x01E4622A`, 620 B; boot, 696 B). Screen B's
+  worst path, 376 B from the meter detour, fits below the deepest path of each.
+
+The stock screen's send and clear hooks (section 7) moved to `tela.c` too. With screen B active, the
+send hook redraws from screen B the side the window belongs to, and the clear does not run, because
+the whole screen follows right after. Without screen B (Chinese language) the old green highlight
+stays.
+
+**PC preview.** `firmware/previa/` compiles the same `tela.c` with the RAM, `janela()` and `envia()`
+imitated and saves the screen as PNG: `python -I previa/previa.py <folder>` (needs zig, from
+`pip install ziglang`). The font (5×7, doubled for the frequency) lives in
+`firmware/fonte/fonte_b.txt`, drawn in `#` and `.`; `scripts/fonte.py` generates the table.
+
+**Checked in the build** (`conferir.py`): 2b, 2d and 4g as before, now with the screen sites; 4m
+checks the 13 detours byte by byte (stock bytes, `goto`, detour and return); 4n, that there is no
+RAM section.

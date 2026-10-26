@@ -5,6 +5,102 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v36 — Oct 25 — screen B in place of G.729 ✅
+
+**Tested on the radio: it flashed completely and "everything worked, perfect".** The test
+checklist was v35's, below.
+
+v35 with screen B somewhere else, because the radio refused to flash v35. The screen code is the
+same, linked at another address.
+
+- **Screen B lives in place of the G.729 decoder**, the one for the `.wtg` voices, which have not
+  played since v30: `0x01E257E0..0x01E278C8`, 8,424 B inside `app.bin`, of which the screen uses
+  5,636. The proof that it never runs is in [section 16](reverse-engineering.md#16-g729-out-v36).
+- **G.729 leaves the decoder registry:** its type goes from `0x40` to 0, which no lookup matches.
+  So it is not chosen even by a path that slipped through the map.
+- **Only the spectrum stays in the voices**, in C0 and C1, byte for byte the same as in v34.
+  Compared with the radio on v34, only `app.bin` changes.
+- **`conferir.py`** gained `2h` (the registry, the place, and no new way into the range, in the
+  stock firmware and the new one) and, in `2g`, the lock that only C0 and C1 change.
+
+## v35 — Oct 25 — main screen B ❌ **the radio did not flash it**
+
+**The loader refused the whole image.** In the flasher it stopped at 5% and jumped to 100%, and the
+radio rebooted on the previous version. Good versions go to ~78% before jumping. It is not kept
+in `firmware/releases/`, because the radio does not flash it.
+
+Five attempts, all the same:
+
+- v35 over v34 and over V0.12;
+- two test images: v34 with only the voice files C2..C11 replaced, one with the v35 code there and
+  one with zeros.
+
+v34 over V0.12 flashed completely. Reading the radio over the cable afterwards, the `tone` directory
+was byte for byte v34's. The loader decides before writing, and what it refuses is an image that
+changes the voice files C0..C11. The content does not matter, nor what was already on the radio.
+Changing only C0 and C1 (v33 and v34) goes through, and changing `app.bin` always did.
+
+The loader is JieLi's stock `uart_update.bin`, which comes inside `ota.bin`, built on 2023-05-19.
+It is encrypted, so the exact rule cannot be read. See
+[section 14](reverse-engineering.md#14-internal-flash-partitions-and-who-writes).
+
+What v35 brought, and v36 carries:
+
+- **highlighted side:** a card with a green border, name, channel, big frequency and a 20-segment meter;
+- **tags:** power (H red, M amber, L green), FM/AM, N, +/−, CT/DCS, R/T, SC, SCR and zone;
+- **the other side:** compact;
+- **top bar:** only what is on (VOX, DW, MO, NR, DTMF ST, Bluetooth, lock), plus RX/TX, voltage and battery;
+- **font:** our own, 5×7, doubled for the frequency.
+
+The firmware still decides when to redraw. Screen B comes in at the entry of thirteen drawing
+routines, through a detour that returns r0..r3 untouched; outside the two-VFO screen it redoes the
+stock instructions and carries on with the routine. The stack never goes past what the stock
+firmware already uses at the same spot. Details in sections 11 and 12 of the
+[screen map](screen-map.md#12-screen-b-v35).
+
+**To test:** the main screen in normal use: change channel, A/B, receive (the meter and RX), transmit
+(TX and the TX frequency), type a frequency and a channel, change power and modulation, the top icons
+(DW, lock, NR…), the battery; and go in and out of the menu and the spectrum. With the Chinese
+language the screen stays the stock one.
+
+## v34 — Oct 25 — green peak and the whole dBm on the AM/FM toggle ✅
+
+v33 passed on the radio: the spectrum worked normally running from the space that was the voices',
+and the processor executes from there.
+
+- **Whole dBm on the AM/FM toggle.** The AM/FM routine (`0x01E4B04C`) opened the window
+  `127..159 × 17..49` and cleared to black the dBm, which since v26 sits at `112..160 × 36..48`:
+  only "-1" was left until the end of the pass. Its text is 12 px at y 20, so the window now ends at
+  y 33, like the "x160" one (`0x01E4B066`, `r3 = 49 → 33`). It is called only by key 23 and by the
+  spectrum entry.
+- **Green peak.** The peak frequency is drawn in the new theme's green (`#34D399`, `0x3693` in
+  RGB565), by the first colored-text routine: the 12 px ASCII path of the stock `escreve()`, with the
+  letter color one asks for instead of the fixed white. `4f` checks that the font, the 12-byte
+  stride and the glyph routine are the firmware's.
+
+**To test:** in the spectrum, the peak line in green, and toggling AM/FM during the scan with the
+whole dBm.
+
+## v33 — Oct 25 — the spectrum in the voice space ✅
+
+The spectrum's code and tables (946 B) leave the area at the end of the image for the space that
+was the voices'. That area keeps 2268 of its 3260 B, leaving 992 B for the new screen. It proves the
+processor **executes** from there, not just reads.
+
+The spectrum was chosen because none of it runs without screen mode 20. In the stock disassembly,
+every path to its hooks goes through case 20 of the mode handler, through the spectrum entry (the
+only write of 20 to the mode) or through the main loop's "if the mode is not 20, skip". If running
+from there fails, only the spectrum goes down: boot, the cable and PTT2 + shortcut never go
+through it.
+
+The canary is gone, since the code itself proves the data arrives. `conferir.py` now requires that
+only the spectrum routines live in `.vozes`, that only the spectrum sites branch there and that
+nothing in `.text` calls `.vozes` (`2b`, `2d`, `4g`), and all three caught the error in a build
+made wrong on purpose. Details in [section 15 of the reverse engineering](reverse-engineering.md#15-voices-removed).
+
+**To test:** enter the spectrum and use it as usual (scan, OK, #, arrows stopped on a signal,
+frequency digits), then leave. The rest of the radio does not change.
+
 ## CHIRP driver — Oct 25 — COIN and no Voice Prompts
 
 - **Roger with five options**, like the radio: OFF, BEEP 1, BEEP 2, **COIN** and TONE1200. COIN
@@ -16,7 +112,7 @@ its cause, because that is what stops it happening twice.
 The test gained the value-4 cases (opens as COIN, writes the right byte) and the page without the
 voice setting. The module in the v1.0T release did not change: this one goes with v32.
 
-## v32 — Oct 25 — the voice space, proven ✅ (in testing)
+## v32 — Oct 25 — the voice space, proven ✅
 
 v31 with a consistent `tone` directory: `repack` redoes the CRC of every file whose content changed
 and the directory's own (`jlfw.refaz_crcs_tone`), the way JieLi's tool writes them. The canary is
@@ -429,7 +525,7 @@ reported on v14 (details in [screen-map.md](screen-map.md)):
    `0x01E3BD04`, which **had no hook at all**.
 2. **"the whole box is still black"** — text backgrounds do not come from `janela()`: each text
    routine fills every character cell with its own hard-coded black (the `r8 = 0` at `0x01E3BAD8`,
-   passed to the glyph drawer `0x01E388F4` and the gap fill `0x01E38978`). Swapping the window
+   passed to the glyph drawer `0x01E388EC` and the gap fill `0x01E38978`). Swapping the window
    colour was never going to paint the block.
 
 The hook now goes into **the send** (`envia()`, `0x01E3ADBC`) and replaces every black pixel of the

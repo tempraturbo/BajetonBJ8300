@@ -279,7 +279,9 @@ the [changelog](docs/changelog.md).
 
 | File | Status |
 |---|---|
-| `BJ8300_BANK_v32.anc` | **in testing** — v27 without the voices (and without the VOICE item), COIN roger (the coin), memory read over the cable; frees ~112 KB for the new screen theme — tested on the radio |
+| `BJ8300_BANK_v36.anc` | **the newest** — v34 + the new main screen (theme B): a card for the highlighted side with the big frequency and the meter, colored tags for power, modulation and tones, and a top bar with only what is on; in the Chinese language the screen stays the stock one — tested on the radio |
+| `BJ8300_BANK_v34.anc` | v32 + the spectrum in the voice space, the green peak and the whole dBm on the AM/FM toggle; the last one with the stock main screen — tested on the radio |
+| `BJ8300_BANK_v32.anc` | v27 without the voices (and without the VOICE item), COIN roger (the coin), memory read over the cable; frees ~112 KB for the new screen theme — tested on the radio |
 | `BJ8300_BANK_v27.anc` | v1.0T + spectrum with the current bar in white, the running frequency, the peak line and the dBm on the right; BEEP 3 roger (the coin, called COIN since v31) — tested on the radio |
 | `BJ8300_BANK_v1.0T.anc` | **stable** — v25 under the version's name (same file); use with the CHIRP driver from the same release |
 | `BJ8300_BANK_v24.anc` | v23 + 2900 Hz scramble (the Baofeng UV-17L's mode 3) — tested on the radio |
@@ -325,7 +327,7 @@ Needs the JieLi toolchain (clang for `pi32v2`) and Python 3:
 sh firmware/build.sh
 ```
 
-It compiles `firmware/src/bancos.c`, builds the `.anc` from the original and **checks** the
+It compiles `firmware/src/bancos.c` and `firmware/src/tela.c`, builds the `.anc` from the original and **checks** the
 result: CRCs of all 12 entries, code and menu table present and identical in all 6 flash images,
 menu items, every hook and patch, texts, and that no byte changed outside the expected ranges —
 nowhere near the protected areas. The output ends in `RESULTADO: tudo certo`, and the build is
@@ -333,10 +335,20 @@ reproducible: the same source gives the same `.anc`, byte for byte.
 
 The toolchain path is in `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.3/...`).
 
-**Space budget:** the new code lives in the only free area of the 6 images, from `0x01E96124`,
-with **3292 bytes**; v1.0T uses 3012. The menu table is written where the original was and takes
-none of that area. [docs/reverse-engineering.md](docs/reverse-engineering.md) explains how to
-measure it and where space was already saved.
+**Space budget:** the new code lives in three places, all at the same address in the 6 images:
+
+- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (v36 uses 2144);
+- **the space that was the voices'**, with the spectrum, but only inside the files C0 and C1
+  (1066 bytes), because the radio's loader refuses an image that changes more voice files;
+- **the place of the G.729 decoder**, inside `app.bin`, with main screen B (8424 bytes, of which it
+  uses 5636).
+
+The menu table is written where the original was. [docs/reverse-engineering.md](docs/reverse-engineering.md)
+explains how to measure it, where space was already saved and why these places are safe.
+
+**Screen B preview on the PC:** `python -I previa/previa.py <folder>`, from inside `firmware/`,
+writes every screen scenario as PNG. It needs zig (`pip install ziglang`), which serves as the C
+compiler.
 
 ---
 
@@ -344,7 +356,9 @@ measure it and where space was already saved.
 
 ```
 firmware/
-  src/          bancos.c (all the new code) and bancos.ld
+  src/          bancos.c (banks, menus, spectrum, cable), tela.c (main screen B) and bancos.ld
+  fonte/        screen B's 5x7 font and icons, as text
+  previa/       screen B preview on the PC
   scripts/      build (.anc), checks, disassembler, analysis
   original/     BJ8300_V0.12.anc — stock firmware
   releases/     .anc files ready to flash

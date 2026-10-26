@@ -65,12 +65,10 @@ FIRMWARE(REVALIDA, 0x01E3A700);     void REVALIDA(void);
 FIRMWARE(FIM_DA_CARGA, 0x01E3951C); void FIM_DA_CARGA(void);     /* ultima etapa da partida */
 FIRMWARE(AVANCA_SCAN, 0x01E458E4);  void AVANCA_SCAN(void);      /* proximo canal da varredura */
 FIRMWARE(DADOS_CABO, 0x01E43970);   void DADOS_CABO(unsigned);   /* 'R' (0) e 'W' (1) do cabo */
-/* Tela: envio ao LCD, layout do lado, limpeza e enchimento (ver o gancho do realce) e a saida do
- * editor de texto que o CH-NAME faz. */
+/* Tela: o envio ao LCD (o espectro), e a limpeza e a saida do editor de texto, que o CH-NAME faz no
+ * fim do set dele e o BANK NAME repete. A tela principal mora no tela.c. */
 FIRMWARE(ENVIA, 0x01E3ADBC);        void ENVIA(void);
-FIRMWARE(LAYOUT, 0x01E3B1A2);       unsigned LAYOUT(unsigned);
 FIRMWARE(LIMPA, 0x01E3ACBA);        void LIMPA(unsigned);
-FIRMWARE(ENCHE, 0x01E3AC68);        void ENCHE(unsigned, unsigned, unsigned);
 FIRMWARE(SAI_DO_EDITOR, 0x01E3C7AA); void SAI_DO_EDITOR(void);
 /* Espectro: o que o firmware faz para voltar a varrer quando o sinal achado cai (0x01E4AEFC) -
  * fecha a saida de audio do chip de radio (regs 0x47/0x48), solta o pedido do espectro ao
@@ -90,6 +88,9 @@ FIRMWARE(JANELA, 0x01E3AD34);          void JANELA(unsigned, unsigned, unsigned,
 /* Retangulo x0..x1, y0..y1 (inclusivos, em qualquer ordem) na janela aberta, na cor do 5o argumento. */
 FIRMWARE(RETANGULO, 0x01E4AAA8);       void RETANGULO(unsigned, unsigned, unsigned, unsigned, unsigned);
 FIRMWARE(ESCREVE, 0x01E3B834);         void ESCREVE(unsigned, unsigned, const char *, unsigned, unsigned);
+/* Uma letra no buffer da janela aberta: (y, x, largura, altura, bits, fundo, frente), com os bits em
+ * faixas de 8 linhas (docs/mapa-da-tela.md, secao 10). O ESCREVE a chama sempre com frente branca. */
+FIRMWARE(GLIFO, 0x01E388EC);           void GLIFO(unsigned, unsigned, unsigned, unsigned, const u8 *, unsigned, unsigned);
 /* Roger: as duas rotinas que o laco do BEEP de fabrica usa (0x01E44644 e 0x01E4464A). */
 FIRMWARE(TOM, 0x01E43B4E);             void TOM(unsigned, unsigned);     /* freq. dos 2 geradores, Hz x 10.32444 */
 /* A espera conta em unidades de 2 ms (v22 tocava cada tom do BEEP 2 por 200 ms em vez de 100): o
@@ -150,6 +151,7 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 #define ALTURAS        ((volatile u8 *)0x0001551B)           /* 87323: 160 colunas do grafico, 0..64 */
 #define ESP_PEDACO     (*(volatile u8 *)0x00014697)          /* 83607: qual das 5 faixas de 32 colunas o laco desenha */
 #define FORMATO_FREQ   ((const char *)0x01E5FF26)            /* "%03d.%05d", o de MOSTRA_FREQ e ROTULOS_FREQ */
+#define FONTE_12       0x00086BC0u                           /* glifos 6 x 12 no chip de dados, 12 B por codigo */
 /* Configuracao do espectro (0x6EC0, 73 bytes que o firmware grava na saida e le na partida). */
 #define CFG_PONTOS     (*(volatile u32 *)0x00006EC4)         /* 28356: 0..3 = 160 >> n; nossos 4 = 640, 5 = 320 */
 #define CFG_PASSO      (*(volatile u32 *)0x00006EC8)         /* 28360: 0..4 os de fabrica; nosso 5 = 10 kHz */
@@ -174,17 +176,12 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 #define TAM_NOME     12
 #define NUM_ZONAS    15                    /* 15 x 64 = 960; as mascaras por zona cobrem isso */
 #define TAM_PEDACO   24                    /* le o mapa de um banco em pedacos; 120 = 5 x 24 */
-/* Verde do fundo do bloco do VFO em evidencia: #004900, degrau 18 dos 64 do verde em RGB565. Ja
- * passaram por aqui o 0x00E0 (degrau 7, "nao da nem pra perceber que e verde"), o 0x0280 (20,
- * pedido "um pouco mais claro" quando o verde ainda so saia na barra), o 0x0380 (28, claro demais
- * no bloco inteiro) e o 0x02C0 (22, v17 a v19: "ainda bem claro", pedido um pouco mais escuro). Os
- * ganchos passam a cor como valor de 16 bits, entao aqui nao vale o limite de 8 bits do remendo
- * direto. Para mudar o tom, mexer so nesta linha. */
-#define COR_REALCE   0x0240u
 /* Barra do ponto que o espectro esta varrendo: branca, contra o azul das outras (0x3B15), o verde
  * da linha do limite (0x07E0) e o fundo preto, com 3 px no minimo para aparecer onde nao ha sinal. */
 #define COR_BARRA_ATUAL  0xFFFFu
 #define MINIMO_ATUAL     3
+/* O verde do tema novo (#34D399 do rascunho, em RGB565), na frequencia do pico do espectro. */
+#define VERDE_TEMA       0x3693u
 
 /* ---------- onde os bancos ficam gravados ----------
  * Setores proprios depois da area que o firmware usa em 0xC0000 (64 registros de 60 B, que ele le
@@ -479,23 +476,33 @@ void gancho_scan(void)
  * 320 e 640 pontos: a maquina do firmware continua varrendo 160 colunas (o indice dela e um byte e
  * o grafico tem 160 colunas), com o passo entre colunas multiplicado por 2 ou 4; cada coluna mede
  * os seus 2 ou 4 sub-pontos no passo de verdade e fica com o maior. Qual sub-ponto esta sintonizado
- * sai da propria frequencia, entao nao precisa de memoria nova. */
+ * sai da propria frequencia, entao nao precisa de memoria nova.
+ *
+ * Desde a v33 o codigo e as tabelas do espectro moram no espaco que era das vozes (ver bancos.ld),
+ * e a area do fim da imagem fica para o resto. Nada daqui roda sem o modo de tela 20: todo caminho
+ * do firmware ate estes ganchos passa pelo caso 20 do tratador de modos, pela entrada do espectro
+ * (que grava o 20) ou pelo "se o modo nao for 20, pula" do laco principal, e nada do .text chama
+ * para ca (secao 15 de docs/engenharia-reversa.md; o conferir.py confere as chamadas, 2b e 4g). */
+#define NAS_VOZES       __attribute__((section(".vozes.text")))
+#define DADO_NAS_VOZES  __attribute__((section(".vozes.rodata")))
 #define PASSOS    6
 #define LARGURAS  6
-static const u16 passo_de[PASSOS] = {625, 833, 1250, 2000, 2500, 1000};   /* em 10 Hz */
-static const u8 filtro_de[PASSOS] = {2, 1, 1, 0, 0, 1};    /* os de fabrica (0x01E60460) + 10k = 8.33/12.5 */
-static const u8 passo_seguinte[PASSOS] = {1, 5, 3, 4, 0, 2};   /* 6.25 8.33 10 12.5 20 25 */
-static const char *const rotulo_passo[PASSOS] = {"6.25k", "8.33k", "12.5k", "20.0k", "25.0k", "10.0k"};
-static const char *const rotulo_pontos[LARGURAS] = {"x160 ", " x80 ", " x40 ", " x20 ", "x640 ", "x320 "};
+DADO_NAS_VOZES static const u16 passo_de[PASSOS] = {625, 833, 1250, 2000, 2500, 1000};   /* em 10 Hz */
+DADO_NAS_VOZES static const u8 filtro_de[PASSOS] = {2, 1, 1, 0, 0, 1};    /* os de fabrica (0x01E60460) + 10k = 8.33/12.5 */
+DADO_NAS_VOZES static const u8 passo_seguinte[PASSOS] = {1, 5, 3, 4, 0, 2};   /* 6.25 8.33 10 12.5 20 25 */
+/* Os textos dentro da propria tabela, e nao ponteiros para cadeias: cadeia literal iria para o
+ * .rodata, na area do fim da imagem. */
+DADO_NAS_VOZES static const char rotulo_passo[PASSOS][6] = {"6.25k", "8.33k", "12.5k", "20.0k", "25.0k", "10.0k"};
+DADO_NAS_VOZES static const char rotulo_pontos[LARGURAS][6] = {"x160 ", " x80 ", " x40 ", " x20 ", "x640 ", "x320 "};
 
-static unsigned cfg_pontos(void)
+NAS_VOZES static unsigned cfg_pontos(void)
 {
     unsigned n = CFG_PONTOS;
 
     return n < LARGURAS ? n : 0;
 }
 
-static unsigned cfg_passo(void)
+NAS_VOZES static unsigned cfg_passo(void)
 {
     unsigned p = CFG_PASSO;
 
@@ -503,7 +510,7 @@ static unsigned cfg_passo(void)
 }
 
 /* Sub-pontos por coluna: 4 com 640 pontos, 2 com 320, 1 no resto. */
-static unsigned sub_pontos(void)
+NAS_VOZES static unsigned sub_pontos(void)
 {
     unsigned n = cfg_pontos();
 
@@ -512,7 +519,7 @@ static unsigned sub_pontos(void)
 
 /* Qual sub-ponto da coluna esta sintonizado: a frequencia e inicio + coluna * passo das colunas +
  * sub-ponto * passo de verdade. Sempre 0 com 160 pontos ou menos. */
-static unsigned sub_ponto(void)
+NAS_VOZES static unsigned sub_ponto(void)
 {
     unsigned k = sub_pontos();
 
@@ -520,7 +527,7 @@ static unsigned sub_ponto(void)
 }
 
 /* No lugar de 0x01E4A9C2 (desvio na entrada dela): quantos pontos a maquina varre. */
-unsigned espectro_pontos(void)
+NAS_VOZES unsigned espectro_pontos(void)
 {
     unsigned n = cfg_pontos();
 
@@ -528,7 +535,7 @@ unsigned espectro_pontos(void)
 }
 
 /* No lugar de 0x01E4A99C: o passo entre colunas, em 10 Hz. */
-unsigned espectro_passo(void)
+NAS_VOZES unsigned espectro_passo(void)
 {
     return passo_de[cfg_passo()] * sub_pontos();
 }
@@ -538,7 +545,7 @@ unsigned espectro_passo(void)
  * vai direto, porque a janela ja e limpa de preto e o espaco a mais so pintava preto (e passava da
  * janela de 32 px: "x160 " + espaco sao 36). O passo desce de y 34 para 37, a altura do pico e do
  * dBm na segunda linha (o de pontos ja estava na da frequencia, y 20). */
-void espectro_rotulos(unsigned n, unsigned p)
+NAS_VOZES void espectro_rotulos(unsigned n, unsigned p)
 {
     if (n >= LARGURAS)
         n = 0;
@@ -555,7 +562,7 @@ void espectro_rotulos(unsigned n, unsigned p)
 /* Nas chamadas do proximo ponto (0x01E4AF86, que serve a varredura e a retomada, e 0x01E4C6B8, da
  * tecla 2): com sub-pontos, anda o passo de verdade dentro da coluna; no ultimo, volta ao comeco
  * dela e deixa o firmware passar para a coluna seguinte (ou recomecar a janela). */
-void gancho_avanca(void)
+NAS_VOZES void gancho_avanca(void)
 {
     unsigned k = sub_pontos(), s = ESP_PASSO / k;
 
@@ -573,7 +580,7 @@ void gancho_avanca(void)
  * a METADE do caminho a cada passada (o sinal curto fica marcado e o ruido para de piscar); e, nos
  * sub-pontos depois do primeiro, a coluna fica com o maior. A leitura e a mesma que o firmware
  * usava: a medida guarda o mesmo valor em ESP_BRUTO e na lista de leituras que ele relia. */
-void gancho_registra(void)
+NAS_VOZES void gancho_registra(void)
 {
     unsigned bruto = ESP_BRUTO, largura = 160 / espectro_pontos(), novo = ALTURA(bruto);
     unsigned sub = sub_ponto();
@@ -593,7 +600,7 @@ void gancho_registra(void)
 }
 
 /* Quantas colunas do grafico cada ponto ocupa. */
-static unsigned largura_ponto(void)
+NAS_VOZES static unsigned largura_ponto(void)
 {
     return 160 / espectro_pontos();
 }
@@ -602,28 +609,46 @@ static unsigned largura_ponto(void)
  * para a direita dela (x 112..160, embaixo do AM/FM). Fonte de 12 (6 px por caractere), centrada
  * embaixo da frequencia grande. A janela da frequencia grande (y 20..38) cobre a primeira linha
  * desta, que nao tem pixel aceso: e a mesma sobreposicao que o dBm de fabrica ja tinha. */
-static void janela_pico(void)
+NAS_VOZES static void janela_pico(void)
 {
     JANELA(40, 112, 36, 48, 1, 0);
 }
 
+/* Texto em cor, na fonte de 12 (6 x 12): o caminho ASCII do ESCREVE de fabrica (0x01E3B9E6..
+ * 0x01E3BA1A) - le os 12 bytes do glifo no chip de dados e desenha com o GLIFO -, com a cor da letra
+ * que se pede no lugar do branco fixo. Codigo fora de 32..126 nao tem glifo nessa fonte: fica o
+ * espaco, sem desenho. */
+NAS_VOZES static void escreve_cor(unsigned y, unsigned x, const char *texto, unsigned fundo, unsigned frente)
+{
+    u8 glifo[12];
+
+    for (; *texto; texto++, x += 6) {
+        unsigned c = (u8)*texto;
+
+        if (c - 32 > 126 - 32)
+            continue;
+        LE_FLASH(FONTE_12 + c * 12, glifo, 12);
+        GLIFO(y, x, 6, 12, glifo, fundo, frente);
+    }
+}
+
 /* No lugar da chamada que mostra o pico na volta ao comeco da janela (0x01E4AEA4, que ia para
- * MOSTRA_FREQ): a frequencia do pico da passada que terminou vai para a segunda linha e fica ate a
- * passada seguinte terminar. O formato e o do firmware. */
-void mostra_pico(u32 freq)
+ * MOSTRA_FREQ): a frequencia do pico da passada que terminou vai para a segunda linha, no verde do
+ * tema, e fica ate a passada seguinte terminar. O formato e o do firmware. */
+NAS_VOZES void mostra_pico(u32 freq)
 {
     char texto[12];
 
     janela_pico();
     SPRINTF(texto, FORMATO_FREQ, freq / 100000, freq % 100000);
-    ESCREVE(37, 51, texto, 12, 0);
+    escreve_cor(37, 51, texto, 0, VERDE_TEMA);
     ENVIA();
 }
 
 /* Nas chamadas que centram a janela pela frequencia digitada (0x01E4C054) e na entrada do
  * espectro (0x01E4CFBC): zera o grafico antes, porque com o pico seguro as barras de outra janela
  * ficariam la, descendo devagar, por cima da nova. Pelo mesmo motivo apaga o pico. */
-void gancho_janela(u32 centro)
+NAS_VOZES void gancho_janela(u32 centro)
 {
     zera((void *)ALTURAS, 160);
     janela_pico();
@@ -635,7 +660,7 @@ void gancho_janela(u32 centro)
  * 0x01E4D710), no lugar de 0x01E4AAA8: o laco principal redesenha uma faixa de 32 colunas por volta
  * (ESP_PEDACO, 0 a 4), e cada barra chega com x relativo a faixa (x0 = x1), a base e o topo (64 menos
  * a altura). As colunas do ponto que a varredura esta medindo saem na cor da barra atual. */
-void gancho_coluna(unsigned x0, unsigned x1, unsigned base, unsigned topo, unsigned cor)
+NAS_VOZES void gancho_coluna(unsigned x0, unsigned x1, unsigned base, unsigned topo, unsigned cor)
 {
     unsigned largura = largura_ponto();
 
@@ -658,7 +683,7 @@ void gancho_coluna(unsigned x0, unsigned x1, unsigned base, unsigned topo, unsig
  * digitos sendo digitados (b[0x14A35], o que o firmware confere antes de mostrar o pico) ela nao
  * escreve por cima. Parado num achado nada e sintonizado, e fica a frequencia do achado, que o
  * firmware mostra. */
-void gancho_espectro(unsigned arg)
+NAS_VOZES void gancho_espectro(unsigned arg)
 {
     unsigned antes = ESPECTRO_ESTADO, sintonizou = antes == 0;
 
@@ -673,7 +698,7 @@ void gancho_espectro(unsigned arg)
 
 /* O que o firmware faz depois de trocar o passo ou a quantidade de pontos (0x01E4C628..0x01E4C664):
  * filtro do passo, janela nova, frequencia e rotulos, e a varredura recomeca. */
-static void reconfigura(void)
+NAS_VOZES static void reconfigura(void)
 {
     unsigned filtro = filtro_de[cfg_passo()];
 
@@ -696,7 +721,7 @@ static void reconfigura(void)
  *  - OK e # trocam passo e pontos pela nossa ordem, com os valores novos, e fazem o que o firmware
  *    faz em seguida; voltam como tecla 255 no caso 20, que pula o bipe - como as duas de fabrica.
  */
-unsigned long long gancho_tecla_espectro(unsigned tecla)
+NAS_VOZES unsigned long long gancho_tecla_espectro(unsigned tecla)
 {
     unsigned caso = tecla - 16;
 
@@ -742,19 +767,6 @@ static const u8 roger_posicao[5] = {0, 1, 4, 2, 3};    /* valor gravado -> posic
  *    com volume constante, e no original a segunda nota cai 22 dB depois de uns 40 ms. */
 static const u16 beep2[] = {11615, 50, 19172, 50, 14031, 50, 9612, 50, 0};
 static const u16 beep3[] = {20649, 35, 27587, 165, 0};
-
-/* ---------- canaria na regiao das vozes (v30, v31) ----------
- * Bytes conhecidos no comeco do espaco que era das vozes (ver bancos.ld). Na v30 o COIN tocava dali
- * se a assinatura batesse, e no radio saiu o BEEP 2: o processador nao le ali o que esta no .anc.
- * Na v31 ela fica so como dado, para ler pelo cabo com a leitura de memoria do gancho_cabo: o
- * radio tinha ali a voz ORIGINAL (o resto do arquivo batia com o .anc). Causa: a entrada do C0 no
- * diretorio tone continuava com o CRC da voz, e a atualizacao nao regravou o arquivo. A v32 refaz
- * os CRCs do diretorio (jlfw.refaz_crcs_tone). */
-__attribute__((section(".vozes"), used)) static const struct {
-    char marca[8];
-    u16 beep3[5];
-} canaria = {{'B', 'V', 'O', 'Z', 'T', 'V', '3', '2'}, {20649, 35, 27587, 165, 0}};
-
 
 u16 roger_le(void)
 {
@@ -879,103 +891,6 @@ void gancho_cabo(unsigned grava)
         return;
     }
     DADOS_CABO(grava);
-}
-
-/* ---------- gancho do realce: fundo do bloco do VFO em evidencia ----------
- * A tela e desenhada uma janela por vez: janela(x0,x1,y0,y1,limpar,cor) em 0x01E3AD34 guarda os
- * limites em b[0x14608..0x1460E] e h[0x14610] (bytes por linha) e, com limpar != 0, enche o buffer
- * de video (0x10190) com a cor; o desenho entra ali; envia() em 0x01E3ADBC le os mesmos globais e
- * manda o pedaco para o LCD.
- *
- * O gancho entra NO ENVIO, nao no preenchimento, e troca por verde todo pixel preto do pedaco.
- * E a unica forma de pintar o bloco inteiro, porque o fundo do texto NAO vem de janela(): as
- * rotinas de texto enchem a celula de cada caractere com uma cor propria, preta fixa (em
- * 0x01E3BACE e o "r8 = 0" de 0x01E3BAD8, que vai como fundo para o desenhador de glifo em
- * 0x01E388F4 e para o enchimento do vao em 0x01E38978). Trocar so a cor da janela, como a v14
- * fazia, deixava o nome e a frequencia em caixas pretas sobre o verde.
- *
- * O buffer guarda cada pixel com o byte ALTO primeiro (0x01E3AD90: b[p] = cor>>8, b[p+1] = cor),
- * e a CPU e little-endian - por isso COR_BUF entra com os bytes trocados. Preto e 0 dos dois
- * lados, entao a comparacao nao depende disso.
- *
- * Qual bloco esta em evidencia sai da PROPRIA rotina do firmware (0x01E3B1A2), a mesma que ele usa
- * para decidir a posicao de cada linha e que o desenhador de bloco (0x01E3BD04) e o complemento
- * (0x01E3C06E) consultam. Chamada com o lado selecionado ela devolve 2 com o VFO A em evidencia,
- * 1 com o B e **0 quando a tela nao e a de dois VFOs** - so vale para b[0x1533D] em {0,3,5}, e a
- * tela de um VFO so poe 4 ali (0x01E4CDC4). E o que mantem o verde fora das outras telas, que
- * passam por estas mesmas funcoes.
- *
- * A AREA do lado em evidencia e a que o proprio firmware limpa ao montar a tela (0x01E3ACBA no
- * modo 2): 72 linhas a partir de y=16 com o A, ou de y=56 com o B, e a linha separadora branca
- * logo depois (88) ou logo antes (55). Todas as janelas do lado em evidencia caem dentro dela e as
- * do outro lado ficam fora - lidas no desmontado (tabelas em 0x01E3BD40/0x01E3BD4A e 0x01E3C0BE):
- *   A em evidencia, area 16..87    A: 18, 30, 56, 58, 62, 74    B: 91, 93, 114
- *   B em evidencia, area 56..127   A: 19, 21, 41                B: 57, 69, 95, 97, 101, 114
- * (18/57 e a linha de informacoes, a do "H", que so existe para o lado em evidencia.)
- *
- * REGRA DURA, PAGA CARO (v13): o buffer tem 10240 bytes (uma banda de 160x32) e janela() nao tem
- * trava de tamanho - foi pedir janela maior que isso que reiniciava o radio. Aqui o gancho nunca
- * desenha nada: so le os limites que o firmware ja gravou e, por garantia, nao passa do buffer.
- */
-#define VIDEO      ((volatile u16 *)0x00010190)
-#define PIXELS     (10240u / 2)                    /* o buffer inteiro, em pixels */
-/* Os limites que janela() grava (0x01E3AD3C..0x01E3AD74: b[83464] x0, b[83466] y0, b[83468] x1,
- * b[83470] y1, h[83472] bytes por linha). O objdump mostra esses enderecos em DECIMAL; a v15 os
- * converteu errado para 0x145CA/0x145CE/0x145D0 (0x40 a menos), leu tres variaveis alheias e
- * nunca pintou nada. Conferir sempre contra o decimal do desmontado. */
-#define JAN_Y0     (*(volatile u8 *)0x0001460A)    /* 83466 */
-#define JAN_Y1     (*(volatile u8 *)0x0001460E)    /* 83470 */
-#define JAN_LINHA  (*(volatile u16 *)0x00014610)   /* 83472, bytes por linha: (x1 - x0) * 2 */
-#define COR_BUF    ((u16)(COR_REALCE >> 8 | COR_REALCE << 8))
-
-#define AREA       72u                             /* linhas da area do lado em evidencia */
-
-/* Primeira linha da area do lado em evidencia (16 com o A, 56 com o B), ou 0 fora da tela de dois
- * VFOs. Chamado com o lado selecionado, layout() devolve 2 com o A em evidencia, 1 com o B e 0 nas
- * outras telas - e ele so testa se o argumento e zero (0x01E3B1CC/0x01E3B1D4), entao LADO_B vai
- * direto. 96 - 40 * lado da 16 para o A e 56 para o B. */
-static unsigned area_realce(void)
-{
-    unsigned lado = LAYOUT(LADO_B);
-
-    return lado - 1 <= 1 ? 96 - 40 * lado : 0;
-}
-
-void gancho_envia(void)
-{
-    unsigned y0 = JAN_Y0, inicio = area_realce();
-
-    if (inicio && y0 - inicio < AREA) {      /* sem sinal: y0 abaixo do inicio da um numero enorme */
-        unsigned n = (JAN_LINHA >> 1) * (JAN_Y1 - y0);
-        volatile u16 *p = VIDEO;
-
-        if (n > PIXELS)             /* nunca passa do buffer, mesmo com janela absurda */
-            n = PIXELS;
-        while (n--) {
-            if (*p == 0)
-                *p = COR_BUF;
-            p++;
-        }
-    }
-    ENVIA();
-}
-
-/* As janelas nao cobrem a area inteira: entre o nome grande e a frequencia, e entre a frequencia e
- * a barra, sobram faixas que ninguem desenha (secao 8 de docs/mapa-da-tela.md) - e que, depois da
- * limpeza, ficavam pretas. Este gancho entra nas duas chamadas que limpam a tela e em seguida a
- * redesenham inteira (0x01E3C294, dentro de 0x01E3C290, por onde passam a partida e a saida do
- * menu; e 0x01E40F66, dentro de 0x01E40F1C, que e a troca de lado): deixa a limpeza de fabrica
- * correr (preto e a separadora) e enche de verde a area do lado em evidencia. As janelas vem por
- * cima, recoloridas pelo gancho do envio, e nas faixas que sobram fica o verde. Nenhum outro
- * caminho pinta aquelas faixas, entao elas continuam verdes ate a proxima limpeza. A entrada do
- * menu limpa por outra chamada e nao passa por aqui. */
-void gancho_limpa(unsigned modo)
-{
-    unsigned inicio;
-
-    LIMPA(modo);
-    if ((inicio = area_realce()) != 0)
-        ENCHE(inicio, AREA, COR_REALCE);
 }
 
 /* ---------- textos ---------- */

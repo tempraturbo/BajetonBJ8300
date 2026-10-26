@@ -441,6 +441,12 @@ byte of RAM of our own, and this firmware has no proven-free RAM yet.
   (the text's x). AM/FM has the window 127..159 × 17..49 with its text at y 20, and the dBm starts
   at y 36.
 - **Step (v27).** The step label is drawn at y 37, the height of the peak and the dBm.
+- **AM/FM without erasing the dBm (v34).** The AM/FM routine (`0x01E4B04C`, called only by key 23
+  and by the entry) opens the window `127..159 × 17..49`, clears it and writes in 12 px at y 20; its
+  end went from y 49 to 33 (`r3` at `0x01E4B066`), because the dBm lives at `112..160 × 36..48`.
+- **Green peak (v34).** `mostra_pico` writes through `escreve_cor`, the 12 px ASCII path of
+  `escreve()` with the letter color instead of the fixed white (map in
+  [screen-map.md](screen-map.md#10-text-escreve-the-fonts-and-the-glyph)).
 
 ## 12. Roger
 
@@ -588,6 +594,21 @@ Nothing writes to the unpartitioned range — and **still, growing the image int
 radio** (v28): what the uboot and the loader do with the image size does not show in the app's
 disassembly. The image sizes and the partition table stay as JieLi made them (`2f`).
 
+**The loader refuses too much change in the voices (v35).** When flashing through BinTalk, the radio
+jumps to the loader, JieLi's stock `uart_update.bin` (from 2023-05-19, inside `ota.bin`). It is
+the loader that asks for the pieces of the `.anc` and writes them. It is encrypted and cannot be
+read. What was measured on the radio ([changelog](changelog.md), v35):
+
+- an image that changes the voice files C0..C11 is refused before any write. Read over the cable
+  afterwards, `tone` was byte for byte v34's. The content does not matter, nor what was on the
+  radio;
+- changing only C0 and C1 goes through;
+- changing `app.bin` always went through.
+
+Why (number of files, of sectors or of bytes) cannot be known without reading the loader. The large
+new code went inside `app.bin` ([section 16](#16-g729-out-v36)), and `2g` refuses to build if any
+voice file other than C0 and C1 changes.
+
 ## 15. Voices removed
 
 The `tone` directory comes right after `app.bin` (for the processor, `0x01E781DC`), with 127 files:
@@ -630,3 +651,145 @@ the cable memory read in v31, only the replaced bytes differed, and their neighb
 patches, that the path table is read in one place only, that the `.vozes` block lands inside the
 voices in the 6 images, that the rest of the directory is the stock one except the CRCs, and that
 every CRC matches the content.
+
+**Code in the voice space (v33).** The spectrum lives there: the 10 routines the firmware calls
+(the hooks for the keys, the scan, the point record, the next point, the window, the bars and the
+peak, and the three routines replaced whole), the helpers and the tables, 946 B (`.vozes.text` and
+`.vozes.rodata`). The area at the end of the image keeps the rest, 2268 of its 3260 B.
+
+None of the spectrum runs without screen mode 20 (`b[0x1533D]`). The proof is a backward closure,
+over the stock disassembly, from each hook site. It gathers every instruction that can reach it:
+
+- the previous one, when it falls through (inside an `if (...) {` block it counts as always
+  falling through);
+- the source of every branch;
+- every `tbb`/`tbh` case, with the table read from `app.bin` and the case count from the guard
+  (the table bytes do not count as instructions).
+
+It fails if it reaches a routine entry, a constant equal to the address, a `tbb`/`tbh` without a
+guard or an instruction nothing leads to. Every site stops at one of these three gates:
+
+| Gate | Leads to |
+|---|---|
+| case 20 of the mode `tbh` (`0x01E4B988`) | the spectrum key handler (`0x01E4BFBE`) |
+| case 36 of the key-action `tbh` (`0x01E4BE28`) | the spectrum entry (`0x01E4CF78`), which writes 20 to the mode |
+| fall-through of the main loop's `if (r0 != 20) goto` (`0x01E4D5AC`) | the scan and the bars (`0x01E4D5B0`) |
+
+The stock routines along the way (`0x01E4AEAC` scan, `0x01E4AE44` next point, `0x01E4AD7C` record,
+`0x01E4AA3C` window, `0x01E4A9E6`, and the replaced `0x01E4A99C`, `0x01E4A9C2` and `0x01E4ABDC`)
+are called only from those gates or by one another, always at the entry, and no 32-bit constant
+points to them. The mode was checked too:
+
+- of the 25 byte writes to it, only the one at `0x01E4CF7E` writes 20; the others write 0, 1, 2,
+  3, 4, 7, 8, 11 and 17;
+- no 16- or 32-bit write covers the byte;
+- it lies outside the RAM's initial data, which ends at `0xD4D0`.
+
+If code there did not run, the radio would go down on entering the spectrum. Boot, the cable and
+PTT2 + shortcut never go through it.
+
+In the build:
+
+- `2b` requires those 10 in `.vozes` and the others in `.text`;
+- `2d` requires that only the spectrum sites branch to `.vozes`;
+- `4g` requires that nothing in `.text` calls `.vozes`.
+
+All three failed on a build with boot and `zera` in `.vozes`. `2d` now counts only the branches we
+wrote, the bytes that differ from stock. Read at every even offset, it also finds "branches" in the
+middle of an instruction: the middle of the call at `0x01E16A10` "goes" to `0x01E79878`. No real
+stock branch leads to the new code:
+
+- the end of the image was free space;
+- the only "branches" into the voice space are 56 at the end of `app.bin`
+  (`0x01E734C6..0x01E77CBA`), the copy of the code that runs in RAM and the initial data, read away
+  from their own address;
+- the RAM code, disassembled at its own address, does not branch there.
+
+**Main screen B (v35, moved out in v36).** In v35 the whole `tela.o` lived here too (6.6 KB counting
+the spectrum), and the loader refused the image, because it changed the files C0..C11
+([section 14](#14-internal-flash-partitions-and-who-writes)). Since v36 the screen lives in place of
+G.729 ([section 16](#16-g729-out-v36)), and only the spectrum stays here, inside C0 and C1.
+
+## 16. G.729 out (v36)
+
+Screen B (5,636 B) went inside `app.bin`, in place of the G.729 decoder, the one for the `.wtg`
+voices, which have not played since v30.
+
+**The range.** `0x01E257E0..0x01E278C8`, 8,424 B, with:
+
+- the G.729 code;
+- the standard's tables: the cosine table at `0x01E2686C` and the LSP codebook at `0x01E2696C`;
+- its library routines, pointed to by the operations table `0x01E26730`.
+
+Just before, at `0x01E257C8..0x01E257DF`, there are two 12 B structures of the player, read at
+`0x01E3000A` and `0x01E30012`, which stay. Just after, at `0x01E278C8`, the MP3 decoder starts: it
+is called from `0x01E2ECAA` and pointed to by the table `0x01E2C084`.
+
+**How a decoder is chosen.** The registry at `0x01E34838` holds three decoders of 68 B each, with
+the type and the routines:
+
+| Type | What it is | Routines |
+|---|---|---|
+| `0x40` | G.729 (`wtg`) | `0x01E257E0..`, in the range |
+| `0x01` | MP3 | `0x01E2EC52..` |
+| `0x100` | sine, for the `.sin` beeps | in RAM (`0x472C..`) |
+
+Only two lookups read the registry; they are the only loads of its address:
+
+- `0x01E2F1D2`, by exact type;
+- `0x01E2F2CE`, by mask: the type must share a bit with the requested mask.
+
+The decoder start (`0x01E30646`, called only from `0x01E308BE`) uses the exact lookup when the
+requested mask has a single bit, and the mask lookup otherwise. The copy that runs in RAM calls the
+exact one with `0x100`.
+
+**Who asks for type `0x40`.** A decoder is only created by `0x01E3022E`. It is called by three
+routines, and all three are called only by the sound player (`0x01E40318`):
+
+- `0x01E3041C`, for a file that is not `.sin`. The type comes from the extension through the table
+  `0x01E60D40` (`wtg` `0x40`, `msbc` `0x20`, `sbc` `0x10`, `mty` `0x400`, `aac` `0x200`,
+  `mp3` `0x01`, `wma` `0x02`, `wav` `0x04`). An unknown extension gives 0, and then the default
+  input `0x01E30BE4` applies, which is `0x40` again;
+- `0x01E3039A`, for `.sin`, and `0x01E302E0`, for the sine by index: both use the input
+  `0x01E30C18`, of type `0x100`.
+
+The player decides by the extension of the opened file, comparing it with `"sin"` (`0x01E5FBCE`) in
+`0x01E1A608` (3 letters, case-insensitive). In the sound directory, the files that are not `.sin`
+are the voices and `index.idx`, which nobody plays, and every voice is cut since v30
+([section 15](#15-voices-removed)). The `ring.*` in the strings does not exist in the directory:
+the file does not open, and the player returns before creating the decoder.
+
+**Nothing from outside gets in.** In the stock disassembly, of the flash and of the RAM copy, what
+points into the range from outside it is:
+
+- the registry's 6 pointers;
+- ten "branches" the disassembler shows, which are table. Eight fall in the middle of the 4 KB of
+  noise-reduction weights (`0x01E21C78..0x01E22788`, inside the block `0x01E21A2C` that its
+  descriptor points to at `0x01E77FA0`); the other two, `0x01E257D0` and `0x01E257D8`, fall in the
+  12 B structures just before the range. Not even the most conservative reachability, whose roots
+  are the entry and every 32-bit value that lands in code, reaches any of them.
+
+Apart from the registry, no `rX = imm` immediate and no loose 32-bit value, in the whole `app.bin`,
+points into the range.
+
+**The lock.** G.729's type in the registry becomes 0, and neither lookup matches 0:
+
+- the exact lookup always gets a single-bit type (or the `0x100` of the RAM copy);
+- the mask lookup needs at least one bit in common.
+
+A `.wtg` request that slipped through the map takes the same stock path that a format without a
+decoder takes, instead of running screen B as if it were audio.
+
+**Noise reduction stays.** The ~32 KB at `0x01E1C02C..0x01E22B2C`, which looked free because they
+are not code, are the noise-reduction weights. Their descriptors are at `0x01E77EC0..`, which goes
+to RAM at `0xD1B4..`, and the routine that reads them (`0x01E23168`) works at 16 kHz with 512-sample
+frames. It is in use.
+
+**In the build:**
+
+- `2b` requires `tela.o` in `.g729`, and only it;
+- `2h` checks the registry and the place, and that nothing from outside points into the range, in
+  the stock firmware and the new one, apart from screen B's sites. That covers 32-bit values and
+  4-byte `call`/`goto`, the latter by the flash address and by the RAM one. It was tested with the
+  range 8 B wider, when it flags the neighboring structures and MP3, and without excluding the
+  registry, when it flags the 6 pointers.

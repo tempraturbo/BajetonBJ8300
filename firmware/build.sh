@@ -14,9 +14,12 @@ SAIDA=build/BJ8300_BANK.anc
 mkdir -p build
 [ -f build/app.bin ] || python -I scripts/jlfw.py unpack "$ORIGINAL" build >/dev/null
 
-"$B/clang.exe" -target pi32v2 -integrated-as -Oz -fno-builtin -ffreestanding \
-    -c src/bancos.c -o build/bancos.o
-"$B/pi32v2-ld.exe" -T src/bancos.ld -o build/bancos.elf build/bancos.o
+python -I scripts/fonte.py >/dev/null        # build/fonte_b.h, a fonte da tela B
+for f in bancos tela; do
+    "$B/clang.exe" -target pi32v2 -integrated-as -Oz -fno-builtin -ffreestanding -Ibuild \
+        -c src/$f.c -o build/$f.o
+done
+"$B/pi32v2-ld.exe" -T src/bancos.ld -o build/bancos.elf build/bancos.o build/tela.o
 "$B/llvm-objcopy.exe" -O binary -j .text build/bancos.elf build/bancos.bin
 
 "$B/llvm-nm.exe" -n build/bancos.elf > build/simbolos.txt

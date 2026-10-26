@@ -437,6 +437,12 @@ byte de RAM nosso, e este firmware ainda não tem RAM comprovadamente livre.
   `0x01E4AE12` e `r1 = 120 → 160` em `0x01E4AE14` (a janela), `r1 = 56 → 116` em `0x01E4AE30` (o
   x do texto). O AM/FM tem a janela 127..159 × 17..49 com o texto em y 20, e o dBm começa em y 36.
 - **Passo (v27).** O rótulo do passo é desenhado em y 37, a altura do pico e do dBm.
+- **AM/FM sem apagar o dBm (v34).** A rotina do AM/FM (`0x01E4B04C`, chamada só pela tecla 23 e pela
+  entrada) abre a janela `127..159 × 17..49`, limpa e escreve em 12 px em y 20; o fim dela passou de
+  y 49 para 33 (`r3` em `0x01E4B066`), porque o dBm mora em `112..160 × 36..48`.
+- **Pico em verde (v34).** O `mostra_pico` escreve pelo `escreve_cor`, o caminho ASCII de 12 px do
+  `escreve()` com a cor da letra no lugar do branco fixo (mapa em
+  [mapa-da-tela.md](mapa-da-tela.md#10-texto-escreve-as-fontes-e-o-glifo)).
 
 ## 12. Roger
 
@@ -584,6 +590,21 @@ Nada grava na faixa sem partição — e **mesmo assim crescer a imagem para den
 rádio** (v28): o que o uboot e o carregador fazem com o tamanho da imagem não aparece no
 desmontado do app. O tamanho das imagens e a tabela de partições ficam como a JieLi fez (`2f`).
 
+**O carregador recusa mudança demais nas vozes (v35).** Na gravação pelo BinTalk, o rádio pula para
+o carregador, o `uart_update.bin` padrão da JieLi (de 19/05/2023, dentro do `ota.bin`). É ele que
+pede os pedaços do `.anc` e grava. Ele é cifrado e não se lê. O que foi medido no rádio
+([histórico](historico.md), v35):
+
+- uma imagem que muda os arquivos de voz C0..C11 é recusada antes de qualquer escrita. Lido pelo
+  cabo depois, o `tone` estava byte a byte o da v34. Não importa o conteúdo, nem o que havia no
+  rádio;
+- mudar só o C0 e o C1 passa;
+- mudar o `app.bin` sempre passou.
+
+O porquê (quantidade de arquivos, de setores ou de bytes) não se sabe sem ler o carregador. O
+código novo grande foi para dentro do `app.bin` ([seção 16](#16-o-g729-fora-v36)), e a `2g` recusa
+montar se mudar qualquer arquivo de voz além do C0 e do C1.
+
 ## 15. Vozes fora
 
 O diretório `tone` vem logo depois do `app.bin` (para o processador, `0x01E781DC`), com 127
@@ -624,3 +645,143 @@ na v31, só os bytes trocados diferiam, e os vizinhos batiam com o `.anc`. Na v3
 os CRCs (`refaz_crcs_tone`), e o dado chegou. A `2g` confere os remendos, que a tabela de caminhos
 é lida num lugar só, que o bloco `.vozes` cai dentro das vozes nas 6 imagens, que o resto do
 diretório é o de fábrica menos os CRCs, e que todo CRC confere com o conteúdo.
+
+**Código no espaço das vozes (v33).** O espectro mora ali: as 10 rotinas que o firmware chama (os
+ganchos das teclas, da varredura, do registro, do próximo ponto, da janela, das barras e do pico, e
+as três rotinas trocadas inteiras), as ajudantes e as tabelas, 946 B (`.vozes.text` e
+`.vozes.rodata`). A área do fim da imagem fica com o resto, 2268 dos 3260 B.
+
+Nada do espectro roda sem o modo de tela 20 (`b[0x1533D]`). A prova é um fecho para trás, no
+desmontado de fábrica, a partir de cada sítio de gancho. Ele junta toda instrução que pode chegar
+ali:
+
+- a anterior, quando cai nela (dentro de um bloco `if (...) {` conta como se caísse sempre);
+- a origem de todo desvio;
+- todo caso de `tbb`/`tbh`, com a tabela lida do `app.bin` e a quantidade de casos pela guarda (os
+  bytes da tabela não contam como instrução).
+
+Falha se chegar a uma entrada de rotina, a uma constante igual ao endereço, a um `tbb`/`tbh` sem
+guarda ou a uma instrução a que nada leva. Todo sítio para numa destas três portas:
+
+| Porta | Leva a |
+|---|---|
+| caso 20 do `tbh` dos modos (`0x01E4B988`) | tratador das teclas do espectro (`0x01E4BFBE`) |
+| caso 36 do `tbh` das ações de tecla (`0x01E4BE28`) | entrada do espectro (`0x01E4CF78`), que grava o 20 no modo |
+| queda do `if (r0 != 20) goto` do laço principal (`0x01E4D5AC`) | varredura e barras (`0x01E4D5B0`) |
+
+As rotinas de fábrica do meio do caminho (`0x01E4AEAC` varredura, `0x01E4AE44` próximo ponto,
+`0x01E4AD7C` registro, `0x01E4AA3C` janela, `0x01E4A9E6`, e as trocadas `0x01E4A99C`, `0x01E4A9C2`
+e `0x01E4ABDC`) só são chamadas dessas portas ou umas pelas outras, sempre pela entrada, e nenhuma
+constante de 32 bits aponta para elas. O modo também foi conferido:
+
+- das 25 escritas de byte nele, só a de `0x01E4CF7E` grava 20; as outras gravam 0, 1, 2, 3, 4, 7,
+  8, 11 e 17;
+- nenhuma escrita de 16 ou 32 bits cobre o byte;
+- ele fica fora dos dados iniciais da RAM, que vão até `0xD4D0`.
+
+Se o código dali não rodasse, o rádio cairia ao entrar no espectro. A partida, o cabo e o PTT2 +
+atalho não passam por ele.
+
+No build:
+
+- a `2b` exige essas 10 no `.vozes` e as outras no `.text`;
+- a `2d` exige que só os sítios do espectro desviem para o `.vozes`;
+- a `4g` exige que nada do `.text` chame o `.vozes`.
+
+As três falharam numa montagem com a partida e o `zera` no `.vozes`. A `2d` passou a contar só os
+desvios que nós gravamos, os bytes diferentes dos de fábrica. Lida a cada deslocamento par, ela
+também acha "desvios" no meio de uma instrução: o meio da chamada em `0x01E16A10` "vai" para
+`0x01E79878`. Desvio de fábrica de verdade para o código novo não existe:
+
+- o fim da imagem era espaço livre;
+- no espaço das vozes só caem 56 "desvios" do fim do `app.bin` (`0x01E734C6..0x01E77CBA`), a
+  cópia do código que roda na RAM e os dados iniciais, lidos fora do endereço deles;
+- o código da RAM, desmontado no endereço dele, não desvia para lá.
+
+**Tela principal B (v35, daqui para fora na v36).** Na v35 o `tela.o` inteiro morava aqui também
+(6,6 KB contando o espectro), e o carregador recusou a imagem, porque ela mudava os arquivos C0..C11
+([seção 14](#14-flash-interna-partições-e-quem-grava)). Desde a v36 a tela mora no lugar do G.729
+([seção 16](#16-o-g729-fora-v36)), e aqui fica só o espectro, dentro do C0 e do C1.
+
+## 16. O G.729 fora (v36)
+
+A tela B (5.636 B) foi para dentro do `app.bin`, no lugar do decodificador G.729, o das vozes
+`.wtg`, que não tocam desde a v30.
+
+**A faixa.** `0x01E257E0..0x01E278C8`, 8.424 B, com:
+
+- o código do G.729;
+- as tabelas da norma: a de cossenos em `0x01E2686C` e o dicionário LSP em `0x01E2696C`;
+- as rotinas da biblioteca dele, apontadas pela tabela de operações `0x01E26730`.
+
+Logo antes, em `0x01E257C8..0x01E257DF`, há duas estruturas de 12 B do tocador, lidas em `0x01E3000A`
+e `0x01E30012`, que ficam. Logo depois, em `0x01E278C8`, começa o decodificador de MP3: ele é chamado
+de `0x01E2ECAA` e apontado pela tabela `0x01E2C084`.
+
+**Como um decodificador é escolhido.** O registro `0x01E34838` tem três decodificadores de 68 B
+cada, com o tipo e as rotinas:
+
+| Tipo | O que é | Rotinas |
+|---|---|---|
+| `0x40` | G.729 (`wtg`) | `0x01E257E0..`, na faixa |
+| `0x01` | MP3 | `0x01E2EC52..` |
+| `0x100` | seno, para os bipes `.sin` | na RAM (`0x472C..`) |
+
+Só duas buscas leem o registro; são as únicas cargas do endereço dele:
+
+- `0x01E2F1D2`, por tipo exato;
+- `0x01E2F2CE`, por máscara: o tipo tem de ter algum bit em comum com a máscara pedida.
+
+A partida do decodificador (`0x01E30646`, chamada só de `0x01E308BE`) usa a busca exata quando a
+máscara pedida tem um bit só, e a de máscara nos outros casos. A cópia que roda na RAM chama a
+exata com `0x100`.
+
+**Quem pede o tipo `0x40`.** Decodificador só é criado por `0x01E3022E`. Ela é chamada por três
+rotinas, e as três só são chamadas pelo tocador de sons (`0x01E40318`):
+
+- `0x01E3041C`, para o arquivo que não é `.sin`. O tipo sai da extensão pela tabela `0x01E60D40`
+  (`wtg` `0x40`, `msbc` `0x20`, `sbc` `0x10`, `mty` `0x400`, `aac` `0x200`, `mp3` `0x01`,
+  `wma` `0x02`, `wav` `0x04`). Extensão desconhecida dá 0, e aí vale a entrada padrão
+  `0x01E30BE4`, que é `0x40` de novo;
+- `0x01E3039A`, para o `.sin`, e `0x01E302E0`, para o seno pelo índice: as duas usam a entrada
+  `0x01E30C18`, de tipo `0x100`.
+
+O tocador decide pela extensão do arquivo aberto, comparando-a com `"sin"` (`0x01E5FBCE`) em
+`0x01E1A608` (3 letras, sem diferenciar caixa). No diretório de sons, os arquivos que não são
+`.sin` são as vozes e o `index.idx`, que ninguém toca, e toda voz está cortada desde a v30
+([seção 15](#15-vozes-fora)). O `ring.*` das strings não existe no diretório: o arquivo não abre,
+e o tocador volta antes de criar o decodificador.
+
+**Nada de fora entra.** No desmontado de fábrica, da flash e da cópia da RAM, o que aponta para
+dentro da faixa vindo de fora dela é:
+
+- os 6 ponteiros do registro;
+- dez "desvios" que o desmontador mostra, e que são tabela. Oito caem no meio dos 4 KB de pesos da
+  redução de ruído (`0x01E21C78..0x01E22788`, dentro do bloco `0x01E21A2C` que o descritor dela
+  aponta em `0x01E77FA0`); os outros dois, `0x01E257D0` e `0x01E257D8`, caem nas estruturas de 12 B
+  logo antes da faixa. Nem o alcance mais conservador, cujas raízes são a entrada e todo valor de
+  32 bits que caia em código, chega a algum deles.
+
+Fora o registro, nenhum imediato `rX = imm` e nenhum valor de 32 bits solto, em todo o `app.bin`,
+aponta para a faixa.
+
+**A trava.** O tipo do G.729 no registro vira 0, e nenhuma das duas buscas casa o 0:
+
+- a busca exata sempre recebe um tipo com um bit só (ou o `0x100` da cópia da RAM);
+- a de máscara exige pelo menos um bit em comum.
+
+Um pedido de `.wtg` que tivesse escapado do mapa sai pelo mesmo caminho de fábrica que um formato
+sem decodificador toma, em vez de executar a tela B como se fosse áudio.
+
+**A redução de ruído fica.** Os ~32 KB de `0x01E1C02C..0x01E22B2C`, que pareciam livres por não
+serem código, são os pesos da redução de ruído. Os descritores deles estão em `0x01E77EC0..`, que vai
+para a RAM em `0xD1B4..`, e a rotina que os lê (`0x01E23168`) trabalha a 16 kHz com quadros de 512.
+Ela está em uso.
+
+**No build:**
+
+- a `2b` exige o `tela.o` no `.g729`, e só ele;
+- a `2h` confere o registro e o lugar, e que nada de fora aponte para a faixa, no de fábrica e no
+  novo, fora os sítios da tela B. Vale para valor de 32 bits e para `call`/`goto` de 4 bytes, estes
+  pelo endereço da flash e pelo da RAM. Ela foi testada com a faixa 8 B mais larga, quando acusa
+  as estruturas vizinhas e o MP3, e sem excluir o registro, quando acusa os 6 ponteiros.

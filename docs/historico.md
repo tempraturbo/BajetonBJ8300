@@ -5,6 +5,100 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v36 — 25/10 — a tela B no lugar do G.729 ✅
+
+**Testada no rádio: gravou inteira e "funcionou tudo, perfeito".** O roteiro de teste foi o da
+v35, abaixo.
+
+A v35 com a tela B em outro lugar, porque o rádio recusou gravar a v35. O código da tela é o
+mesmo, ligado em outro endereço.
+
+- **A tela B mora no lugar do decodificador G.729**, o das vozes `.wtg`, que não tocam desde a
+  v30: `0x01E257E0..0x01E278C8`, 8.424 B dentro do `app.bin`, dos quais a tela usa 5.636. A prova
+  de que ele nunca roda está na [seção 16](engenharia-reversa.md#16-o-g729-fora-v36).
+- **O G.729 sai do registro dos decodificadores:** o tipo dele vai de `0x40` para 0, que nenhuma
+  busca casa. Assim ele não é escolhido nem por um caminho que tenha escapado do mapa.
+- **Nas vozes fica só o espectro**, no C0 e no C1, byte a byte igual ao da v34. Em relação ao rádio
+  na v34, muda só o `app.bin`.
+- **O `conferir.py`** ganhou a `2h` (o registro, o lugar e nenhuma porta nova para a faixa, no de
+  fábrica e no novo) e, na `2g`, a trava de que só o C0 e o C1 mudam.
+
+## v35 — 25/10 — a tela principal B ❌ **o rádio não gravou**
+
+**O carregador recusou a imagem inteira.** No gravador, ela parava nos 5% e pulava para 100%, e o
+rádio reiniciava na versão anterior. Nas versões boas ele vai até ~78% antes de pular. Ela não
+fica em `firmware/releases/`, porque o rádio não a grava.
+
+Cinco tentativas, todas iguais:
+
+- a v35 por cima da v34 e por cima da V0.12;
+- duas imagens de teste: a v34 com só os arquivos de voz C2..C11 trocados, uma com o código da v35
+  ali e outra com zeros.
+
+A v34 por cima da V0.12 gravou inteira. Lido o rádio pelo cabo depois, o diretório `tone` estava
+byte a byte como o da v34. O carregador decide antes de escrever, e o que ele recusa é a imagem que
+muda os arquivos de voz C0..C11. O conteúdo não importa, nem o que já estava no rádio. Mudar só o
+C0 e o C1 (v33 e v34) passa, e mudar o `app.bin` sempre passou.
+
+O carregador é o `uart_update.bin` padrão da JieLi, que vem dentro do `ota.bin`, compilado em
+19/05/2023. Ele é cifrado, então a regra exata não se lê. Ver a
+[seção 14](engenharia-reversa.md#14-flash-interna-partições-e-quem-grava).
+
+O que a v35 trazia, e que a v36 leva:
+
+- **lado em evidência:** cartão com borda verde, nome, canal, frequência grande e medidor de 20 segmentos;
+- **etiquetas:** potência (H vermelho, M âmbar, L verde), FM/AM, N, +/−, CT/DCS, R/T, SC, SCR e zona;
+- **o outro lado:** compacto;
+- **barra de cima:** só o que está ligado (VOX, DW, MO, NR, DTMF ST, Bluetooth, trava), mais RX/TX, tensão e pilha;
+- **fonte:** própria, 5×7, ampliada por 2 na frequência.
+
+O firmware continua decidindo quando redesenhar. A tela B entra pela entrada de treze rotinas de
+desenho, por um desvio que devolve r0..r3 intactos; fora da tela de dois VFOs, ele refaz as
+instruções de fábrica e segue a rotina. A pilha nunca passa do que o firmware de fábrica já usa no
+mesmo lugar. Detalhes nas seções 11 e 12 do [mapa da tela](mapa-da-tela.md#12-a-tela-b-v35).
+
+**Para testar:** a tela principal em uso normal: trocar de canal, A/B, receber (o medidor e o RX),
+transmitir (TX e a frequência de TX), digitar frequência e canal, mudar potência e modulação, os
+ícones de cima (DW, trava, NR…), a bateria; e entrar e sair do menu e do espectro. Com o idioma
+chinês a tela fica a de fábrica.
+
+## v34 — 25/10 — pico em verde e o dBm inteiro na troca de AM/FM ✅
+
+A v33 passou no rádio: o espectro funcionou normal rodando do espaço que era das vozes, e o
+processador executa dali.
+
+- **dBm inteiro na troca de AM/FM.** A rotina do AM/FM (`0x01E4B04C`) abria a janela
+  `127..159 × 17..49` e limpava de preto o dBm, que desde a v26 fica em `112..160 × 36..48`: sobrava
+  o "-1" até o fim da passada. O texto dela é de 12 px em y 20, então a janela passa a terminar em
+  y 33, como a do "x160" (`0x01E4B066`, `r3 = 49 → 33`). Ela só é chamada pela tecla 23 e pela
+  entrada do espectro.
+- **Pico em verde.** A frequência do pico sai no verde do tema novo (`#34D399`, `0x3693` em
+  RGB565), pela primeira rotina de texto em cor: o caminho ASCII de 12 px do `escreve()` de
+  fábrica, com a cor da letra que se pede no lugar do branco fixo. A `4f` confere que a fonte, o
+  passo de 12 bytes e a rotina do glifo são os do firmware.
+
+**Para testar:** no espectro, a linha do pico em verde, e trocar AM/FM durante a varredura com o
+dBm inteiro.
+
+## v33 — 25/10 — o espectro no espaço das vozes ✅
+
+O código e as tabelas do espectro (946 B) saem da área do fim da imagem para o espaço que era das
+vozes. Lá ficam 2268 dos 3260 B, e sobram 992 B para a tela nova. É a prova de que o processador
+**executa** dali, e não só lê.
+
+Foi o espectro porque nada dele roda sem o modo de tela 20. No desmontado de fábrica, todo caminho
+até os ganchos dele passa pelo caso 20 do tratador de modos, pela entrada do espectro (a única
+escrita de 20 no modo) ou pelo "se o modo não for 20, pula" do laço principal. Se a execução dali
+falhar, só o espectro cai: a partida, o cabo e o PTT2 + atalho não passam por ele.
+
+A canária saiu, porque o próprio código prova que o dado chega. O `conferir.py` passa a exigir que
+só as rotinas do espectro morem no `.vozes`, que só os sítios do espectro desviem para lá e que
+nada do `.text` chame o `.vozes` (`2b`, `2d`, `4g`), e as três pegaram o erro numa montagem errada
+de propósito. Detalhes na [seção 15 da engenharia reversa](engenharia-reversa.md#15-vozes-fora).
+
+**Para testar:** entrar no espectro e usar como sempre (varredura, OK, #, setas parado num sinal,
+dígitos da frequência) e sair. O resto do rádio não muda.
+
 ## Driver do CHIRP — 25/10 — COIN e sem Voice Prompts
 
 - **Roger com cinco opções**, como o rádio: OFF, BEEP 1, BEEP 2, **COIN** e TONE1200. O COIN grava o
@@ -16,7 +110,7 @@ causa, porque é isso que evita repetir.
 O teste ganhou os casos do valor 4 (abre como COIN, grava o byte certo) e da página sem o ajuste
 de voz. O módulo do release v1.0T não mudou: este acompanha a v32.
 
-## v32 — 25/10 — o espaço das vozes, provado ✅ (em teste)
+## v32 — 25/10 — o espaço das vozes, provado ✅
 
 A v31 com o diretório `tone` consistente: o `repack` refaz o CRC de cada arquivo cujo conteúdo
 mudou e o do próprio diretório (`jlfw.refaz_crcs_tone`), do jeito que a ferramenta da JieLi os
@@ -427,7 +521,7 @@ que o usuário relatou na v14 (detalhes em [mapa-da-tela.md](mapa-da-tela.md)):
    de bloco `0x01E3BD04`, que **não tinham gancho nenhum**.
 2. **«o quadrado completo continua preto»** — o fundo do texto não vem de `janela()`: cada rotina de
    texto enche a célula de cada caractere com uma cor própria, preta fixa (o `r8 = 0` de
-   `0x01E3BAD8`, que vai para o desenhador de glifo `0x01E388F4` e para o vão `0x01E38978`). Trocar
+   `0x01E3BAD8`, que vai para o desenhador de glifo `0x01E388EC` e para o vão `0x01E38978`). Trocar
    a cor da janela nunca ia pintar o bloco.
 
 Agora o gancho entra **no envio** (`envia()`, `0x01E3ADBC`) e troca por verde todo pixel preto do

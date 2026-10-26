@@ -43,7 +43,7 @@ Por isso nenhuma chamada de fábrica passa de 32 linhas em largura cheia — a m
 
 Cada rotina de texto enche a célula de cada caractere com uma cor de fundo própria, **preta fixa**.
 No desenhador de nome (`0x01E3BACE`) é o `r8 = 0` de `0x01E3BAD8`, que vai como fundo tanto para o
-desenhador de glifo (`0x01E388F4`, sexto argumento) como para o enchimento do vão entre caracteres
+desenhador de glifo (`0x01E388EC`, sexto argumento) como para o enchimento do vão entre caracteres
 (`0x01E38978`). A rotina da frequência (`0x01E3BB7A`) faz o mesmo com o `r8 = r3` que recebe.
 
 Consequência prática, e foi o segundo defeito da v14: **trocar a cor da janela não pinta o bloco**.
@@ -254,3 +254,153 @@ linha do `H` (com o A) e a linha 56 entre a separadora e a linha do `H` (com o B
   as pinta, pela trava da seção 3, mas o realce também não foi pensado para elas.
 - A janela do nome começa em x=7 na atualização parcial (`0x01E4B270`) e em x=0 no redesenho
   completo (`0x01E3BF50`): sobra uma tira de 7 pixels que só é repintada no redesenho completo.
+
+## 10. Texto: `escreve()`, as fontes e o glifo
+
+Mapeado em 2026-10-25 para o tema novo, que precisa de texto em cor.
+
+```
+escreve(y, x, texto, tamanho, fundo)                 0x01E3B834
+    tamanho 12, 16 ou 24; x anda a largura de cada letra
+    a cor da letra é fixa: r10 = 0xFFFF (0x01E3B842), branca
+glifo(y, x, largura, altura, bits, fundo, frente)    0x01E388EC (14 chamadores)
+    não desenha com altura 0, largura 0 ou x > 160; corta a largura em 160 - x
+    escreve no buffer da janela aberta, pelo cursor b[0x14604] (x) e b[0x14606] (y), que
+    0x01E38724 limita a 159 e 127 e converte pela janela (b[0x14608], b[0x1460A], h[0x14610]);
+    pixel que cairia fora dos 10240 B do buffer não é escrito
+```
+
+**Os bits** vêm em faixas de 8 linhas. Cada byte é uma coluna, e o bit k é a linha faixa × 8 + k,
+com o bit 0 em cima. A primeira faixa ocupa os primeiros `largura` bytes e a seguinte os próximos
+(laço em `0x01E38944..0x01E38974`). Bit aceso sai na cor de frente, apagado na de fundo.
+
+**Os ASCII** (32 a 126) de cada tamanho:
+
+| Tamanho | Letra | Bytes | De onde |
+|---|---|---|---|
+| 12 | 6 × 12 | 12 | chip de dados, `0x86BC0 + c × 12` (`0x01E3B9E6`) |
+| 16 | 8 × 16 | 16 | chip de dados, `0x5B5C0 + c × 16`, e cada coluna desce uma linha (`0x01E3B8D0..0x01E3B906`) |
+| 24 | 12 × 24 | 36, de 48 em 48 | flash interna, `0x01E63B70 + (c − 32) × 48` (`0x01E3B868`) |
+
+Os de 12 e 16 são lidos pelo `LE_FLASH` (`0x01E390AC`), e o de 24 pelo `memcpy` da ROM
+(`0x021127A8`). Byte de 161 em diante é chinês (GB2312, dois bytes), por outros caminhos.
+
+Para escrever em cor basta repetir o caminho ASCII com a frente que se quiser: `janela()`,
+`glifo()` letra a letra e `envia()`. É o que o `escreve_cor` do `bancos.c` faz, na fonte de 12
+(v34, a linha do pico do espectro).
+
+## 11. Os dados da tela de dois VFOs
+
+Levantado em 2026-10-25 no desmontado de fábrica, para a tela B (seção 12). Base global `0x14680`.
+
+**Cada lado** (A = 0, B = 1) tem um registro em `0x14DC4 + lado × 31` (`0x01E3BD88..0x01E3BD8E`):
+
+| Campo | Onde | Observação |
+|---|---|---|
+| frequência de RX | u32 em +0 | em 10 Hz; `%03d.%05d` com /100000 |
+| tipo de tom | `b[+4]` | 0 nenhum, 1 CT, outro DCS |
+| frequência de TX | u32 em +5 | a que a linha grande mostra transmitindo (`0x01E40FE6`) |
+| deslocamento | `b[+10]` | 1 "+", 2 "−" |
+| largura | `b[+11]` | diferente de 0: "N" |
+| AM | `b[+12]` | 1 = AM, de 18 a 999,99999 MHz; de 108 a 135,99999 MHz sempre AM (`0x01E3B438..0x01E3B47E`) |
+| SC | `b[+13]` | diferente de 0 e fora de AM: "SC" (significado sem prova) |
+| SCR | `b[+14] & 3` | diferente de 0: "SCR" (significado sem prova) |
+| nome | 12 B em +15 | para em 0 ou 0xFF (`0x01E3BDCC..0x01E3BDE6`); vazio: "Unnamed CH" |
+
+Fora do registro:
+
+| Dado | Onde |
+|---|---|
+| lado em evidência | `b[0x15E04]` |
+| modo de trabalho | nibble de `b[0x14B86]` (A no baixo, B no alto): 1 = canal |
+| exibição | `b[0x14B79]` (A), `b[0x14B7A]` (B): 0 nome, 1 frequência, 2 número |
+| número do canal | `h[0x15E0C]` (A), `h[0x15E10]` (B), base 0 |
+| potência | `b[0x15E30 + lado]`: 0 H, 1 M, 2 L |
+| R/T | `b[0x15E28 + lado]`: 1 R, 2 T (significado sem prova) |
+| idioma | `b[0x14B74]`: 1 = chinês |
+| zona | com `b[0x14BD4]` = 0, navega por zona; a zona é `b[0x14BDB + lado]` |
+| estado de TX | `b[0x14685]`: 2 = transmitindo (`0x01E40F1C`) |
+| dígitos digitados | quantos em `b[0x14A35]`, em ASCII a partir de `0x14A3A` (`0x01E4B29C`, `0x01E4B1DE`) |
+
+**Barra de cima** (`0x01E3B05C`, fundo `0x2965`). Todo ícone é sempre desenhado, e o desligado sai
+com a frente da cor do fundo:
+
+| Ícone | Liga com |
+|---|---|
+| VOX | `b[0x14B6E]` |
+| DW | `b[0x14B70]` (TDR) |
+| MO | `b[0x15370]` |
+| nota musical | `b[0x14B75]`, item DTMFST |
+| ondas | `b[0x14BDE]`, item NOISE REDUCTION (o get/set dele, `0x01E3D0E0`/`0x01E3D0F4`, é o único que grava) |
+| Bluetooth | `b[0x14B89]` = 1 |
+| cadeado | `b[0x14B87]` |
+| tensão | `b[0x149BC] × 444 / 1000`, em décimos de volt (`0x01E3AFBE`) |
+| pilha | nível de `[0x149C0]`: acima de 6 vale 3, de 4 a 6 vale 4, senão ele mesmo (`0x01E3B03E`); 0..3 = 1..4 traços, 4 = só o contorno vermelho; com 5 e 6 o laço pisca o contorno (`0x01E460B2..0x01E460F2`) |
+
+**Medidor.** Só é redesenhado quando o degrau do sinal muda (`0x01E46166`: 5 degraus, nível
+2 × degrau + 2) ou pelo monitor, com nível 10 (`0x01E4532C`). O redesenho completo deixa as barras
+vazias, e o fim da recepção não chama o medidor. Na transmissão ele fica cheio pela potência
+(H 10, M 5, L 2).
+
+**Quem redesenha o quê.**
+
+- **A tela inteira:** `0x01E3C132`, pelos 17 chamadores de `0x01E3C290`; na varredura, por `0x01E3C278` a cada canal.
+- **O lado em evidência na troca de canal:** `0x01E453E0`.
+- **Um lado e a linha de informações:** `0x01E413BE` e `0x01E3B2C4`. A tecla A/B passa por `0x01E41486`.
+- **O medidor:** `0x01E3B592`.
+- **A transmissão:** `0x01E40F1C`.
+- **Os números sendo digitados:** `0x01E4B29C` e `0x01E4B1DE`.
+- **A barra de cima, a pilha, o MO e o cadeado:** cada um tem rotina e janela próprias.
+
+## 12. A tela B (v35)
+
+Desenhada por `firmware/src/tela.c`. Desde a v36 o código mora no lugar do decodificador G.729,
+dentro do `app.bin` ([engenharia reversa, seção 16](engenharia-reversa.md#16-o-g729-fora-v36)); na
+v35 ficava no espaço das vozes, e o carregador recusou gravar. Do firmware ela usa só a
+`janela()` e o `envia()`; retângulo e letra ela escreve no buffer de vídeo da janela aberta. A cena
+inteira é desenhada em faixas de até 32 linhas, e o que cai fora da janela é cortado.
+
+**Quem decide quando desenhar continua sendo o firmware.** Treze rotinas da seção 11 ganham, na
+entrada, um `goto` para um desvio no `tela.c`. O desvio:
+
+1. guarda `rets` e r0..r3, com as mesmas instruções que o firmware usa (`0x01E3C290` e `0x01E51358`);
+2. chama o gancho em C com os argumentos da rotina;
+3. se o gancho desenhou a tela B, volta a quem chamou com r0..r3 intactos;
+4. se não desenhou, refaz as instruções de fábrica que o `goto` cobriu e segue a rotina.
+
+A tela B só desenha com `layout()` diferente de 0 e fora do idioma chinês, porque a fonte não tem os
+ideogramas. Nos menus, na tela de um VFO e no espectro, as rotinas rodam como sempre.
+
+| Rotina | Gancho | O que a tela B redesenha |
+|---|---|---|
+| `0x01E3C132(0)`, a tela inteira | `b_tela` | tudo, e zera o estado de TX como ela |
+| `0x01E3B05C`, `0x01E3B03E`, `0x01E3AE50` | `b_barra` | a barra de cima |
+| `0x01E3AF1E(nível)`, a pilha | `b_bateria` | a barra, com o nível que vem (o pisca da bateria fraca) |
+| `0x01E3AEB0(ligado)`, o MO | `b_monitor` | a barra, com o MO que vem |
+| `0x01E453E0` | `b_evidencia` | o lado em evidência |
+| `0x01E4B29C`, `0x01E4B1DE` | `b_digitando` | o lado em evidência com os dígitos; só elas os mostram, como na de fábrica |
+| `0x01E413BE`, `0x01E3B2C4` | `b_lado` | os dois lados, porque na tecla A/B o cartão muda de lugar |
+| `0x01E3B592`, o medidor | `b_medidor` | o medidor do lado, com o nível que vem, e a barra (RX) |
+| `0x01E40F1C`, a transmissão | `b_transmissao` | refaz a lógica dela: grava o estado antes de desenhar, e desenha o lado e a barra (2) ou tudo (fim) |
+
+**Provado no desmontado antes de gravar:**
+
+- nenhum desvio nem constante cai dentro dos bytes cobertos;
+- nenhuma das treze lê argumento da pilha de quem chama;
+- elas só mudam estado no que o gancho repete (`b[0x14685]`);
+- a pilha: a profundidade máxima com a tela B é a mesma de fábrica nos três contextos de onde ela é
+  chamada (a interface `0x01E4B416`, 740 B; o laço do sinal `0x01E4622A`, 620 B; a partida, 696 B).
+  O pior caminho da tela B, 376 B a partir do desvio do medidor, cabe abaixo do mais fundo de cada um.
+
+O envio e a limpeza da tela de fábrica (seção 7) também foram para o `tela.c`. Com a tela B ativa,
+o envio redesenha da tela B o lado a que a janela pertence, e a limpeza não roda, porque a tela
+inteira vem logo depois. Sem a tela B (idioma chinês) fica o realce verde de antes.
+
+**Prévia no PC.** `firmware/previa/` compila o mesmo `tela.c` com a RAM, a `janela()` e o `envia()`
+imitados e grava a tela em PNG: `python -I previa/previa.py <pasta>` (precisa do zig, por
+`pip install ziglang`). A fonte (5×7, ampliada por 2 na frequência) mora em
+`firmware/fonte/fonte_b.txt`, desenhada em `#` e `.`; o `scripts/fonte.py` gera a tabela.
+
+**Conferido no build** (`conferir.py`): a 2b, a 2d e a 4g como antes, agora com os sítios da tela; a
+4m confere os 13 desvios byte a byte (bytes de fábrica, `goto`, desvio e volta); a 4n, que não há
+seção em RAM.
