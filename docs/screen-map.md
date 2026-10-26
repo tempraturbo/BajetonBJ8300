@@ -523,10 +523,10 @@ main screen's deepest path.
   that redraws the screen (Modulation's, CH-NAME's through the editor exit `0x01E3C7AA`) falls into
   that; measured at the call site, they all stay at up to 652 B, under the stock 740 B.
 
-## 14. The WATCH views (v42 to v50)
+## 14. The WATCH views (v42 to v51)
 
 WATCH picks how many frequencies the main screen shows. Screen B reads its record
-([reverse engineering, section 18](reverse-engineering.md#18-dual-watch-and-triple-v42-to-v50)) on
+([reverse engineering, section 18](reverse-engineering.md#18-dual-watch-and-triple-v42-to-v51)) on
 every draw and keeps the view in the byte left over from the digits of the state structure: the
 digits went from 8 to 7 bytes (up to 6 digits and the zero), and the structure did not grow,
 because it sits on the deepest stack path.
@@ -565,11 +565,11 @@ the data chip: the channel record, with MDF-C (or MDF-B, when it is B). An empty
 with `VFO` on the chip. **While receiving**, the strip turns dark amber (`#3b2a0b`, the amber chip's
 background) with the badge and the text in amber (`#fbbf24`). The side out of focus is receiving
 when it has signal, or when dual watch is on it with state 4, and the one receiving is the third
-one when the round-robin is on it. **While transmitting** on the third one (TX-A/B/C, v50: the flag
-`b[0x15384]` with bits 7 and 6), its strip turns red (the TX chip's background and text), the card
-of the side in focus stays as it is and the top bar shows TX. The state keeps this in the same TX
-byte (`tx` = 1 on the side in focus, 2 on the third), and the meter redraw, with TX on the third,
-only redraws its strip.
+one when the round-robin is on it. **While transmitting** on the third one (TX-A/B/C, v51: the flag
+`b[0x15384]` with bits 7 and 6), it is on side B, in focus, in RAM only: B's screen record holds its
+data, and `watch_tela()` inverts the view (with bit 31, its channel goes to B's card), so the card
+shows its letter, channel, name and red meter, and the strip shows the one that left side B. In v50,
+TX on the third painted its strip red; v51 put it on the card, as A and B.
 
 The summary of the side in focus at the top of the menu and QT scan uses the same letter
 (`LETRA()`): with C on side B, the badge is C (up to v49 it showed B).
@@ -582,4 +582,5 @@ the end of the deepest path of the screen in TRIPLE, and one more frame went pas
 
 **In the preview**, scenes 33 to 35 are SINGLE (channel receiving, VFO with an offset, and
 transmitting) and 36 to 39 are TRIPLE (A receiving, C receiving, B in focus with A receiving, and C
-in focus); 38c is C on a VFO, 38d TX on C (v50) and 11b the TX-A/B/C menu with C in focus (v50).
+in focus); 38c is C on a VFO, 39c TX on C with A in focus before PTT (v51) and 11b the TX-A/B/C
+menu with C in focus (v50).

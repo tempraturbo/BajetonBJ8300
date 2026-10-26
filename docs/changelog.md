@@ -5,6 +5,34 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v51 — Oct 26 — the third in focus while PTT is pressed ✅ (it is V2.6T)
+
+Tested on the radio: "now everything worked". The v50 test showed that, with TX-A/B/C on C, TX went
+out on C's frequency, but C did not come into focus as A and B do. Now it does, still writing
+nothing:
+
+- **On PTT press**, for the third, `gancho_tx_abc` brings side B into focus with the stock swap
+  (`0x01E40E52(0)`, the same as TX-A/B's), if A was in focus, and sets `b[0x15384]`: bit 7 is the
+  third, bit 5 says the swap was ours.
+- **At TX start**, after the disarm, `gancho_tx_desarma` puts the third in side B's current slot and
+  decodes it without inverting the side, as the channel loader does with the side in focus; puts its
+  power on side B and rebuilds side B's screen record with its data (`0x01E39128`: frequencies,
+  tones, power and the name through the current channel). It sets bit 6 and keeps B's power in bits
+  0..3. Side B's slots (the mode, the channel and the shadow) stay as they were.
+- **The screen** shows what PTT put on side B: with bit 6, `watch_tela()` inverts `c_no_b` (B's card
+  gets the third's letter and MDF) and gives, in bits 16..30, its channel for the card; and
+  `terceira()` becomes the one that left side B, read from its slots (the VFO through the shadow of
+  the side in focus, `0x15EA4`). The card shows the third transmitting, with the red meter, as A and
+  B. v50's red strip is gone.
+- **On the way back** (end of TX and refused TX), `gancho_tx_volta` clears the flag, gives the power
+  back, brings B's shadow back to the current slot (`0x01E3FD9E`) and B's screen record, and goes back
+  to A with the stock swap if that is what took it out of focus.
+- The round-robin and TX read the third through the same routine (`le_terceira`); only the
+  round-robin decodes with the side inverted.
+- The build passed ("tudo certo"), the stack is the stock one at all three roots (`gancho_tx_abc`,
+  which now does the swap, reaches 504 bytes at its site), the menus' deepest point is 640 bytes, and
+  the preview's 43 screens come out the same; the TX on C one (39c) shows C on the card.
+
 ## V2.5T — Oct 26 — three frequencies at once ⏳ v50, waiting for the radio test before the release
 
 v50 becomes **V2.5T**, the third stable version: `firmware/releases/BJ8300_BANK_v2.5T.anc`. It is
@@ -24,7 +52,7 @@ and the drawing when reception starts), but acceptable. From the code, the drawi
 paths are the same as v45's; what weighs more is the A/B key going to C or coming back from it,
 which since v49 writes the VFO sector, B's VFO record and the settings. To be watched in daily use.
 
-## v50 — Oct 26 — TX-A/B/C and the C label in the menu ⏳ waiting for the radio test
+## v50 — Oct 26 — TX-A/B/C and the C label in the menu ✔️ tested: TX went out on C, without C in focus
 
 The owner's two requests after using v49.
 
@@ -53,8 +81,9 @@ The owner's two requests after using v49.
     the flag right after them, and so does boot (`0x01E56B3A`).
 - **Who wins.** Outside TRIPLE, C does nothing (it acts as OFF). If PTT already swapped sides before
   TX-A/B (the flag already set), that wins, as in the stock firmware.
-- **On screen**, TX on the third leaves the card of the side in focus as it is and paints the
-  third's strip red; the top bar shows TX.
+- **On screen**, TX on the third left the card of the side in focus as it was and painted the
+  third's strip red; the top bar showed TX. On the radio the strip did not turn red, and the owner
+  asked for C in focus, as A and B do: v51 redid it that way.
 - **The label of the summary at the top of the menu and QT scan** showed B with C in focus: the
   summary drew the side's letter (`'A' + side`), not the one from `LETRA()`, which the card and the
   strips already use.

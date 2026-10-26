@@ -72,8 +72,8 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | `0x20000–0x99FFF` | fontes e textos em chinês (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 registros de 60 B que o firmware usa |
 | **`0xC1000–0xD1FFF`** | **os bancos** (cabeçalho + 16 setores de 4 KB) |
-| **`0xD2000–0xD2FFF`** | **o registro do WATCH** (v43; o cabo o grava desde a v46; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v50)) |
-| **`0xD3000–0xD3FFF`** | **os VFOs da C** (v49: o da C e o do B guardado; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v50)) |
+| **`0xD2000–0xD2FFF`** | **o registro do WATCH** (v43; o cabo o grava desde a v46; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v51)) |
+| **`0xD3000–0xD3FFF`** | **os VFOs da C** (v49: o da C e o do B guardado; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v51)) |
 | `0xFA000` | 4 KB de uso do firmware |
 | livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -187,7 +187,7 @@ em r0, origem em r1, tamanho em r2). Só leitura. Foi ela que mostrou o caso das
 | `0x00014BDF` | MIC GAIN: 0 HIGH, 1 MID, 2 LOW (v49; o `0x9033` dos ajustes, seção 19) |
 | `0x0000706C` | ganho do microfone posto no registrador `0x7D` a cada TX (cópia do `0xF210`; desde a v49, do MIC GAIN) |
 | `0x00014B7F` | TX-A/B (`0x9013` dos ajustes): 0 OFF, 1 A, 2 B; desde a v50, 3 = C (seção 18) |
-| `0x00015384` | marca da troca de lado do PTT: 1 = trocou (destroca no fim da TX); bits 7 e 6 = TX na terceira, potência do lado nos bits 0..3 (v50) |
+| `0x00015384` | marca da troca de lado do PTT: 1 = trocou (destroca no fim da TX); desde a v51, bit 7 = TX na terceira, bit 6 = ela já está no lado B, bit 5 = a troca para o B foi do TX-A/B/C, bits 0..3 = a potência do B |
 | `0x00015E2C` / `0x000129A4` | scramble do canal ou VFO atual / o da sintonia: 0 OFF, 1 3400 Hz, 2 2900 Hz, 3–8 = 2700, 2800, 3000…3300 Hz (v25) |
 | `0x01E68B18` | frequências de inversão de fábrica (u16, Hz × 10,32444): 35103 = 3400 Hz e 36135 = 3500 Hz; desde a v25 ninguém a lê (seção 13) |
 | `0x0001533D` | modo da tela (20 = espectro) |
@@ -905,7 +905,7 @@ O rádio fica sempre em inglês, a pedido do dono:
 O driver do CHIRP esconde o ajuste de idioma. O `conferir.py` confere na `4o` que o byte que o
 gancho zera é o que o get do LANGUAGE lê e que o item saiu da tabela.
 
-## 18. A dupla escuta e o TRIPLE (v42 a v50)
+## 18. A dupla escuta e o TRIPLE (v42 a v51)
 
 O firmware só tem dois lados, A e B. O WATCH escolhe quantas frequências a tela principal mostra
 (SINGLE, DUAL ou TRIPLE), e o TRIPLE põe uma terceira, a C, sem mexer no motor da dupla escuta:
@@ -1024,19 +1024,27 @@ cada PTT, então a leitura vira `call gancho_tx_abc` + nop:
 | B | como de fábrica | lado B, ou a terceira se a C está no lado B |
 | C | nada (como OFF) | lado B se a C está nele, senão a terceira |
 
-A terceira transmite sem troca nem gravação: `gancho_tx_abc` marca `b[0x15384]` com o bit 7 (só se
-estava zerada) e devolve 0. O início da TX (`0x01E41022`) desarma a dupla escuta (`0x01E3FDE4`, em
-`0x01E410EA`) e depois lê a frequência de TX decodificada (`b[0x15341]`, escrita pela decodificação
-`0x01E38DE6`); ali `gancho_tx_desarma` põe a terceira na corrente (o mesmo `poe_terceira` do
-rodízio) e a potência dela no lado em evidência. A TX tira a potência de `b[0x15E30 + lado em
-evidência]` (`0x01E475A2`, gravada em `b[0x1299C]` por `0x01E43FCA`), e a decodificação só a escreve
-num caso especial (`b[0x153A1] = 165`); a de um canal ou VFO é o nibble baixo do byte 14 do canal
-cru (`0x15E52`) ou do 16 do VFO (`0x15E90`), como os carregadores de fábrica a tiram (`0x01E3A6D0`,
-`0x01E3A682`). A potência do lado fica nos bits 0..3 da marca, com o bit 6. As duas destrocas
-(`0x01E411AE` e `0x01E473EE`) passam por `gancho_tx_volta`: com o bit 7, devolvem a potência, a
-sombra do lado em evidência à corrente (`0x01E3FD9E`) e, no modo 0, refazem a tela; sem ele, a
-destroca de fábrica. Na tela B, a TX na terceira deixa o cartão como está e pinta a faixa dela de
-vermelho.
+A terceira fica em evidência enquanto o PTT está apertado, como o A e o B, e nada é gravado (v51;
+na v50 a TX saía nela sem ela aparecer). `gancho_tx_abc` põe o lado B em evidência com a troca de
+fábrica (`0x01E40E52(0)`) se o A estava nela, marca `b[0x15384]` com o bit 7 (e o 5, se trocou; só se
+a marca estava zerada) e devolve 0. O início da TX (`0x01E41022`) desarma a dupla escuta
+(`0x01E3FDE4`, em `0x01E410EA`) e depois lê a frequência de TX decodificada (`b[0x15341]`, escrita
+pela decodificação `0x01E38DE6`); ali `gancho_tx_desarma` põe a terceira na corrente (`le_terceira`,
+a mesma leitura do rodízio) e a decodifica sem inverter o lado, como o carregador de canal faz com o
+lado em evidência (`0x01E3A650`). A TX tira a potência de `b[0x15E30 + lado em evidência]`
+(`0x01E475A2`, gravada em `b[0x1299C]` por `0x01E43FCA`), e a decodificação só a escreve num caso
+especial (`b[0x153A1] = 165`); a de um canal ou VFO é o nibble baixo do byte 14 do canal cru
+(`0x15E52`) ou do 16 do VFO (`0x15E90`), como os carregadores de fábrica a tiram (`0x01E3A6D0`,
+`0x01E3A682`). O gancho põe essa potência no lado B, guarda a dele nos bits 0..3 da marca com o bit
+6, refaz o registro de tela do B com os dados da terceira (`0x01E39128`: as frequências e os tons
+da decodificação e o nome lido do chip pelo canal corrente) e redesenha. As vagas do lado B (o
+nibble de `b[0x14B86]`, `h[0x15E10]` e a sombra) não mudam. Com os bits 7 e 6, `watch_tela()`
+inverte o `c_no_b` e dá o canal da terceira para o cartão (bits 16..30, com o bit 31), e
+`terceira()` passa a ser a que saiu do lado B, lida dessas vagas (o VFO, da sombra do lado em
+evidência, `0x15EA4`). As duas destrocas (`0x01E411AE` e `0x01E473EE`) passam por
+`gancho_tx_volta`: com o bit 7, zeram a marca, devolvem a potência, a sombra do B à corrente
+(`0x01E3FD9E`) e o registro de tela do B, e voltam ao A com a troca de fábrica se o bit 5 diz que
+foi ela que o tirou; sem o bit 7, a destroca de fábrica.
 
 **Conferido no build** (`conferir.py`): a `4r` confere os três pontos de troca byte a byte
 (`0x01E4826E`, `0x01E481CC` e `0x01E4D44C`: a chamada de fábrica antes, a do gancho depois; desde a

@@ -72,8 +72,8 @@ by looking for where content starts mirroring address 0:
 | `0x20000–0x99FFF` | fonts and Chinese text (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 records of 60 B used by the firmware |
 | **`0xC1000–0xD1FFF`** | **the banks** (header + 16 sectors of 4 KB) |
-| **`0xD2000–0xD2FFF`** | **the WATCH record** (v43; the cable writes it since v46; [section 18](#18-dual-watch-and-triple-v42-to-v50)) |
-| **`0xD3000–0xD3FFF`** | **C's VFOs** (v49: C's and the saved B's; [section 18](#18-dual-watch-and-triple-v42-to-v50)) |
+| **`0xD2000–0xD2FFF`** | **the WATCH record** (v43; the cable writes it since v46; [section 18](#18-dual-watch-and-triple-v42-to-v51)) |
+| **`0xD3000–0xD3FFF`** | **C's VFOs** (v49: C's and the saved B's; [section 18](#18-dual-watch-and-triple-v42-to-v51)) |
 | `0xFA000` | 4 KB used by the firmware |
 | free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -186,7 +186,7 @@ destination in r0, source in r1, size in r2). Read only. It is what showed the v
 | `0x00014BDF` | MIC GAIN: 0 HIGH, 1 MID, 2 LOW (v49; `0x9033` of the settings, section 19) |
 | `0x0000706C` | microphone gain put into register `0x7D` on every TX (copy of `0xF210`; since v49, of MIC GAIN) |
 | `0x00014B7F` | TX-A/B (`0x9013` of the settings): 0 OFF, 1 A, 2 B; since v50, 3 = C (section 18) |
-| `0x00015384` | PTT side-swap flag: 1 = swapped (swaps back at the end of TX); bits 7 and 6 = TX on the third, the side's power in bits 0..3 (v50) |
+| `0x00015384` | PTT side-swap flag: 1 = swapped (swaps back at the end of TX); since v51, bit 7 = TX on the third, bit 6 = it is already on side B, bit 5 = the swap to B was TX-A/B/C's, bits 0..3 = B's power |
 | `0x00015E2C` / `0x000129A4` | scramble of the current channel or VFO / the tuned one: 0 OFF, 1 3400 Hz, 2 2900 Hz, 3–8 = 2700, 2800, 3000…3300 Hz (v25) |
 | `0x01E68B18` | stock inversion frequencies (u16, Hz × 10.32444): 35103 = 3400 Hz and 36135 = 3500 Hz; since v25 nothing reads it (section 13) |
 | `0x0001533D` | screen mode (20 = spectrum) |
@@ -917,7 +917,7 @@ The radio always runs in English, as the owner asked:
 The CHIRP driver hides the language setting. `conferir.py` checks in `4o` that the byte the hook
 zeroes is the one LANGUAGE's get reads and that the item left the table.
 
-## 18. Dual watch and TRIPLE (v42 to v50)
+## 18. Dual watch and TRIPLE (v42 to v51)
 
 The firmware only has two sides, A and B. WATCH picks how many frequencies the main screen shows
 (SINGLE, DUAL or TRIPLE), and TRIPLE adds a third one, C, without touching the dual watch engine:
@@ -1038,19 +1038,27 @@ sides on every PTT, so the read becomes `call gancho_tx_abc` + nop:
 | B | as stock | side B, or the third if C is on side B |
 | C | nothing (as OFF) | side B if C is on it, else the third |
 
-The third transmits with no swap and no write: `gancho_tx_abc` sets bit 7 of `b[0x15384]` (only if
-it was clear) and returns 0. TX start (`0x01E41022`) disarms dual watch (`0x01E3FDE4`, at
+The third comes into focus while PTT is pressed, as A and B do, and nothing is written (v51; in
+v50 TX went out on it without it showing). `gancho_tx_abc` brings side B into focus with the stock
+swap (`0x01E40E52(0)`) if A was in focus, sets bit 7 of `b[0x15384]` (and bit 5, if it swapped; only
+if the flag was clear) and returns 0. TX start (`0x01E41022`) disarms dual watch (`0x01E3FDE4`, at
 `0x01E410EA`) and then reads the decoded TX frequency (`b[0x15341]`, written by the decoder
-`0x01E38DE6`); there `gancho_tx_desarma` puts the third in the current slot (the round-robin's own
-`poe_terceira`) and its power on the side in focus. TX takes the power from `b[0x15E30 + side in
-focus]` (`0x01E475A2`, stored in `b[0x1299C]` by `0x01E43FCA`), and the decoder only writes it in a
-special case (`b[0x153A1] = 165`); a channel's or VFO's power is the low nibble of byte 14 of the
-raw channel (`0x15E52`) or byte 16 of the VFO (`0x15E90`), as the stock loaders take it
-(`0x01E3A6D0`, `0x01E3A682`). The side's power goes in bits 0..3 of the flag, with bit 6. Both
-swap-backs (`0x01E411AE` and `0x01E473EE`) go through `gancho_tx_volta`: with bit 7, they give the
-power back, bring the shadow of the side in focus back to the current slot (`0x01E3FD9E`) and, in
-mode 0, redraw the screen; without it, the stock swap-back. On screen B, TX on the third leaves the
-card as it is and paints the third's strip red.
+`0x01E38DE6`); there `gancho_tx_desarma` puts the third in the current slot (`le_terceira`, the
+round-robin's own read) and decodes it without inverting the side, as the channel loader does with
+the side in focus (`0x01E3A650`). TX takes the power from `b[0x15E30 + side in focus]`
+(`0x01E475A2`, stored in `b[0x1299C]` by `0x01E43FCA`), and the decoder only writes it in a special
+case (`b[0x153A1] = 165`); a channel's or VFO's power is the low nibble of byte 14 of the raw channel
+(`0x15E52`) or byte 16 of the VFO (`0x15E90`), as the stock loaders take it (`0x01E3A6D0`,
+`0x01E3A682`). The hook puts that power on side B, keeps B's own in bits 0..3 of the flag with bit
+6, rebuilds B's screen record with the third's data (`0x01E39128`: the decoder's frequencies and
+tones and the name read from the chip through the current channel) and redraws. Side B's slots (the
+nibble of `b[0x14B86]`, `h[0x15E10]` and the shadow) do not change. With bits 7 and 6,
+`watch_tela()` inverts `c_no_b` and gives the third's channel to the card (bits 16..30, with bit
+31), and `terceira()` becomes the one that left side B, read from those slots (the VFO from the
+shadow of the side in focus, `0x15EA4`). Both swap-backs (`0x01E411AE` and `0x01E473EE`) go through
+`gancho_tx_volta`: with bit 7, they clear the flag, give the power back, bring B's shadow back to
+the current slot (`0x01E3FD9E`) and B's screen record, and go back to A with the stock swap if bit 5
+says that is what took it out; without bit 7, the stock swap-back.
 
 **Checked at build time** (`conferir.py`): `4r` checks the three swapped call sites byte by byte
 (`0x01E4826E`, `0x01E481CC` and `0x01E4D44C`: the stock call before, the hook's after; since v49,

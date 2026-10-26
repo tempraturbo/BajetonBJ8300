@@ -5,6 +5,34 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v51 — 26/10 — a terceira em evidência enquanto o PTT está apertado ✅ (é a V2.6T)
+
+Testada no rádio: "agora funcionou tudo". O teste da v50 mostrou que, com o TX-A/B/C em C, a TX saía
+na frequência da C, mas a C não ia para evidência como o A e o B vão. Agora vai, e continua sem
+gravar nada:
+
+- **Na ida do PTT**, para a terceira, `gancho_tx_abc` põe o lado B em evidência com a troca de
+  fábrica (`0x01E40E52(0)`, a mesma do TX-A/B), se o A estava nela, e marca `b[0x15384]`: o bit 7 é a
+  terceira, o bit 5 diz que a troca foi nossa.
+- **No início da TX**, depois do desarme, `gancho_tx_desarma` põe a terceira na corrente do lado B e a
+  decodifica sem inverter o lado, como o carregador de canal faz com o lado em evidência; põe a
+  potência dela no lado B e refaz o registro de tela do B com os dados dela (`0x01E39128`:
+  frequências, tons, potência e o nome pelo canal corrente). Marca o bit 6 e guarda a potência do B
+  nos bits 0..3. As vagas do lado B (o modo, o canal e a sombra) ficam como estavam.
+- **A tela** mostra o que o PTT pôs no lado B: com o bit 6, `watch_tela()` inverte o `c_no_b` (o
+  cartão do B ganha a letra e o MDF da terceira) e dá, nos bits 16..30, o canal dela para o cartão; e
+  `terceira()` passa a ser quem saiu do lado B, lida das vagas dele (o VFO pela sombra do lado em
+  evidência, `0x15EA4`). O cartão mostra a terceira transmitindo, com o medidor vermelho, como o A e o
+  B. A faixa vermelha da v50 saiu.
+- **Na volta** (fim da TX e TX recusada), `gancho_tx_volta` zera a marca, devolve a potência, a sombra
+  do B à corrente (`0x01E3FD9E`) e o registro de tela do B, e volta ao A com a troca de fábrica se foi
+  ela que o tirou de evidência.
+- O rodízio e a TX leem a terceira pela mesma rotina (`le_terceira`); só o rodízio decodifica com o
+  lado invertido.
+- O build passou ("tudo certo"), a pilha é a de fábrica nas três raízes (o `gancho_tx_abc`, que agora
+  faz a troca, chega a 504 B no sítio), o ponto mais fundo dos menus ficou em 640 B, e as 43 telas da
+  prévia saem iguais; a da TX na C (39c) mostra a C no cartão.
+
 ## V2.5T — 26/10 — três frequências de uma vez ⏳ a v50, espera o teste no rádio para o release
 
 A v50 vira a **V2.5T**, a terceira versão estável: `firmware/releases/BJ8300_BANK_v2.5T.anc`. É a v49,
@@ -23,7 +51,7 @@ lados e o desenho ao começar a receber), mas aceitável. Pelo código, os camin
 recepção são os mesmos da v45; o que pesa mais é a tecla A/B indo à C ou voltando dela, que desde a
 v49 grava o setor dos VFOs, o registro de VFO do B e os ajustes. Fica para observar no dia a dia.
 
-## v50 — 26/10 — o TX-A/B/C e o selo C no menu ⏳ espera teste no rádio
+## v50 — 26/10 — o TX-A/B/C e o selo C no menu ✔️ testada: a TX saía na C, sem a C em evidência
 
 Os dois pedidos do dono depois de usar a v49.
 
@@ -52,8 +80,9 @@ Os dois pedidos do dono depois de usar a v49.
     também (`0x01E56B3A`).
 - **Quem ganha.** Fora do TRIPLE o C não vale (fica como OFF). Se o PTT já trocou de lado antes do
   TX-A/B (a marca já posta), ele ganha, como no firmware de fábrica.
-- **Na tela**, a TX na terceira deixa o cartão do lado em evidência como está e pinta a faixa da
-  terceira de vermelho; na barra, TX.
+- **Na tela**, a TX na terceira deixava o cartão do lado em evidência como estava e pintava a faixa
+  da terceira de vermelho; na barra, TX. No rádio, a faixa não apareceu vermelha, e o dono pediu a C
+  em evidência, como o A e o B: a v51 refez assim.
 - **O selo do resumo no topo do menu e do scan QT** mostrava B com a C em evidência: o resumo
   desenhava a letra do lado (`'A' + lado`), e não a de `LETRA()`, que o cartão e as faixas já usam.
 - O build passou ("tudo certo", com a `4r` conferindo os quatro sítios novos), a pilha é a de

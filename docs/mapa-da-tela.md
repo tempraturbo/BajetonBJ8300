@@ -519,10 +519,10 @@ junto da `letra()` o quadro dela crescia, e ela está no fim do caminho mais fun
   (o do Modulation, o CH-NAME pela saída do editor `0x01E3C7AA`) entra nisso; medidos no ponto da
   chamada, todos ficam em até 652 B, abaixo dos 740 B de fábrica.
 
-## 14. As vistas do WATCH (v42 a v50)
+## 14. As vistas do WATCH (v42 a v51)
 
 O WATCH escolhe quantas frequências a tela principal mostra. A tela B lê o registro dele
-([engenharia reversa, seção 18](engenharia-reversa.md#18-a-dupla-escuta-e-o-triple-v42-a-v50)) a
+([engenharia reversa, seção 18](engenharia-reversa.md#18-a-dupla-escuta-e-o-triple-v42-a-v51)) a
 cada desenho e guarda a vista no byte que sobrava dos dígitos da estrutura do estado: os dígitos
 passaram de 8 para 7 bytes (até 6 dígitos e o zero), e a estrutura não cresceu, porque ela está no
 caminho mais fundo da pilha.
@@ -561,10 +561,11 @@ aparece como `EMPTY CH`. Desde a v49, a terceira em VFO mostra a frequência do 
 setor `0xD3000`) com `VFO` na etiqueta. **Recebendo**, a faixa fica em âmbar escuro (`#3b2a0b`, o fundo da
 etiqueta âmbar) com o selo e o texto em âmbar (`#fbbf24`). O lado fora de evidência recebe quando
 tem sinal, ou quando a dupla escuta está nele com o estado em 4, e o que recebe é a terceira quando
-o rodízio está nela. **Transmitindo** na terceira (o TX-A/B/C, v50: a marca `b[0x15384]` com os bits
-7 e 6), a faixa dela fica vermelha (o fundo e o texto do chip de TX), o cartão do lado em evidência
-fica como está e a barra mostra TX. O estado guarda isso no mesmo byte do TX (`tx` = 1 no lado em
-evidência, 2 na terceira), e o redesenho do medidor, com a TX na terceira, só refaz a faixa dela.
+o rodízio está nela. **Transmitindo** na terceira (o TX-A/B/C, v51: a marca `b[0x15384]` com os bits
+7 e 6), ela está no lado B, em evidência, só pela RAM: o registro de tela do B tem os dados dela, e
+o `watch_tela()` inverte a vista (com o bit 31, o canal dela vai para o cartão do B), de modo que o
+cartão mostra a letra, o canal, o nome e o medidor vermelho dela, e a faixa mostra quem saiu do lado
+B. Na v50, a TX na terceira pintava a faixa dela de vermelho; a v51 a pôs no cartão, como o A e o B.
 
 O resumo do lado em evidência no topo do menu e do scan QT usa a mesma letra (`LETRA()`): com a C
 no lado B, o selo é C (até a v49 saía B).
@@ -577,5 +578,5 @@ o fim do caminho mais fundo da tela no TRIPLE, e um quadro a mais passava da pil
 
 **Na prévia**, as cenas 33 a 35 são o SINGLE (canal recebendo, VFO com deslocamento e
 transmitindo) e as 36 a 39 o TRIPLE (o A recebendo, a C recebendo, o B em evidência com o A
-recebendo e a C em evidência); a 38c é a C em VFO, a 38d a TX na C (v50) e a 11b o menu TX-A/B/C com
-a C em evidência (v50).
+recebendo e a C em evidência); a 38c é a C em VFO, a 39c a TX na C com o A em evidência antes do PTT
+(v51) e a 11b o menu TX-A/B/C com a C em evidência (v50).

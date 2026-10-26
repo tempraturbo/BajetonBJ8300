@@ -72,9 +72,10 @@ u32 watch_le_tudo(void)
 }
 
 /* o modo para a tela (3 = TRIPLE com a C no lado B) | MDF-C << 8, e a terceira: canal | MDF << 16 */
+static u32 previa_alvo;                /* v51: bit 31 e o canal da terceira no cartao do lado B (TX-A/B/C) */
 unsigned watch_tela(void)
 {
-    return previa_vista | previa_mdf_c << 8;
+    return previa_vista | previa_mdf_c << 8 | previa_alvo;
 }
 
 static unsigned previa_terceira, previa_mdf_terceira;
@@ -335,18 +336,6 @@ int main(int argc, char **argv)
     grava("38c-triple-c-em-vfo");
     previa_terceira = 4;
 
-    /* v50: TX-A/B/C em C, com o A em evidencia - a TX sai da C (a marca 0x15384 com os bits 7 e 6), o
-     * cartao do A fica como esta e a faixa da C fica vermelha; na barra, TX */
-    limpa();
-    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
-    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
-    memoria[0x14B70] = 1;
-    memoria[0x14685] = 2;              /* transmitindo */
-    memoria[0x15384] = 0xC0;           /* na terceira */
-    tela_b();
-    tela_b_medidor(1, 10, 0);
-    grava("38d-triple-tx-na-c");
-
     /* a C em evidencia (tecla A/B): ela no lado B, e o B (canal 10) fora, como terceira */
     {
         static const u8 canal10[32] = {0x50, 0x62, 0x25, 0x46, 0x50, 0x62, 0x25, 0x46};
@@ -372,6 +361,22 @@ int main(int argc, char **argv)
     digitando("123*5666");
     tela_b();
     grava("39b-dtmf-triple-c");
+
+    /* v51: TX-A/B/C em C, com o A em evidencia e a C fora dos lados. O PTT pos o lado B em evidencia e
+     * a C nele so pela RAM: o registro de tela do B com os dados dela, o canal dado por watch_tela (bit
+     * 31), e as vagas do lado B ainda as do B (canal 10), que aparece na faixa de baixo */
+    limpa();
+    lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
+    lado(1, 14562500, 14562500, "APRS 2M", 10, 0, 0);
+    memoria[0x14B70] = 1;
+    memoria[0x15E04] = 1;
+    memoria[0x14685] = 2;              /* transmitindo */
+    memoria[0x15384] = 0xE0;           /* a C no lado B, o A estava em evidencia */
+    previa_alvo = 1u << 31 | 5u << 16;
+    tela_b();
+    tela_b_medidor(1, 10, 1);
+    grava("39c-triple-tx-na-c");
+    previa_alvo = 0;
     previa_vista = 0;
 
     /* as outras telas (v37 e v38), com o estado das fotos do dono (PIGAO 2 no canal 101) posto na

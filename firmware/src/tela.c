@@ -49,9 +49,6 @@ FIRMWARE(ENVIA, 0x01E3ADBC);   void ENVIA(void);
 #define MODO_ZONA        RAM(u8, 0x00014BD4)             /* 0 = navega por zona */
 #define ZONA(lado)       RAM(u8, 0x00014BDB + (lado))
 #define EM_TX            RAM(u8, 0x00014685)             /* 2 = transmitindo (0x01E40F1C) */
-/* A marca da troca de lado do PTT; com os bits 7 e 6, a TX esta na terceira (TX-A/B/C, bancos.c, v50) */
-#define TX_TROCA         RAM(u8, 0x00015384)
-#define TX_EM(tx)        ((tx) ? (TX_TROCA & 0xC0u) == 0xC0u ? 2u : 1u : 0u)
 #define DIGITADOS        RAM(u8, 0x00014A35)             /* quantos digitos ja digitados */
 #define DIGITOS          0x00014A3Au                     /* os digitos, em ASCII */
 #define VOX              RAM(u8, 0x00014B6E)
@@ -130,7 +127,7 @@ struct lado {
 };
 struct estado {
     struct lado lado[2];
-    u8 evidencia, tx, rx;  /* tx: 1 transmitindo no lado em evidencia, 2 na terceira (v50) */
+    u8 evidencia, tx, rx;
     char digitos[7];       /* o que se esta digitando no lado em evidencia, "" se nada (ate 6) */
     u8 vista;              /* WATCH (v42): 0 DUAL, 1 SINGLE - no byte que sobrou dos digitos, para a
                             * estrutura nao crescer (ela esta no caminho mais fundo da pilha) */
@@ -186,11 +183,11 @@ static void le_estado(struct estado *e)
     unsigned i, v = NIVEL_BATERIA;
 
     e->evidencia = LADO_B != 0;
-    e->tx = TX_EM(EM_TX == 2);
+    e->tx = EM_TX == 2;
     e->rx = 0;
     for (i = 0; i < 2; i++)
-        le_lado(&e->lado[i], i, e->tx == 1 && i == e->evidencia);
-    if (e->tx == 1)
+        le_lado(&e->lado[i], i, e->tx && i == e->evidencia);
+    if (e->tx)
         e->lado[e->evidencia].sinal = POTENCIA(e->evidencia) == 0 ? 20 : POTENCIA(e->evidencia) == 1 ? 10 : 4;
     e->digitos[0] = 0;              /* so as rotinas de digitacao os mostram (tela_b_digitando) */
     e->vox = VOX != 0;
@@ -206,6 +203,8 @@ static void le_estado(struct estado *e)
     e->vista = v & 0xFF;
     if (e->vista == VISTA_TRIPLE_C)     /* a C no lado B aparece como o MDF-C pede, nao o MDF-B */
         e->lado[1].exibicao = v >> 8;
+    if (v >> 31)                        /* TX-A/B/C (v51): a terceira no lado B, com o canal dela */
+        e->lado[1].canal = v >> 16 & 0x7FFF;
 }
 
 /* ---------- desenho ---------- */
@@ -508,7 +507,7 @@ SEPARADA static void cartao(const struct estado *e, unsigned i)
         numero(s, l->freq % 100, 2);
         texto(x, y + 27, s, 1, COR_CINZA);
     }
-    medidor(8, y + 54, 9, l->sinal, e->tx == 1 && i == e->evidencia, COR_SEG_FUNDO);
+    medidor(8, y + 54, 9, l->sinal, e->tx && i == e->evidencia, COR_SEG_FUNDO);
 }
 
 /* WATCH em SINGLE (v42): o lado em evidencia sozinho, da barra ao pe da tela. O mesmo cartao, maior:
@@ -559,7 +558,7 @@ SEPARADA static void cartao_unico(const struct estado *e, unsigned i)
         numero(s, l->freq % 100, 2);
     if ((digitando && !l->canal) || frequencia_grande)
         texto(x, y + 22 + FONTE_B_ALTURA, s, g - 1, COR_CINZA);    /* 7 x g contra 7 x (g - 1): pelo pe */
-    medidor(10, MEDIDOR_UNICO, ALTURA_MED_UNICO, l->sinal, e->tx == 1, COR_SEG_FUNDO);
+    medidor(10, MEDIDOR_UNICO, ALTURA_MED_UNICO, l->sinal, e->tx, COR_SEG_FUNDO);
     /* com deslocamento, a frequencia em que ele transmite */
     if (!e->tx && (l->desloc == 1 || l->desloc == 2)) {
         frequencia(junta(s, "TX "), le32(VFO(i) + 5), 5);
@@ -601,20 +600,18 @@ SEPARADA static u32 le_canal_c(unsigned canal, char *nome12)
  * canal escrito no mesmo buffer depois de o texto ja estar desenhado: e o fim do caminho mais fundo
  * da tela no TRIPLE, e um quadro a mais (ou um buffer a mais) passava da pilha de fabrica. */
 static inline __attribute__((always_inline)) void faixa(unsigned y, unsigned selo, char *s, unsigned canal,
-                                                        unsigned uso)
+                                                        unsigned rx)
 {
-    /* uso: 0 parada, 1 recebendo (ambar), 2 transmitindo (vermelha, a terceira com o TX-A/B/C, v50) */
-    unsigned fundo = uso == 2 ? COR_CHIP_VERMELHO : uso ? COR_CHIP_AMBAR : COR_FUNDO;
-    unsigned cor = uso == 2 ? COR_SEG_VERMELHO : uso ? COR_TEXTO_AMBAR : COR_CINZA;
+    unsigned cor = rx ? COR_TEXTO_AMBAR : COR_CINZA;
 
-    pinta(3, y, 157, y + ALTURA_FAIXA - 1, fundo);
-    pinta(8, y + 4, 19, y + 15, uso ? cor : COR_SELO_B);
-    letra(11, y + 6, selo, 1, uso ? fundo : COR_CINZA);
+    pinta(3, y, 157, y + ALTURA_FAIXA - 1, rx ? COR_CHIP_AMBAR : COR_FUNDO);
+    pinta(8, y + 4, 19, y + 15, rx ? COR_TEXTO_AMBAR : COR_SELO_B);
+    letra(11, y + 6, selo, 1, rx ? COR_CHIP_AMBAR : COR_CINZA);
     texto(24, y + 6, s, 1, cor);
     if (canal != 0xFFFF) {
         if (canal)
             texto_canal(s, canal);
-        etiqueta(152, y + 4, canal ? s : "VFO", uso ? fundo : COR_CHIP_CANAL_B, cor, 1);
+        etiqueta(152, y + 4, canal ? s : "VFO", rx ? COR_CHIP_AMBAR : COR_CHIP_CANAL_B, cor, 1);
     }
 }
 
@@ -668,7 +665,7 @@ SEPARADA static void faixa_terceira(const struct estado *e)
             junta(s, "UNNAMED CH");
         n = !f || mdf == 2 ? 0xFFFF : canal + 1;
     }
-    faixa(y, 'A' + j, s, n, e->tx == 2 ? 2 : (e->lado[!e->evidencia].sinal || outro_recebendo()) && c_no_lugar());
+    faixa(y, 'A' + j, s, n, (e->lado[!e->evidencia].sinal || outro_recebendo()) && c_no_lugar());
 }
 
 /* O outro lado, compacto: selo, o texto da exibicao (no VFO, a frequencia inteira), o canal e um
@@ -830,20 +827,18 @@ static inline __attribute__((always_inline)) void medidor_b(unsigned estado, uns
     le_estado(&e);
     lado = lado != 0;
     e.lado[lado].sinal = nivel < 10 ? nivel * 2 : 20;
-    e.tx = TX_EM(estado == 1);
+    e.tx = estado == 1;
     e.rx = !e.tx && nivel != 0;
     if (e.vista == VISTA_SINGLE) {       /* so o lado em evidencia tem medidor (o outro nem recebe) */
         if (!so_barra && lado == e.evidencia)
             desenha(&e, MEDIDOR_UNICO, MEDIDOR_UNICO + ALTURA_MED_UNICO);
     } else if (e.vista >= VISTA_TRIPLE) { /* o medidor do cartao, ou as duas faixas (o outro lado ou a terceira) */
-        if (!so_barra && lado == e.evidencia && e.tx != 2) {
+        if (!so_barra && lado == e.evidencia) {
             y = TOPO_CARTAO_V(&e, lado) + 54;
             desenha(&e, y, y + 9);
-        } else if (!so_barra) {         /* TX na terceira (v50): so a faixa dela, vermelha */
-            if (e.tx != 2) {
-                y = Y_FAIXA(&e, LETRA(&e, lado));
-                desenha(&e, y, y + ALTURA_FAIXA);
-            }
+        } else if (!so_barra) {
+            y = Y_FAIXA(&e, LETRA(&e, lado));
+            desenha(&e, y, y + ALTURA_FAIXA);
             y = Y_FAIXA(&e, 3 - LETRA(&e, 1));
             desenha(&e, y, y + ALTURA_FAIXA);
         }
