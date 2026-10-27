@@ -5,6 +5,27 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v58 — 27/10 — o cartão do 3º item inteiro ✅ (é a V2.8T)
+
+O dono, usando a V2.7T: "sempre no terceiro item de cada menu o fundo âmbar fica pela metade", em
+qualquer pasta e também no menu do rádio. A janela de pasta é desenhada em faixas de 32 linhas a
+partir de y 16 (16, 48, 80, 112), e cada linha da lista só era desenhada na faixa em que cai o topo
+dela (y − 2 a y + 12). O cartão do cursor cobre também a linha do valor, até y + 23: no 3º item ele
+vai de y 63 a 87 e atravessa a divisa de y 80, e a faixa de baixo não pintava o que passa dela, a
+metade de baixo da linha do valor. Nas outras posições o cartão cabe numa faixa só, ou a faixa de
+baixo já desenhava a linha (o 4º item); com a lista rolada, o cursor fica na 5ª linha. Agora a linha
+do cursor é desenhada em toda faixa que o cartão toca. O dono confirmou o desenho: o fundo âmbar
+cobrindo o item e o valor do "L", quando há valor, agrupa a seleção.
+
+A prévia não pegou porque desenhava em faixas a partir de 0 (0, 32, 64, 96): nela o corte caía no 2º
+item (y 64), e passou despercebido nas telas 43 e 45 e nas duas imagens do README tiradas delas. A
+prévia agora divide o menu nas mesmas faixas do firmware (a janela de pasta a partir de 16; fora dela
+o resumo, o título e cada linha à parte) e ganhou as telas 47b e 51b, com o cursor no 3º item. As
+imagens dos itens e do menu do rádio no README foram refeitas.
+
+Testada no rádio: "deu certo aqui". O build passou ("tudo certo"), a pilha é a de fábrica nas três
+raízes, os menus ficam em 640 B, e o sha256 é `301a399b…`.
+
 ## V2.7T — 26/10 — o menu em pastas ✅
 
 A v57 virou a **V2.7T**: `firmware/releases/BJ8300_BANK_v2.7T.anc` (sha256 `93bf62bb…`). A v56, que já

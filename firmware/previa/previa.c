@@ -634,6 +634,14 @@ int main(int argc, char **argv)
         LINHA(1, 1, "ALL");
         telas_b(1, 0);
         grava("47-menu-item-sem-valor");
+        /* v58: o cursor no 3o item, com o valor - o cartao (y 63..87) atravessa a divisa das faixas do
+         * firmware em y 80, e ate a v57 a faixa de baixo nao o pintava */
+        menu_em(2, 2);
+        LINHA(0, 2, "FM");
+        LINHA(1, 1, "AM");
+        LINHA(2, 0, "");
+        telas_b(1, 0);
+        grava("47b-menu-item-terceiro");
 
         /* v56: o menu do radio na janela de pasta - uma pasta so, "RADIO" e a banda no titulo, sem os
          * pontos dos grupos; no USB os 6 itens com o valor rolam */
@@ -663,6 +671,16 @@ int main(int argc, char **argv)
         LINHA(2, 1, "LSB");
         telas_b(1, 0);
         grava("51-menu-radio-am");
+        memoria[0x14BFA] = 2;                /* v58: o 3o item do menu do radio, o WORK BAND */
+        LINHA(0, 1, "LW");
+        LINHA(1, 2, "MW");
+        LINHA(2, 1, "SW");
+        telas_b(1, 0);
+        grava("51b-menu-radio-terceiro");
+        memoria[0x14BFA] = 0;
+        LINHA(0, 1, "FM");
+        LINHA(1, 2, "AM");
+        LINHA(2, 1, "LSB");
         strcpy((char *)&memoria[0x15494], "Modulation");
         memoria[0x14BF9] = 1;
         memoria[0x14C10] = 1;

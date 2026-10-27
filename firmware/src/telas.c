@@ -431,7 +431,9 @@ SEPARADA static void pasta_cena(const struct menu_b *m)
     for (k = 0, y = JANELA_CORPO + 3; k < JANELA_LINHAS && inicio + k < linhas; k++, y += JANELA_PASSO) {
         unsigned l = inicio + k;
 
-        if (!NA_JANELA(y - 2, y + JANELA_PASSO))
+        /* o cartao do cursor cobre tambem a linha do valor: a faixa de 32 linhas que so pega essa parte
+         * dele tambem o pinta (v58; ate a v57 o 3o item, y 63..87, perdia o que passa de y 80) */
+        if (!NA_JANELA(y - 2, y + JANELA_PASSO * (1 + (valor && l == cursor))))
             continue;
         if (valor && l == cursor + 1) {           /* o "L": o valor, que o cursor nao seleciona */
             pinta(13, y - 2, 14, y + 5, COR_VERDE);
@@ -1029,13 +1031,29 @@ void espectro_b(const struct espectro_previa *p)
     }
 }
 
-/* A previa desenha a tela inteira de cada modo, lendo a RAM imitada. */
+/* A previa desenha a tela inteira de cada modo, lendo a RAM imitada. O menu sai nas mesmas faixas de
+ * 32 linhas do firmware, que comecam onde o gancho comeca (tela.c): a janela de pasta de baixo da barra
+ * ao fim (16, 48, 80, 112), e fora dela o resumo, o titulo e cada linha a parte. Com as faixas a partir
+ * de 0, a previa cortava o cartao do cursor num lugar em que o radio nao corta e nao cortava onde ele
+ * corta (v58). */
 void telas_b(unsigned modo, unsigned variante)
 {
     struct telas t;
+    unsigned y;
 
     le_telas(&t, modo, variante, modo == 2 ? RADIO_ITEM : 0);
-    desenha_telas(&t, 0, 128);
+    if (modo != 1) {
+        desenha_telas(&t, 0, 128);
+        return;
+    }
+    desenha_telas(&t, 0, ALTURA_ESTADO);
+    if (menu_pasta()) {
+        desenha_telas(&t, ALTURA_ESTADO, 128);
+        return;
+    }
+    desenha_telas(&t, ALTURA_ESTADO, TOPO_MENU);
+    for (y = TOPO_MENU; y < 128; y += 18)
+        desenha_telas(&t, y, y + 18 < 128 ? y + 18 : 128);
 }
 
 void tensao_b(unsigned decimos)

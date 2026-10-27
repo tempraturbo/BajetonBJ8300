@@ -5,6 +5,27 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v58 — Oct 27 — the 3rd item's card whole again ✅ (it is V2.8T)
+
+The owner, using V2.7T: "always on the third item of every menu the amber background is cut in
+half", in any folder and in the radio menu too. The folder window is drawn in bands of 32 lines from
+y 16 (16, 48, 80, 112), and each list line was only drawn in the band its top (y − 2 to y + 12) falls
+in. The cursor card also covers the value line, down to y + 23: on the 3rd item it runs from y 63 to
+87 and crosses the y 80 boundary, and the lower band did not paint what lies past it, the bottom half
+of the value line. In the other positions the card fits in one band, or the lower band already drew
+the line (the 4th item); with the list scrolled, the cursor sits on the 5th line. Now the cursor line
+is drawn in every band its card touches. The owner confirmed the design: the amber background
+covering the item and the "L" value, when there is one, groups the selection.
+
+The preview missed it because it drew in bands from 0 (0, 32, 64, 96): there the cut fell on the 2nd
+item (y 64), and went unnoticed in screens 43 and 45 and in the two README images taken from them.
+The preview now splits the menu into the firmware's own bands (the folder window from 16; outside it
+the summary, the title and each row separately) and got screens 47b and 51b, with the cursor on the
+3rd item. The README images of the items and of the radio menu were redone.
+
+Tested on the radio: "it worked here". The build passed ("tudo certo"), the stack is stock's at the
+three roots, the menus stay at 640 B, and the sha256 is `301a399b…`.
+
 ## V2.7T — Oct 26 — the menu in folders ✅
 
 v57 became **V2.7T**: `firmware/releases/BJ8300_BANK_v2.7T.anc` (sha256 `93bf62bb…`). v56, which

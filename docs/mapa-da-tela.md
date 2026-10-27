@@ -611,6 +611,11 @@ A lista rola para o cursor e a linha do valor ficarem à vista; escolhendo o gru
 mostra os primeiros itens (v57: na v56 a conta usava o 255 do "sem cursor", e o CHANNEL, o único
 grupo com 7 itens, saía vazio). Âmbar é a cor de grupo e verde a de item.
 
+A janela sai em faixas de 32 linhas a partir de y 16 (16, 48, 80, 112), e cada linha é desenhada em
+toda faixa que ela toca; a do cursor, contando o cartão, que cobre também a linha do valor (v58: até
+a v57, no 3º item o cartão vai de y 63 a 87 e a faixa de 80 não pintava a parte dele que passa de
+80).
+
 **O valor** sai das linhas que o motor acabou de montar (`0x01E487BC`): a marcada como gravada
 (`02 10`) ou, sem marca (o nome, o OFFSET, o VERSION e o BFO), a primeira sem os dois espaços; sem o
 `0x01` do fim (o BANK ligado) e com até 19 letras (o maior, `HARDWARE:V01T32`, tem 15).
@@ -626,5 +631,6 @@ VERSION aberto não tem cursor.
 
 **Na prévia**, as cenas 40 a 42 são a escolha do grupo (a 41 é o CHANNEL), as 43 a 48 os itens de um
 grupo (o "L" com um valor e com um nome, a rolagem para baixo e para cima, um item de ação e o VERSION
-aberto) e as 49 a 52 o menu do rádio (o USB com a rolagem, a memória, o AM e um item aberto). A 26b
-é a tensão com o 0 segurado (v52).
+aberto) e as 49 a 52 o menu do rádio (o USB com a rolagem, a memória, o AM e um item aberto). A 47b e a
+51b têm o cursor no 3º item (v58), e a 26b é a tensão com o 0 segurado (v52). Desde a v58 a prévia
+desenha o menu nas mesmas faixas do firmware.

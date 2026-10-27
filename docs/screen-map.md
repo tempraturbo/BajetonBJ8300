@@ -616,6 +616,11 @@ The list scrolls so the cursor and the value line stay in view; while choosing t
 it shows the first items (v57: in v56 the computation used the 255 of "no cursor", and CHANNEL, the
 only group with 7 items, came out empty). Amber is the group colour and green the item one.
 
+The window goes out in bands of 32 lines from y 16 (16, 48, 80, 112), and each line is drawn in every
+band it touches; the cursor's, counting its card, which also covers the value line (v58: up to v57,
+on the 3rd item the card runs from y 63 to 87 and the band at 80 did not paint the part of it past
+80).
+
 **The value** comes from the rows the engine just built (`0x01E487BC`): the one marked as saved
 (`02 10`) or, with no mark (the name, OFFSET, VERSION and BFO), the first one without its two
 spaces; without the trailing `0x01` (BANK on) and with up to 19 letters (the longest,
@@ -632,5 +637,6 @@ the medium (`texto_menu`), like NOISE REDUCTION.
 
 **In the preview**, scenes 40 to 42 are choosing the group (41 is CHANNEL), 43 to 48 a group's items
 (the "L" with a value and with a name, scrolling down and up, an action item and VERSION open) and 49
-to 52 the radio menu (USB with scrolling, the memory, AM and an open item). 26b is the voltage with
-0 held (v52).
+to 52 the radio menu (USB with scrolling, the memory, AM and an open item). 47b and 51b have the
+cursor on the 3rd item (v58), and 26b is the voltage with 0 held (v52). Since v58 the preview draws
+the menu in the firmware's own bands.
