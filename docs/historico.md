@@ -5,6 +5,18 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V2.8T — 27/10 — o menu em pastas, com o cartão do 3º item inteiro ✅
+
+A v58 virou a **V2.8T**: `firmware/releases/BJ8300_BANK_v2.8T.anc` (sha256 `11efdc26…`). Testada no rádio: "deu certo
+aqui". É a V2.7T com o fundo âmbar do 3º item de cada pasta, e do menu do rádio, inteiro; o menu
+`VERSION` mostra `V2.8T` (`0x01E5FD10`). O dono pediu o nome novo depois do teste, e por isso a v58
+gravada no rádio ainda mostrava `V2.7T`: fora esse texto, o firmware é o mesmo.
+
+Publicada no [release V2.8T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.8T), junto com o módulo do CHIRP, o gravador e o
+driver do cabo. O README aponta para ela, conta a correção no quadro do topo e manteve a V2.7T entre
+as anteriores, com o defeito; as telas dos itens e do menu do rádio já tinham sido refeitas com o
+cartão inteiro.
+
 ## Driver do CHIRP — 27/10 — o nome da V2.8T
 
 - O módulo virou `chirp/bj8300_v2.8TEMPRA.py`, e o modelo no CHIRP, `Baojie → BJ8300_v2.8TEMPRA`. O

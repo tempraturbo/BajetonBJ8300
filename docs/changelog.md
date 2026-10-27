@@ -5,6 +5,19 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V2.8T — Oct 27 — the menu in folders, with the 3rd item's card whole ✅
+
+v58 became **V2.8T**: `firmware/releases/BJ8300_BANK_v2.8T.anc` (sha256 `11efdc26…`). Tested on the radio: "it worked
+here". It is V2.7T with the amber background of the 3rd item in every folder, and in the radio menu,
+whole; the `VERSION` menu shows `V2.8T` (`0x01E5FD10`). The owner asked for the new name after the
+test, which is why the v58 flashed on the radio still showed `V2.7T`: apart from that text, the
+firmware is the same.
+
+Published in the [V2.8T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.8T), together with the CHIRP module, the flasher
+and the cable driver. The README points to it, describes the fix in the box at the top and keeps
+V2.7T among the earlier ones, with the flaw; the screens of the items and of the radio menu had
+already been redone with the card whole.
+
 ## CHIRP driver — Oct 27 — the V2.8T name
 
 - The module became `chirp/bj8300_v2.8TEMPRA.py`, and the model in CHIRP, `Baojie →

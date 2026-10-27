@@ -1,4 +1,4 @@
-# Baojie BJ-8300 — firmware V2.7T: a folder menu, triple watch, a new screen, channel banks and CHIRP driver
+# Baojie BJ-8300 — firmware V2.8T: a folder menu, triple watch, a new screen, channel banks and CHIRP driver
 
 <p align="center">
   <a href="README.md"><img src="docs/imagens/botao-portugues.svg" alt="Versão em português" height="56"></a>
@@ -11,20 +11,23 @@ folders**, **triple watch (TRIPLE)**, a first on this radio, **a new screen acro
 spectrum and a dedicated **CHIRP driver**. The "T" in the version stands for **Tempra**.
 
 > [!TIP]
-> ## 🎉 V2.7T — the menu in folders
+> ## 🎉 V2.8T — the menu in folders, with the 3rd item's card whole
 >
-> **[⬇️ Download V2.7T from the Releases page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T)**
+> **[⬇️ Download V2.8T from the Releases page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.8T)**
 >
 > | Release file | What it is for |
 > |---|---|
-> | `BJ8300_BANK_v2.7T.anc` | the firmware, to flash into the radio |
+> | `BJ8300_BANK_v2.8T.anc` | the firmware, to flash into the radio |
 > | `bj8300_v2.8TEMPRA.py` | the CHIRP module for this firmware |
 > | `BinTalk-V1.1.zip` | the flasher (BinTe ANC Bootloader) |
 > | `CH340-driver.zip` | the driver for the USB programming cable |
 >
+> V2.8T is V2.7T with the amber background of the 3rd item in every folder, and in the radio menu,
+> whole: in V2.7T its bottom half, the value's, came out without the background.
+>
 > Tested on the radio. To flash it: [step by step](#-how-to-flash-the-firmware-step-by-step). For
 > CHIRP: [step by step](#-how-to-use-chirp-with-this-firmware). The earlier ones are still
-> available: [V2.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), with triple
+> available: [V2.7T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T), the same menu with that flaw, [V2.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), with triple
 > watch and the menu as a single list, [V2.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.0T),
 > with the new screen and no WATCH, and [v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T),
 > with the stock screen.
@@ -36,7 +39,7 @@ helps the next version come out.
 
 ## 📁 A new menu: everything in folders
 
-The stock menu is a queue of more than 50 items. In V2.7T they sit in **13 folders by topic**, in
+The stock menu is a queue of more than 50 items. Since V2.7T they sit in **13 folders by topic**, in
 alphabetical order, in a window that shows what is inside each one before you open it.
 
 | | | |
@@ -73,7 +76,7 @@ alphabetical order, in a window that shows what is inside each one before you op
 
 ## 🔺 TRIPLE: the BJ-8300 listening to three frequencies
 
-The stock firmware has only two sides, A and B, and dual watch (TDR) watches both. V2.7T adds a
+The stock firmware has only two sides, A and B, and dual watch (TDR) watches both. V2.8T adds a
 **third side, C**, and the radio now watches **three frequencies** at once. No BJ-8300 firmware did
 this before.
 
@@ -114,7 +117,7 @@ this before.
 The images come from the PC preview ([firmware/previa/](firmware/previa/)), which runs the same
 drawing code that goes into the radio.
 
-## ✨ What changed from the stock V0.12 to V2.7T
+## ✨ What changed from the stock V0.12 to V2.8T
 
 ### 🆕 New features
 
@@ -166,11 +169,11 @@ tags and a font of its own:
 | 🟩 **Highlighted side stands out** | The active side sits in a green-bordered card, with the big frequency and the meter; the other one is compact |
 | 📻 **FM/AM/SSB radio** | Switching modulation is ~2.5 s faster, and the saved settings (step, bandwidth, LNA, BFO and the memories) are checked on entry and on every switch: a value outside the menus' limits goes back to the default |
 | ↕️ **Menu arrows swapped** | The up arrow now moves up the list instead of stepping the value |
-| 🔤 **English texts revised** | 25 strings fixed and made consistent (e.g. `VOICEPRI` → `ENCRYPT`), `TDR` became `TTR` (Transmitter Triple Receiver), because with TRIPLE the watch is triple, and `TX-A/B` became `TX-A/B/C`. The `VERSION` menu shows `Firmware: V2.7T` |
+| 🔤 **English texts revised** | 25 strings fixed and made consistent (e.g. `VOICEPRI` → `ENCRYPT`), `TDR` became `TTR` (Transmitter Triple Receiver), because with TRIPLE the watch is triple, and `TX-A/B` became `TX-A/B/C`. The `VERSION` menu shows `Firmware: V2.8T` |
 
 ### 🐞 Fixes
 
-| V0.12 problem | In V2.7T |
+| V0.12 problem | In V2.8T |
 |---|---|
 | During scan, the signal bar froze on the last channel found, and the channel number got out of step with the name | The screen follows every channel of the sweep |
 | At power-on with the voltage, and holding `0`, the `   Voltage` text had the voltage written over it, and the "ge" was lost | `VOLTAGE` in full, with the voltage in a card |
@@ -219,8 +222,8 @@ the firmware does not even start, but it has **never been tested**.
 You need a Windows PC and the radio's **USB programming cable** (the CH340 one, the same the stock
 CPS uses).
 
-**1. Download the files.** From the [V2.7T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T),
-download `BJ8300_BANK_v2.7T.anc`, `BinTalk-V1.1.zip` and, if Windows does not recognise the cable
+**1. Download the files.** From the [V2.8T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.8T),
+download `BJ8300_BANK_v2.8T.anc`, `BinTalk-V1.1.zip` and, if Windows does not recognise the cable
 yet, `CH340-driver.zip`. Unzip them. (The same files are in the repository, under
 `firmware/releases/`, `tools/anc-bootloader/` and `tools/ch340-driver/`.)
 
@@ -235,7 +238,7 @@ Close any program that uses the COM port first (CHIRP, CPS).
 
 <p align="center"><img src="docs/imagens/gravador.png" alt="The BinTalk V1.1 flasher window" width="300"></p>
 
-- In the top field, click **`...`** and pick `BJ8300_BANK_v2.7T.anc`.
+- In the top field, click **`...`** and pick `BJ8300_BANK_v2.8T.anc`.
 - **Port:** the cable's COM port (from step 2).
 - **Baudrate:** **115200** (the default).
 
@@ -246,7 +249,7 @@ it on **while holding PTT2 + the shortcut key**, until `UPDATE` shows on the scr
 `Update 3%` → `Jump To Loader` → `Progress 100%` → `Finish`. Do not unplug anything halfway.
 
 **6. Check.** Turn the radio off and on. The menu opens on the folders, and `SYSTEM` → `VERSION`
-should show `Firmware: V2.7T`.
+should show `Firmware: V2.8T`.
 
 **If you get `Retry1..5 / Failure!`:** turn the radio off, make sure no other program holds the
 COM port, go back to step 4 and try again.
@@ -419,8 +422,9 @@ the [changelog](docs/changelog.md).
 
 | File | Status |
 |---|---|
-| `BJ8300_BANK_v2.7T.anc` | **stable, the recommended one** — v57: V2.6T + the menu in 13 folders (with the item's value, scrolling, OK opening straight into editing, BANK and CHANNEL taking several picks and VERSION read only), a bigger menu font, the radio menu in the same window, no CH-C item, the name editor counting only the letters and with only ABC and 123, and the voltage when holding `0` in the new theme; use with the CHIRP driver from the same release |
-| `BJ8300_BANK_v2.6T.anc` | the previous stable one, triple watch with the menu as a single list — v51: v41 + WATCH (SINGLE, DUAL and TRIPLE), the full side C (VFO or channel), TX-A/B/C, MIC GAIN, the light on in the spectrum, TTR and the DTMF box in the new theme; use with the CHIRP driver from the same release |
+| `BJ8300_BANK_v2.8T.anc` | **stable, the recommended one** — v58: V2.7T with the amber background of the 3rd item in every folder and in the radio menu whole; use with the CHIRP driver from the same release |
+| `BJ8300_BANK_v2.7T.anc` | the previous stable one, the menu in folders — v57: V2.6T + the menu in 13 folders (with the item's value, scrolling, OK opening straight into editing, BANK and CHANNEL taking several picks and VERSION read only), a bigger menu font, the radio menu in the same window, no CH-C item, the name editor counting only the letters and with only ABC and 123, and the voltage when holding `0` in the new theme, but the 3rd item's amber background comes out cut in half; use with the CHIRP driver from the same release |
+| `BJ8300_BANK_v2.6T.anc` | triple watch with the menu as a single list — v51: v41 + WATCH (SINGLE, DUAL and TRIPLE), the full side C (VFO or channel), TX-A/B/C, MIC GAIN, the light on in the spectrum, TTR and the DTMF box in the new theme; use with the CHIRP driver from the same release |
 | `BJ8300_BANK_v2.0T.anc` | the new screen without WATCH — v41 under the version's name (same file); use with the CHIRP driver from the same release |
 | `BJ8300_BANK_v45.anc` | v41 + the `WATCH` menu (SINGLE: one side full screen; DUAL: the usual A/B; TRIPLE: a third frequency, C, picked in `CH-C` and shown as `MDF-C` asks, which dual watch watches with the same time as the others and the A/B key brings into focus) — tested on the radio |
 | `BJ8300_BANK_v41.anc` | v39 + the spectrum in theme B, the radio settings checked on entry and on every modulation switch, a modulation switch ~2.5 s faster and the S of the medium font — tested on the radio |
@@ -483,14 +487,14 @@ The toolchain path is in `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.3/...`)
 
 **Space budget:** the new code lives in three places, all at the same address in the 6 images:
 
-- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (V2.7T uses 2286);
+- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (V2.8T uses 2286);
 - **the space that was the voices'**, with the spectrum, but only inside the files C0 and C1
-  (1066 bytes, of which V2.7T uses 674), because the radio's loader refuses an image that changes
+  (1066 bytes, of which V2.8T uses 674), because the radio's loader refuses an image that changes
   more voice files;
 - **the place of the G.729 and MP3 decoders**, inside `app.bin`, with the B screens, WATCH, TRIPLE,
-  the folder menu and the menu table (38884 bytes, of which V2.7T uses 22850).
+  the folder menu and the menu table (38884 bytes, of which V2.8T uses 22878).
 
-The menu table has lived in that last place since v43, in an 80-slot array (V2.7T uses 68: the 13
+The menu table has lived in that last place since v43, in an 80-slot array (V2.8T uses 68: the 13
 folders and the 55 items); the original, with 54, is left intact. [docs/reverse-engineering.md](docs/reverse-engineering.md)
 explains how to measure it, where space was already saved and why these places are safe.
 

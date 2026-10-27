@@ -1,4 +1,4 @@
-# Baojie BJ-8300 — firmware V2.7T: menu em pastas, escuta tripla, tela nova, bancos de canais e driver do CHIRP
+# Baojie BJ-8300 — firmware V2.8T: menu em pastas, escuta tripla, tela nova, bancos de canais e driver do CHIRP
 
 <p align="center">
   <a href="README.en.md"><img src="docs/imagens/botao-english.svg" alt="English version" height="56"></a>
@@ -11,20 +11,23 @@ em pastas**, a **escuta tripla (TRIPLE)**, inédita neste rádio, **uma tela nov
 rápido e um **driver do CHIRP** próprio. O "T" da versão é de **Tempra**.
 
 > [!TIP]
-> ## 🎉 V2.7T — o menu em pastas
+> ## 🎉 V2.8T — o menu em pastas, com o cartão do 3º item inteiro
 >
-> **[⬇️ Baixar a V2.7T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T)**
+> **[⬇️ Baixar a V2.8T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.8T)**
 >
 > | Arquivo do release | Para que serve |
 > |---|---|
-> | `BJ8300_BANK_v2.7T.anc` | o firmware, para gravar no rádio |
+> | `BJ8300_BANK_v2.8T.anc` | o firmware, para gravar no rádio |
 > | `bj8300_v2.8TEMPRA.py` | o módulo do CHIRP para este firmware |
 > | `BinTalk-V1.1.zip` | o gravador (BinTe ANC Bootloader) |
 > | `CH340-driver.zip` | o driver do cabo de programação USB |
 >
+> A V2.8T é a V2.7T com o fundo âmbar do 3º item de cada pasta, e do menu do rádio, inteiro: na
+> V2.7T a metade de baixo dele, a do valor, saía sem fundo.
+>
 > Testada no rádio. Para gravar: [passo a passo](#-como-gravar-o-firmware-passo-a-passo). Para o
 > CHIRP: [passo a passo](#-como-usar-o-chirp-com-este-firmware). As anteriores continuam
-> disponíveis: a [V2.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), com a
+> disponíveis: a [V2.7T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T), o mesmo menu com aquele defeito, a [V2.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), com a
 > escuta tripla e o menu numa lista só, a [V2.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.0T),
 > com a tela nova e sem o WATCH, e a [v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T),
 > com a tela de fábrica.
@@ -36,7 +39,7 @@ ajuda a próxima versão a sair.
 
 ## 📁 Menu novo: tudo em pastas
 
-O menu de fábrica é uma fila de mais de 50 itens. Na V2.7T eles ficam em **13 pastas por assunto**,
+O menu de fábrica é uma fila de mais de 50 itens. Desde a V2.7T eles ficam em **13 pastas por assunto**,
 em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes de abrir.
 
 | | | |
@@ -73,7 +76,7 @@ em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes 
 
 ## 🔺 TRIPLE: o BJ-8300 escutando três frequências
 
-O firmware de fábrica só tem dois lados, A e B, e a dupla escuta (TDR) vigia os dois. A V2.7T põe um
+O firmware de fábrica só tem dois lados, A e B, e a dupla escuta (TDR) vigia os dois. A V2.8T põe um
 **terceiro lado, a C**, e o rádio passa a vigiar **três frequências** ao mesmo tempo. Nenhum
 firmware do BJ-8300 fazia isso.
 
@@ -114,7 +117,7 @@ firmware do BJ-8300 fazia isso.
 As imagens saem da prévia no PC ([firmware/previa/](firmware/previa/)), que roda o mesmo código de
 desenho que vai para o rádio.
 
-## ✨ O que mudou da V0.12 de fábrica para a V2.7T
+## ✨ O que mudou da V0.12 de fábrica para a V2.8T
 
 ### 🆕 Recursos novos
 
@@ -166,11 +169,11 @@ etiquetas coloridas e uma fonte própria:
 | 🟩 **Lado em evidência destacado** | O lado ativo fica num cartão de borda verde, com a frequência grande e o medidor; o outro fica compacto |
 | 📻 **Rádio FM/AM/SSB** | A troca de modulação ficou ~2,5 s mais rápida, e os ajustes salvos (passo, largura, LNA, BFO e as memórias) são conferidos ao entrar e a cada troca: valor fora dos limites dos menus volta ao padrão |
 | ↕️ **Setas do menu invertidas** | A seta de cima passa a subir na lista, em vez de avançar o valor |
-| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TTR` (Transmitter Triple Receiver), porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX-A/B/C`. O menu `VERSION` mostra `Firmware: V2.7T` |
+| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TTR` (Transmitter Triple Receiver), porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX-A/B/C`. O menu `VERSION` mostra `Firmware: V2.8T` |
 
 ### 🐞 Correções
 
-| Problema da V0.12 | Na V2.7T |
+| Problema da V0.12 | Na V2.8T |
 |---|---|
 | Durante o scan, a barra de sinal ficava congelada no último canal achado, e o número do canal descasava do nome | A tela acompanha cada canal da varredura |
 | Na partida com a tensão, e segurando o `0`, o texto `   Voltage` tinha a tensão escrita por cima, e o "ge" sumia | `VOLTAGE` inteiro, com a tensão num cartão |
@@ -219,8 +222,8 @@ o firmware nem chega a ligar, mas ele **nunca foi testado**.
 Precisa de um PC com Windows e do **cabo de programação USB** do rádio (o de chip CH340, o mesmo do
 CPS de fábrica).
 
-**1. Baixe os arquivos.** Na [página do release V2.7T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T),
-baixe o `BJ8300_BANK_v2.7T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
+**1. Baixe os arquivos.** Na [página do release V2.8T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.8T),
+baixe o `BJ8300_BANK_v2.8T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
 o `CH340-driver.zip`. Descompacte os zips. (Os mesmos arquivos estão no repositório, em
 `firmware/releases/`, `tools/anc-bootloader/` e `tools/ch340-driver/`.)
 
@@ -235,7 +238,7 @@ Feche antes qualquer programa que use a porta COM (CHIRP, CPS).
 
 <p align="center"><img src="docs/imagens/gravador.png" alt="Janela do gravador BinTalk V1.1" width="300"></p>
 
-- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v2.7T.anc`.
+- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v2.8T.anc`.
 - **Port:** a COM do cabo (a do passo 2).
 - **Baudrate:** **115200** (já vem assim).
 
@@ -246,7 +249,7 @@ o rádio **segurando PTT2 + o botão de atalho**, até aparecer `UPDATE` na tela
 `Update 3%` → `Jump To Loader` → `Progress 100%` → `Finish`. Não desconecte nada no meio.
 
 **6. Confira.** Desligue e ligue o rádio. O menu abre nas pastas, e em `SYSTEM` → `VERSION` deve
-aparecer `Firmware: V2.7T`.
+aparecer `Firmware: V2.8T`.
 
 **Se der `Retry1..5 / Failure!`:** desligue o rádio, confira que nenhum outro programa está com a
 porta COM, volte ao passo 4 e tente de novo.
@@ -417,8 +420,9 @@ quê, está no [histórico](docs/historico.md).
 
 | Arquivo | Estado |
 |---|---|
-| `BJ8300_BANK_v2.7T.anc` | **estável, a recomendada** — a v57: a V2.6T + o menu em 13 pastas (com o valor do item, a rolagem, OK abrindo já na edição, BANK e CHANNEL de marcar vários e o VERSION só leitura), a letra do menu maior, o menu do rádio na mesma janela, sem o item CH-C, o editor de nome contando só as letras e só com ABC e 123, e a tensão do `0` segurado no tema novo; use com o driver do CHIRP do mesmo release |
-| `BJ8300_BANK_v2.6T.anc` | estável anterior, a escuta tripla com o menu numa lista só — a v51: a v41 + o WATCH (SINGLE, DUAL e TRIPLE), o lado C completo (VFO ou canal), o TX-A/B/C, o MIC GAIN, a luz acesa no espectro, o TTR e a caixa do DTMF no tema novo; use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v2.8T.anc` | **estável, a recomendada** — a v58: a V2.7T com o fundo âmbar do 3º item de cada pasta e do menu do rádio inteiro; use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v2.7T.anc` | estável anterior, o menu em pastas — a v57: a V2.6T + o menu em 13 pastas (com o valor do item, a rolagem, OK abrindo já na edição, BANK e CHANNEL de marcar vários e o VERSION só leitura), a letra do menu maior, o menu do rádio na mesma janela, sem o item CH-C, o editor de nome contando só as letras e só com ABC e 123, e a tensão do `0` segurado no tema novo, mas o fundo âmbar do 3º item sai pela metade; use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v2.6T.anc` | a escuta tripla com o menu numa lista só — a v51: a v41 + o WATCH (SINGLE, DUAL e TRIPLE), o lado C completo (VFO ou canal), o TX-A/B/C, o MIC GAIN, a luz acesa no espectro, o TTR e a caixa do DTMF no tema novo; use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v2.0T.anc` | a tela nova sem o WATCH — a v41 com o nome da versão (mesmo arquivo); use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v45.anc` | v41 + o menu `WATCH` (SINGLE: um lado em tela cheia; DUAL: o A/B de sempre; TRIPLE: uma terceira frequência, a C, escolhida no `CH-C` e mostrada como o `MDF-C` pede, que a dupla escuta vigia com o mesmo tempo das outras e a tecla A/B põe em evidência) — testado no rádio |
 | `BJ8300_BANK_v41.anc` | v39 + o espectro no tema B, os ajustes do rádio conferidos na entrada e na troca de modulação, a troca de modulação ~2,5 s mais rápida e o S da fonte média — testado no rádio |
@@ -482,14 +486,14 @@ O caminho da toolchain está em `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.
 
 **Orçamento de espaço:** o código novo mora em três lugares, todos no mesmo endereço nas 6 imagens:
 
-- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a V2.7T usa 2286);
+- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a V2.8T usa 2286);
 - **o espaço que era das vozes**, com o espectro, mas só dentro dos arquivos C0 e C1 (1066 bytes,
-  dos quais a V2.7T usa 674), porque o carregador do rádio recusa a imagem que muda mais arquivos de
+  dos quais a V2.8T usa 674), porque o carregador do rádio recusa a imagem que muda mais arquivos de
   voz;
 - **o lugar dos decodificadores G.729 e MP3**, dentro do `app.bin`, com as telas B, o WATCH, o
-  TRIPLE, o menu em pastas e a tabela de menus (38884 bytes, dos quais a V2.7T usa 22850).
+  TRIPLE, o menu em pastas e a tabela de menus (38884 bytes, dos quais a V2.8T usa 22878).
 
-A tabela de menus fica nesse último lugar desde a v43, num vetor de 80 vagas (a V2.7T usa 68: as 13
+A tabela de menus fica nesse último lugar desde a v43, num vetor de 80 vagas (a V2.8T usa 68: as 13
 pastas e os 55 itens); a original, de 54, fica intacta. [docs/engenharia-reversa.md](docs/engenharia-reversa.md)
 explica como medir, onde já foi economizado e por que esses lugares são seguros.
 
