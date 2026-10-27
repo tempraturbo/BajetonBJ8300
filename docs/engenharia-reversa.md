@@ -215,7 +215,9 @@ flags(1) | máximo(u16) | get(4) | set(4) | nome_en(4) | nome_cn(4) | exibe|opç
   6 bytes. O r0 que sobrava não é lido (a chamada seguinte, `0x01E3AC52`, o escreve antes de ler),
   e o r6 é sobrescrito em `0x01E4CBC0`. O resto do firmware acha a tabela pelo ponteiro que esse
   trecho guarda em `[0x14BF4]` (`0x01E4CBC4`), e a original fica intacta. A contagem é uma
-  constante: 55 desde a v43.
+  constante: 55 desde a v43. Desde a v53 o vetor tem 80 vagas e traz os grupos antes dos itens, o
+  trecho virou "call menu_abre; r5 = r0" e a contagem é a dos grupos, 13
+  ([seção 21](#21-o-menu-em-pastas-v53-a-v57)).
 - Um item novo entra no lugar dos de zona (o WATCH, o CH-C e os do BANK) ou logo depois de um de
   fábrica (o MDF-C, depois do MDF-B: `ITENS_DEPOIS` do `montar.py`), e copia o resto do item que
   serve de molde.
@@ -223,7 +225,7 @@ flags(1) | máximo(u16) | get(4) | set(4) | nome_en(4) | nome_cn(4) | exibe|opç
   lista/valor, 2 = CTCSS, 3 = frequência, 4 = MEMCH/DELCH, 7 = editor de texto, 8 = VERSION, 10 =
   DCS) e nenhum abre uma lista dentro de outra. Dois níveis (BANK → banco → renomear/canais) seriam
   possíveis trocando a tabela corrente de dentro do nosso próprio handler, como `FUN_01E4B3A0(id)`
-  faz nos menus rápidos — é interface nova, não foi feito.
+  faz nos menus rápidos. Foi o que a v53 fez para os grupos ([seção 21](#21-o-menu-em-pastas-v53-a-v57)).
 
 ## 7. Como o filtro dos bancos funciona
 
@@ -236,7 +238,7 @@ Para desfazer, os mapas são remontados do zero com o mesmo critério da partida
 BCD, `VALIDA_FREQ`), em vez de guardar cópia: assim não existe estado nosso em RAM e canal gravado
 ou apagado pelo MEMCH/DELCH entra na conta na hora.
 
-Depois de o filtro mudar pelo menu (o BANK e o BANK CH), **os dois lados** vão para um canal que
+Depois de o filtro mudar pelo menu (o BANK e o CHANNEL dos BANKS; o BANK CH até a v52), **os dois lados** vão para um canal que
 vale (v38), como o DELCH de fábrica faz depois de apagar um canal (`0x01E3C5D6..0x01E3C6C4`): em
 canal cheio, o canal de cada lado (`h[0x15E0C]`, `h[0x15E10]`) que saiu do mapa pula para o
 próximo que vale (`0x01E3C4C0`), e `0x01E3A812` recarrega os dois lados, revalidando cada um.
@@ -959,6 +961,10 @@ O `gancho_ab` entra no lugar:
 - C → A: guarda o canal em que a C ficou (as setas e a digitação a mudam como a qualquer lado),
   devolve o B ao lado B pelo mesmo caminho e faz a troca de fábrica, que redesenha.
 
+Desde a v54 não há o item CH-C, e no TRIPLE a tecla sempre chega à C: com o canal dela vazio (apagado,
+ou nunca escolhido), `c_alcancavel` a leva ao próximo canal que existe, pelo número do canal (o
+próximo de fábrica, `0x01E3C4C0`, conta dentro da zona no modo zona), e sem nenhum canal a C vai em VFO.
+
 A troca de lados de fábrica (`0x01E40E52`) desarma a dupla escuta, inverte `b[0x15E04]`, troca as
 sombras dos dois lados, decodifica, refaz o registro da tela (`0x01E39128`) e a barra
 (`0x01E3B05C`), grava os ajustes (`0x01E3AB36`, com r0 ≠ 0), redesenha (`0x01E3C290`) e silencia
@@ -979,7 +985,8 @@ sombras dos dois lados, decodifica, refaz o registro da tela (`0x01E39128`) e a 
 
 Sem registro válido (marca ou soma errada), o rádio fica em DUAL. A v43 tinha 10 bytes, sem os
 campos 8 a 11, e o registro dela deixou de valer na v44. A tela B lê o registro a cada desenho.
-Desde a v46 a janela de gravação do cabo o inclui, e o CHIRP grava o WATCH, o CH-C e o MDF-C.
+Desde a v46 a janela de gravação do cabo o inclui, e o CHIRP grava o WATCH, o CH-C e o MDF-C. O
+item CH-C saiu do menu na v54; o canal da C continua no registro, e o CHIRP ainda o grava.
 
 **O VFO C (v49).** A C ganha modo (VFO ou canal) e VFO, como o A e o B. Os VFOs ficam no setor
 `0xD3000` (`struct vfc`, "VFC1", 70 B: o da C, o do B guardado e a soma), no formato do registro
@@ -1115,3 +1122,68 @@ firmware modificado.
 - **No rádio de teste** (calibração lida pelo cabo): H entre 218 e 250, M entre 186 e 201, L entre
   158 e 166, num bias de 0 a 255 (255 só nos degraus que o índice nunca alcança). O firmware não
   sabe quantos watts isso dá: a saída em W depende do amplificador e só um wattímetro mede.
+
+## 21. O menu em pastas (v53 a v57)
+
+O motor de menus (`0x01E489E0`) só conhece a tabela corrente, e o estado dele fica em `0x14BF4`:
+
+| Endereço | O que é |
+|---|---|
+| `[0x14BF4]` | o ponteiro da tabela corrente |
+| `b[0x14BF8]` | quantos itens ela tem |
+| `b[0x14BF9]` | 1 = editando o item |
+| `b[0x14BFA]`, `h[0x14BFC]` | o item; as setas escrevem os dois (`0x01E49F78`) |
+| `h[0x14BFE]` | o número digitado (`0x01E4A2CE`) |
+| `b[0x14C00]` | o tipo do item (o nibble baixo das flags) |
+| `b[0x14C0C]` | o tempo do número: 15 a cada dígito, e o tique o desce (`0x01E4A326`) |
+
+A entrada do menu (`0x01E4CBC4..0x01E4CBEC`), os menus rápidos (`0x01E4B3DC..0x01E4B402`) e as setas
+(`0x01E49FA6..0x01E49FCC`) escrevem esses campos, e mudar de nível é escrevê-los do mesmo jeito:
+recarregar o tempo de saída do menu (`0x01E484F8`), pôr a tabela, a conta, o item e o tipo, avisar o
+item novo (`0x01E4851E`, que com o get nulo zera o valor e o cursor) e chamar o motor, que redesenha
+(`menu_vai`, no `tela.c`).
+
+**A tabela** (`menu_tabela`, 80 vagas de 28 B) traz primeiro os 13 grupos e depois os itens de cada
+um, na ordem dos grupos, tudo em ordem alfabética: 68 vagas usadas. Cada grupo é um item de lista sem
+get nem set (como o RESET), com a quantidade de itens no máximo e os nomes deles nas opções; o motor
+monta as linhas com eles, e a tela B não as mostra nesse nível. O nível sai do ponteiro: a tabela dos
+grupos é o nível 0; a do grupo g, o g + 1 (ela começa depois dos grupos e dos itens dos anteriores);
+as duas do rádio, o `RADIO`; e qualquer outra (os menus rápidos) é `FORA`, que fica como de fábrica.
+
+O `menu_textos` (512 B) leva o resto: no byte 0 a quantidade de grupos, no 1 a de posições da tabela,
+a partir do 4 uma marca por posição (1 = sem valor no "L": RESET, MEMCH, DELCH e o CHANNEL dos BANKS;
+2 = marcar vários: o BANK e o CHANNEL dos BANKS), e depois as listas de ponteiros e os nomes dos
+grupos. O `montar.py` monta os dois a partir do `GRUPOS` e do `MENU_MARCAS`, e a `3b` do `conferir.py`
+lê o que ficou gravado na imagem: os grupos e os itens em ordem alfabética, cada grupo uma lista sem
+get nem set com os nomes dos itens dele, as marcas, e cada item de fábrica que fica e cada um dos
+nossos uma vez só, dentro de um grupo.
+
+**Os ganchos:**
+
+| Onde | Como | Gancho | O que faz |
+|---|---|---|---|
+| `0x01E4CBB2`, o ponteiro da tabela na entrada | "r5 = menu_tabela" vira "call menu_abre; r5 = r0" | `menu_abre` | a tabela dos grupos; se o menu foi fechado dentro de um grupo, reabre nele (a entrada lê o item de `[+6]` logo depois, `0x01E4CBCA`) |
+| `0x01E4CBE8`, a contagem | constante | — | 13, os grupos |
+| `0x01E4C924`, a chamada do OK (`0x01E49996`) | chamada trocada | `gancho_menu_ok` | nos grupos, abre o grupo no primeiro item; no VERSION, abre só para ler; no resto, o OK de fábrica, que abre o item editando |
+| `0x01E4B9FA`, a chamada dos números (`0x01E4A0FE`) | chamada trocada | `gancho_menu_digito` | fora da edição, vai ao item de mesmo número, contando de 1 (o de fábrica conta de 0, `0x01E4A2DA`); dois dígitos antes do tempo acabar fazem um número só, como no de fábrica (`0x01E4A274..0x01E4A2CE`); com o VERSION aberto, nada |
+| `0x01E4D54A`, o EXIT fora da edição ("r0 = 349", que começa a saída) | desvio no meio | `desvio_menu_sai` → `b_menu_sai` | dentro de um grupo, volta aos grupos e segue para o bipe do EXIT (`0x01E4D59A`); nos grupos e no rádio, a saída de fábrica |
+| `0x01E49A86`, o OK editando depois do set ("r0 = 3303", que fecha a edição) | desvio no meio | `desvio_menu_marca` → `b_menu_marca` | nos itens de marcar vários, zera o estado da recepção (`b[0x15367]`, como o de fábrica) e segue para o redesenho e a volta (`0x01E49C7C`) sem fechar a edição |
+
+O desvio no meio (`DESVIO_MEIO`, no `tela.c`) é o desvio de sempre com mais uma saída: quando o
+gancho resolve, ele não volta para depois dos bytes cobertos, e sim para um ponto adiante da rotina,
+onde o caminho de fábrica também passa (o bipe do EXIT, o redesenho do OK), com a mesma pilha. A `4t`
+confere os dois byte a byte.
+
+**O VERSION** (tipo 8) o OK de fábrica não abre: `0x01E49A2E` só toca a voz, que não há mais. O
+gancho liga a edição, que a tela B desenha sem cursor; o OK e os números não fazem nada com ele
+aberto, e o EXIT de fábrica o fecha (cancela a edição, `0x01E4D500`).
+
+**O menu do rádio** (v56) é o mesmo motor, no modo de menu: a entrada (`0x01E49000`) põe uma de duas
+tabelas de fábrica, `0x01E61168` (FM e AM) ou `0x01E6137C` (SSB e CW, 532 B adiante, `0x01E49026`), e
+a conta da banda vem de `0x01E3DE36` (FM 2, AM 5, SSB e CW 6). O item de memória tem `0x20` nas
+flags: o título é montado por função (`0x01E3D20E`, o prefixo da banda e `MEMCH`), e a tela B o monta
+igual. Os números contam de 1, como no principal; o OK e o EXIT ficam os de fábrica.
+
+**A pilha.** A janela de pasta é desenhada pelo envio do título, no fundo do motor de menus. Com os
+dois textos da janela em 28 B cada, a interface ia a 744 B (v56), 4 acima da de fábrica; eles ficaram
+com 12 e 20 B, e as três raízes voltaram aos 740, 620 e 696 B de fábrica.

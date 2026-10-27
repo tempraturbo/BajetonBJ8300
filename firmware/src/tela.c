@@ -270,6 +270,10 @@ static unsigned indice(unsigned c)
 #define ALTURA_MEDIA  9
 #define COLUNA_MEDIA(k) (1 + (fonte_b_media[(k) >> 3] >> ((k) & 7) & 1))
 static const u8 linha_media[8] = {0, 1, 3, 4, 5, 6, 8, 9};
+/* O do menu (v56: a janela de pasta e o item aberto), um pouco maior para ler melhor: as colunas do
+ * medio, a linha do meio tambem com 2 px (10 de altura: as barras do A, E, F, H, P, R saem como as de
+ * cima e de baixo) e um px a mais entre as letras. O que nao cabe sai no medio (texto_menu, telas.c). */
+static const u8 linha_janela[8] = {0, 1, 3, 4, 6, 7, 9, 10};
 
 /* Quanto uma letra anda: a largura dela mais o espaco depois. */
 static unsigned avanco(unsigned l, unsigned e)
@@ -299,22 +303,22 @@ static unsigned letra(unsigned x, unsigned y, unsigned c, unsigned e, unsigned c
 
 /* A mesma letra no tamanho medio. Separada da letra(), que fica no fim do caminho mais fundo da tela
  * principal: junta, as duas contas guardavam mais registradores e o quadro dela crescia. */
-SEPARADA static unsigned letra_media(unsigned x, unsigned y, unsigned c, unsigned cor)
+SEPARADA static unsigned letra_media(unsigned x, unsigned y, unsigned c, unsigned cor, const u8 *linhas)
 {
     unsigned l = fonte_b_letra[indice(c)], k = l >> 3, fim = k + (l & 7), x0 = x, w, b, r;
-    unsigned ve = y < JAN_Y1 && y + ALTURA_MEDIA > JAN_Y0;
+    unsigned ve = y < JAN_Y1 && y + linhas[7] > JAN_Y0;
 
     for (; k < fim; k++, x += w)
         for (w = COLUNA_MEDIA(k), b = fonte_b_colunas[k], r = 0; ve && x < JAN_X1 && b; b >>= 1, r++)
             if (b & 1)
-                retangulo(x, y + linha_media[r], x + w, y + linha_media[r + 1], cor);
+                retangulo(x, y + linhas[r], x + w, y + linhas[r + 1], cor);
     return x - x0 + 1;
 }
 
 COLADA static unsigned texto(unsigned x, unsigned y, const char *s, unsigned e, unsigned cor)
 {
     while (*s)
-        x += e ? letra(x, y, (u8)*s++, e, cor) : letra_media(x, y, (u8)*s++, cor);
+        x += e ? letra(x, y, (u8)*s++, e, cor) : letra_media(x, y, (u8)*s++, cor, linha_media);
     return x;
 }
 
@@ -965,11 +969,132 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
 }
 
 #ifndef PREVIA
-/* A tabela do menu principal (v43): o montar.py a preenche aqui, na faixa livre, e troca o ponteiro
- * do firmware (0x01E4CBB2) para ca. A original tinha 54 vagas, e o WATCH, o CH-C e o MDF-C nao
- * cabiam. Sai do compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e
- * zero no resto, e o montar so escreve aqui se achar exatamente isso. */
-const unsigned char menu_tabela[64 * 28] __attribute__((aligned(4))) = {0xFF};
+/* A tabela do menu principal (v43): o montar.py a preenche aqui, na faixa livre, e a entrada do menu
+ * (0x01E4CBB2) a poe no firmware. A original tinha 54 vagas, e o WATCH, o CH-C e o MDF-C nao cabiam;
+ * desde a v53 ela traz os grupos e depois os itens de cada um (os grupos do menu, no telas.c). E o que
+ * os grupos precisam alem dela vai em menu_textos: a quantidade de grupos no byte 0, e as listas com
+ * os nomes dos itens de cada um (as opcoes do item do grupo) e os nomes dos grupos - e, desde a v55,
+ * a quantidade de posicoes da tabela no byte 1 e uma marca por posicao a partir do byte 4. Os dois saem do
+ * compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e zero no resto, e o
+ * montar so escreve neles se achar exatamente isso. */
+const unsigned char menu_tabela[80 * 28] __attribute__((aligned(4))) = {0xFF};
+const unsigned char menu_textos[512] __attribute__((aligned(4))) = {0xFF};
+
+/* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
+ * O mapa do motor de menus esta no telas.c, junto do desenho. O que muda o nivel faz o mesmo que as
+ * setas fazem para mudar de item (0x01E49F60): recarrega o tempo de saida do menu, poe o item e o tipo
+ * dele no estado, avisa o item novo e chama o motor, que redesenha. */
+FIRMWARE(MOTOR_MENU, 0x01E489E0);  u32 MOTOR_MENU(void);
+FIRMWARE(TEMPO_MENU, 0x01E484F8);  void TEMPO_MENU(void);         /* o MENU EXIT TIME de novo */
+FIRMWARE(ITEM_MUDOU, 0x01E4851E);  void ITEM_MUDOU(void);         /* no tipo 3 (OFFSET), guarda o valor */
+FIRMWARE(OK_MENU, 0x01E49996);     u32 OK_MENU(void);
+FIRMWARE(DIGITO_MENU, 0x01E4A0FE); u32 DIGITO_MENU(unsigned);
+FIRMWARE(BIPE, 0x01E38B4C);        void BIPE(unsigned);
+
+/* Poe no menu o item i da tabela t, de n itens. */
+static void menu_vai(u32 t, unsigned n, unsigned i)
+{
+    MENU_TABELA = t;
+    MENU_CONTA = n;
+    MENU_NUMERO = i;
+    MENU_ITEM = i;
+    MENU_TIPO = ITEM_FLAGS(t, i) & 0x0F;
+    MENU_DIGITADO = 0;
+    ITEM_MUDOU();
+}
+
+/* No lugar do "r5 = menu_tabela" da entrada do menu (0x01E4CBB2, seguido de "r5 = r0"): a tabela dos
+ * grupos. Se o menu foi fechado de dentro de um grupo (a tabela que ficou e a dele), reabre nele - a
+ * entrada le o item de [+6] logo depois (0x01E4CBCA). */
+u32 menu_abre(void)
+{
+    unsigned n = menu_nivel();
+
+    if (n != 0 && n < RADIO)
+        MENU_NUMERO = n - 1;
+    return MENU_BASE;
+}
+
+/* No lugar da chamada do OK do menu (0x01E4C924, para 0x01E49996): nos grupos, abre o grupo no
+ * primeiro item, na janela de pasta; no resto, o OK de fabrica, que abre o item ja editando. O VERSION
+ * (tipo 8, v55) o de fabrica nao abre (0x01E49A2E so toca a voz, que nao ha mais): aqui ele abre so
+ * para leitura - a edicao ligada, que a tela B desenha sem cursor -, aberto o OK nao faz nada, e o
+ * EXIT de fabrica o fecha (cancela a edicao, 0x01E4D500). Devolve o que o motor deixa em r0, como o
+ * de fabrica (o bipe, 0x01E4D59C), ou 0, o bipe de tecla sem funcao. */
+u32 gancho_menu_ok(void)
+{
+    unsigned g = MENU_NUMERO, n = menu_nivel();
+
+    if (n == 0) {
+        TEMPO_MENU();
+        menu_vai(MENU_BASE + menu_inicio(g) * TAM_ITEM, MENU_ITENS(g), 0);
+        return MOTOR_MENU();
+    }
+    if (n >= RADIO || MENU_TIPO != 8)     /* o radio e os menus rapidos: o OK de fabrica */
+        return OK_MENU();
+    if (MENU_EDITANDO == 1)
+        return 0;
+    TEMPO_MENU();
+    MENU_EDITANDO = 1;
+    return MOTOR_MENU();
+}
+
+/* No caminho do EXIT fora da edicao (0x01E4D54A, que fecharia o menu; desvio_menu_sai): dentro de um
+ * grupo, volta aos grupos, nele. Devolve 1 quando voltou - o desvio segue para o bipe do EXIT
+ * (0x01E4D59A) - ou 0, e o menu fecha como antes (o do radio volta ao radio, 0x01E4D556). */
+u32 b_menu_sai(void)
+{
+    unsigned n = menu_nivel();
+
+    if (n == 0 || n >= RADIO)
+        return 0;
+    TEMPO_MENU();
+    menu_vai(MENU_BASE, MENU_GRUPOS, n - 1);
+    MOTOR_MENU();
+    return 1;
+}
+
+/* Depois do set, no OK editando (0x01E49A86, onde o firmware zera o estado da recepcao, b[0x15367], e
+ * fecha a edicao): nos itens de marcar varios (MARCA_VARIOS: o BANK e o CHANNEL dos BANKS, v55) a
+ * edicao continua. So o estado da recepcao vai a 0 - sintoniza de novo, como o de fabrica faz depois
+ * de mudar o ajuste - e o desvio segue para o redesenho e a volta (0x01E49C7C). O EXIT sai: cada OK
+ * ja gravou. */
+#define ESTADO_RX RAM(u8, 0x00015367)
+u32 b_menu_marca(void)
+{
+    unsigned n = menu_nivel();
+
+    if (n == 0 || n >= RADIO
+        || !(MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO) & MARCA_VARIOS))
+        return 0;
+    ESTADO_RX = 0;
+    return 1;
+}
+
+/* No lugar da chamada do tratador de digitos do menu (0x01E4B9FA, para 0x01E4A0FE; a tecla em ASCII):
+ * fora da edicao, nas nossas tabelas e no menu do radio (v56), o numero vai ao item de mesmo numero, contando de 1 como a tela
+ * mostra - o de fabrica conta de 0 (0x01E4A2DA). Dois digitos seguidos, antes do tempo do digito
+ * acabar e sem seta no meio, fazem um numero so, como no de fabrica (0x01E4A274..0x01E4A2CE). */
+u32 gancho_menu_digito(unsigned tecla)
+{
+    unsigned d = tecla - '0', conta = MENU_CONTA, n;
+
+    if (MENU_EDITANDO == 1 && MENU_TIPO == 8)
+        return 0;                     /* o VERSION aberto e so leitura (v55) */
+    if (MENU_EDITANDO == 1 || menu_nivel() == FORA)
+        return DIGITO_MENU(tecla);
+    TEMPO_MENU();
+    n = MENU_TEMPO_DIGITO && MENU_DIGITADO == MENU_NUMERO + 1u ? MENU_DIGITADO * 10 + d : d;
+    if (n - 1 >= conta)
+        n = d;
+    if (n - 1 >= conta)
+        return 0;                     /* nenhum item com esse numero: o bipe de tecla sem funcao */
+    menu_vai(MENU_TABELA, conta, n - 1);
+    MENU_DIGITADO = n;
+    BIPE(6);
+    MENU_TEMPO_DIGITO = 15;
+    return MOTOR_MENU();
+}
 
 /* ---------- ligacao com o firmware ----------
  * Treze rotinas que desenham a tela de dois VFOs ganham um desvio na entrada (DESVIO, abaixo). O
@@ -1022,14 +1147,20 @@ SEPARADA static void telas_faixa(unsigned m, unsigned y0, unsigned y1, unsigned 
 
 /* No lugar do envia() do titulo (0x01E48E82) e do de cada linha (0x01E48ECA) do motor de menus: a
  * faixa do titulo, ou a da linha que o motor acabou de montar (a janela dele: y 75, 92 ou 109). Fora
- * do modo de menu (ou no editor de nome), o envia() de fabrica. */
+ * do modo de menu (ou no editor de nome), o envia() de fabrica. Na janela de pasta (os grupos, v53, e
+ * a escolha do item dentro deles, v55) o titulo a desenha inteira, de baixo da barra ao fim, e as
+ * linhas nao desenham nada: o motor manda o titulo, as tres linhas, a barra e o resumo em toda passada
+ * (0x01E48E82..0x01E48EE4), e as linhas ja estao montadas quando o titulo sai (o valor do cursor). */
 void gancho_menu_titulo(void)
 {
     if (telas_modo() != 1) {
         ENVIA();
         return;
     }
-    telas_faixa(1, TOPO_MENU, TOPO_MENU + 18, 0, 0);
+    if (menu_pasta())
+        telas_faixa(1, ALTURA_ESTADO, 128, 0, 0);
+    else
+        telas_faixa(1, TOPO_MENU, TOPO_MENU + 18, 0, 0);
 }
 
 void gancho_menu_linha(void)
@@ -1040,7 +1171,8 @@ void gancho_menu_linha(void)
         ENVIA();
         return;
     }
-    telas_faixa(1, TOPO_MENU + 18 + r * 18, TOPO_MENU + 36 + r * 18, 0, 0);
+    if (!menu_pasta())
+        telas_faixa(1, TOPO_MENU + 18 + r * 18, TOPO_MENU + 36 + r * 18, 0, 0);
 }
 
 /* No lugar do envia() de 0x01E476E4, por onde sai toda a piscada do menu no laco do sinal: o numero
@@ -1222,13 +1354,15 @@ void gancho_dtmf(void)
  * partida a le (0x01E45FB0 x 444 / 1000). */
 void gancho_tensao(void)
 {
-    unsigned decimos = LE_TENSAO() * 444u / 1000, y;
+    tensao_faixas(LE_TENSAO() * 444u / 1000, 0, 160, 0, 128);
+}
 
-    for (y = 0; y < 128; y += 32) {
-        janela_b(0, 160, y, y + 32, COR_FUNDO);
-        tensao_cena(decimos);
-        ENVIA();
-    }
+/* No lugar do envia() da caixa da tensao com o 0 segurado (acao 33 das teclas, 0x01E4CF1C; a mesma
+ * conta, 0x01E4CEA6..0x01E4CED2): so o cartao, por cima da tela no ar. Depois o firmware espera 1 s e
+ * redesenha a tela inteira (0x01E4CF20..0x01E4CF28), como antes. */
+void gancho_tensao_tecla(void)
+{
+    tensao_faixas(LE_TENSAO() * 444u / 1000, TENSAO_X0, TENSAO_X1, TENSAO_Y0, TENSAO_Y1);
 }
 
 /* No lugar da limpeza de fabrica na entrada do espectro (0x01E4CFE2, LIMPA(0): a faixa de cima em
@@ -1338,7 +1472,8 @@ u32 b_lado(void)
     unsigned m = telas_modo();
 
     if (m == 1 || m == 17) {
-        desenha_resumo();
+        if (m == 17 || !menu_pasta())      /* a janela de pasta do menu ocupa o lugar */
+            desenha_resumo();
         return 1;
     }
     return lado_principal();
@@ -1430,6 +1565,35 @@ DESVIO(desvio_scanqt, b_scanqt, 0x01E45A86, "0x76, 0x04, 0xe2, 0x9a");
 DESVIO(desvio_radio_digita, b_radio_digita, 0x01E4907C, "0x77, 0x04, 0xe2, 0x9b");
 DESVIO(desvio_editor_modo, b_editor_modo, 0x01E48724, "0x76, 0x04, 0xe2, 0x9c");
 DESVIO(desvio_editor_quadro, b_editor_quadro, 0x01E48660, "0x7e, 0x04, 0x29, 0x16");
+
+/* Como o DESVIO, mas no meio de uma rotina (v53): quando o gancho resolve, segue para `feito` na
+ * rotina, em vez de voltar dela. */
+#define DESVIO_MEIO(nome, gancho, volta, feito, bytes)                                             \
+    __asm__(".set " #nome "_volta, " #volta "\n"                                                   \
+            ".set " #nome "_feito, " #feito "\n"                                                   \
+            ".section .text." #nome ",\"ax\"\n"                                                    \
+            ".globl " #nome "\n"                                                                   \
+            #nome ":\n\t"                                                                          \
+            "[--sp] = rets\n\t"                                                                    \
+            "[--sp] = {r3-r0}\n\t"                                                                 \
+            "call " #gancho "\n\t"                                                                 \
+            "if (r0 == 0) goto " #nome "_fabrica\n\t"                                              \
+            "{r3-r0} = [sp++]\n\t"                                                                 \
+            "{rets} = [sp++]\n\t"                                                                  \
+            "goto " #nome "_feito\n"                                                               \
+            #nome "_fabrica:\n\t"                                                                  \
+            "{r3-r0} = [sp++]\n\t"                                                                 \
+            "{rets} = [sp++]\n\t"                                                                  \
+            ".byte " bytes "\n\t"                                                                  \
+            "goto " #nome "_volta\n\t"                                                             \
+            ".previous")
+
+/* O EXIT fora da edicao, no meio da interface: "r0 = 349" (0x01E4D54A) comeca a saida do menu; voltar
+ * aos grupos segue para o bipe do EXIT (0x01E4D59A), onde a saida de fabrica tambem termina. */
+DESVIO_MEIO(desvio_menu_sai, b_menu_sai, 0x01E4D54E, 0x01E4D59A, "0x40, 0xe0, 0x5d, 0x01");
+/* O OK editando, depois do set: "r0 = 3303" (0x01E49A86) comeca o fechamento da edicao; nos itens de
+ * marcar varios segue para o redesenho e a volta (0x01E49C7C). */
+DESVIO_MEIO(desvio_menu_marca, b_menu_marca, 0x01E49A8A, 0x01E49C7C, "0x40, 0xe0, 0xe7, 0x0c");
 
 /* 0x01E44C68 de fabrica, chamada como rotina: os bytes que o desvio cobre e a volta. O rets que o
  * primeiro deles empilha e o de quem chamou esta, entao a de fabrica volta para la. */

@@ -177,6 +177,8 @@ ENVIA_SITIOS = (
     (0x01E4A93C, 'gancho_dtmf', 'DTMF: os digitos'),
     # v38: a tensao na partida (0x01E55E9C, mensagem de partida em tensao)
     (0x01E55F40, 'gancho_tensao', 'tensao na partida'),
+    # v52: a caixa da tensao com o 0 segurado (acao 33 das teclas, 0x01E4CE96..0x01E4CF2C)
+    (0x01E4CF1C, 'gancho_tensao_tecla', 'tensao com o 0 segurado'),
     # v38: a linha do texto do editor de nome ("%15s" em y 110), que o desvio do indicador ja desenhou
     (0x01E48FE0, 'gancho_editor_linha', 'editor de nome: a linha do texto'),
 )
@@ -203,7 +205,6 @@ PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho
            'espectro_pontos', 'espectro_passo', 'espectro_rotulos',
            'roger_le', 'roger_grava', 'roger_opcoes', 'gancho_roger_tons',
            'watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
-           'canal_c_le', 'canal_c_grava', 'canal_c_exibe', 'titulo_canal_c',
            'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'menu_tabela', 'gancho_troca_dw',
            'gancho_volta_dw', 'gancho_ab', 'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic',
            'gancho_ajustes', 'gancho_tx_abc', 'gancho_tx_desarma', 'gancho_tx_volta', 'titulo_txabc', 'txabc_opcoes',
@@ -298,8 +299,42 @@ PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 # a chamada seguinte (0x01E3AC52) o sobrescreve antes de ler, e o r6 e sobrescrito em 0x01E4CBC0.
 # Mais nada le a tabela original (ver acima): o resto do firmware a acha pelo ponteiro que este
 # trecho guarda em [0x14BF4] (0x01E4CBC4).
-MENU_VAGAS = 64
+# v53: os 6 bytes viram "call menu_abre; r5 = r0" (05 16, a codificacao de 0x01E2A43A): menu_abre
+# devolve a tabela e, se o menu foi fechado de dentro de um grupo, poe o grupo em [+6], que a entrada
+# le logo depois (0x01E4CBCA). Na chamada, r1..r3 estao mortos (escritos antes de lidos depois dela)
+# e o r4 (0, lido em 0x01E4CBC6) a chamada preserva.
+MENU_VAGAS = 80
 TABELA_SIMBOLO = 'menu_tabela'
+TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 512
+R5_R0 = bytes.fromhex('0516')
+
+# v53: os grupos do menu (src/telas.c), um nivel acima dos itens, a pedido do dono. Cada item fica em
+# um grupo so, pelo nome que o radio mostra; grupos e itens entram em ordem alfabetica (sorted), para
+# um item novo cair sozinho no lugar. Nenhum grupo com um item so: com 1 item, o EXIT editando
+# fecharia o menu inteiro, como nos menus rapidos (0x01E4D53C: "if (conta == 1)" vai a saida).
+GRUPOS = {
+    'AUDIO': ('NOISE REDUCTION', 'SQL', 'STE'),
+    'BANKS': ('BANK', 'CHANNEL', 'NAME'),
+    'CHANNEL': ('BCL', 'ENCRYPT', 'RX MODULATION', 'SCRAMBLE', 'STEP', 'TXP', 'W/N'),
+    'DISPLAY': ('ABR', 'MDF-A', 'MDF-B', 'MDF-C', 'MENU EXIT TIME', 'POWER-ON MSG'),
+    'DTMF': ('DTMF CODE', 'DTMFST', 'PTT-LT', 'S-CODE'),
+    'KEYS': ('AUTOLOCK', 'BEEP PROMPT', 'PF2', 'PF2 LONG PRESS', 'PF3'),
+    'MEMORY': ('CH-NAME', 'DELCH', 'MEMCH'),
+    'REPEATER': ('OFFSET', 'RP-STE', 'RPT-RL', 'SFT-D', 'TONE'),
+    'SCAN': ('SC-REV', 'SCAN ADD'),
+    'SYSTEM': ('AL-MOD', 'BLUETOOTH', 'RESET', 'SAVE', 'VERSION'),
+    'TONES': ('R-CTCSS', 'R-DCS', 'T-CTCSS', 'T-DCS'),
+    'TX': ('MIC GAIN', 'ROGER', 'TOT', 'VOX', 'VOX DELAY'),
+    'WATCH': ('TTR', 'TX-A/B/C', 'WATCH'),
+}
+ITENS_POR_GRUPO = 7       # o maior grupo; a janela de pasta mostra 6 linhas e rola o resto (telas.c, pasta_cena)
+# v55: as marcas de cada item (grupo, nome), no menu_textos: SEM_VALOR nao mostra o "L" do valor na
+# janela de pasta (acoes, e a lista dos canais do banco); VARIOS continua editando depois do OK, para
+# marcar varios seguidos, e o EXIT sai (b_menu_marca, tela.c).
+MARCA_SEM_VALOR, MARCA_VARIOS = 1, 2
+MENU_MARCAS = {('BANKS', 'BANK'): MARCA_VARIOS, ('BANKS', 'CHANNEL'): MARCA_SEM_VALOR | MARCA_VARIOS,
+               ('MEMORY', 'DELCH'): MARCA_SEM_VALOR, ('MEMORY', 'MEMCH'): MARCA_SEM_VALOR,
+               ('SYSTEM', 'RESET'): MARCA_SEM_VALOR}
 
 # Como o firmware conta os itens varrendo a tabela ate o item zerado, e a tabela nova ocupa a vaga
 # dele, a contagem e trocada por uma constante na propria chamada que a pedia (4 bytes, no lugar
@@ -367,17 +402,16 @@ def monta_scramble():
     return bytes.fromhex('4016' '60e10f00' '0000' 'c1ff') + struct.pack('<I', S['scramble_freqs'])
 ITENS = [
     # v42: quantas frequencias a tela principal mostra (bancos.c), uma lista no molde do TDR - as
-    # opcoes vao no campo de exibir e no das opcoes em chines, como as do ROGER -; e o canal da C no
-    # TRIPLE, um numero como o BANK CH (a exibicao da C, o MDF-C, fica depois do MDF-B: ITENS_DEPOIS)
+    # opcoes vao no campo de exibir e no das opcoes em chines, como as do ROGER (a exibicao da C, o
+    # MDF-C, fica depois do MDF-B: ITENS_DEPOIS). O CH-C, o canal da C, saiu na v53: a C e um lado
+    # como o A e o B desde a v49, e a tecla A/B sempre chega nela no TRIPLE (gancho_ab, bancos.c)
     dict(nome='WATCH', molde=TDR_ITEM, flags=0, maximo=3, get='watch_le', set='watch_grava',
          titulo='titulo_watch', exibe='watch_opcoes', opcoes_cn='watch_opcoes'),
-    dict(nome='CH-C', molde=ZONE, flags=FLAGS_NUMERO, maximo=960,
-         get='canal_c_le', set='canal_c_grava', titulo='titulo_canal_c', exibe='canal_c_exibe'),
     dict(nome='BANK', molde=ZONE, flags=FLAGS_NUMERO, maximo=16,
          get='bank_le', set='bank_grava', titulo='titulo_bank', exibe='bank_exibe'),
-    dict(nome='BANK NAME', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0,
+    dict(nome='NAME', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0,
          get='nome_le', set='nome_grava', titulo='titulo_nome', exibe='nome_exibe'),
-    dict(nome='BANK CH', molde=ZONE, flags=FLAGS_NUMERO, maximo=960,
+    dict(nome='CHANNEL', molde=ZONE, flags=FLAGS_NUMERO, maximo=960,
          get='canal_le', set='canal_grava', titulo='titulo_canal', exibe='canal_exibe'),
 ]
 
@@ -425,11 +459,7 @@ TEXTOS = [
     (0x01E5A60F, 'All', 'ALL'),
     (0x01E5AA81, 'RX Modulation', 'RX MODULATION'),
     # versao do firmware, que o item VERSION mostra (o hardware V01T32 fica como esta)
-    (0x01E5FD10, 'V0.12', 'V2.6T'),
-    # a tensao de fora da tela B (0x01E4CEB8..0x01E4CF1C, depois da tela de um VFO de fabrica): o
-    # firmware escreve a tensao a partir da 8a posicao desta cadeia, e "   Voltage" perdia o "ge"
-    # ("   Volta8.1V"); com " VOLTAGE" a tensao entra depois do espaco (v38)
-    (0x01E60302, '   Voltage      ', ' VOLTAGE'),
+    (0x01E5FD10, 'V0.12', 'V2.7T'),
     # o nome chines do item e 语音加密 (criptografia de voz): VOICEPRI engana
     (0x01E5A82F, 'VOICEPRI', 'ENCRYPT'),
     # a dupla escuta virou tripla com o TRIPLE (v42): TDR -> TTR, pedido do dono (v48). A cadeia e
@@ -498,6 +528,38 @@ TX_TROCA_ERA = 0x01E40E52
 CHAMADAS_LIVRE += ((0x01E410EA, 0x01E3FDE4, 'gancho_tx_desarma', 'TX-A/B/C: a terceira no inicio da TX'),
                    (0x01E411AE, TX_TROCA_ERA, 'gancho_tx_volta', 'TX-A/B/C: a destroca na TX recusada'),
                    (0x01E473EE, TX_TROCA_ERA, 'gancho_tx_volta', 'TX-A/B/C: a destroca no fim da TX'))
+# v52: o editor de nome. O get do CH-NAME (0x01E3C732) media o nome com o strlen da ROM (0x021127C0),
+# que so para no 0, e o CHIRP completa o nome com 0xFF: o editor abria com 12/12 e os 0xFF como
+# letras. O tamanho e a copia para o editor (COPIA_MEM, com o tamanho + 1) passam pelos ganchos, que
+# param no 0 ou no 0xFF como o resto do firmware, e o editor abre em ABC.
+CHAMADAS_LIVRE += ((0x01E3C784, 0x021127C0, 'nome_tamanho', 'CH-NAME: o tamanho do nome, ate o 0 ou o 0xFF'),
+                   (0x01E3C792, 0x021127A8, 'nome_para_editor', 'CH-NAME: o nome no editor, que abre em ABC'))
+# v52: o editor de nome so com ABC e 123. A tecla # (0x01E4A590..0x01E4A5AE) soma 1 ao modo
+# (b[0x14A38]: 0 abc, 1 ABC, 2 123) e o volta a 0 no 3 (no 4 em chines, que saiu na v37); voltando a 1,
+# ela alterna ABC e 123. O "r0 = 0" e a instrucao do "if (r2 >= r1) {...}", do mesmo tamanho. Ninguem
+# mais escreve o modo, so a limpeza 0x01E3AC52 (zera 0x14A34..0x14A49); os dois editores o poem em ABC
+# ao abrir.
+EDITOR_REMENDOS = ((0x01E4A5AA, bytes.fromhex('4020'), bytes.fromhex('4021'),
+                    'a tecla # volta ao ABC, nao ao abc'),)
+# v53: os grupos do menu (telas.c e tela.c). No modo de menu (o tbh das teclas do modo 1, 0x01E4B9C6),
+# o OK (tecla 17) chama 0x01E49996 em 0x01E4C924 - inclusive no editor de nome com o cursor no comeco -
+# e o digito (16) chama 0x01E4A0FE em 0x01E4B9FA; os dois devolvem em r0 o que o bipe de 0x01E4D59C usa.
+CHAMADAS_LIVRE += ((0x01E4C924, 0x01E49996, 'gancho_menu_ok', 'menu: OK abre o grupo'),
+                   (0x01E4B9FA, 0x01E4A0FE, 'gancho_menu_digito', 'menu: o numero digitado, de 1'))
+# O EXIT fora da edicao: 0x01E4D4F4 desvia para 0x01E4D54A quando nao edita, e dali o menu fecha
+# (0x01E3C29C) e segue ao bipe de 0x01E4D59A. O "r0 = 349" do comeco vira um goto para o desvio, que
+# volta aos grupos e segue ao mesmo bipe, ou refaz a instrucao e volta. (sitio, bytes cobertos, desvio,
+# gancho, onde segue quando o gancho resolve, o que e.)
+MENU_DESVIOS = ((0x01E4D54A, bytes.fromhex('40e05d01'), 'desvio_menu_sai', 'b_menu_sai', 0x01E4D59A,
+                 'menu: EXIT dentro de um grupo volta aos grupos'),)
+# v55: o OK editando, depois do set (0x01E49A00; so 0x01E49A0A desvia para 0x01E49A7A, e o set nulo pula
+# para 0x01E49A98): em 0x01E49A86, no modo de menu, o firmware zera o estado da recepcao (b[0x15367]) e
+# fecha a edicao, e em 0x01E49C7C redesenha e volta. Nos itens de marcar varios o desvio zera o estado
+# e segue direto para 0x01E49C7C, e a edicao continua.
+MENU_DESVIOS += ((0x01E49A86, bytes.fromhex('40e0e70c'), 'desvio_menu_marca', 'b_menu_marca', 0x01E49C7C,
+                  'menu: OK nos itens de marcar varios continua editando'),)
+MENU_SIMBOLOS = ('menu_abre', 'gancho_menu_ok', 'gancho_menu_digito', 'desvio_menu_sai', 'b_menu_sai',
+                 'desvio_menu_marca', 'b_menu_marca', 'nome_tamanho', 'nome_para_editor')
 # Instrucoes trocadas por uma chamada e nop no resto: na ida do PTT, a leitura do TX-A/B ("r0 = 1279;
 # r0 = b[r4+r0]", 0x01E43F92) vira "call gancho_tx_abc; nop; nop". O r0 que ele devolve e o que o
 # trecho de fabrica testa em seguida (0x01E43F9A); r1..r3 sao escritos antes de lidos, e o r4 (a base
@@ -583,9 +645,10 @@ ESPECTRO_B = (tuple(sorted({g for _, _, g, _ in ESPECTRO_B_CHAMADAS}))
               + tuple(n for _, _, n, _ in ESPECTRO_B_FUNCOES))
 NA_LIVRE += ESPECTRO_B
 NA_LIVRE += (TABELA_SIMBOLO,)              # v43: a tabela do menu, dado no .livre
+NA_LIVRE += (TEXTOS_SIMBOLO,) + MENU_SIMBOLOS  # v52 e v53: o editor de nome e os grupos do menu
+PRECISA += MENU_SIMBOLOS
 # v44: o WATCH e o TRIPLE do bancos.c tambem moram no .livre (a area do fim da imagem nao os cabia)
 NA_LIVRE += ('watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
-             'canal_c_le', 'canal_c_grava', 'canal_c_exibe', 'titulo_canal_c',
              'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'gancho_troca_dw', 'gancho_volta_dw', 'gancho_ab',
              'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic', 'gancho_ajustes',
              'gancho_tx_abc', 'gancho_tx_desarma', 'gancho_tx_volta', 'titulo_txabc', 'txabc_opcoes')
@@ -732,52 +795,117 @@ def ordem_da_copia():
     return ordem
 
 
-def monta_tabela(app):
-    """Copia da tabela do menu principal, com os itens dos bancos no meio e nada perdido."""
+def itens_da_copia(app):
+    """Os itens do menu (28 bytes cada), na ordem da copia: os de fabrica que ficam, com os campos de
+    ITENS_MUDADOS trocados, e os nossos, cada um no molde dele."""
     inicio = TABELA - BASE_APP
     original = app[inicio:inicio + ITENS_ORIGINAIS * TAM_ITEM]
-    tabela = bytearray()
+    itens = []
     for quem in ordem_da_copia():
+        molde = quem if isinstance(quem, int) else quem['molde']
+        item = bytearray(original[molde * TAM_ITEM:(molde + 1) * TAM_ITEM])
         if isinstance(quem, int):
-            o = len(tabela)
-            tabela += original[quem * TAM_ITEM:(quem + 1) * TAM_ITEM]
             for campo, valor in ITENS_MUDADOS.get(quem, {}).items():
                 if campo == 'maximo':
-                    struct.pack_into('<H', tabela, o + 1, valor)
+                    struct.pack_into('<H', item, 1, valor)
                 else:
-                    struct.pack_into('<I', tabela, o + CAMPO[campo], S[valor])
-            continue
-        o = len(tabela)
-        tabela += original[quem['molde'] * TAM_ITEM:(quem['molde'] + 1) * TAM_ITEM]
-        if quem['flags'] is not None:      # None: as do molde (o MDF-C, uma lista como o MDF-A)
-            tabela[o] = quem['flags']
-        struct.pack_into('<H', tabela, o + 1, quem['maximo'])
-        for campo, chave in (('get', quem['get']), ('set', quem['set']), ('nome', quem['titulo']),
-                             ('nome_cn', quem['titulo']), ('exibe', quem.get('exibe')),
-                             ('opcoes_cn', quem.get('opcoes_cn'))):
-            if chave:
-                struct.pack_into('<I', tabela, o + CAMPO[campo], S[chave])
-    return bytes(tabela)
+                    struct.pack_into('<I', item, CAMPO[campo], S[valor])
+        else:
+            if quem['flags'] is not None:      # None: as do molde (o MDF-C, uma lista como o MDF-A)
+                item[0] = quem['flags']
+            struct.pack_into('<H', item, 1, quem['maximo'])
+            for campo, chave in (('get', quem['get']), ('set', quem['set']), ('nome', quem['titulo']),
+                                 ('nome_cn', quem['titulo']), ('exibe', quem.get('exibe')),
+                                 ('opcoes_cn', quem.get('opcoes_cn'))):
+                if chave:
+                    struct.pack_into('<I', item, CAMPO[campo], S[chave])
+        itens.append(bytes(item))
+    return itens
 
 
-def livre_com_tabela(tela, tabela):
-    """O .livre com a tabela do menu dentro do vetor menu_tabela (v43), como o montar grava e o
-    conferir espera. O vetor sai do compilador com 0xFF no primeiro byte e zero no resto (o 0xFF o
-    mantem no .rodata): qualquer outra coisa ali e recusada."""
-    o = S[TABELA_SIMBOLO] - LIVRE
-    vazio = b'\xff' + bytes(MENU_VAGAS * TAM_ITEM - 1)
-    if bytes(tela[o:o + len(vazio)]) != vazio:
-        raise SystemExit(f'{S[TABELA_SIMBOLO]:#x} nao e o vetor vazio da tabela do menu')
-    if len(tabela) > len(vazio):
-        raise SystemExit(f'a tabela tem {len(tabela) // TAM_ITEM} itens e o vetor so tem {MENU_VAGAS} vagas')
+def texto_em(endereco, app, codigo, tela):
+    """A cadeia em `endereco` como o radio a mostra: no app.bin (com a revisao dos TEXTOS), no .text
+    (codigo) ou no .livre (tela)."""
+    for e, _, novo in TEXTOS if TEXTOS_REVISADOS else ():
+        if e == endereco:
+            return novo
+    # o .livre primeiro: ele fica dentro da faixa do app.bin, no lugar dos decodificadores
+    for base, dados in ((LIVRE, tela), (ENDERECO_CODIGO, codigo), (BASE_APP, app)):
+        o = endereco - base
+        if 0 <= o < len(dados):
+            return bytes(dados[o:dados.index(0, o)]).decode('latin1')
+    raise SystemExit(f'nome de item fora do app, do .text e do .livre: {endereco:#x}')
+
+
+def monta_menu(app, codigo, tela):
+    """A tabela do menu (v53: os grupos, e depois os itens de cada grupo, na ordem dos grupos) e o
+    menu_textos (a quantidade de grupos e de posicoes da tabela, uma marca por posicao - v55 -, as
+    listas com os nomes dos itens de cada grupo e os nomes dos grupos), grupos e itens em ordem
+    alfabetica. Cada grupo e um item de lista sem get nem set (como o
+    RESET de fabrica: com o get nulo, a preparacao do item zera valor e cursor, 0x01E485C8), com a
+    quantidade de itens no maximo e os nomes deles nas opcoes."""
+    itens = {}
+    for item in itens_da_copia(app):
+        nome = texto_em(struct.unpack_from('<I', item, CAMPO['nome'])[0], app, codigo, tela)
+        if nome in itens:
+            raise SystemExit(f'dois itens de menu chamados {nome}')
+        itens[nome] = item
+    listados = [n for g in GRUPOS.values() for n in g]
+    erros = ([f'{n} em mais de um grupo' for n in sorted(set(listados)) if listados.count(n) > 1]
+             + [f'{n} sem grupo' for n in sorted(set(itens) - set(listados))]
+             + [f'{n} nao e item do menu' for n in sorted(set(listados) - set(itens))]
+             + [f'o grupo {g} tem {len(n)} itens' for g, n in GRUPOS.items()
+                if not 2 <= len(n) <= ITENS_POR_GRUPO])
+    erros += [f'marca para {g}/{n}, que nao e item do grupo' for g, n in MENU_MARCAS if n not in GRUPOS.get(g, ())]
+    if erros:
+        raise SystemExit('grupos do menu: ' + '; '.join(erros))
+    grupos = sorted(GRUPOS)
+    base = S[TEXTOS_SIMBOLO]
+    posicoes = len(grupos) + len(itens)
+    textos = bytearray([len(grupos), posicoes, 0, 0]) + bytes(len(grupos))
+    for g in grupos:
+        textos += bytes(MENU_MARCAS.get((g, n), 0) for n in sorted(GRUPOS[g]))
+    textos += bytes(-len(textos) % 4)                 # as listas sao de ponteiros: alinhadas em 4
+    listas = []
+    for g in grupos:
+        listas.append(base + len(textos))
+        for n in sorted(GRUPOS[g]):
+            textos += itens[n][CAMPO['nome']:CAMPO['nome'] + 4]
+    tabela = bytearray()
+    for g, lista in zip(grupos, listas):
+        item = bytearray(TAM_ITEM)
+        struct.pack_into('<H', item, 1, len(GRUPOS[g]))
+        for campo, valor in (('nome', base + len(textos)), ('nome_cn', base + len(textos)),
+                             ('exibe', lista), ('opcoes_cn', lista)):
+            struct.pack_into('<I', item, CAMPO[campo], valor)
+        textos += g.encode('ascii') + b'\0'
+        tabela += item
+    for g in grupos:
+        for n in sorted(GRUPOS[g]):
+            tabela += itens[n]
+    return bytes(tabela), bytes(textos)
+
+
+def livre_com_menu(tela, tabela, textos):
+    """O .livre com a tabela do menu no vetor menu_tabela (v43) e os textos dos grupos no menu_textos
+    (v53), como o montar grava e o conferir espera. Os vetores saem do compilador com 0xFF no primeiro
+    byte e zero no resto (o 0xFF os mantem no .rodata): qualquer outra coisa ali e recusada."""
     tela = bytearray(tela)
-    tela[o:o + len(tabela)] = tabela
+    for simbolo, vagas, dados in ((TABELA_SIMBOLO, MENU_VAGAS * TAM_ITEM, tabela),
+                                  (TEXTOS_SIMBOLO, TEXTOS_VAGAS, textos)):
+        o = S[simbolo] - LIVRE
+        vazio = b'\xff' + bytes(vagas - 1)
+        if bytes(tela[o:o + len(vazio)]) != vazio:
+            raise SystemExit(f'{simbolo} ({S[simbolo]:#x}) nao e o vetor vazio')
+        if len(dados) > vagas:
+            raise SystemExit(f'{simbolo}: {len(dados)} bytes, e o vetor so tem {vagas}')
+        tela[o:o + len(dados)] = dados
     return bytes(tela)
 
 
 def monta_ponteiro():
-    """"r5 = menu_tabela" (c5 ff + 32 bits), no lugar de "r0 = 13368; r5 = r6 + r0"."""
-    return b'\xc5\xff' + struct.pack('<I', S[TABELA_SIMBOLO])
+    """"call menu_abre; r5 = r0" (v53), no lugar de "r0 = 13368; r5 = r6 + r0"."""
+    return monta_call(PONTEIRO_EM, S['menu_abre']) + R5_R0
 
 
 def monta_contagem(itens):
@@ -805,9 +933,9 @@ def main():
     blob = open(codigo, 'rb').read()
     print(f'  .text ligado para {confere_ligacao(codigo, blob):#x} = onde o codigo e gravado: ok')
     tela = secao_ligada(codigo, '.livre', LIVRE, LIVRE_FIM)
-    tabela = monta_tabela(app)
+    tabela, textos = monta_menu(app, blob, tela)
     if MENU_NOVO:
-        tela = livre_com_tabela(tela, tabela)
+        tela = livre_com_menu(tela, tabela, textos)
     vozes = secao_ligada(codigo, '.vozes', VOZES, VOZES_ACEITAS_FIM)
 
     # Monta a lista de escritas no app.bin e passa pela trava antes de tocar em qualquer byte.
@@ -821,6 +949,7 @@ def main():
         escritas += [(s, 4, f'espectro B: {d}') for s, _, _, d in ESPECTRO_B_CHAMADAS]
         escritas += [(e, 4, f'espectro B: {d}') for e, _, _, d in ESPECTRO_B_FUNCOES]
     escritas += [(s, len(a), f'vozes: {d}') for s, a, _, d in VOZES_REMENDOS]
+    escritas += [(s, len(a), f'editor de nome: {d}') for s, a, _, d in EDITOR_REMENDOS]
     escritas += [(ROGER_DESVIO_EM, 4, 'roger: valores 3 e 4 no caminho do BEEP'),
                  (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
                  (SCRAMBLE_EM, len(SCRAMBLE_ANTES), 'scramble: frequencia pelo valor')]
@@ -836,6 +965,7 @@ def main():
     if REALCE:
         escritas += [(e, 4, f'gancho do realce ({o})') for e, o in REALCE_SITIOS_GANCHO]
     escritas += [(e, 4, f'tela B: {o}') for e, _, _, _, o in TELA_DESVIOS]
+    escritas += [(s_, 4, o_) for s_, _, _, _, _, o_ in MENU_DESVIOS]
     escritas += [(s_, 4, o_) for s_, _, o_ in ENVIA_SITIOS]
     escritas += [(s_, 4, o_) for s_, o_ in NOP_SITIOS]
     escritas += [(s_, 4, 'espera da troca de banda do radio') for s_ in ESPERAS_RADIO]
@@ -918,13 +1048,15 @@ def main():
             app[o:o + 4] = monta_goto(entrada, S[nova])
             print(f'  espectro {entrada:#x}: rotina trocada por {nova} ({oque})')
 
-    # 3b2. vozes fora: os tres caminhos que tocam voz viram o "sem voz" de cada um
-    for sitio, antes, depois, oque in VOZES_REMENDOS:
-        o = sitio - BASE_APP
-        if bytes(app[o:o + len(antes)]) != antes:
-            raise SystemExit(f'{sitio:#x} nao e o esperado: {bytes(app[o:o + len(antes)]).hex()}')
-        app[o:o + len(antes)] = depois
-        print(f'  vozes {sitio:#x}: {oque} ({antes.hex()} -> {depois.hex()})')
+    # 3b2. vozes fora: os tres caminhos que tocam voz viram o "sem voz" de cada um; e (v52) a tecla #
+    # do editor de nome
+    for rotulo, remendos in (('vozes', VOZES_REMENDOS), ('editor de nome', EDITOR_REMENDOS)):
+        for sitio, antes, depois, oque in remendos:
+            o = sitio - BASE_APP
+            if bytes(app[o:o + len(antes)]) != antes:
+                raise SystemExit(f'{sitio:#x} nao e o esperado: {bytes(app[o:o + len(antes)]).hex()}')
+            app[o:o + len(antes)] = depois
+            print(f'  {rotulo} {sitio:#x}: {oque} ({antes.hex()} -> {depois.hex()})')
 
     # 3c. roger BEEP 2 e 3: os valores 3 e 4 entram no caminho do BEEP, e o laco dos tons e nosso
     o = ROGER_DESVIO_EM - BASE_APP
@@ -958,19 +1090,19 @@ def main():
             raise SystemExit(f'{PONTEIRO_EM:#x} nao e o calculo esperado do endereco da tabela')
         app[o:o + len(PONTEIRO_ANTES)] = monta_ponteiro()
         print(f'  tabela de menus em {S[TABELA_SIMBOLO]:#x}, na faixa livre ({itens} de {MENU_VAGAS} vagas: '
-              f'os {ITENS_ORIGINAIS - len(ITENS_FORA)} de fabrica que ficam e os '
+              f'{len(GRUPOS)} grupos, os {ITENS_ORIGINAIS - len(ITENS_FORA)} itens de fabrica que ficam e os '
               f'{sum(isinstance(q, dict) for q in ordem_da_copia())} nossos); '
-              f'ponteiro em {PONTEIRO_EM:#x} trocado')
-        for pos, quem in enumerate(ordem_da_copia()):
-            if not isinstance(quem, int):
-                print(f"    item {pos:2d}: \"{quem['nome']}\" (max {quem['maximo']}, molde {quem['molde']})")
+              f'{PONTEIRO_EM:#x} chama menu_abre {S["menu_abre"]:#x}')
+        for g, grupo in enumerate(sorted(GRUPOS)):
+            print(f'    {g + 1:2d} {grupo}: ' + ', '.join(f'{g + 1}-{i + 1} {n}'
+                                                       for i, n in enumerate(sorted(GRUPOS[grupo]))))
 
         o = CONTAGEM_EM - BASE_APP
         antes = bytes(app[o:o + len(CONTAGEM_ANTES)])
         if antes != CONTAGEM_ANTES:
             raise SystemExit(f'{CONTAGEM_EM:#x} nao e a chamada esperada da contagem: {antes.hex()}')
-        app[o:o + len(CONTAGEM_ANTES)] = monta_contagem(itens)
-        print(f'  quantidade de itens {CONTAGEM_EM:#x}: contagem na tabela -> {itens} fixo')
+        app[o:o + len(CONTAGEM_ANTES)] = monta_contagem(len(GRUPOS))
+        print(f'  quantidade de itens {CONTAGEM_EM:#x}: contagem na tabela -> {len(GRUPOS)} fixo (os grupos)')
     else:
         print('  MENU_NOVO desligado: menu de fabrica, sem os itens BANK (corte de diagnostico)')
 
@@ -1014,6 +1146,12 @@ def main():
             raise SystemExit(f'{entrada:#x} nao comeca com {antes.hex()}: {bytes(app[o:o + len(antes)]).hex()}')
         app[o:o + 4] = monta_goto(entrada, S[desvio])
         print(f'  tela B {entrada:#x} -> {desvio} ({S[desvio]:#x}): {oque}')
+    for sitio, antes, desvio, _, feito, oque in MENU_DESVIOS:
+        o = sitio - BASE_APP
+        if bytes(app[o:o + len(antes)]) != antes:
+            raise SystemExit(f'{sitio:#x} nao e {antes.hex()}: {bytes(app[o:o + len(antes)]).hex()}')
+        app[o:o + 4] = monta_goto(sitio, S[desvio])
+        print(f'  {sitio:#x} -> {desvio} ({S[desvio]:#x}), que segue para {feito:#x}: {oque}')
     for sitio, gancho, oque in ENVIA_SITIOS if grava_grupo('envia') else ():
         o = sitio - BASE_APP
         if bytes(app[o:o + 4]) != monta_call(sitio, ENVIA_ERA):

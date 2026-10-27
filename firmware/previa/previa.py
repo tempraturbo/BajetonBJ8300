@@ -33,11 +33,31 @@ def rgb(v):
     return (r << 3 | r >> 2, g << 2 | g >> 4, b << 3 | b >> 2)
 
 
+def menu_grupos_h():
+    """build/menu_grupos.h: os grupos do menu (v53) como o montar.py os monta - grupos e itens em ordem
+    alfabetica -, para a previa desenhar os mesmos nomes sem a tabela do firmware."""
+    sys.path.insert(0, os.path.join(FIRMWARE, 'scripts'))
+    import montar
+    grupos = sorted(montar.GRUPOS)
+    itens = [n for g in grupos for n in sorted(montar.GRUPOS[g])]
+    with open(os.path.join(FIRMWARE, 'build', 'menu_grupos.h'), 'w', encoding='ascii') as f:
+        f.write('/* Gerado pelo previa/previa.py a partir de scripts/montar.py (GRUPOS). */\n')
+        f.write('static const char *const menu_previa_nomes[] = {\n')
+        f.write(''.join(f'    "{n}",\n' for n in grupos + itens))
+        f.write('};\nstatic const unsigned char menu_previa_itens[] = {'
+                + ', '.join(str(len(montar.GRUPOS[g])) for g in grupos) + '};\n')
+        marcas = [0] * len(grupos) + [montar.MENU_MARCAS.get((g, n), 0) for g in grupos
+                                      for n in sorted(montar.GRUPOS[g])]
+        f.write('static const unsigned char menu_previa_marcas[] = {' + ', '.join(map(str, marcas)) + '};\n')
+        f.write(f'#define MENU_PREVIA_GRUPOS {len(grupos)}u\n')
+
+
 def main():
     saida = os.path.abspath(sys.argv[1])
     os.makedirs(saida, exist_ok=True)
     subprocess.run([sys.executable, '-I', os.path.join(FIRMWARE, 'scripts', 'fonte.py')], check=True)
     exe = os.path.join(saida, 'previa.exe')
+    menu_grupos_h()
     subprocess.run([sys.executable, '-m', 'ziglang', 'cc', '-O1', '-Wall', '-Wextra', '-Wno-unused-parameter',
                     '-DPREVIA', '-I', os.path.join(FIRMWARE, 'build'), '-o', exe,
                     os.path.join(AQUI, 'previa.c')], check=True)

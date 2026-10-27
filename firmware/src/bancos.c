@@ -148,6 +148,8 @@ void aplica_mic(void);                    /* o ganho do microfone (v49, MIC GAIN
 #define EDITOR_TAM     (*(volatile u8 *)0x00014A35)          /* quantos caracteres tem o texto */
 #define EDITOR_TAM_MAX (*(volatile u8 *)0x00014A36)
 #define EDITOR_MARCA   (*(volatile u8 *)0x00014A39)          /* 0xAA liga o editor */
+#define EDITOR_MODO    (*(volatile u8 *)0x00014A38)          /* 0 abc, 1 ABC, 2 123 (tecla #, 0x01E4A5AE) */
+#define MODO_ABC       1
 #define EDITOR_TEXTO   ((volatile char *)0x00014A3A)
 #define EDITOR_POS     (*(volatile u8 *)0x00012A74)
 /* Flags de "redesenhar" que a rotina 0x01E41022 do firmware liga quando a tela precisa ser
@@ -830,7 +832,7 @@ void roger_grava(void)
 
 /* ---------- WATCH: quantas frequencias a tela principal mostra (v42) ----------
  * SINGLE mostra so o lado em evidencia, em tela cheia; DUAL e o A/B de sempre; TRIPLE poe uma
- * terceira, a C - um canal da memoria (item CH-C), mostrado como o MDF-C pede -, numa faixa fina
+ * terceira, a C - um canal ou o VFO dela, mostrado como o MDF-C pede -, numa faixa fina
  * embaixo, e o lado que nao esta em evidencia tambem fica fino. Tudo mora no registro do WATCH
  * (struct vigia, setor 0xD2000), que a tela B le a cada desenho (watch_le_tudo).
  *
@@ -840,7 +842,6 @@ void roger_grava(void)
  * O WATCH em SINGLE a desliga, o set do TDR a mantem em 0 enquanto for SINGLE, e a partida a zera
  * de novo, para o caso de um upload do CHIRP a ter religado. */
 DADO_NA_LIVRE const char titulo_watch[] = "WATCH";
-DADO_NA_LIVRE const char titulo_canal_c[] = "CH-C";
 DADO_NA_LIVRE const char titulo_mdf_c[] = "MDF-C";
 DADO_NA_LIVRE const char *const watch_opcoes[3] = {"SINGLE", "DUAL", "TRIPLE"};
 DADO_NA_LIVRE static const u8 watch_valor[3] = {WATCH_SINGLE, WATCH_DUAL, WATCH_TRIPLE};   /* posicao no menu -> modo */
@@ -890,50 +891,12 @@ NA_LIVRE_COD void tdr_grava(void)
     TDR = watch_vista() == WATCH_SINGLE ? 0 : VALOR;
 }
 
-/* CH-C: o canal da C, como o BANK CH percorre os canais (numero, max 960); canal vazio sai com " -". */
-NA_LIVRE_COD char *canal_c_exibe(void)
-{
-    unsigned canal = VALOR;
-
-    SPRINTF(TEXTO, "CH-%03d", canal + 1);
-    if (!canal_existe(canal))
-        acrescenta(TEXTO, " -");
-    return TEXTO;
-}
-
-/* Com a C no lado B (TRIPLE, tecla A/B), o canal dela e o do lado B - as setas o mudam, como em
- * qualquer lado -, e o CH-C le e grava esse; com ela em evidencia e em canal, o canal novo vai para
- * ela ja (em VFO, fica guardado no lado para a tecla VFO/MR, como o de qualquer lado). */
+/* As vagas do lado B: com a C no lado B (TRIPLE, tecla A/B), o canal e o modo dela sao os do lado B, e
+ * as setas e a tecla VFO/MR os mudam como em qualquer lado. Desde a v53 nao ha item de menu para o
+ * canal da C (o CH-C): ela e um lado como o A e o B, e o CHIRP ainda o grava pelo cabo. */
 #define CANAL_DO_B     (*(volatile u16 *)0x00015E10)         /* h[0x15E0C + 4], o canal gravado do lado B */
 #define MODO_LADOS     (*(volatile u8 *)0x00014B86)          /* um nibble por lado: 1 = canal, 0 = VFO */
 #define B_EM_CANAL     ((MODO_LADOS >> 4) == 1)
-
-NA_LIVRE_COD u16 canal_c_le(void)
-{
-    struct vigia v;
-
-    le_vigia(&v);
-    return v.c_no_b ? CANAL_DO_B : v.canal_c < NUM_CANAIS ? v.canal_c : 0;
-}
-
-NA_LIVRE_COD void canal_c_grava(void)
-{
-    struct vigia v;
-    unsigned canal = VALOR;
-
-    if (canal >= NUM_CANAIS)
-        return;
-    le_vigia(&v);
-    v.canal_c = canal;
-    grava_vigia(&v);
-    if (v.c_no_b && LADO_B == 1) {
-        CANAL_DO_B = canal;
-        if (B_EM_CANAL) {
-            PARA_DW();
-            RECARREGA_LADOS();             /* carrega, grava o canal do lado e o log (0x01E3A42A) */
-        }
-    }
-}
 
 /* MDF-C: a exibicao da C. O item usa a tabela de opcoes do MDF-A, e o valor e o mesmo dele. */
 NA_LIVRE_COD u16 mdf_c_le(void)
@@ -959,7 +922,7 @@ NA_LIVRE_COD void mdf_c_grava(void)
  * corrente e decodifica, chamada em 0x01E481CC). A sintonia le o que foi decodificado. Nada disso
  * grava na flash, nem mexe no registro da tela (0x14DC4).
  *
- * Desde a v49 a C e um lado como o A e o B: modo (VFO ou canal), VFO de 32 B e canal (o CH-C). O
+ * Desde a v49 a C e um lado como o A e o B: modo (VFO ou canal), VFO de 32 B e canal. O
  * modo e o canal ficam no registro do WATCH; o VFO, no setor 0xD3000 (struct vfc).
  *
  * A C entra de dois jeitos, sem tocar no motor:
@@ -1217,6 +1180,25 @@ NA_LIVRE_COD __attribute__((noinline)) static void volta_b(struct vigia *v)
     poe_no_b(v->vfo >> 1 & 1, v->canal_b, f.vfo_b);
 }
 
+/* B -> C com a C num canal vazio (apagado, ou nunca escolhido - o registro novo comeca no 1): o
+ * proximo canal que existe, como o DELCH faz com os lados, e sem nenhum a C vai em VFO. Sem isso a
+ * tecla A/B nao chegaria nela, e desde a v53 nao ha o item CH-C para escolher outro canal. */
+NA_LIVRE_COD static void c_alcancavel(struct vigia *v)
+{
+    unsigned c = v->canal_c, i;
+
+    if ((v->vfo & 1) || (c < NUM_CANAIS && canal_existe(c)))
+        return;
+    for (i = 0; i < NUM_CANAIS; i++) {
+        c = c + 1 < NUM_CANAIS ? c + 1 : 0;
+        if (canal_existe(c)) {
+            v->canal_c = c;
+            return;
+        }
+    }
+    v->vfo |= 1;
+}
+
 /* A tecla A/B (0x01E4D44C, no lugar de 0x01E40E52(1)). Fora do TRIPLE, a troca de sempre - e, se a C
  * ficou no lado B (o WATCH saiu do TRIPLE com ela em evidencia), o B volta. */
 NA_LIVRE_COD void gancho_ab(void)
@@ -1237,12 +1219,13 @@ NA_LIVRE_COD void gancho_ab(void)
         TROCA_AB(1);
         return;
     }
-    if (v.modo == WATCH_TRIPLE && ((v.vfo & 1) || canal_existe(v.canal_c))) {
+    if (v.modo == WATCH_TRIPLE) {
+        c_alcancavel(&v);
         vai_c(&v);                           /* B -> C */
         TELA_INTEIRA();                      /* a remontagem nao redesenha; a troca de fabrica, sim (0x01E40EF4) */
         return;
     }
-    TROCA_AB(1);                             /* B -> A: fora do TRIPLE, ou a C em canal vazio */
+    TROCA_AB(1);                             /* B -> A: fora do TRIPLE */
 }
 
 /* ---------- MIC GAIN: o ganho do microfone (v49) ----------
@@ -1506,19 +1489,50 @@ void gancho_cabo(unsigned grava)
     DADOS_CABO(grava);
 }
 
-/* ---------- textos ---------- */
-const char titulo_bank[] = "BANK";
-const char titulo_nome[] = "BANK NAME";
-const char titulo_canal[] = "BANK CH";
+/* ---------- o editor de nome: o tamanho do nome e so ABC/123 (v52) ----------
+ * O nome tem sempre 12 bytes na memoria, e o que sobra o radio completa com 0 (set do CH-NAME,
+ * 0x01E3C7BE) e o CHIRP com 0xFF. O firmware para no primeiro dos dois (a exibicao do CH-NAME
+ * 0x01E3C6E8, a tela principal, o lado C), menos o get do CH-NAME (0x01E3C732): ele media o nome com o
+ * strlen da ROM e abria o editor com 12/12 e os 0xFF como letras. As duas chamadas da ROM no get passam
+ * por aqui, e o BANK NAME usa as mesmas. */
 
-/* Le o nome do banco para o destino (TAM_NOME+1 bytes), terminado em zero; fica vazio se o banco
- * ainda nao tem nome. Quem precisa de um padrao visivel e so o editor, que poe "BANK n". */
-static void le_nome(unsigned n, char *destino)
+/* As letras do nome, ate o primeiro 0 ou 0xFF; no lugar do strlen do get do CH-NAME (0x01E3C784), que
+ * grava o resultado em b[0x14A35]. */
+NA_LIVRE_COD unsigned nome_tamanho(const char *nome)
+{
+    unsigned n;
+
+    for (n = 0; n < TAM_NOME && nome[n] && (u8)nome[n] != 0xFF; n++)
+        ;
+    return n;
+}
+
+/* No lugar da copia do nome para o editor no get do CH-NAME (0x01E3C792; tam = letras + 1, contando o
+ * fim): as letras e zero ate o fim do buffer - o "%15s" de fabrica (0x01E476BE, 0x01E48FBA) le o texto
+ * como cadeia, e a insercao de letra (0x01E49664) nao escreve o fim. E o editor abre em ABC. */
+NA_LIVRE_COD void nome_para_editor(char *destino, const char *nome, unsigned tam)
 {
     zera(destino, TAM_NOME + 1);
+    COPIA_MEM(destino, nome, tam - 1);
+    EDITOR_MODO = MODO_ABC;
+}
+
+/* ---------- textos ---------- */
+const char titulo_bank[] = "BANK";
+const char titulo_nome[] = "NAME";            /* dentro do grupo BANKS (v53): BANK, CHANNEL e NAME */
+const char titulo_canal[] = "CHANNEL";
+
+/* Le o nome do banco para o destino (TAM_NOME+1 bytes), com zero do fim do nome ao fim do buffer, e
+ * devolve quantas letras tem; fica vazio se o banco ainda nao tem nome. Quem precisa de um padrao
+ * visivel e so o editor, que poe "BANK n". */
+static unsigned le_nome(unsigned n, char *destino)
+{
+    unsigned tam;
+
     LE_FLASH(POS_NOME(n), destino, TAM_NOME);
-    if ((u8)destino[0] <= ' ' || (u8)destino[0] == 0xFF)
-        *destino = 0;                      /* cadeia vazia: o resto do buffer ja nao e lido */
+    tam = (u8)destino[0] <= ' ' ? 0 : nome_tamanho(destino);
+    zera(destino + tam, TAM_NOME + 1 - tam);
+    return tam;
 }
 
 /* ---------- item BANK: escolhe o banco e liga/desliga (flags 0x80) ---------- */
@@ -1584,16 +1598,13 @@ char *nome_exibe(void)
 u16 nome_le(void)
 {
     struct cabeca c;
-    unsigned i;
 
     le_cabeca(&c);
     EDITOR_TAM_MAX = TAM_NOME;
     EDITOR_MARCA = 0xAA;
     EDITOR_POS = 0;
-    le_nome(c.escolhido, (char *)EDITOR_TEXTO);   /* banco sem nome abre o editor vazio */
-    for (i = 0; i < TAM_NOME && EDITOR_TEXTO[i]; i++)
-        ;
-    EDITOR_TAM = (u8)i;
+    EDITOR_MODO = MODO_ABC;
+    EDITOR_TAM = le_nome(c.escolhido, (char *)EDITOR_TEXTO);   /* banco sem nome abre o editor vazio */
     return 0;
 }
 

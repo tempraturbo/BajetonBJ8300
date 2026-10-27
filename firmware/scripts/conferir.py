@@ -49,7 +49,6 @@ def partes(caminho):
 
 dados, entradas, chave, app = partes(novo)
 dados_velhos, entradas_velhas, _, app_velho = partes(original)
-tabela_esperada = montar.monta_tabela(app_velho)      # a copia certa sai do firmware de fabrica
 fonte = ''.join(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', f),
                      encoding='utf-8').read() for f in ('bancos.c', 'tela.c', 'telas.c'))
 declaradas = {int(e, 16): n for n, e in re.findall(r'^FIRMWARE\((\w+), (0x[0-9A-Fa-f]+)\)', fonte, re.M)}
@@ -89,11 +88,15 @@ print(f'1. CRCs das {len(entradas)} entradas: ' + ('ok' if not erros else 'FALHO
 # 2. codigo novo e tabela presentes, decifrados, nas 6 imagens
 elf = os.path.splitext(codigo)[0] + '.elf'
 livre_em, tela = montar.codigo_ligado(elf, '.livre')
-# v43: a tabela do menu mora no vetor menu_tabela do .livre - o que vai a flash e o .livre com ela
-tela_gravada = montar.livre_com_tabela(tela, tabela_esperada) if montar.MENU_NOVO else tela
+# a copia certa da tabela sai do firmware de fabrica (e os nomes dos nossos itens, do .text e do .livre)
+tabela_esperada, textos_esperados = montar.monta_menu(app_velho, blob, tela)
+# v43: a tabela do menu mora no vetor menu_tabela do .livre, e desde a v53 os textos dos grupos no
+# menu_textos - o que vai a flash e o .livre com os dois
+tela_gravada = montar.livre_com_menu(tela, tabela_esperada, textos_esperados) if montar.MENU_NOVO else tela
 blocos = [('codigo', montar.ENDERECO_CODIGO, blob), ('tela B', livre_em, tela_gravada)]
 if montar.MENU_NOVO:
-    blocos.append(('tabela', montar.S[montar.TABELA_SIMBOLO], tabela_esperada))
+    blocos += [('tabela', montar.S[montar.TABELA_SIMBOLO], tabela_esperada),
+               ('textos dos grupos', montar.S[montar.TEXTOS_SIMBOLO], textos_esperados)]
 for nome, endereco, esperado in blocos:
     copias = 0
     for e in entradas:
@@ -172,7 +175,9 @@ sitios_vozes = ({montar.ESPECTRO_EM} | {s for s, _, _, _ in montar.ESPECTRO_CHAM
 sitios_livre = ({s for s, _ in montar.REALCE_SITIOS_GANCHO} | {s for s, _ in montar.LIMPA_SITIOS} | {s_ for s_, _, _ in montar.ENVIA_SITIOS}
                | {e for e, _, _, _, _ in montar.TELA_DESVIOS} | {s for s, _, _, _ in montar.ESPECTRO_B_CHAMADAS}
                | {e for e, _, _, _ in montar.ESPECTRO_B_FUNCOES}
-               | {s for s, _, _, _ in montar.CHAMADAS_LIVRE + montar.GOTOS_LIVRE + montar.CHAMADAS_NO_LUGAR})
+               | {s for s, _, _, _ in montar.CHAMADAS_LIVRE + montar.GOTOS_LIVRE + montar.CHAMADAS_NO_LUGAR}
+               | {s for s, _, _, _, _, _ in montar.MENU_DESVIOS}
+               | ({montar.PONTEIRO_EM} if montar.MENU_NOVO else set()))   # v53: call menu_abre
 imagens = []
 for e in entradas:
     if e['type'] in jlfw.FLASH_TYPES:
@@ -429,9 +434,13 @@ if faltando:
 if sobrando:
     erros.append(f'itens que deviam sair continuam na tabela: {sobrando}')
 
-for pos, quem in enumerate(montar.ordem_da_copia() if montar.MENU_NOVO else []):
+# o item nosso e achado pelo nome (desde a v53 a posicao e a do grupo dele, em ordem alfabetica)
+posicao = {struct.unpack_from('<I', tabela_esperada, o + montar.CAMPO['nome'])[0]: o // T
+           for o in range(0, len(tabela_esperada), T)}
+for quem in montar.ordem_da_copia() if montar.MENU_NOVO else []:
     if isinstance(quem, int):
         continue
+    pos = posicao.get(montar.S[quem['titulo']], 0)
     o = pos * T
     flags = tabela_esperada[o]
     maximo = struct.unpack_from('<H', tabela_esperada, o + 1)[0]
@@ -450,14 +459,71 @@ for pos, quem in enumerate(montar.ordem_da_copia() if montar.MENU_NOVO else []):
     if not bate:
         erros.append(f"item {quem['nome']} errado")
 
-itens = len(tabela_esperada) // T
+# 3b. os grupos do menu (v53), lidos da tabela e dos textos GRAVADOS na imagem, com a regra do C
+# (telas.c, menu_inicio): os grupos primeiro, os itens do grupo g depois dos grupos e dos itens dos
+# anteriores, a quantidade no maximo do item do grupo e a de grupos no byte 0 do menu_textos. Cada
+# item de fabrica que fica e cada um dos nossos aparece uma vez so, dentro de um grupo; grupos e itens
+# em ordem alfabetica; o grupo e uma lista sem get nem set cujas opcoes sao os nomes dos itens dele.
+if montar.MENU_NOVO:
+    def gravado(endereco, n):
+        o = endereco - montar.BASE_APP
+        return bytes(app[o:o + n])
+
+    tab = gravado(montar.S[montar.TABELA_SIMBOLO], montar.MENU_VAGAS * T)
+    txt = gravado(montar.S[montar.TEXTOS_SIMBOLO], montar.TEXTOS_VAGAS)
+    campo = lambda p, c: struct.unpack_from('<I', tab, p * T + montar.CAMPO[c])[0]
+
+    def cadeia(endereco):
+        return montar.texto_em(endereco, app_velho, blob, tela)
+
+    grupos = txt[0]
+    problemas = [] if grupos == len(montar.GRUPOS) else [f'{grupos} grupos no menu_textos']
+    vistos, nomes_grupos, p = [], [], grupos
+    for g in range(grupos):
+        n = struct.unpack_from('<H', tab, g * T + 1)[0]
+        o = campo(g, 'nome') - montar.S[montar.TEXTOS_SIMBOLO]
+        nome = txt[o:txt.index(0, o)].decode('latin1') if 0 <= o < len(txt) else '?'
+        nomes_grupos.append(nome)
+        filhos = [cadeia(campo(p + i, 'nome')) for i in range(n)]
+        lista = campo(g, 'exibe') - montar.S[montar.TEXTOS_SIMBOLO]
+        opcoes = [struct.unpack_from('<I', txt, lista + 4 * i)[0] for i in range(n)] if 0 <= lista < len(txt) else []
+        if (tab[g * T] != 0 or campo(g, 'get') or campo(g, 'set') or campo(g, 'nome_cn') != campo(g, 'nome')
+                or campo(g, 'opcoes_cn') != campo(g, 'exibe') or tab[g * T + 0x1B]
+                or opcoes != [campo(p + i, 'nome') for i in range(n)]):
+            problemas.append(f'o item do grupo {nome} nao e uma lista sem get nem set com os nomes dos itens')
+        if filhos != sorted(filhos) or not 2 <= n <= montar.ITENS_POR_GRUPO:
+            problemas.append(f'{nome}: {n} itens, ou fora de ordem: {filhos}')
+        marcas = [txt[4 + p + i] for i in range(n)]       # v55: SEM_VALOR e VARIOS, por posicao
+        if marcas != [montar.MENU_MARCAS.get((nome, f), 0) for f in filhos] or any(txt[4 + g:5 + g]):
+            problemas.append(f'{nome}: marcas {marcas} erradas')
+        print(f'3b. {g + 1:2d} {nome:9s} ' + ', '.join(f + ('*' * bool(m)) for f, m in zip(filhos, marcas)))
+        vistos += [bytes(tab[(p + i) * T:(p + i + 1) * T]) for i in range(n)]
+        p += n
+    if nomes_grupos != sorted(nomes_grupos):
+        problemas.append(f'grupos fora de ordem: {nomes_grupos}')
+    certos = [com_mudancas(i) for i in esperados] + [tabela_esperada[o_ * T:(o_ + 1) * T]
+                                                      for q in montar.ordem_da_copia() if isinstance(q, dict)
+                                                      for o_ in [posicao.get(montar.S[q['titulo']], 0)]]
+    if sorted(vistos) != sorted(certos):
+        problemas.append('os itens dos grupos nao sao, uma vez cada, os de fabrica que ficam e os nossos')
+    if any(tab[p * T:]):
+        problemas.append('sobra coisa na tabela depois do ultimo item do ultimo grupo')
+    if txt[1] != p:
+        problemas.append(f'{txt[1]} posicoes no menu_textos, e a tabela tem {p}')
+    print(f'3b. {grupos} grupos com {len(vistos)} itens, da tabela gravada: '
+          + ('ok' if not problemas else 'FALHOU'))
+    for p_ in problemas:
+        print('    ' + p_)
+        erros.append('grupos do menu: ' + p_)
+
+itens = len(montar.GRUPOS)
 if not montar.MENU_NOVO:
     print('   (MENU_NOVO desligado: tabela, contagem e itens nao entram neste firmware)')
 o = montar.CONTAGEM_EM - montar.BASE_APP
 atual = bytes(app[o:o + len(montar.CONTAGEM_ANTES)])
 ok = atual == montar.monta_contagem(itens) or not montar.MENU_NOVO
 if montar.MENU_NOVO:
-    print(f'   quantidade de itens fixada em {montar.CONTAGEM_EM:#x} = {itens}: '
+    print(f'   quantidade de itens fixada em {montar.CONTAGEM_EM:#x} = {itens} (os grupos): '
           + ('ok' if ok else f'FALHOU ({atual.hex()})'))
 if not ok:
     erros.append('quantidade de itens errada')
@@ -529,7 +595,8 @@ atual = bytes(app[o:o + len(montar.PONTEIRO_ANTES)])
 esperado = montar.monta_ponteiro() if montar.MENU_NOVO else montar.PONTEIRO_ANTES
 ok = bytes(app_velho[o:o + len(montar.PONTEIRO_ANTES)]) == montar.PONTEIRO_ANTES and atual == esperado
 print(f'4b. ponteiro da tabela em {montar.PONTEIRO_EM:#x}: de fabrica "r0 = 13368; r5 = r6 + r0", agora '
-      f'"r5 = {montar.S[montar.TABELA_SIMBOLO]:#x}" (menu_tabela, no .livre): ' + ('ok' if ok else f'FALHOU ({atual.hex()})'))
+      f'"call menu_abre ({montar.S["menu_abre"]:#x}); r5 = r0" (v53: a tabela dos grupos, no .livre): '
+      + ('ok' if ok else f'FALHOU ({atual.hex()})'))
 if not ok:
     erros.append('ponteiro da tabela errado')
 
@@ -758,6 +825,40 @@ if not ok:
     erros.append('esperas da troca de banda do radio erradas')
 previsto_tela += [(e, e + 3, 'espera da troca de banda') for e in montar.ESPERAS_RADIO]
 
+# 4s. o editor de nome so com ABC e 123 (v52): o "r0 = 0" da tecla # vira "r0 = 1". As duas chamadas da
+# ROM no get do CH-NAME (o tamanho e a copia do nome) estao na 4r, com as outras chamadas trocadas.
+for sitio, antes, depois, oque in montar.EDITOR_REMENDOS:
+    o = sitio - montar.BASE_APP
+    ok = bytes(app_velho[o:o + len(antes)]) == antes and bytes(app[o:o + len(antes)]) == depois
+    print(f'4s. editor de nome {sitio:#x}: {oque}: ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append(f'editor de nome: remendo errado em {sitio:#x}')
+previsto_tela += [(s_, s_ + len(a_) - 1, 'editor de nome: ' + d_) for s_, a_, _, d_ in montar.EDITOR_REMENDOS]
+
+# 4t. o EXIT dos grupos do menu (v53): no sitio, de fabrica os bytes cobertos e, remendado, um goto para
+# o desvio; o desvio, no .livre, e exatamente o da 4m com "goto feito" no lugar do rts: guarda rets e
+# r0..r3, chama o gancho, desvia para o caminho de fabrica se ele devolver 0 (00 44: 8 adiante), senao
+# restaura e segue para onde a saida de fabrica tambem termina; o caminho de fabrica restaura, refaz os
+# bytes cobertos e volta para logo depois deles.
+for sitio, cobertos, desvio, gancho, feito, oque in montar.MENU_DESVIOS:
+    o, d = sitio - montar.BASE_APP, montar.S[desvio]
+    v, fab = d - livre_em, montar.S[desvio + '_fabrica'] - livre_em
+    volta = montar.S[desvio + '_fabrica'] + 4 + len(cobertos)
+    certo = (bytes(app_velho[o:o + len(cobertos)]) == cobertos
+             and bytes(app[o:o + 4]) == montar.monta_goto(sitio, d) and na_livre(d)
+             and tela[v:v + 4] == bytes.fromhex('10046004')
+             and tela[v + 4:v + 8] == montar.monta_call(d + 4, montar.S[gancho])
+             and tela[v + 8:v + 14] == bytes.fromhex('004440048804')
+             and tela[v + 14:v + 18] == montar.monta_goto(d + 14, feito) and fab == v + 18
+             and tela[fab:fab + 4] == bytes.fromhex('40048804')
+             and tela[fab + 4:fab + 4 + len(cobertos)] == cobertos
+             and tela[fab + 4 + len(cobertos):fab + 8 + len(cobertos)] == montar.monta_goto(volta, sitio + len(cobertos)))
+    print(f'4t. {sitio:#x} -> {desvio} -> {gancho}, resolvido segue para {feito:#x} ({oque}): '
+          + ('ok' if certo else 'FALHOU'))
+    if not certo:
+        erros.append(f'desvio errado em {sitio:#x} ({oque})')
+previsto_tela += [(s_, s_ + 3, o_) for s_, _, _, _, _, o_ in montar.MENU_DESVIOS]
+
 # 4n. o codigo novo nao tem dados em RAM (.data, .bss): nao ha RAM nossa, e o bancos.ld so poe codigo e
 # tabelas na flash. Uma variavel global sem const viraria uma dessas secoes e cairia num lugar qualquer.
 elf_bytes = open(os.path.splitext(codigo)[0] + '.elf', 'rb').read()
@@ -876,6 +977,9 @@ radio_ram = [
     ('RADIO_ITEM', imediato(0x01E49344) + (imediato16(0x01E49340) << 2)),
     ('DIGITA_MODO', imediato(0x01E49094) + imediato16(0x01E4909C)),
     ('EDITOR_MODO', imediato(0x01E48728) + imediato16(0x01E48724)),
+    # v56: a tabela do menu do radio de FM e AM, que a entrada dele carrega (0x01E49026); a de SSB e CW
+    # e ela + 532 (0x01E4902C), e a saida as compara (0x01E4D552, 0x01E4D55C: r6 + 5640 e r6 + 6172)
+    ('RADIO_FM_AM', imediato(0x01E49026)),
     # v42: a dupla escuta, que o set do TDR e o WATCH mantem em 0 no SINGLE: o get do item TDR
     ('TDR', imediato(0x01E39570) + imediato16(0x01E3956C)),
     # v40, a conferencia dos ajustes do radio

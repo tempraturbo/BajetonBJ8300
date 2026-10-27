@@ -424,7 +424,7 @@ hook runs it whole and silences its `envia()`, instead of repeating the logic.
 
 | Where | How | Hook | What screen B does |
 |---|---|---|---|
-| `0x01E48E82`, `0x01E48ECA` (menu engine `0x01E489E0`) | `envia()` replaced | `gancho_menu_titulo`, `gancho_menu_linha` | the band of the title or of the row the engine built |
+| `0x01E48E82`, `0x01E48ECA` (menu engine `0x01E489E0`) | `envia()` replaced | `gancho_menu_titulo`, `gancho_menu_linha` | the band of the title or of the row the engine built; in the folder window (v53), the title draws the whole window and the rows nothing ([section 15](#15-the-menu-folder-window-v53-to-v57)) |
 | `0x01E476E4` (signal loop) | `envia()` replaced | `gancho_menu_pisca` | nothing in the menu: all of the stock blinking goes out through it |
 | `0x01E3B2C4`, the info line | detour | `b_lado` | in the menu and the QT scan, the summary of the highlighted side |
 | `0x01E48720`, the editor's mode indicator | detour | `b_editor_modo` | the whole name editor |
@@ -439,6 +439,7 @@ hook runs it whole and silences its `envia()`, instead of repeating the logic.
 | `0x01E45A82(running)`, the QT scan | detour | `b_scanqt` | the title and the state |
 | `0x01E4DA88`, `0x01E4A93C` (DTMF) | `envia()` replaced | `gancho_dtmf` | the DTMF box, in place of the card of the side in use |
 | `0x01E55F40` (power-on) | `envia()` replaced | `gancho_tensao` | the voltage card |
+| `0x01E4CF1C`, the voltage box with 0 held (v52) | `envia()` replaced | `gancho_tensao_tecla` | the same card, over the screen |
 | `0x01E4CFE2`, the clear on entering the spectrum (v41) | replaced call | `gancho_espectro_limpa` | the background and the top bar |
 | `0x01E45D96`, `0x01E4AFC2`, `0x01E4B04C`, `0x01E4ADFE`, `0x01E4AB2A` (spectrum) | routine replaced whole | `b_esp_freq`, `b_esp_digitos`, `b_esp_modo`, `b_esp_dbm`, `b_esp_eixo` | the frequency or the digits, AM/FM, the dBm and the ends |
 | the 5 windows of the graph slices and the threshold line (`0x01E4D72E`) | replaced call | `gancho_fatia`, `gancho_limite` | the panel with the grid and the line dashed in amber |
@@ -453,8 +454,8 @@ factory one would draw it over the graph).
 stored value, marker 2), two spaces (another option, 1) or nothing (0: the type-7 name and "NONE");
 type 8 never has a marker. Screen B recognizes the marker by the content. The other data: item
 number `b[0x14BFA]`, cursor `b[0x14C10]`, editing `b[0x14BF9]` and type `b[0x14C00]` (0 and 4 to 6
-list, 2 tone with typing, 3 frequency, 7 name, 8 no marker, 13 signed number). BANK and BANK CH mark
-the option that is on with a `0x01` byte at the end, which screen B paints amber.
+list, 2 tone with typing, 3 frequency, 7 name, 8 no marker, 13 signed number). BANK and the BANKS
+CHANNEL mark the option that is on with a `0x01` byte at the end, which screen B paints amber.
 
 **The blinking.** In the menu, the signal loop (`0x01E4622A`) counts `b[0x14C1A]` from 0 to 7, once
 per pass. At 4 it draws, at 0 it erases. Outside editing it blinks the item number at (133, 57)
@@ -468,6 +469,9 @@ maximum at `b[0x14A36]` (written by the item's get) and the mode at `b[0x14A38]`
 clear (`0x01E49B1C`), and after every key the engine runs whole (`0x01E4A0FE` ends in
 `goto 0x01E489E0`). The already-drawn mode (`b[0x14686]`) does not go back to `0xFF` on that path, so
 it cannot tell whether the editor just opened: the detour draws the whole editor on every pass.
+Since v52 there are only `ABC` and `123`, and the editor opens in `ABC`: `#` goes back to 1 instead of
+0 (`0x01E4A5AA`), and the CH-NAME and BANK NAME gets set mode 1. The CH-NAME get measures the name up
+to the first 0 or `0xFF` (CHIRP fills the name with `0xFF`), no longer with the ROM strlen.
 
 **Radio.** The addresses, each one rebuilt from the stock bytes by `conferir.py`'s `4p`:
 
@@ -503,7 +507,10 @@ up.
 
 **Voltage at power-on** (`0x01E55E9C`, with the power-on message set to voltage): boot reads the
 ADC at `0x01E45FB0` and does × 444 / 1000, in tenths of a volt. The stock text is "   Voltage" with
-the voltage written over the 8th position, and the "ge" was lost.
+the voltage written over the 8th position, and the "ge" was lost. With 0 held (key action 33,
+`0x01E4CE96`, the same computation at `0x01E4CEA6..0x01E4CED2`) screen B shows the same card over the
+screen (x 3..157, y 40..96) in place of stock's ` VOLTAGE` box (v52); then the firmware waits 1 s and
+redraws the whole screen (`0x01E4CF20..0x01E4CF28`).
 
 **The medium font.** The same 5×7 letter, with each stem column (4 or more lit dots) and each empty
 column 2 px wide and the others 1 px, and rows 2 and 6 2 px tall: 9 tall, the vertical stroke of 2x
@@ -584,3 +591,46 @@ the end of the deepest path of the screen in TRIPLE, and one more frame went pas
 transmitting) and 36 to 39 are TRIPLE (A receiving, C receiving, B in focus with A receiving, and C
 in focus); 38c is C on a VFO, 39c TX on C with A in focus before PTT (v51) and 11b the TX-A/B/C
 menu with C in focus (v50).
+
+## 15. The menu folder window (v53 to v57)
+
+The engine sends the title, the three rows, the bar and the summary on every pass
+(`0x01E48E82..0x01E48EE4`), and the rows are already built when the title goes out. In the folder
+window (choosing the group, choosing the item inside it and in the radio menu; everything but the
+open item and the quick menus) the title send (`gancho_menu_titulo`) draws the whole window, from
+below the bar to the bottom of the screen, and the rows and the side summary draw nothing. The map
+of the engine and the hooks is in [reverse engineering, section 21](reverse-engineering.md#21-the-menu-in-folders-v53-to-v57).
+
+The geometry (`pasta_cena`, in `telas.c`):
+
+| Part | Where |
+|---|---|
+| the frame | x 3..157, y 18..126, with the amber border |
+| the title bar | y 19..36: the folder, the group's number and name (in the radio, `RADIO` and the band). While choosing the group it is lit (dark amber) with `OK ▸` on the right; while choosing the item it goes dark |
+| the body | 6 lines of 12 px from y 40: the number in amber at x 9 and the name at x 20. The item under the cursor sits on a dark amber card (x 5..148), with the OK arrow at x 141 |
+| the value "L" | right below the item under the cursor, in green: the stroke at x 13 and the value from x 21; the cursor card covers it too. Only while choosing the item, and not on action items or the radio's memory item |
+| scrolling | only with more lines than the window: the arrows (5 × 3 triangles) at x 150..155, the top one at y 39 and the bottom one at y 105, each only when there is something to scroll; between them the 1 px line at x 152 and the 3 px position bar (x 151..154), its height proportional to what is in view |
+| the dots | one per group, 3 × 3 px every 7, centred at y 119..122, the group's one lit; the radio has none |
+
+The list scrolls so the cursor and the value line stay in view; while choosing the group (no cursor)
+it shows the first items (v57: in v56 the computation used the 255 of "no cursor", and CHANNEL, the
+only group with 7 items, came out empty). Amber is the group colour and green the item one.
+
+**The value** comes from the rows the engine just built (`0x01E487BC`): the one marked as saved
+(`02 10`) or, with no mark (the name, OFFSET, VERSION and BFO), the first one without its two
+spaces; without the trailing `0x01` (BANK on) and with up to 19 letters (the longest,
+`HARDWARE:V01T32`, has 15).
+
+**The open item** (editing) stays on the usual screen, with the title and the three rows, but in the
+menu font. In the title, the folder and the `G-k` chip (group and item, counting from 1); in the
+radio, the folder and the item number; in the quick menus, the stock number, from 0, which is what
+their digit reaches. VERSION open has no cursor.
+
+**The menu font** (v56): the medium one with the middle row 2 px tall too (`linha_janela` = 0, 1,
+3, 4, 6, 7, 9, 10: 10 tall) and 1 px more between letters. What does not fit the width falls back to
+the medium (`texto_menu`), like NOISE REDUCTION.
+
+**In the preview**, scenes 40 to 42 are choosing the group (41 is CHANNEL), 43 to 48 a group's items
+(the "L" with a value and with a name, scrolling down and up, an action item and VERSION open) and 49
+to 52 the radio menu (USB with scrolling, the memory, AM and an open item). 26b is the voltage with
+0 held (v52).

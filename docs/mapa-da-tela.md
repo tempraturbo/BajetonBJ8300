@@ -420,7 +420,7 @@ cala o `envia()` dela, em vez de repetir a lógica.
 
 | Onde | Como | Gancho | O que a tela B faz |
 |---|---|---|---|
-| `0x01E48E82`, `0x01E48ECA` (motor de menus `0x01E489E0`) | `envia()` trocado | `gancho_menu_titulo`, `gancho_menu_linha` | a faixa do título ou da linha que o motor montou |
+| `0x01E48E82`, `0x01E48ECA` (motor de menus `0x01E489E0`) | `envia()` trocado | `gancho_menu_titulo`, `gancho_menu_linha` | a faixa do título ou da linha que o motor montou; na janela de pasta (v53), o título desenha a janela inteira e as linhas nada ([seção 15](#15-a-janela-de-pasta-do-menu-v53-a-v57)) |
 | `0x01E476E4` (laço do sinal) | `envia()` trocado | `gancho_menu_pisca` | nada no menu: é por ele que sai toda a piscada de fábrica |
 | `0x01E3B2C4`, a linha de informações | desvio | `b_lado` | no menu e no scan QT, o resumo do lado em evidência |
 | `0x01E48720`, o indicador do modo do editor | desvio | `b_editor_modo` | o editor de nome inteiro |
@@ -435,6 +435,7 @@ cala o `envia()` dela, em vez de repetir a lógica.
 | `0x01E45A82(rodando)`, o scan QT | desvio | `b_scanqt` | o título e o estado |
 | `0x01E4DA88`, `0x01E4A93C` (DTMF) | `envia()` trocado | `gancho_dtmf` | a caixa do DTMF, no lugar do cartão do lado em uso |
 | `0x01E55F40` (partida) | `envia()` trocado | `gancho_tensao` | o cartão da tensão |
+| `0x01E4CF1C`, a caixa da tensão com o 0 segurado (v52) | `envia()` trocado | `gancho_tensao_tecla` | o mesmo cartão, por cima da tela |
 | `0x01E4CFE2`, a limpeza na entrada do espectro (v41) | chamada trocada | `gancho_espectro_limpa` | o fundo e a barra de cima |
 | `0x01E45D96`, `0x01E4AFC2`, `0x01E4B04C`, `0x01E4ADFE`, `0x01E4AB2A` (espectro) | rotina trocada inteira | `b_esp_freq`, `b_esp_digitos`, `b_esp_modo`, `b_esp_dbm`, `b_esp_eixo` | a frequência ou os dígitos, AM/FM, o dBm e as pontas |
 | as 5 janelas das fatias do gráfico e a linha do limite (`0x01E4D72E`) | chamada trocada | `gancho_fatia`, `gancho_limite` | o painel com a grade e a linha tracejada em âmbar |
@@ -450,7 +451,7 @@ fábrica o desenharia por cima do gráfico).
 "NONE"); o tipo 8 nunca tem marcador. A tela B reconhece o marcador pelo conteúdo. Os outros dados:
 número do item `b[0x14BFA]`, cursor `b[0x14C10]`, editando `b[0x14BF9]` e tipo `b[0x14C00]`
 (0 e 4 a 6 lista, 2 tom com digitação, 3 frequência, 7 nome, 8 sem marcador, 13 número com sinal).
-O BANK e o BANK CH marcam a opção ligada com um byte `0x01` no fim, que a tela B pinta de âmbar.
+O BANK e o CHANNEL dos BANKS marcam a opção ligada com um byte `0x01` no fim, que a tela B pinta de âmbar.
 
 **A piscada.** No menu, o laço do sinal (`0x01E4622A`) conta `b[0x14C1A]` de 0 a 7, uma vez por
 volta. Em 4 ele desenha, em 0 apaga. Fora da edição, pisca o número do item em (133, 57)
@@ -464,7 +465,9 @@ máximo em `b[0x14A36]` (gravado pelo get do item) e o modo em `b[0x14A38]`: 0 `
 limpeza de fábrica (`0x01E49B1C`), e depois de cada tecla o motor roda inteiro (`0x01E4A0FE`
 termina em `goto 0x01E489E0`). O modo já desenhado (`b[0x14686]`) não volta a `0xFF` nesse caminho,
 então não serve para saber se o editor acabou de abrir: o desvio desenha o editor inteiro em toda
-passada.
+passada. Desde a v52 só há `ABC` e `123`, e o editor abre em `ABC`: a `#` volta ao 1 em vez do 0
+(`0x01E4A5AA`), e o get do CH-NAME e o do BANK NAME põem o modo 1. O get do CH-NAME mede o nome até o
+primeiro 0 ou `0xFF` (o CHIRP completa o nome com `0xFF`), e não mais com o strlen da ROM.
 
 **Rádio.** Os endereços, cada um refeito dos bytes de fábrica pela `4p` do `conferir.py`:
 
@@ -500,7 +503,10 @@ sempre a caixa de fábrica.
 
 **A tensão na partida** (`0x01E55E9C`, com a mensagem de partida em tensão): a partida lê o ADC em
 `0x01E45FB0` e faz × 444 / 1000, em décimos de volt. O texto de fábrica é "   Voltage" com a tensão
-escrita sobre a 8ª posição, e o "ge" se perdia.
+escrita sobre a 8ª posição, e o "ge" se perdia. Com o 0 segurado (a ação 33 das teclas,
+`0x01E4CE96`, a mesma conta em `0x01E4CEA6..0x01E4CED2`) a tela B mostra o mesmo cartão por cima da
+tela (x 3..157, y 40..96) no lugar da caixa ` VOLTAGE` de fábrica (v52); depois o firmware espera 1 s
+e redesenha a tela inteira (`0x01E4CF20..0x01E4CF28`).
 
 **A fonte média.** A mesma letra 5×7, com cada coluna de haste (4 pontos acesos ou mais) e cada
 coluna vazia com 2 px e as outras com 1, e a 2ª e a 6ª linha com 2 px: 9 de altura, o traço
@@ -580,3 +586,45 @@ o fim do caminho mais fundo da tela no TRIPLE, e um quadro a mais passava da pil
 transmitindo) e as 36 a 39 o TRIPLE (o A recebendo, a C recebendo, o B em evidência com o A
 recebendo e a C em evidência); a 38c é a C em VFO, a 39c a TX na C com o A em evidência antes do PTT
 (v51) e a 11b o menu TX-A/B/C com a C em evidência (v50).
+
+## 15. A janela de pasta do menu (v53 a v57)
+
+O motor manda o título, as três linhas, a barra e o resumo em toda passada (`0x01E48E82..0x01E48EE4`),
+e as linhas já estão montadas quando o título sai. Na janela de pasta (escolhendo o grupo, escolhendo
+o item dentro dele e no menu do rádio; tudo menos o item aberto e os menus rápidos) o envio do título
+(`gancho_menu_titulo`) desenha a janela inteira, de baixo da barra ao fim da tela, e as linhas e o
+resumo do lado não desenham nada. O mapa do motor e dos ganchos está na
+[engenharia reversa, seção 21](engenharia-reversa.md#21-o-menu-em-pastas-v53-a-v57).
+
+A geometria (`pasta_cena`, no `telas.c`):
+
+| Parte | Onde |
+|---|---|
+| a moldura | x 3..157, y 18..126, com a borda âmbar |
+| a barra de título | y 19..36: a pasta, o número e o nome do grupo (no rádio, `RADIO` e a banda). Escolhendo o grupo, ela fica acesa (âmbar escuro) com o `OK ▸` à direita; escolhendo o item, apaga |
+| o corpo | 6 linhas de 12 px a partir de y 40: o número em âmbar em x 9 e o nome em x 20. O item do cursor fica num cartão âmbar escuro (x 5..148), com a seta do OK em x 141 |
+| o "L" do valor | logo abaixo do item do cursor, em verde: o traço em x 13 e o valor a partir de x 21; o cartão do cursor o cobre também. Só escolhendo o item, e não nos de ação nem no item de memória do rádio |
+| a rolagem | só com mais linhas que a janela: as setas (triângulos de 5 × 3) em x 150..155, a de cima em y 39 e a de baixo em y 105, cada uma só quando há o que rolar; entre elas o risco de 1 px em x 152 e a barra da posição de 3 px (x 151..154), com a altura proporcional ao que se vê |
+| os pontos | um por grupo, de 3 × 3 px a cada 7, centralizados em y 119..122, o do grupo aceso; no rádio não há |
+
+A lista rola para o cursor e a linha do valor ficarem à vista; escolhendo o grupo (sem cursor) ela
+mostra os primeiros itens (v57: na v56 a conta usava o 255 do "sem cursor", e o CHANNEL, o único
+grupo com 7 itens, saía vazio). Âmbar é a cor de grupo e verde a de item.
+
+**O valor** sai das linhas que o motor acabou de montar (`0x01E487BC`): a marcada como gravada
+(`02 10`) ou, sem marca (o nome, o OFFSET, o VERSION e o BFO), a primeira sem os dois espaços; sem o
+`0x01` do fim (o BANK ligado) e com até 19 letras (o maior, `HARDWARE:V01T32`, tem 15).
+
+**O item aberto** (editando) continua na tela de sempre, com o título e as três linhas, mas na letra
+do menu. No título, a pasta e o chip `G-k` (grupo e item, contando de 1); no rádio, a pasta e o
+número do item; nos menus rápidos, o número de fábrica, de 0, que é o que o dígito deles alcança. O
+VERSION aberto não tem cursor.
+
+**A letra do menu** (v56): a média com a linha do meio também de 2 px (`linha_janela` = 0, 1, 3, 4,
+6, 7, 9, 10: 10 de altura) e 1 px a mais entre as letras. O que não cabe na largura sai na média
+(`texto_menu`), como o NOISE REDUCTION.
+
+**Na prévia**, as cenas 40 a 42 são a escolha do grupo (a 41 é o CHANNEL), as 43 a 48 os itens de um
+grupo (o "L" com um valor e com um nome, a rolagem para baixo e para cima, um item de ação e o VERSION
+aberto) e as 49 a 52 o menu do rádio (o USB com a rolagem, a memória, o AM e um item aberto). A 26b
+é a tensão com o 0 segurado (v52).

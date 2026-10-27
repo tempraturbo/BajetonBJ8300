@@ -214,7 +214,9 @@ flags(1) | max(u16) | get(4) | set(4) | name_en(4) | name_cn(4) | show|options(4
   same 6 bytes. The leftover r0 is not read (the next call, `0x01E3AC52`, writes it before reading
   it), and r6 is overwritten at `0x01E4CBC0`. The rest of the firmware finds the table through the
   pointer this code stores at `[0x14BF4]` (`0x01E4CBC4`), and the original stays intact. The count
-  is a constant: 55 since v43.
+  is a constant: 55 since v43. Since v53 the array has 80 slots and holds the groups before the
+  items, the code became "call menu_abre; r5 = r0" and the count is the groups', 13
+  ([section 21](#21-the-menu-in-folders-v53-to-v57)).
 - A new item goes in place of the zone ones (WATCH, CH-C and the BANK ones) or right after a stock
   one (MDF-C, after MDF-B: `ITENS_DEPOIS` in `montar.py`), and copies the rest of the item it is
   modelled on.
@@ -222,7 +224,8 @@ flags(1) | max(u16) | get(4) | set(4) | name_en(4) | name_cn(4) | show|options(4
   list/value, 2 = CTCSS, 3 = frequency, 4 = MEMCH/DELCH, 7 = text editor, 8 = VERSION, 10 = DCS)
   and none of them opens a list inside another. Two levels (BANK → bank → rename/channels) would be
   possible by swapping the current table from inside our own handler, the way `FUN_01E4B3A0(id)`
-  does for the quick menus — that is new UI work, and was not done.
+  does for the quick menus. That is what v53 did for the groups
+  ([section 21](#21-the-menu-in-folders-v53-to-v57)).
 
 ## 7. How the bank filter works
 
@@ -235,7 +238,7 @@ To undo it, the bitmaps are rebuilt from scratch with the same criteria the star
 per channel, BCD, `VALIDA_FREQ`) instead of keeping a copy: that way no state of ours lives in RAM,
 and a channel stored or deleted through MEMCH/DELCH counts immediately.
 
-After the filter changes through the menu (BANK and BANK CH), **both sides** move to a valid
+After the filter changes through the menu (BANK and the BANKS CHANNEL; BANK CH up to v52), **both sides** move to a valid
 channel (v38), as the stock DELCH does after deleting a channel (`0x01E3C5D6..0x01E3C6C4`): in full
 channel mode, each side's channel (`h[0x15E0C]`, `h[0x15E10]`) that left the bitmap jumps to the
 next valid one (`0x01E3C4C0`), and `0x01E3A812` reloads both sides, revalidating each. Up to v37
@@ -973,6 +976,11 @@ overwrites it: both only change who comes first in the round-robin.
 - C → A: saves the channel C ended on (the arrows and number entry change it as on any side), gives
   side B back to B the same way and does the stock swap, which redraws.
 
+Since v54 there is no CH-C item, and in TRIPLE the key always reaches C: with its channel empty
+(deleted, or never chosen), `c_alcancavel` takes it to the next channel that exists, by channel
+number (stock's next one, `0x01E3C4C0`, counts inside the zone in zone mode), and with no channel at
+all C goes on its VFO.
+
 The stock side swap (`0x01E40E52`) disarms dual watch, flips `b[0x15E04]`, swaps the two sides'
 shadows, decodes, rebuilds the screen record (`0x01E39128`) and the bar (`0x01E3B05C`), saves the
 settings (`0x01E3AB36`, with r0 ≠ 0), redraws (`0x01E3C290`) and mutes (`0x01E39F20`).
@@ -992,7 +1000,8 @@ settings (`0x01E3AB36`, with r0 ≠ 0), redraws (`0x01E3C290`) and mutes (`0x01E
 
 With no valid record (wrong magic or checksum), the radio stays in DUAL. v43's record had 10
 bytes, without fields 8 to 11, and stopped being valid in v44. Screen B reads the record on every
-draw. Since v46 the cable write window includes it, and CHIRP writes WATCH, CH-C and MDF-C.
+draw. Since v46 the cable write window includes it, and CHIRP writes WATCH, CH-C and MDF-C. The
+CH-C item left the menu in v54; C's channel stays in the record, and CHIRP still writes it.
 
 **VFO C (v49).** C gets a mode (VFO or channel) and a VFO, like A and B. The VFOs are in sector
 `0xD3000` (`struct vfc`, "VFC1", 70 bytes: C's, the saved B's and the checksum), in the format of
@@ -1131,3 +1140,69 @@ firmware changes none of it.
   201, L between 158 and 166, on a 0 to 255 bias (255 only in the steps the index never reaches).
   The firmware does not know how many watts that gives: the output in W depends on the amplifier,
   and only a wattmeter measures it.
+
+## 21. The menu in folders (v53 to v57)
+
+The menu engine (`0x01E489E0`) only knows the current table, and its state lives at `0x14BF4`:
+
+| Address | What it is |
+|---|---|
+| `[0x14BF4]` | the pointer to the current table |
+| `b[0x14BF8]` | how many items it has |
+| `b[0x14BF9]` | 1 = editing the item |
+| `b[0x14BFA]`, `h[0x14BFC]` | the item; the arrows write both (`0x01E49F78`) |
+| `h[0x14BFE]` | the typed number (`0x01E4A2CE`) |
+| `b[0x14C00]` | the item type (the low nibble of the flags) |
+| `b[0x14C0C]` | the number timer: 15 on each digit, and the tick counts it down (`0x01E4A326`) |
+
+The menu entry (`0x01E4CBC4..0x01E4CBEC`), the quick menus (`0x01E4B3DC..0x01E4B402`) and the arrows
+(`0x01E49FA6..0x01E49FCC`) write these fields, and changing level is writing them the same way:
+reload the menu exit timer (`0x01E484F8`), set the table, the count, the item and the type, announce
+the new item (`0x01E4851E`, which with a null get clears the value and the cursor) and call the
+engine, which redraws (`menu_vai`, in `tela.c`).
+
+**The table** (`menu_tabela`, 80 slots of 28 B) holds the 13 groups first and then each group's
+items, in group order, everything alphabetical: 68 slots used. Each group is a list item with no
+get or set (like RESET), with its item count as the maximum and their names as the options; the
+engine builds the lines from them, and screen B does not show them at that level. The level comes
+from the pointer: the groups' table is level 0; group g's table, g + 1 (it starts after the groups
+and the earlier groups' items); the radio's two, `RADIO`; and any other (the quick menus) is `FORA`,
+which stays stock.
+
+`menu_textos` (512 B) carries the rest: byte 0 the number of groups, byte 1 the number of table
+positions, from byte 4 a mark per position (1 = no value in the "L": RESET, MEMCH, DELCH and the
+BANKS CHANNEL; 2 = tick several: BANK and the BANKS CHANNEL), and then the pointer lists and the
+group names. `montar.py` builds both from `GRUPOS` and `MENU_MARCAS`, and `conferir.py`'s `3b` reads
+what was written into the image: groups and items in alphabetical order, each group a list with no
+get or set and its items' names, the marks, and each stock item that stays and each of ours exactly
+once, inside a group.
+
+**The hooks:**
+
+| Where | How | Hook | What it does |
+|---|---|---|---|
+| `0x01E4CBB2`, the table pointer at the entry | "r5 = menu_tabela" becomes "call menu_abre; r5 = r0" | `menu_abre` | the groups' table; if the menu was closed inside a group, it reopens there (the entry reads the item from `[+6]` right after, `0x01E4CBCA`) |
+| `0x01E4CBE8`, the count | constant | — | 13, the groups |
+| `0x01E4C924`, the OK call (`0x01E49996`) | call swapped | `gancho_menu_ok` | on the groups, opens the group on its first item; on VERSION, opens it read-only; elsewhere, stock OK, which opens the item editing |
+| `0x01E4B9FA`, the digits call (`0x01E4A0FE`) | call swapped | `gancho_menu_digito` | outside editing, goes to the item with that number, counting from 1 (stock counts from 0, `0x01E4A2DA`); two digits before the timer runs out make one number, as stock does (`0x01E4A274..0x01E4A2CE`); with VERSION open, nothing |
+| `0x01E4D54A`, EXIT outside editing ("r0 = 349", which starts the exit) | mid-routine detour | `desvio_menu_sai` → `b_menu_sai` | inside a group, goes back to the groups and on to the EXIT beep (`0x01E4D59A`); on the groups and in the radio, the stock exit |
+| `0x01E49A86`, OK while editing, after the set ("r0 = 3303", which closes the edit) | mid-routine detour | `desvio_menu_marca` → `b_menu_marca` | on the tick-several items, clears the reception state (`b[0x15367]`, as stock does) and goes on to the redraw and the return (`0x01E49C7C`) without closing the edit |
+
+The mid-routine detour (`DESVIO_MEIO`, in `tela.c`) is the usual detour with one more exit: when the
+hook handles it, it does not return to just after the covered bytes but to a point further along the
+routine, one the stock path also goes through (the EXIT beep, the OK redraw), with the same stack.
+`4t` checks both byte by byte.
+
+**VERSION** (type 8) is not opened by stock OK: `0x01E49A2E` only plays the voice, which no longer
+exists. The hook turns editing on, which screen B draws without a cursor; OK and the digits do
+nothing while it is open, and stock EXIT closes it (cancels the edit, `0x01E4D500`).
+
+**The radio menu** (v56) is the same engine, in menu mode: the entry (`0x01E49000`) sets one of two
+stock tables, `0x01E61168` (FM and AM) or `0x01E6137C` (SSB and CW, 532 B further, `0x01E49026`), and
+the band's count comes from `0x01E3DE36` (FM 2, AM 5, SSB and CW 6). The memory item has `0x20` in
+its flags: the title is built by a function (`0x01E3D20E`, the band prefix plus `MEMCH`), and screen
+B builds it the same way. Digits count from 1, as in the main menu; OK and EXIT stay stock.
+
+**The stack.** The folder window is drawn by the title send, at the bottom of the menu engine. With
+the window's two texts at 28 B each, the interface reached 744 B (v56), 4 above stock; they became 12
+and 20 B, and the three roots are back at stock's 740, 620 and 696 B.

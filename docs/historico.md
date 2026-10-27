@@ -5,6 +5,104 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v57 — 26/10 — o grupo CHANNEL de novo com os itens ✅ (é a V2.7T)
+
+O teste da v56 deu "funcionou", menos o grupo 3, CHANNEL, que na escolha do grupo aparecia sem
+nenhum item. Escolhendo o grupo não há cursor (`FORA`, 255), e a conta da rolagem o usava: no
+CHANNEL, o único grupo com 7 itens e por isso o único que rola, o início da lista ia além do fim e
+nenhuma linha era desenhada. Agora a lista só rola escolhendo o item, e escolhendo o grupo mostra
+os primeiros. A prévia já mostrava a tela 41 vazia e passou, porque só se olharam as telas que
+deviam mudar: desde então, olha-se toda tela que mudou.
+
+## v56 — 26/10 — a letra maior e o menu do rádio na pasta ✔️ testada: "funcionou", menos o CHANNEL vazio
+
+Os dois pedidos do dono depois de ver a v55:
+
+- **A letra do menu maior**, na janela de pasta e no item aberto (o título e as opções), sem passar
+  da barra de rolagem. É a média com a linha do meio também de 2 px (10 de altura: as barras do A,
+  E, F, H, P e R saem iguais às de cima e de baixo) e 1 px a mais entre as letras; o que não cabe
+  sai na média de antes (o NOISE REDUCTION). A janela passou a 6 linhas de 12 px.
+- **O menu do rádio** (FM, AM, SSB) na mesma janela. É o mesmo motor, com uma de duas tabelas de
+  fábrica (`0x01E61168` FM e AM, `0x01E6137C` SSB e CW, escolhidas na entrada `0x01E49000`) e quantos
+  itens a banda tem (`0x01E3DE36`: FM 2, AM 5, SSB e CW 6). Fica numa pasta só, com `RADIO` e a
+  banda no título e sem os pontos dos grupos; o item de memória, que tem o título montado por função
+  (`0x01E3D20E`: `FM`, `AM` ou `SSB` e `MEMCH`), não tem o "L". Os números contam de 1, como no menu
+  principal, e o EXIT da lista volta ao rádio, como de fábrica.
+- A pilha: com os dois textos da janela em 28 B cada, a interface ia a 744 B, 4 acima dos 740 de
+  fábrica. Eles ficaram com 12 e 20 B, e ela voltou aos 740.
+
+## v55 — 26/10 — o menu do jeito que o dono desenhou
+
+Depois de ver os grupos ("menu aprovado"), o dono mudou o uso:
+
+- **A janela de pasta também dentro do grupo.** Os itens numerados; o do cursor num cartão, com a
+  seta do OK, e o valor dele logo embaixo, num "L" verde que o cursor não seleciona. Só o item do
+  cursor mostra o valor, e os de ação (RESET, MEMCH, DELCH e o CHANNEL dos BANKS) não têm "L". O
+  valor sai das linhas que o motor já montou (`0x01E487BC`): a marcada como gravada (`02 10`) ou,
+  sem marca (o nome, o OFFSET, o VERSION e o BFO), a primeira.
+- **OK abre o item já editando** (o OK de fábrica); gravar ou cancelar volta à janela, no mesmo
+  item; EXIT volta aos grupos, no grupo.
+- **O VERSION só para ler**: o OK o abre sem cursor, o OK e os números não fazem nada com ele aberto,
+  e só o EXIT sai.
+- **O BANK e o CHANNEL dos BANKS marcam vários**: cada OK grava e a edição continua; o EXIT sai. Um
+  desvio logo depois do set (`0x01E49A86`) zera o estado da recepção, como o de fábrica faz depois
+  de mudar um ajuste, e segue para o redesenho sem fechar a edição.
+- **A rolagem.** Com mais linhas que a janela, a lista rola para o cursor e o valor ficarem à vista;
+  as setas de cima e de baixo só aparecem quando há o que rolar, e entre elas fica um risco com a
+  barra da posição, mais grossa que ele. Os pontos dos grupos ficam.
+- O DELCH continua apagando um canal por vez.
+
+## v54 — 26/10 — sem o item CH-C
+
+Pedido do dono: desde a v49 a C é um lado com VFO, como o A e o B, e o item que escolhia o canal
+dela não fazia mais sentido. Sem ele, um canal da C vazio (apagado, ou nunca escolhido) a deixaria
+fora do alcance da tecla A/B; agora, no TRIPLE, a tecla sempre chega à C: com o canal dela vazio,
+vai ao próximo que existe (`canal_existe`, pelo número do canal; o próximo canal de fábrica conta
+dentro da zona no modo zona), e sem nenhum canal a C vai em VFO. O grupo WATCH ficou com TTR,
+TX-A/B/C e WATCH, e o menu com 55 itens. O canal da C continua no registro do WATCH, e o CHIRP ainda
+o grava pelo cabo.
+
+## v53 — 26/10 — os grupos do menu (nunca gravada; foi direto para a v54)
+
+Pedido do dono: agrupar os itens por assunto, sempre em ordem alfabética, de um jeito que leigo
+entenda, e mostrar quando o item é um grupo.
+
+- **13 grupos**, cada um com os itens em ordem alfabética: AUDIO, BANKS, CHANNEL, DISPLAY, DTMF,
+  KEYS, MEMORY, REPEATER, SCAN, SYSTEM, TONES, TX e WATCH (a tabela está no README). O BANK NAME e o
+  BANK CH viraram NAME e CHANNEL, dentro de BANKS.
+- **Dois níveis no mesmo motor.** A tabela do menu, agora com 80 vagas, traz os grupos e depois os
+  itens de cada um; entrar num grupo é pôr a tabela dele no estado do menu (`0x14BF4`), e voltar é
+  pôr a dos grupos. Cada grupo é um item de lista sem get nem set, com os nomes dos itens nas
+  opções. Os ganchos ficam na entrada do menu (`0x01E4CBB2`, que reabre no grupo de onde se saiu),
+  no OK (`0x01E4C924`), nos números (`0x01E4B9FA`, contando de 1, como a tela mostra) e no EXIT fora
+  da edição (`0x01E4D54A`, que volta aos grupos).
+- **A janela de pasta**, em âmbar, na escolha do grupo: a pasta, o número e o nome do grupo na barra
+  de título, os itens dele no corpo e um ponto por grupo embaixo. Dentro do grupo, o título do item
+  ganhou o chip `G-k` (grupo e item).
+- O mapa está na [engenharia reversa, seção 21](engenharia-reversa.md#21-o-menu-em-pastas-v53-a-v57)
+  e no [mapa da tela, seção 15](mapa-da-tela.md#15-a-janela-de-pasta-do-menu-v53-a-v57).
+
+## v52 — 26/10 — o nome vindo do CHIRP, o editor só em maiúsculas e a tensão do 0
+
+Os três pedidos do dono depois da V2.6T:
+
+- **O nome gravado pelo CHIRP abria com `??` no fim** (o editor mostrava `SBST RADIO??`, 12/12). O
+  nome tem sempre 12 B na memória; o que sobra, o rádio completa com 0 (`0x01E3C7BE`) e o CHIRP com
+  `0xFF`. A exibição para no primeiro dos dois, mas o get do CH-NAME (`0x01E3C732`) media o nome com
+  o strlen da ROM (`0x021127C0`, chamado em `0x01E3C784`), que só para no 0, e abria o editor com os
+  `0xFF` como letras. As duas chamadas da ROM no get (o strlen e a cópia, `0x01E3C792`) agora passam
+  por `nome_tamanho` e `nome_para_editor`: as letras até o primeiro 0 ou `0xFF`, e zero até o fim do
+  buffer, com que o `%15s` de fábrica e a inserção de letra (`0x01E49664`) contam. O BANK NAME, o
+  único outro editor de nome do firmware (varrido o app inteiro), usa a mesma conta.
+- **O editor de nome só com maiúsculas e números**, abrindo em `ABC`. A tecla `#` ciclava `abc` →
+  `ABC` → `123`; o "r0 = 0" de `0x01E4A5AA` virou "r0 = 1", e o ciclo ficou `ABC` ↔ `123`. Os dois
+  editores abrem em `ABC`.
+- **O 0 segurado** (a ação 33 das teclas, `0x01E4CE96`) mostrava a caixa de tensão de fábrica, o
+  `VOLTAGE` no estilo antigo. O envio dela (`0x01E4CF1C`) passa pelo `gancho_tensao_tecla`, que
+  desenha o cartão da partida por cima da tela; depois o firmware espera 1 s e redesenha tudo, como
+  antes. O texto ` VOLTAGE` saiu dos textos traduzidos, porque só essa ação o usava.
+- O `VERSION` passou a mostrar `V2.7T`.
+
 ## V2.6T — 26/10 — três frequências de uma vez ✅
 
 A v51 virou a **V2.6T**, a terceira versão estável: `firmware/releases/BJ8300_BANK_v2.6T.anc` (sha256

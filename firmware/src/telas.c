@@ -99,13 +99,117 @@ static unsigned copia_ram(char *s, u32 a, unsigned n)
 
 /* ---------- menu ---------- */
 
+/* Os grupos do menu (v53). O menu principal tem dois niveis: a tabela (menu_tabela, que o montar.py
+ * monta) traz primeiro os grupos, um item cada, e depois os itens de cada grupo, na ordem dos grupos,
+ * tudo em ordem alfabetica. O firmware so conhece a tabela corrente, no estado do menu em 0x14BF4: o
+ * ponteiro dela [+0], quantos itens [+4], editando [+5], o item [+6] e [+8], o numero digitado [+10] e
+ * o tipo do item [+12] - o que a entrada do menu (0x01E4CBC4..0x01E4CBEC), os menus rapidos
+ * (0x01E4B3DC..0x01E4B402) e as setas (0x01E49FA6..0x01E49FCC) escrevem. Entrar num grupo e por a
+ * tabela dele ali, e voltar e por a dos grupos (os ganchos estao no tela.c). O nivel sai do ponteiro.
+ * Cada grupo e um item de lista sem get nem set, com a quantidade de itens no maximo e os nomes deles
+ * nas opcoes: o motor de menus monta as linhas com eles, que a tela B nao mostra nesse nivel.
+ *
+ * O menu do radio (v56) e o mesmo motor, no modo de menu, com uma de duas tabelas de fabrica (a
+ * entrada, 0x01E49000: FM e AM numa, SSB e CW na outra, 532 B adiante) e quantos itens a banda tem
+ * (0x01E3DE36: FM 2, AM 5, SSB e CW 6). Ele fica numa pasta so, sem grupos. */
+#define MENU_TABELA       RAM(u32, 0x00014BF4)
+#define MENU_CONTA        RAM(u8, 0x00014BF8)
+#define MENU_ITEM         RAM(u16, 0x00014BFC)   /* o item de novo, fora da edicao (as setas, 0x01E49F78) */
+#define MENU_DIGITADO     RAM(u16, 0x00014BFE)   /* o numero digitado (0x01E4A2CE) */
+#define MENU_TEMPO_DIGITO RAM(u8, 0x00014C0C)    /* 15 a cada digito, e o tique o desce (0x01E4A326) */
+#define TAM_ITEM          28
+#define RADIO             0xFE                   /* menu_nivel(): o menu do radio (v56) */
+#define FORA              0xFF                   /* menu_nivel(): uma tabela que nao e a nossa (os rapidos) */
+#define MARCA_SEM_VALOR   1                      /* as marcas de cada item (v55, montar.py MENU_MARCAS) */
+#define MARCA_VARIOS      2
+#define RADIO_FM_AM       0x01E61168u            /* as tabelas do menu do radio (0x01E49026) */
+#define RADIO_SSB         (RADIO_FM_AM + 532)
+
+#ifdef PREVIA
+unsigned previa_menu_grupos(void);
+unsigned previa_menu_itens(unsigned g);
+unsigned previa_menu_marcas(unsigned p);
+unsigned previa_item_flags(u32 t, unsigned i);
+const char *previa_item_nome(u32 t, unsigned i);
+#define MENU_BASE         0x01E30000u
+#define MENU_GRUPOS       previa_menu_grupos()
+#define MENU_ITENS(g)     previa_menu_itens(g)
+#define MENU_MARCAS(p)    previa_menu_marcas(p)
+#define ITEM_FLAGS(t, i)  previa_item_flags(t, i)
+#else
+/* Os dois vetores que o montar.py preenche, no fim do tela.c. Lidos byte a byte: o item tem 28 B
+ * sem alinhamento, e o compilador nao pode usar o conteudo que ele ve no fonte (0xFF e zeros). */
+extern const unsigned char menu_tabela[], menu_textos[];
+#define MENU_BASE         ((u32)menu_tabela)
+#define MENU_GRUPOS       (((const volatile u8 *)menu_textos)[0])
+#define MENU_MARCAS(p)    (((const volatile u8 *)menu_textos)[4 + (p)])
+#define MENU_ITENS(g)     (RAM(u8, MENU_BASE + (g) * TAM_ITEM + 1) | RAM(u8, MENU_BASE + (g) * TAM_ITEM + 2) << 8)
+#define ITEM_FLAGS(t, i)  RAM(u8, (t) + (i) * TAM_ITEM)
+#endif
+
+/* O nome do item i da tabela t: o ponteiro em +11 ou, no item com titulo por funcao (flags 0x20: so o
+ * de memoria do radio, 0x01E3D20E), o que ela monta - o prefixo da banda e MEMCH -, em s. */
+static const char *item_nome(u32 t, unsigned i, char *s)
+{
+#ifdef PREVIA
+    (void)s;
+    return previa_item_nome(t, i);
+#else
+    u32 a = t + i * TAM_ITEM + 11;
+
+    if (ITEM_FLAGS(t, i) & 0x20) {
+        junta(junta(s, RADIO_BANDA == 0 ? "FM" : RADIO_BANDA == 1 ? "AM" : "SSB"), "MEMCH");
+        return s;
+    }
+    return (const char *)(RAM(u8, a) | RAM(u8, a + 1) << 8 | RAM(u8, a + 2) << 16 | (u32)RAM(u8, a + 3) << 24);
+#endif
+}
+
+/* Onde comecam os itens do grupo g na tabela (em itens): depois dos grupos e dos itens dos anteriores. */
+static unsigned menu_inicio(unsigned g)
+{
+    unsigned p = MENU_GRUPOS, i;
+
+    for (i = 0; i < g; i++)
+        p += MENU_ITENS(i);
+    return p;
+}
+
+/* 0 nos grupos, g + 1 dentro do grupo g, RADIO no menu do radio, FORA em outra tabela (os menus
+ * rapidos, que ficam como os de fabrica). */
+static unsigned menu_nivel(void)
+{
+    u32 t = MENU_TABELA;
+    unsigned g, n = MENU_GRUPOS, p = n;
+
+    if (t == MENU_BASE)
+        return 0;
+    if (t == RADIO_FM_AM || t == RADIO_SSB)
+        return RADIO;
+    for (g = 0; g < n; g++) {
+        if (t == MENU_BASE + p * TAM_ITEM)
+            return g + 1;
+        p += MENU_ITENS(g);
+    }
+    return FORA;
+}
+
+/* A janela de pasta (v55): escolhendo o grupo, e escolhendo o item dentro dele ou no menu do radio -
+ * tudo menos o item aberto (editando) e as tabelas que nao sao as nossas. */
+static unsigned menu_pasta(void)
+{
+    unsigned n = menu_nivel();
+
+    return n == 0 || (n != FORA && MENU_EDITANDO != 1);
+}
+
 struct menu_b {
-    u8 numero, cursor, editando, editor;
+    u8 numero, cursor, editando, editor, nivel, pasta;
 };
 
 #define TOPO_MENU   56
 #define TOPO_EDITOR (TOPO_MENU + 21)
-#define LIGADO      0x01        /* no fim da opcao: ela esta ligada (BANK e BANK CH, bancos.c) - sai em ambar */
+#define LIGADO      0x01        /* no fim da opcao: ela esta ligada (BANK e CHANNEL dos BANKS, bancos.c) - sai em ambar */
 
 /* O editor de nome: tipo 7 editando (o motor de menus vai para 0x01E48DAC em vez do titulo e das
  * linhas). Desde a v38 tambem na tela B (os ganchos dele estao no tela.c). */
@@ -118,10 +222,34 @@ static unsigned menu_editor(void)
  * nome (tipo 7) tem uma linha so e o motor nao mexe no cursor dele: e sempre a linha 0. */
 static void le_menu(struct menu_b *m)
 {
+    unsigned tipo = MENU_TIPO;
+
     m->numero = MENU_NUMERO;
-    m->cursor = MENU_TIPO == 7 ? 0 : MENU_CURSOR;
-    m->editando = MENU_EDITANDO == 1;
+    m->cursor = tipo == 7 ? 0 : tipo == 8 ? 3 : MENU_CURSOR;    /* o VERSION aberto e so leitura (v55) */
+    m->editando = MENU_EDITANDO == 1 && tipo != 8;
     m->editor = menu_editor();
+    m->nivel = menu_nivel();
+    m->pasta = menu_pasta();
+}
+
+/* A letra do menu (v56), um pouco maior que a media para ler melhor: as colunas do medio, a linha do
+ * meio tambem com 2 px (linha_janela, tela.c: 10 de altura) e um px a mais entre as letras. O que nao
+ * couber em largura_max sai no medio - os nomes mais compridos, como o NOISE REDUCTION. */
+#define ALTURA_MENU 10
+
+static void texto_menu(unsigned x, unsigned y, const char *s, unsigned largura_max, unsigned cor)
+{
+    const char *t;
+    unsigned l = 0;
+
+    for (t = s; *t; t++)
+        l += avanco(fonte_b_letra[indice((u8)*t)], MEDIA) + 1;
+    if (l > largura_max + 2) {
+        texto_medio(x, y + 1, s, largura_max, cor);
+        return;
+    }
+    while (*s)
+        x += letra_media(x, y, (u8)*s++, cor, linha_janela) + 1;
 }
 
 /* O texto do editor de nome num cartao de borda verde, em 2x se couber (no medio, senao), com o
@@ -144,22 +272,30 @@ SEPARADA static void editor_cena(void)
     texto(156 - largura(s, 1), y + 38, s, 1, COR_CINZA);
 }
 
-/* O titulo e as tres linhas do menu, no tamanho medio, ou o editor de nome (a barra e o resumo sao
- * desenhados pela cena_telas, ao lado). */
+/* O item aberto: o titulo e as tres linhas do menu, na letra do menu, ou o editor de nome (a barra e o
+ * resumo sao desenhados pela cena_telas, ao lado). */
 SEPARADA static void menu_cena(const struct menu_b *m)
 {
-    static const char *const modos[3] = {ICONE_MIN_A ICONE_MIN_B ICONE_MIN_C, "ABC", "123"};
-    unsigned r, x, x1 = 154;
+    static const char *const modos[2] = {"ABC", "123"};
+    unsigned r, x = 4, x1 = 154;
     char s[28];
 
-    /* cabecalho: o numero numa etiqueta verde e o titulo; no editor, o modo numa etiqueta ambar */
+    /* cabecalho: o numero numa etiqueta verde e o titulo; no editor, o modo numa etiqueta ambar.
+     * Dentro de um grupo, a pasta dele em ambar e "grupo-item", contando de 1 (v53), e no menu do
+     * radio a pasta e o item (v56); nos menus rapidos, o numero de fabrica, de 0 - e o que o digito
+     * deles alcanca. */
     if (NA_JANELA(TOPO_MENU, TOPO_MENU + 18)) {
-        if (m->editor && EDITOR_MODO < 3)
-            x1 = etiqueta(156, TOPO_MENU + 3, modos[EDITOR_MODO], COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 1) - 3;
-        numero(s, m->numero, 2);
-        x = etiqueta(4, TOPO_MENU + 3, s, COR_CHIP_RX, COR_TEXTO_RX, 0);
+        if (m->editor && EDITOR_MODO - 1u < 2)
+            x1 = etiqueta(156, TOPO_MENU + 3, modos[EDITOR_MODO - 1], COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 1) - 3;
+        if (m->nivel == FORA)
+            numero(s, m->numero, 2);
+        else {
+            x = texto(4, TOPO_MENU + 5, ICONE_PASTA, 1, COR_TEXTO_AMBAR) + 2;
+            numero(m->nivel == RADIO ? s : junta(numero(s, m->nivel, 1), "-"), m->numero + 1, 1);
+        }
+        x = etiqueta(x, TOPO_MENU + 3, s, COR_CHIP_RX, COR_TEXTO_RX, 0);
         copia_ram(s, MENU_TITULO, 26);
-        texto_medio(x + 2, TOPO_MENU + 4, s, x1 - x, COR_BRANCO);
+        texto_menu(x + 2, TOPO_MENU + 4, s, x1 - x - 2, COR_BRANCO);
         pinta(0, TOPO_MENU + 17, 160, TOPO_MENU + 18, COR_LINHA);
     }
     if (m->editor) {
@@ -193,10 +329,144 @@ SEPARADA static void menu_cena(const struct menu_b *m)
             pinta(10, y + 5, 13, y + 12, COR_VERDE);
             pinta(8, y + 7, 15, y + 10, COR_VERDE);
         }
-        texto_medio(20, y + 4, s + p, 126, cor);
+        texto_menu(20, y + 4, s + p, 126, cor);
         if (r == m->cursor && m->editando)
             texto(148, y + 5, ICONE_SETAS, 1, COR_VERDE);
     }
+}
+
+/* O valor do item do cursor, das linhas que o motor acabou de montar (0x01E487BC; o titulo, cujo envio
+ * desenha a janela, sai depois delas, 0x01E48E82): a marcada como gravada (02 10) ou, sem marca (o
+ * nome, o OFFSET, o VERSION e o BFO), a primeira, sem os dois espacos. Sem o LIGADO do fim (o BANK
+ * ligado), e ate VALOR_MAX letras, mais do que cabe na linha do "L" (o maior, HARDWARE:V01T32, tem 15).
+ * Devolve o tamanho. */
+#define VALOR_MAX 19
+
+static unsigned valor_do_cursor(char *s)
+{
+    unsigned r, a = MENU_LINHAS, n;
+
+    for (r = 0; r < 3; r++)
+        if (RAM(u8, MENU_LINHAS + r * 27) == 2 && RAM(u8, MENU_LINHAS + r * 27 + 1) == 0x10) {
+            a = MENU_LINHAS + r * 27 + 2;
+            break;
+        }
+    if (a == MENU_LINHAS && RAM(u8, a) == ' ' && RAM(u8, a + 1) == ' ')
+        a += 2;
+    n = copia_ram(s, a, VALOR_MAX);
+    if (n && s[n - 1] == LIGADO)
+        s[--n] = 0;
+    return n;
+}
+
+/* Triangulo de 5 px de largura e 3 de altura, com a ponta para cima ou para baixo, a partir de (x, y). */
+static void triangulo(unsigned x, unsigned y, unsigned para_baixo, unsigned cor)
+{
+    unsigned i;
+
+    for (i = 0; i < 3; i++)
+        pinta(x + 2 - i, y + (para_baixo ? 2 - i : i), x + 3 + i, y + (para_baixo ? 3 - i : i + 1), cor);
+}
+
+/* A janela de pasta, de baixo da barra ao fim, no lugar do resumo e das linhas: os grupos (v53), os
+ * itens de um grupo (v55) e o menu do radio (v56). Na barra de titulo a pasta, o numero e o nome do
+ * grupo (no radio, "RADIO" e a banda); no corpo, os itens numerados como ficam abertos; embaixo, nos
+ * grupos, um ponto por grupo com o deste aceso, e as setas. Escolhendo o grupo, a barra de titulo fica
+ * acesa, com o "OK" que o abre, e o corpo mostra os itens dele. Escolhendo o item, a barra apaga e o
+ * item do cursor fica num cartao, com a seta do OK e o valor dele embaixo, num "L" verde que o cursor
+ * nao seleciona (os itens de acao nao tem). Se nao couber, a lista rola para o cursor e o valor ficarem
+ * a vista, com as setas do que ficou escondido e, entre elas, o risco com a barra da posicao, mais
+ * grossa que ele. Ambar e a cor de grupo; verde, a de item. */
+/* As bandas do radio (0x01E603FC) e a de agora: 0x01E44FB0 trata banda > 4 como FM. Para o titulo
+ * do menu do radio (v56) e para o radio_texto, mais abaixo. */
+static const char *const bandas_radio[5] = {"FM", "AM", "LSB", "USB", "CW"};
+
+static unsigned radio_banda(void)
+{
+    unsigned b = RADIO_BANDA;
+
+    return b > 4 ? 0 : b;
+}
+
+#define JANELA_Y      (ALTURA_ESTADO + 2)
+#define JANELA_CORPO  (JANELA_Y + 19)
+#define JANELA_FIM    126
+#define JANELA_PASSO  12                   /* a letra do menu (10 de altura) e 2 px entre as linhas */
+#define JANELA_LINHAS 6
+#define ROLA_X        151                  /* a barra de rolagem: [151, 154) */
+
+SEPARADA static void pasta_cena(const struct menu_b *m)
+{
+    unsigned radio = m->nivel == RADIO, escolhendo = m->nivel != 0, cursor = escolhendo ? m->numero : FORA;
+    unsigned g = radio ? 0 : escolhendo ? m->nivel - 1u : m->numero, total = radio ? 0 : MENU_GRUPOS;
+    u32 t = escolhendo ? MENU_TABELA : MENU_BASE + menu_inicio(g) * TAM_ITEM;
+    unsigned n = escolhendo ? MENU_CONTA : MENU_ITENS(g), valor = 0, linhas, inicio = 0, k, i, x, y;
+    char s[12], v[VALOR_MAX + 1];           /* s: numeros, "RADIO " e a banda, o nome da memoria do radio */
+
+    if (escolhendo && (radio ? (ITEM_FLAGS(t, cursor) & 0x0F) != 4
+                             : !(MENU_MARCAS((t - MENU_BASE) / TAM_ITEM + cursor) & MARCA_SEM_VALOR)))
+        valor = valor_do_cursor(v) != 0;   /* sem "L": as acoes (no radio, a memoria) */
+    linhas = n + valor;
+    if (escolhendo && linhas > JANELA_LINHAS && cursor + valor >= JANELA_LINHAS)
+        inicio = cursor + valor - (JANELA_LINHAS - 1);    /* escolhendo o grupo, do comeco (v57) */
+
+    pinta(3, JANELA_Y, 157, JANELA_FIM, COR_TEXTO_AMBAR);
+    pinta(4, JANELA_Y + 1, 156, JANELA_CORPO - 1, escolhendo ? COR_ESTADO : COR_CHIP_AMBAR);
+    pinta(4, JANELA_CORPO, 156, JANELA_FIM - 1, COR_ESTADO);
+    texto(8, JANELA_Y + 3, ICONE_PASTA, 2, COR_TEXTO_AMBAR);
+    if (radio) {
+        junta(junta(s, "RADIO "), bandas_radio[radio_banda()]);
+        texto_menu(27, JANELA_Y + 4, s, 100, COR_CINZA);
+    } else {
+        numero(s, g + 1, 1);
+        x = texto(27, JANELA_Y + 5, s, MEDIA, COR_TEXTO_AMBAR) + 5;
+        texto_menu(x, JANELA_Y + 4, item_nome(MENU_BASE, g, s), 130 - x, escolhendo ? COR_CINZA : COR_BRANCO);
+    }
+    if (!escolhendo) {
+        x = texto(136, JANELA_Y + 6, "OK", 1, COR_TEXTO) + 1;
+        texto(x, JANELA_Y + 6, ICONE_SETA, 1, COR_TEXTO_AMBAR);
+    }
+
+    /* as linhas a vista: os itens e, logo depois do item do cursor, o valor dele */
+    for (k = 0, y = JANELA_CORPO + 3; k < JANELA_LINHAS && inicio + k < linhas; k++, y += JANELA_PASSO) {
+        unsigned l = inicio + k;
+
+        if (!NA_JANELA(y - 2, y + JANELA_PASSO))
+            continue;
+        if (valor && l == cursor + 1) {           /* o "L": o valor, que o cursor nao seleciona */
+            pinta(13, y - 2, 14, y + 5, COR_VERDE);
+            pinta(13, y + 5, 18, y + 6, COR_VERDE);
+            texto_menu(21, y, v, 138 - 21, COR_VERDE);
+            continue;
+        }
+        i = l - (valor && l > cursor);
+        if (i == cursor) {
+            pinta(5, y - 1, 148, y + ALTURA_MENU + 1 + valor * JANELA_PASSO, COR_CHIP_AMBAR);
+            texto(141, y + 2, ICONE_SETA, 1, COR_TEXTO_AMBAR);
+        }
+        numero(s, i + 1, 1);
+        texto(9, y + 2, s, 1, COR_TEXTO_AMBAR);
+        texto_menu(20, y, item_nome(t, i, s), 138 - 20, i == cursor || !escolhendo ? COR_BRANCO : COR_TEXTO);
+    }
+
+    /* a rolagem: as setas do que ficou escondido e, entre elas, o risco com a barra da posicao */
+    if (linhas > JANELA_LINHAS) {
+        unsigned topo = JANELA_CORPO + 7, altura = JANELA_LINHAS * JANELA_PASSO - 13;
+
+        if (inicio > 0)
+            triangulo(ROLA_X - 1, JANELA_CORPO + 2, 0, COR_TEXTO_AMBAR);
+        if (inicio + JANELA_LINHAS < linhas)
+            triangulo(ROLA_X - 1, topo + altura + 2, 1, COR_TEXTO_AMBAR);
+        pinta(ROLA_X + 1, topo, ROLA_X + 2, topo + altura, COR_SEG_FUNDO);
+        k = altura * JANELA_LINHAS / linhas;
+        y = topo + (altura - k) * inicio / (linhas - JANELA_LINHAS);
+        pinta(ROLA_X, y, ROLA_X + 3, y + k, COR_TEXTO_AMBAR);
+    }
+
+    x = 80 - (total * 7 - 4) / 2;
+    for (i = 0; i < total; i++, x += 7)
+        pinta(x, JANELA_FIM - 7, x + 3, JANELA_FIM - 4, i == g ? COR_TEXTO_AMBAR : COR_SEG_FUNDO);
+    texto(140, JANELA_FIM - 9, ICONE_SETAS, 1, COR_CINZA);
 }
 
 /* ---------- scan QT ---------- */
@@ -233,16 +503,8 @@ SEPARADA static void scanqt_cena(unsigned rodando)
 #define RADIO_DIGITANDO 1
 #define RADIO_BUSCANDO  2
 
-static unsigned radio_banda(void)
-{
-    unsigned b = RADIO_BANDA;
-
-    return b > 4 ? 0 : b;                    /* 0x01E44FB0 trata banda > 4 como FM */
-}
-
 SEPARADA static void radio_texto(char *s, unsigned qual)
 {
-    static const char *const bandas[5] = {"FM", "AM", "LSB", "USB", "CW"};
     static const char *const faixas[4] = {"LW", "MW", "SW", "USW"};
     static const char *const passos[6] = {"1K", "5K", "10K", "100K", "500K", "1M"};
     static const char *const larguras[6] = {"0.5K", "1.0K", "1.2K", "2.2K", "3.0K", "4.0K"};
@@ -251,7 +513,7 @@ SEPARADA static void radio_texto(char *s, unsigned qual)
     s[0] = 0;
     switch (qual) {
     case R_BANDA:
-        junta(s, bandas[banda]);
+        junta(s, bandas_radio[banda]);
         break;
     case R_FAIXA:                            /* a faixa do AM; no SSB, SW */
         if (banda == 1)
@@ -519,11 +781,15 @@ static void le_telas(struct telas *t, unsigned modo, unsigned variante, unsigned
  * lado a lado, para os quadros delas nao se somarem na pilha. */
 static void cena_telas(const struct telas *t)
 {
+    unsigned pasta = t->modo == 1 && t->m.pasta;
+
     if (NA_JANELA(0, ALTURA_ESTADO))
         barra_estado(&t->e);
-    if ((t->modo == 1 || t->modo == 17) && NA_JANELA(ALTURA_ESTADO, TOPO_MENU))
+    if (((t->modo == 1 && !pasta) || t->modo == 17) && NA_JANELA(ALTURA_ESTADO, TOPO_MENU))
         resumo(&t->e, ALTURA_ESTADO + 2);
-    if (t->modo == 1)
+    if (pasta)
+        pasta_cena(&t->m);
+    else if (t->modo == 1)
         menu_cena(&t->m);
     else if (t->modo == 2)
         radio_cena(t->item, t->variante);
@@ -561,24 +827,44 @@ SEPARADA static void desenha_resumo(void)
 }
 #endif
 
-/* ---------- a tensao na partida (v38) ----------
+/* ---------- a tensao na partida (v38) e com o 0 segurado (v52) ----------
  * Com a mensagem de partida em tensao (b[0x14B88] & 3, 0x01E55EBC), a partida limpa a tela, le o ADC
  * (0x01E45FB0), faz x 444 / 1000 (decimos de volt) e escreve "   Volta" e a tensao por cima da 8a
- * posicao de "   Voltage" - o "ge" se perdia. A tela B a mostra num cartao, com a mesma conta. E rasa
- * (sem a estrutura das outras telas) porque roda na partida, que ja e funda. */
+ * posicao de "   Voltage" - o "ge" se perdia. Com o 0 segurado (acao 33 das teclas, 0x01E4CE96), a
+ * mesma conta numa caixa por cima da tela, 1 s, e depois a tela inteira de novo. A tela B mostra as
+ * duas no mesmo cartao. E rasa (sem a estrutura das outras telas) porque roda na partida, que ja e
+ * funda. */
+#define TENSAO_X0  3                       /* o cartao: [3, 157) x [40, 96) */
+#define TENSAO_X1  157
+#define TENSAO_Y0  40
+#define TENSAO_Y1  96
+
 SEPARADA static void tensao_cena(unsigned decimos)
 {
     static const char titulo[] = "VOLTAGE";
     char s[8], *p;
 
-    pinta(3, 40, 157, 96, COR_VERDE);
-    pinta(4, 41, 156, 95, COR_CARTAO);
+    pinta(TENSAO_X0, TENSAO_Y0, TENSAO_X1, TENSAO_Y1, COR_VERDE);
+    pinta(TENSAO_X0 + 1, TENSAO_Y0 + 1, TENSAO_X1 - 1, TENSAO_Y1 - 1, COR_CARTAO);
     texto(80 - largura(titulo, MEDIA) / 2, 50, titulo, MEDIA, COR_CINZA);
     p = numero(s, decimos / 10, 1);
     *p++ = '.';
     p = numero(p, decimos % 10, 1);
     junta(p, "V");
     texto(80 - largura(s, 3) / 2, 66, s, 3, COR_BRANCO);
+}
+
+/* O cartao na janela [x0, x1) das linhas [y0, y1), em faixas de ate 32 linhas (o buffer de video): a
+ * tela inteira na partida, so a area do cartao por cima da tela no ar com o 0 segurado. */
+static void tensao_faixas(unsigned decimos, unsigned x0, unsigned x1, unsigned y0, unsigned y1)
+{
+    unsigned y;
+
+    for (y = y0; y < y1; y += 32) {
+        janela_b(x0, x1, y, y + 32 < y1 ? y + 32 : y1, COR_FUNDO);
+        tensao_cena(decimos);
+        ENVIA();
+    }
 }
 
 /* ---------- o espectro (modo 20, v41) ----------
@@ -754,12 +1040,12 @@ void telas_b(unsigned modo, unsigned variante)
 
 void tensao_b(unsigned decimos)
 {
-    unsigned y;
+    tensao_faixas(decimos, 0, 160, 0, 128);
+}
 
-    for (y = 0; y < 128; y += 32) {
-        janela_b(0, 160, y, y + 32, COR_FUNDO);
-        tensao_cena(decimos);
-        ENVIA();
-    }
+/* O cartao com o 0 segurado: por cima da tela que a previa desenhou antes. */
+void tensao_tecla_b(unsigned decimos)
+{
+    tensao_faixas(decimos, TENSAO_X0, TENSAO_X1, TENSAO_Y0, TENSAO_Y1);
 }
 #endif

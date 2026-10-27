@@ -5,6 +5,108 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v57 — Oct 26 — the CHANNEL group shows its items again ✅ (it is V2.7T)
+
+The v56 test gave "it worked", except for group 3, CHANNEL, which showed no items while choosing the
+group. While choosing the group there is no cursor (`FORA`, 255), and the scroll computation used
+it: in CHANNEL, the only group with 7 items and so the only one that scrolls, the start of the list
+went past its end and no line was drawn. Now the list only scrolls while choosing the item, and
+while choosing the group it shows the first ones. The preview already showed screen 41 empty and it
+got through, because only the screens that were meant to change were looked at: since then, every
+screen that changed is looked at.
+
+## v56 — Oct 26 — the bigger letters and the radio menu in the folder ✔️ tested: "it worked", except for the empty CHANNEL
+
+The owner's two requests after seeing v55:
+
+- **Bigger menu letters**, in the folder window and in the open item (the title and the options),
+  without running into the scroll bar. It is the medium font with the middle row 2 px tall too (10
+  in all: the bars of A, E, F, H, P and R come out like the top and bottom ones) and 1 px more
+  between letters; what does not fit falls back to the old medium (NOISE REDUCTION). The window
+  became 6 lines of 12 px.
+- **The radio menu** (FM, AM, SSB) in the same window. It is the same engine, with one of two stock
+  tables (`0x01E61168` FM and AM, `0x01E6137C` SSB and CW, chosen at the entry `0x01E49000`) and the
+  number of items the band has (`0x01E3DE36`: FM 2, AM 5, SSB and CW 6). It sits in a single
+  folder, with `RADIO` and the band in the title and without the group dots; the memory item, whose
+  title is built by a function (`0x01E3D20E`: `FM`, `AM` or `SSB` plus `MEMCH`), has no "L". Numbers
+  count from 1, as in the main menu, and EXIT from the list goes back to the radio, as stock does.
+- The stack: with the window's two texts at 28 B each, the interface reached 744 B, 4 above stock's
+  740. They became 12 and 20 B, and it is back at 740.
+
+## v55 — Oct 26 — the menu the way the owner drew it
+
+After seeing the groups ("menu approved"), the owner changed how it is used:
+
+- **The folder window inside the group too.** The items numbered; the one under the cursor on a
+  card, with the OK arrow, and its value right below, in a green "L" the cursor does not select.
+  Only the item under the cursor shows its value, and the action items (RESET, MEMCH, DELCH and the
+  BANKS CHANNEL) have no "L". The value comes from the lines the engine already built
+  (`0x01E487BC`): the one marked as saved (`02 10`) or, with no mark (the name, OFFSET, VERSION and
+  BFO), the first one.
+- **OK opens the item already editing** (stock OK); saving or cancelling goes back to the window,
+  on the same item; EXIT goes back to the groups, on the group.
+- **VERSION is read-only**: OK opens it without a cursor, OK and the digits do nothing while it is
+  open, and only EXIT leaves.
+- **BANK and the BANKS CHANNEL tick several**: each OK saves and editing goes on; EXIT leaves. A
+  detour right after the set (`0x01E49A86`) clears the reception state, as stock does after
+  changing a setting, and goes on to the redraw without closing the edit.
+- **Scrolling.** With more lines than the window, the list scrolls so the cursor and the value stay
+  in view; the up and down arrows only show when there is something to scroll, and between them
+  there is a thin line with the position bar, thicker than it. The group dots stay.
+- DELCH still deletes one channel at a time.
+
+## v54 — Oct 26 — without the CH-C item
+
+The owner's request: since v49 C is a side with a VFO, like A and B, and the item that chose its
+channel no longer made sense. Without it, an empty C channel (deleted, or never chosen) would leave
+C out of reach of the A/B key; now, in TRIPLE, the key always reaches C: with its channel empty it
+goes to the next one that exists (`canal_existe`, by channel number; stock's next channel counts
+inside the zone in zone mode), and with no channel at all C goes on its VFO. The WATCH group was
+left with TTR, TX-A/B/C and WATCH, and the menu with 55 items. C's channel stays in the WATCH record,
+and CHIRP still writes it over the cable.
+
+## v53 — Oct 26 — the menu groups (never flashed; went straight to v54)
+
+The owner's request: group the items by subject, always in alphabetical order, in a way a layman
+understands, and show when an item is a group.
+
+- **13 groups**, each with its items in alphabetical order: AUDIO, BANKS, CHANNEL, DISPLAY, DTMF,
+  KEYS, MEMORY, REPEATER, SCAN, SYSTEM, TONES, TX and WATCH (the table is in the README). BANK NAME
+  and BANK CH became NAME and CHANNEL, inside BANKS.
+- **Two levels on the same engine.** The menu table, now with 80 slots, holds the groups and then
+  each group's items; entering a group puts its table in the menu state (`0x14BF4`), and going back
+  puts the groups' one. Each group is a list item with no get or set, with its items' names as the
+  options. The hooks sit at the menu entry (`0x01E4CBB2`, which reopens in the group it was left
+  from), at OK (`0x01E4C924`), at the digits (`0x01E4B9FA`, counting from 1, as the screen shows) and
+  at EXIT outside editing (`0x01E4D54A`, which goes back to the groups).
+- **The folder window**, in amber, when choosing the group: the folder, the group's number and name
+  in the title bar, its items in the body and a dot per group at the bottom. Inside the group, the
+  item's title got the `G-k` chip (group and item).
+- The map is in [reverse engineering, section 21](reverse-engineering.md#21-the-menu-in-folders-v53-to-v57)
+  and in [the screen map, section 15](screen-map.md#15-the-menu-folder-window-v53-to-v57).
+
+## v52 — Oct 26 — the name coming from CHIRP, the editor in capitals only and the voltage on 0
+
+The owner's three requests after V2.6T:
+
+- **A name written by CHIRP opened with `??` at the end** (the editor showed `SBST RADIO??`, 12/12).
+  The name is always 12 B in memory; the radio fills what is left with 0 (`0x01E3C7BE`) and CHIRP
+  with `0xFF`. The display stops at the first of the two, but the CH-NAME get (`0x01E3C732`) measured
+  the name with the ROM strlen (`0x021127C0`, called at `0x01E3C784`), which only stops at 0, and
+  opened the editor with the `0xFF`s as letters. The get's two ROM calls (the strlen and the copy,
+  `0x01E3C792`) now go through `nome_tamanho` and `nome_para_editor`: the letters up to the first 0
+  or `0xFF`, and zeros to the end of the buffer, which stock's `%15s` and the letter insertion
+  (`0x01E49664`) count on. BANK NAME, the only other name editor in the firmware (the whole app was
+  searched), uses the same count.
+- **The name editor with capitals and digits only**, opening in `ABC`. The `#` key cycled `abc` →
+  `ABC` → `123`; the "r0 = 0" at `0x01E4A5AA` became "r0 = 1", and the cycle is now `ABC` ↔ `123`.
+  Both editors open in `ABC`.
+- **Holding 0** (key action 33, `0x01E4CE96`) showed stock's voltage box, the old-style `VOLTAGE`.
+  Its send (`0x01E4CF1C`) goes through `gancho_tensao_tecla`, which draws the start-up card over the
+  screen; then the firmware waits 1 s and redraws everything, as before. The ` VOLTAGE` text left the
+  translated texts, since only that action used it.
+- `VERSION` now shows `V2.7T`.
+
 ## V2.6T — Oct 26 — three frequencies at once ✅
 
 v51 became **V2.6T**, the third stable version: `firmware/releases/BJ8300_BANK_v2.6T.anc` (sha256
