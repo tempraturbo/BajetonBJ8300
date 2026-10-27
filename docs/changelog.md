@@ -5,6 +5,22 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V2.7T — Oct 26 — the menu in folders ✅
+
+v57 became **V2.7T**: `firmware/releases/BJ8300_BANK_v2.7T.anc` (sha256 `93bf62bb…`). v56, which
+already carried everything from v52 to v55, was tested on the radio ("it worked", except for the
+empty CHANNEL group), and v57 is v56 with that fix. The `VERSION` menu shows `V2.7T` (`0x01E5FD10`)
+since v52: the owner asked for the new name together with the fixes.
+
+Published in the [V2.7T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T), together with the CHIRP module, the flasher
+and the cable driver. The README got, as a highlight, the menu-in-folders section, with three
+screens from the preview (choosing the group, a group's items with the value in the "L" and the
+radio menu) and the table of the 13 groups; the two menu screens it already had (the list and
+TX-A/B/C) were redone in the folder window, so the old menu no longer shows.
+
+One unproven report: in the v56 test, a text in the old style showed up once in the title and was
+gone at once. It was not found in the disassembly; the owner will say if it comes back.
+
 ## CHIRP driver — Oct 26 — the V2.7T name
 
 - The module became `chirp/bj8300_v2.7TEMPRA.py`, and the model in CHIRP, `Baojie →

@@ -5,6 +5,22 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V2.7T — 26/10 — o menu em pastas ✅
+
+A v57 virou a **V2.7T**: `firmware/releases/BJ8300_BANK_v2.7T.anc` (sha256 `93bf62bb…`). A v56, que já
+trazia tudo das v52 a v55, foi testada no rádio ("funcionou", menos o grupo CHANNEL vazio), e a v57 é
+ela com essa correção. O menu `VERSION` mostra `V2.7T` (`0x01E5FD10`) desde a v52: o dono pediu o
+nome novo junto com as correções.
+
+Publicada no [release V2.7T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T), junto com o módulo do CHIRP, o gravador e o
+driver do cabo. O README ganhou, em destaque, a seção do menu em pastas, com três telas da prévia (a
+escolha do grupo, os itens de um grupo com o valor no "L" e o menu do rádio) e a tabela dos 13
+grupos; as duas telas do menu que já estavam lá (a lista e o TX-A/B/C) foram refeitas na janela de
+pasta, para não mostrar o menu antigo.
+
+Um relato sem prova: no teste da v56, um texto no formato antigo apareceu uma vez no título e apagou
+logo. Não foi achado no desmontado; o dono vai avisar se voltar.
+
 ## Driver do CHIRP — 26/10 — o nome da V2.7T
 
 - O módulo virou `chirp/bj8300_v2.7TEMPRA.py`, e o modelo no CHIRP, `Baojie → BJ8300_v2.7TEMPRA`. O
