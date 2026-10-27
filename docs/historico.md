@@ -5,6 +5,13 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 27/10 — o nome da V2.8T
+
+- O módulo virou `chirp/bj8300_v2.8TEMPRA.py`, e o modelo no CHIRP, `Baojie → BJ8300_v2.8TEMPRA`. O
+  `MODEL_COMPAT` ganhou o `BJ8300_v2.7TEMPRA`, e uma imagem salva com qualquer um dos cinco nomes
+  antigos abre neste. O `teste_chirp_real` ganhou a `2c5`.
+- Fora o nome, nada mudou: a V2.8T só corrige o desenho do menu.
+
 ## v58 — 27/10 — o cartão do 3º item inteiro ✅ (é a V2.8T)
 
 O dono, usando a V2.7T: "sempre no terceiro item de cada menu o fundo âmbar fica pela metade", em

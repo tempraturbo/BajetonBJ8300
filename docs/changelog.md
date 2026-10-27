@@ -5,6 +5,13 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 27 — the V2.8T name
+
+- The module became `chirp/bj8300_v2.8TEMPRA.py`, and the model in CHIRP, `Baojie →
+  BJ8300_v2.8TEMPRA`. `MODEL_COMPAT` got `BJ8300_v2.7TEMPRA`, and an image saved under any of the
+  five old names opens in this one. `teste_chirp_real` got `2c5`.
+- Apart from the name, nothing changed: V2.8T only fixes how the menu is drawn.
+
 ## v58 — Oct 27 — the 3rd item's card whole again ✅ (it is V2.8T)
 
 The owner, using V2.7T: "always on the third item of every menu the amber background is cut in
