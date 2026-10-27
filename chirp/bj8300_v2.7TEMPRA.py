@@ -444,7 +444,7 @@ class _BankCableMixin(object):
             self.pipe.read(head[3])
             raise errors.RadioError(
                 'This radio is not running the banks firmware (the 24-bit address is not '
-                'accepted). Flash BJ8300_BANK V2.6T, or use the stock Bajeton BJ7800 or '
+                'accepted). Flash BJ8300_BANK V2.7T, or use the stock Bajeton BJ7800 or '
                 'Radtel RT-920 driver for the channels only.')
         data = self.pipe.read(EXT_BLOCK)
         if len(data) != EXT_BLOCK:
@@ -680,7 +680,8 @@ def _txabc_setting(value):
     rs = MemSetting('settings.dualtx', 'TX-A/B/C', RadioSettingValueList(
         TXABC_OPTIONS, current_index=int(value) if int(value) < 4 else 0))
     rs.set_doc('With TTR on, the side PTT transmits on: A, B or C (C only in TRIPLE). Off: the one '
-               'in focus. C needs firmware V2.6T; on earlier firmware leave it on Off, A or B.')
+               'in focus. C needs firmware V2.6T or later; on earlier firmware leave it on Off, A '
+               'or B.')
     return rs
 
 
@@ -706,22 +707,22 @@ def _vfo_scramble_setting(old, side, vfo):
 
 
 # The module is named after the firmware release: bj8300_v1.0TEMPRA.py (model BJ8300_v1.0TEMPRA)
-# until V2.0T, bj8300_v2.0TEMPRA.py until V2.5T, bj8300_v2.5TEMPRA.py (never released) until V2.6T.
-# An image keeps the vendor and model it was saved
+# until V2.0T, bj8300_v2.0TEMPRA.py until V2.5T, bj8300_v2.5TEMPRA.py (never released) until V2.6T,
+# bj8300_v2.6TEMPRA.py until V2.7T. An image keeps the vendor and model it was saved
 # with, and CHIRP only opens it with a driver whose model matches, directly or through
 # directory.MODEL_COMPAT (get_radio_by_image): this keeps the images saved with the old modules
 # opening here, without more models in the radio list.
 if isinstance(getattr(directory, 'MODEL_COMPAT', None), dict):
-    directory.MODEL_COMPAT.update({('Baojie', old): ('Baojie', 'BJ8300_v2.6TEMPRA')
+    directory.MODEL_COMPAT.update({('Baojie', old): ('Baojie', 'BJ8300_v2.7TEMPRA')
                                    for old in ('BJ8300_v1.0TEMPRA', 'BJ8300_v2.0TEMPRA',
-                                               'BJ8300_v2.5TEMPRA')})
+                                               'BJ8300_v2.5TEMPRA', 'BJ8300_v2.6TEMPRA')})
 
 
 @directory.register
 class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     """Baojie BJ-8300 running the channel banks firmware."""
     VENDOR = 'Baojie'
-    MODEL = 'BJ8300_v2.6TEMPRA'        # its own name: it only works with the modified firmware
+    MODEL = 'BJ8300_v2.7TEMPRA'        # its own name: it only works with the modified firmware
     VARIANT = ''
 
     # the channel scramble with the firmware's options, in menu order (see SCRAMBLE_OPTIONS)
@@ -756,7 +757,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     def get_prompts(cls):
         rp = super().get_prompts()
         rp.experimental = (
-            'Driver for the BJ-8300 running the TEMPRA channel banks firmware (V2.6T).\n'
+            'Driver for the BJ-8300 running the TEMPRA channel banks firmware (V2.7T).\n'
             '\n'
             'The 16 banks are in the Banks tab: one column per bank, and a channel can be in as\n'
             'many banks as you like. Double-click a bank\'s column header to rename it. Each\n'
@@ -1168,7 +1169,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         rs = RadioSetting('bank_selected', 'Bank edited by the radio menu',
                           RadioSettingValueList(
                               options, current_index=selected if selected < NUM_BANKS else 0))
-        rs.set_doc('The bank that the radio\'s BANK NAME and BANK CH menu items work on.')
+        rs.set_doc('The bank that the radio\'s BANKS > NAME and BANKS > CHANNEL menu items work on.')
         rs.set_apply_callback(self._apply_bank_selected)
         group.append(rs)
         return group
@@ -1188,5 +1189,5 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
 class BJ8300VhfUhf(BJ8300):
     """VHF/UHF sub-device: this is where the 960 channels are and, with them, the banks."""
     VENDOR = 'Baojie'
-    MODEL = 'BJ8300_v2.6TEMPRA'
+    MODEL = 'BJ8300_v2.7TEMPRA'
     VARIANT = 'VHF/UHF'

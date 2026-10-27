@@ -5,6 +5,16 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 26 — the V2.7T name
+
+- The module became `chirp/bj8300_v2.7TEMPRA.py`, and the model in CHIRP, `Baojie →
+  BJ8300_v2.7TEMPRA`. `MODEL_COMPAT` got `BJ8300_v2.6TEMPRA`, and an image saved under any of the
+  four old names opens in this one. `teste_chirp_real` got `2c4`.
+- The help for the chosen bank names `BANKS > NAME` and `BANKS > CHANNEL`, the new names in the
+  menu, and the texts name V2.7T (TX-A/B/C on C asks for "V2.6T or later").
+- The CH-C field stays: the item left the radio's menu in v54, but C's channel is still where C
+  starts in TRIPLE, and the cable writes it.
+
 ## v57 — Oct 26 — the CHANNEL group shows its items again ✅ (it is V2.7T)
 
 The v56 test gave "it worked", except for group 3, CHANNEL, which showed no items while choosing the

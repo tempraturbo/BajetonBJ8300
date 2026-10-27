@@ -26,7 +26,7 @@ except ImportError:
     print('chirp nao instalado - nada a testar aqui (o teste_bj8300.py cobre o resto)')
     sys.exit(0)
 
-CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v2.6TEMPRA.py')
+CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v2.7TEMPRA.py')
 _nome = 'chirp.loaded.%s' % os.path.splitext(os.path.basename(CAMINHO))[0]
 _spec = importlib.util.spec_from_file_location(_nome, CAMINHO)
 bj = importlib.util.module_from_spec(_spec)
@@ -106,7 +106,7 @@ def main():
 
     # 1. a classe e um radio do CHIRP, registrado e com o nome combinado
     confere('1. deriva de CloneModeRadio', issubclass(bj.BJ8300, chirp_common.CloneModeRadio), True)
-    confere('1b. nome do modelo', (bj.BJ8300.VENDOR, bj.BJ8300.MODEL), ('Baojie', 'BJ8300_v2.6TEMPRA'))
+    confere('1b. nome do modelo', (bj.BJ8300.VENDOR, bj.BJ8300.MODEL), ('Baojie', 'BJ8300_v2.7TEMPRA'))
     confere('1c. 960 canais, como o radio', bj.BJ8300._upper, 960)
 
     # 2. abre uma imagem (e o caminho que o CHIRP usa ao carregar um .img)
@@ -127,12 +127,12 @@ def main():
     with tempfile.TemporaryDirectory() as pasta:
         arq = os.path.join(pasta, 'antigo.img')
         for letra, Antigo.MODEL in (('', 'BJ8300_v1.0TEMPRA'), ('2', 'BJ8300_v2.0TEMPRA'),
-                                    ('3', 'BJ8300_v2.5TEMPRA')):
+                                    ('3', 'BJ8300_v2.5TEMPRA'), ('4', 'BJ8300_v2.6TEMPRA')):
             Antigo(imagem()).save_mmap(arq)
             aberto = directory.get_radio_by_image(arq)
             confere(f'2c{letra}. .img do {Antigo.MODEL} abre neste, com o modelo novo',
                     (isinstance(aberto, bj.BJ8300), aberto.VENDOR, aberto.MODEL),
-                    (True, 'Baojie', 'BJ8300_v2.6TEMPRA'))
+                    (True, 'Baojie', 'BJ8300_v2.7TEMPRA'))
         Antigo.MODEL = 'BJ8300_v9.9XYZ'
         Antigo(imagem()).save_mmap(arq)
         try:
@@ -355,7 +355,7 @@ def main():
     aj = r.get_settings()
     confere('10c. VFO A/B/C Channel e FM/AM/SSB Modulation fora do Specific, no topo',
             [g.get_shortname() for g in aj],
-            ['Basic Settings', 'DTMF Settings', 'BJ8300_v2.6TEMPRA Specific', 'VFO A/B/C Channel',
+            ['Basic Settings', 'DTMF Settings', 'BJ8300_v2.7TEMPRA Specific', 'VFO A/B/C Channel',
              'FM/AM/SSB Modulation', 'Banks'])
     abc = aj['abblock']
     confere('10c2. o WATCH e o TTR primeiro no VFO A/B/C Channel, e um bloco para cada lado',

@@ -5,6 +5,16 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 26/10 — o nome da V2.7T
+
+- O módulo virou `chirp/bj8300_v2.7TEMPRA.py`, e o modelo no CHIRP, `Baojie → BJ8300_v2.7TEMPRA`. O
+  `MODEL_COMPAT` ganhou o `BJ8300_v2.6TEMPRA`, e uma imagem salva com qualquer um dos quatro nomes
+  antigos abre neste. O `teste_chirp_real` ganhou a `2c4`.
+- A ajuda do banco escolhido cita `BANKS > NAME` e `BANKS > CHANNEL`, os nomes novos no menu, e os
+  textos citam a V2.7T (o TX-A/B/C com o C pede "a V2.6T ou depois").
+- O campo CH-C continua: o item saiu do menu do rádio na v54, mas o canal da C ainda é por onde ela
+  começa no TRIPLE, e o cabo o grava.
+
 ## v57 — 26/10 — o grupo CHANNEL de novo com os itens ✅ (é a V2.7T)
 
 O teste da v56 deu "funcionou", menos o grupo 3, CHANNEL, que na escolha do grupo aparecia sem
