@@ -67,7 +67,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | Faixa | Conteúdo |
 |---|---|
 | `0x00000–0x09FFF` | 960 canais de 32 B |
-| `0x0A000–0x0FFFF` | ajustes; `0x0F000–0x0F24F` é calibração de fábrica (potência de TX em `0xF000–0xF0BF`, [seção 20](#20-a-potência-de-tx-mapa-só-leitura); ganho do microfone em `0xF210`, [seção 19](#19-o-ganho-do-microfone-e-o-mic-gain-v49)) |
+| `0x0A000–0x0FFFF` | ajustes; `0x0F000–0x0F24F` é calibração de fábrica (potência de TX em `0xF000–0xF0BF`, [seção 20](#20-a-potência-de-tx-mapa-só-leitura); ganho do microfone em `0xF210`, [seção 19](#19-o-ganho-do-microfone-e-o-mic-gain-v49); squelch, subtom e cristal, [seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)) |
 | `0x10000–0x1AFFF` | **imagem de abertura**: 160×138 em RGB565 little-endian, 44160 B |
 | `0x20000–0x99FFF` | fontes e textos em chinês (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 registros de 60 B que o firmware usa |
@@ -186,6 +186,9 @@ em r0, origem em r1, tamanho em r2). Só leitura. Foi ela que mostrou o caso das
 | `0x00014B83` | roger: 0 OFF, 1 BEEP, 2 TONE1200; 3 = BEEP 2 (v22) |
 | `0x00014BDF` | MIC GAIN: 0 HIGH, 1 MID, 2 LOW (v49; o `0x9033` dos ajustes, seção 19) |
 | `0x0000706C` | ganho do microfone posto no registrador `0x7D` a cada TX (cópia do `0xF210`; desde a v49, do MIC GAIN) |
+| `0x00014BE1` / `0x00014BE2` | COMPRESSOR (0 OFF, 1 a 3 = 1,33:1, 2:1 e 4:1) e MIC AGC (0 ON, 1 OFF): o `0x9035` e o `0x9036` dos ajustes (v59, seção 22) |
+| `0x00014BE3` | CRYSTAL FINE, 16 bits com sinal, em 10 Hz a 435,5 MHz: o `0x9037` dos ajustes (v59, seção 22) |
+| `0x00007076`..`0x00007079` | a correção do cristal da calibração (cópia de `0xF21A`; desde a v59, com o CRYSTAL FINE somado; seção 22) |
 | `0x00014B7F` | TX-A/B (`0x9013` dos ajustes): 0 OFF, 1 A, 2 B; desde a v50, 3 = C (seção 18) |
 | `0x00015384` | marca da troca de lado do PTT: 1 = trocou (destroca no fim da TX); desde a v51, bit 7 = TX na terceira, bit 6 = ela já está no lado B, bit 5 = a troca para o B foi do TX-A/B/C, bits 0..3 = a potência do B |
 | `0x00015E2C` / `0x000129A4` | scramble do canal ou VFO atual / o da sintonia: 0 OFF, 1 3400 Hz, 2 2900 Hz, 3–8 = 2700, 2800, 3000…3300 Hz (v25) |
@@ -1071,9 +1074,10 @@ nem o CHIRP de fábrica mexem nele (o CHIRP baixa a calibração, `0xF000..0xF24
 
 **A escala.** O firmware escreve 6 bits, e a folha de dados do BK4819 dá a sensibilidade do
 microfone nos bits 4 a 0 (0 a 31, em degraus de 0,5 dB). Os outros registradores que o firmware
-usa batem com esse chip (`0x36` amplificador, `0x43` filtro, `0x47`/`0x48` áudio, `0x71` scramble),
-mas não há prova direta do chip no firmware: nenhum texto com o nome, nenhuma leitura da
-identificação. Por isso o MIC GAIN não passa de 31. No rádio de teste, pelo cabo, o `0xF210` foi a 18
+usa batem com esse chip (`0x36` amplificador, `0x43` filtro, `0x47`/`0x48` áudio, `0x71` scramble).
+Nenhum texto do firmware diz o nome, e até a v58 não havia prova direta; a da v59 é a tabela que a
+partida escreve no `0x09`, a do BK4819 do UV-K5 ([seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)).
+Por isso o MIC GAIN não passa de 31. No rádio de teste, pelo cabo, o `0xF210` foi a 18
 e depois a 31, e a diferença ouvida (18 → 31: "mudou bastante") combina com essa escala.
 
 **O item MIC GAIN** (v49, logo depois do NOISE REDUCTION, no molde do TDR): HIGH, MID e LOW, que
@@ -1187,3 +1191,189 @@ igual. Os números contam de 1, como no principal; o OK e o EXIT ficam os de fá
 **A pilha.** A janela de pasta é desenhada pelo envio do título, no fundo do motor de menus. Com os
 dois textos da janela em 28 B cada, a interface ia a 744 B (v56), 4 acima da de fábrica; eles ficaram
 com 12 e 20 B, e as três raízes voltaram aos 740, 620 e 696 B de fábrica.
+
+## 22. A pasta MIC, o CRYSTAL FINE e o menu recebendo (v59)
+
+**O chip de rádio é um BK4819.** Os 16 valores que a partida escreve no registrador `0x09`
+(`0x01E566C0..0x01E56766`, de `0x006F` a `0xF09F`) são, um a um, os da inicialização do BK4819 no
+UV-K5, e o `0x43` da largura de banda (`0x01E4416E`: `0x4008` no largo, `0x3028` no estreito) bate
+com o desenho dos bits dele. Toda escrita no chip passa por `0x01E39D82(reg, valor)`: são 154 pontos,
+contando os `goto` de cauda (só os `call` dão 138). A leitura é `0x01E407C0(reg)`, que manda o
+registrador com o bit 7 ligado.
+
+**O compressor de TX** vem configurado e desligado. A partida põe `0xAA00` no `0x29` (`0x01E56602`:
+razão 2:1 nos bits 15:14, ponto de 0 dB 84) e `0x0B40` no `0x28` (`0x01E565F8`: o expansor do RX, com
+a razão 0, desligado), mas nada liga o bit 3 do `0x31`, que liga os dois. As escritas do `0x31` leem,
+mudam o bit 0 (o NR: `0x01E44078`, `0x01E440A2`, `0x01E4B0B8`, `0x01E4B0DE`) ou o 1 (o scramble:
+`0x01E4090E`, `0x01E4092A`, `0x01E4094A`) e gravam; o espectro guarda e devolve o `0x31` inteiro, com
+mais dez (`0x01E3FEE4`, a lista de `0x01E5FF7B`: `0x13`, `0x30`, `0x31`, `0x37`, `0x3D`, `0x40`, `0x43`,
+`0x47`, `0x48`, `0x7D`, `0x7E`). O bit posto por nós fica. **O AGC do microfone** é o bit 15 do `0x19`
+(1 desliga), que só a partida escreve, com `0x1041` (`0x01E565EE`): ligado. Os registradores só voltam
+ao padrão no reset da partida (`0x00`, `0x01E5653C`), na carga `0x01E56084`, que roda uma vez
+(`0x01E56CB6`), antes do gancho da partida.
+
+**A pasta MIC** junta COMPRESSOR (OFF, LOW, MID e HIGH: 1,33:1, 2:1 e 4:1 nos bits 15:14 do `0x29`, o
+resto como a partida deixa; OFF devolve o `0xAA00` e desliga o bit 3), MIC AGC (ON e OFF) e o MIC
+GAIN, que sai do TX. Os níveis ficam no `0x9035` e no `0x9036` dos ajustes (`b[0x14BE1]` e
+`b[0x14BE2]`), que o firmware não usa: nenhuma instrução os lê nem grava fora das cópias do bloco,
+conferido no desmontado inteiro (constante, base `0x14680` com deslocamento, meia palavra e palavra).
+A gravação dos ajustes (`0x01E3AB36`) leva 39 B a partir de `0x14BCC`, então eles vão para o chip de
+dados com os outros, e o cabo serve e recebe os 64 B do bloco da RAM ([seção 4](#4-protocolo-do-cabo)).
+O padrão de fábrica (`0x01E4842E`) copia 39 B de `0x01E603C3`, mas a tabela acaba antes e segue com
+o texto em chinês que vem depois: ficam 197 e 181, que valem OFF e ON, os de fábrica. O `aplica_mic`
+põe os três na partida (no `gancho_partida`, depois do reset do chip), no set de cada item e quando
+os ajustes mudam por fora do menu (`gancho_ajustes`: o upload do CHIRP e o RESET).
+
+**O cristal.** Toda sintonia passa por `0x01E440CE(freq)`, com a frequência em 10 Hz: ela soma a
+correção da calibração e grava o `0x38` e o `0x39`. Só o espectro escreve os dois direto
+(`0x01E4AF1E`). A correção vem dos bytes 10 a 13 do bloco `0xF210`, que a partida copia para
+`0x7076..0x7079` (`0x01E561BE`):
+
+| Byte | RAM | O que é |
+|---|---|---|
+| `0xF21A` | `b[0x7076]` | índice grosso, de 0 a 16, na tabela `0x01E602E0` = {40, 35, …, 5, 0, 5, …, 40} décimos de ppm, negativos até o 8; 17 ou mais vale 8, o zero (e é regravado como 8) |
+| `0xF21B` | `b[0x7077]` | `0xA0` = usa o fino no lugar do índice |
+| `0xF21C`, `0xF21D` | `0x7078` | o fino, 16 bits com sinal: soma `freq / 100 × valor / 435500`, ou seja, 10 Hz por unidade em 435,5 MHz, proporcional à frequência |
+
+No rádio de teste (calibração lida pelo cabo em 26/10) o índice é 8 e a marca `0xFF`: nenhuma
+correção de fábrica.
+
+**O CRYSTAL FINE** (pasta CALIBRATION) soma um ajuste ao que a fábrica gravou: de −2000 a +2000 Hz em
+435,5 MHz, de 10 em 10 (401 linhas, um número com exibição própria, como o BANK). +2000 Hz são
+4,6 ppm, e em 520 MHz dão 2,4 kHz, dentro do canal de 12,5 kHz; a faixa grossa de fábrica é ±4 ppm.
+Com o ajuste diferente de 0, o `aplica_cristal` põe a marca e, no fino, o ajuste mais o de fábrica (o
+fino dela, ou o índice convertido: 0,5 ppm = 21,775 unidades, arredondado); com 0, os quatro bytes de
+fábrica voltam como estavam, relidos do chip de dados. O ajuste fica no `0x9037` e no `0x9038`
+(`b[0x14BE3]`, 16 bits com sinal), livres como os da pasta MIC; o padrão de fábrica deixa `0xC4C0`,
+fora da faixa, que vale 0. Vale na próxima sintonia, e o OK do menu a pede: depois do set o firmware
+zera o estado da recepção (`0x01E49A86`). Com o item aberto, os números digitados não fazem nada
+(`gancho_menu_digito`): escolheriam a linha do número, de −2000 Hz em diante.
+
+**A pasta de um item só.** No EXIT editando, depois de cancelar a edição, `r0 = 1400` (`0x01E4D53C`)
+lê a quantidade de itens da tabela, e com 1 o menu fecha inteiro (`0x01E4D566`, para `0x01E3C29C`),
+como num menu rápido de um item; com mais, segue ao bipe do EXIT (`0x01E4D59A`). O `desvio_menu_um`
+entra ali: num grupo segue sempre ao bipe, e a lista do grupo fica, também no CALIBRATION. Nada
+desvia para os bytes cobertos, e o r0 é escrito em `0x01E4D59A` antes de ser lido.
+
+**O menu recebendo.** Com o menu aberto, ao receber, aparecia por cima da janela de pasta o bloco de
+fábrica do lado em evidência: o selo dela (que só conhece A e B: a C saía B), o nome e o número do
+canal. O laço do sinal chama a tela inteira de fábrica (`0x01E3C132`, por `0x01E44812`), e só três
+rotinas pintam o bloco e o complemento (`0x01E3BD04` e `0x01E3C06E`): ela, a do lado em evidência
+(`0x01E453E0`) e a de um lado (`0x01E413BE`). As três têm desvio nosso; o da última já não desenhava
+no menu, e os outros devolviam o desenho à de fábrica fora da tela principal (`layout()` em 0), onde
+ela pinta na geometria do A compacto, por cima do título e da primeira linha da janela. Desde a v59,
+`b_tela`, `b_evidencia` e `b_digitando` não desenham nada no modo de tela 1, e `b_tela` zera o estado
+de TX como a de fábrica (só com 0: com 1, a tela de um VFO, `0x01E3C152` pula `0x01E3C1D4`). A saída do
+menu (`0x01E3C29C`) zera o modo de tela (`0x01E3C322`) antes de redesenhar (`0x01E3C33E`), então a tela
+principal volta inteira. O menu não fecha ao receber: a passagem para "recebendo"
+(`0x01E47D98..0x01E47E38`) não mexe no modo de tela.
+
+No lugar, a barra de cima mostra quem recebe: `● RX`, o selo da letra (`LETRA()`, então a C sai C) e o
+texto que o MDF daquele lado pede, cortado antes da tensão, no lugar dos ícones (VOX, DW, MO, NR, a
+nota, o Bluetooth e o cadeado), que voltam quando o sinal some. Quem recebe é sempre o lado em
+evidência: a entrada do menu desarma a dupla escuta (`0x01E4CBBC`, para `0x01E3FDE4`) e o laço do sinal
+só a arma no modo de tela 0 (`0x01E47C10`: `b[0x15379]`, o modo e `b[0x14950]` têm de estar zerados).
+O lado que chega ao medidor no menu é sempre o A (`0x01E452E8`), e por isso o indicador não o usa. A
+dupla escuta parada no menu é escolha de fábrica e ficou: a ida dela ao outro lado troca o canal
+"corrente", que é o que os itens do menu leem e gravam.
+
+**Outras calibrações mapeadas (só leitura).** O `0xF0C0` e o `0xF0D0` são os limiares de abrir e de
+fechar do squelch por nível (10 B cada, para `0x7052` e `0x705F`, lidos em `0x01E4762C` e
+`0x01E476A6`); o `0xF0E0`, o `0xF0F0` e o `0xF110` são correções por faixa lidas no mesmo caminho
+(`0x01E4765E`, `0x01E47AE4` e `0x01E4769A`), e o `0xF100` vai para `0x1496C`, sem leitor conferido. O
+`0xF211` (`b[0x706D]`) é o nível do subtom, posto nos bits 6:0 do `0x51` (`0x01E441A6`, `0x01E443C8`); no
+rádio de teste, 70.
+
+**Conferido no build:** a `3b` aceita grupo de um item, e a `4t` confere o `desvio_menu_um` byte a
+byte. A pilha é a de fábrica nas três raízes (740, 620 e 696 B), e os get, set e exibe novos, medidos
+no ponto da chamada, ficam em até 320 B.
+
+## 23. A luz da tela por PWM (v60, diagnóstico)
+
+**O pino.** A luz é o PB7 (pino 23). `0x01E001BA(pino)` devolve a base da porta pela tabela de
+`0x01E006D0` (`0x1E5000`, `0x1E5040`, `0x1E5080`, `0x1E50C0`: as `JL_PORTA..D` do SDK da JieLi), e a
+rotina da luz (`0x01E394D6`) só liga e desliga o bit 7 do OUT da porta B e grava a marca `b[0x15386]`.
+Ela é chamada ao acender pelo ABR (`0x01E3951C`, que a chama em `0x01E39552`), ao apagar no laço do
+sinal (`0x01E46578`, onde entra o `gancho_luz` da v49) e duas vezes na partida, que acende o logo
+(`0x01E55FB0`, `0x01E5607E`). Fora da partida, só ela mexe no pino: a iniciação da placa
+(`0x01E5483E`) e o `main` do SDK (`0x01E53D2E`) configuram o pino antes do gancho da partida.
+
+**O PWM.** Os temporizadores do BR23 ficam em `0x1E0400`, `0x1E0500`, `0x1E0600` e `0x1E0700` (CON,
+CNT, PRD e PWM): o TIMER0 faz as esperas, o TIMER1 é o tique de 2 ms (`0x01E3E44C`), e o TIMER2 não
+aparece no app.bin. O PB7 não é pino fixo de PWM (os do SDK são PA05, PA12, PB03 e PB05), e o caminho
+é o canal de saída 2, que leva o `CH2_T2_PWM_OUT` (46, `0x2E`). O firmware tem a rotina que liga um
+canal, o `gpio_output_channle` do SDK em `0x01E4370A(pino, fonte)`: grupo = fonte >> 4, a fonte & 0xF
+nos bits 11:8 do CON1 do IOMAP (`0x1E511C`) no CH0 ou nos bits 23:20 e 27:24 do CON3 (`0x1E5124`) no
+CH1 e no CH2, e o pino com PU = PD = 1 e {OUT, DIE} = {0, 0}, {0, 1} ou {1, 0}. O `luz_inicia`, no fim
+do gancho da partida, configura o TIMER2 como o `timer_pwm_init` do SDK (CON = `0x18`: o cristal de
+24 MHz e /4; PRD = 240, 25 kHz, fora do áudio; o PWM = 60, 25%, com a luz acesa; CNT = 0; CON |= 1) e
+liga o canal (23, `0x2E`). Sem o bit 8 do CON, que leva o PWM ao pino fixo do TIMER2 (o PB3, que não
+é o da luz): o SDK também não o liga no caminho pelo canal.
+
+**A rotina da luz trocada.** Com o pino no canal, o OUT escolhe o canal, e a rotina de fábrica, ao
+apagar, passaria o pino para o CH0. O `desvio_luz` entra nela (8 bytes: `[--sp] = rets; r1 = 83584`,
+nada desvia para dentro deles): com o TIMER2 contando, grava a marca como ela e põe o ciclo em 60 ou em
+0; antes disso (a luz do logo), deixa a de fábrica rodar.
+
+**O CH2 e as seriais.** A rotina do canal só tem dois chamadores. O cabo, na partida (`0x01E55AF4`, a
+configuração de `0x01E5FCB6` = {62, 61, 0, 17}), é a UART1 no CH1. A abertura genérica (`0x01E6A974`,
+pelo `0x01E4381A`, na troca para o modo de atualização em `0x01E4C096` e em `0x01E54A92`) pega a
+primeira serial livre (o bit 0 do CON0 de `0x1E2000`, `0x1E2100` e `0x1E2200`, `0x01E6A94C`): a UART0
+no CH0, a UART1 no CH1 e a UART2 no CH2. A UART0 pode vir ligada do carregador (o `main` a testa em
+`0x01E53E5C` para as mensagens), então o CH2 só seria tomado com o cabo e ela ocupados. O
+`luz_inicia` não liga o PWM com a UART2 ligada, para não tirar o canal de uma serial; se ela for
+ligada depois, o pino só repete o TX dela enquanto durar.
+
+**O que só o rádio responde:** se a luz escurece sem piscar a 25 kHz, se há zumbido no RX ou no TX, e
+o comportamento no ABR, no SAVE e na volta do modo de gravação. O pior caso é a luz ficar cheia (o
+pino fora do canal volta a ser saída com OUT = 1) ou apagada até gravar outra versão; nada disso toca
+a partida antes do gancho dela nem o modo de gravação.
+
+**Conferido no build:** a `4m` confere o `desvio_luz` byte a byte com os outros 22, e a pilha é a de
+fábrica nas três raízes (o desvio pesa 28 B onde a luz é chamada).
+
+**O item BRIGHTNESS (v61).** O diagnóstico funcionou no rádio: a luz ficou mais fraca, sem piscar e sem
+ruído no RX nem no TX. O nível fixo virou o item BRIGHTNESS da pasta DISPLAY: 100%, 60%, 35%, 20% e
+10% (os ciclos 240, 144, 84, 48 e 24 de 240), no `0x9039` dos ajustes (`b[0x14BE5]`; fora da faixa,
+como o RESET de fábrica o deixa, vale 100%). O `luz_ciclo` lê o nível; o `luz_inicia` e o `b_luz` o
+usam, e o `luz_aplica` o põe na hora, no set do item e no `gancho_ajustes`, com a marca da luz como
+está. O `0x9039` é livre pela mesma varredura dos bytes da v59, refeita por script e validada no byte
+do NOISE REDUCTION ([seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)).
+
+**Sem PWM a 100% e apagada (v62).** Com a v60, o dono viu ruído num Baofeng encostado (e às vezes no
+próprio rádio), que sumia com a luz apagada: cada borda do PWM espalha um pouco de RF. O `luz_poe`
+leva o pino ao canal só com a luz acesa abaixo de 100% (o canal liga uma vez, enquanto o PD do PB7
+estiver em 0); a 100% e apagada, o pino sai do canal e volta a ser saída comum, com o PD em 0, o DIE
+em 1 e o OUT, como a iniciação da placa o deixa (`0x01E54844..0x01E54854`), sem borda nenhuma. O TIMER2
+fica contando sem pino. Com a UART2 ligada, o nível escurecido fica em 100%.
+
+**A correção do indicador de recepção no menu (v62).** O indicador da v59
+([seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)) contava com o medidor, mas no rádio
+ele não aparecia: o laço do sinal só chama o medidor nos modos de tela 0 e 3 (`0x01E46216`, na rotina
+do nível do sinal), e o fim da recepção não passa por ele. A rotina do nível (`0x01E46166`) é chamada
+em qualquer modo: o laço tem um contador rápido (`b[0x14612]`, de 0 a 9 a cada volta) e um lento
+(`b[0x14614]`, que anda a cada 10), e na volta em que o rápido dá 0 o lento escolhe a tarefa (o `tbh` de
+`0x01E46A38`); o 3 e o 8 vão a ela (`0x01E46C7A`), ou seja, a cada 50 voltas. O `desvio_sinal` entra na
+entrada dela (8 bytes, `[--sp] = {rets, r7-r4}; r5 = 83584`; nada desvia para dentro deles): fora do
+menu, a de fábrica; no menu, no lugar dela (que ali só leria o RSSI e o nível guardado em `b[0x7031]`),
+compara o estado da recepção (`b[0x15367]` = 4) com o que a barra mostra, guardado no mesmo
+`b[0x7031]` (0xFE recebendo, 0xFF não), e redesenha a barra quando muda. O `le_estado` põe o RX no
+menu pelo mesmo estado, então toda barra desenhada ali (a bateria, o cadeado) concorda. Nos modos 0 e
+3 nenhum nível (0 a 4) é 0xFE, e a volta do menu redesenha o medidor como depois do 0xFF de fábrica.
+
+**O fim da recepção no menu (v63).** Com a v62 o indicador aparecia e não sumia: no menu o estado da
+recepção não sai do 4 quando a portadora cai (do estado 4, o código do laço não chega a nenhuma
+escrita do estado; a volta para a espera acontece dentro de rotinas chamadas). O indicador passou a
+exigir também o pedido do amplificador da recepção: `0x01E39E2C(n)` (o `PEDE_AMPLI`) guarda um byte por
+pedido a partir de `0x129D2` (1 e 2 o primeiro, 3 e 4 o segundo, 5 e 6 o terceiro, ...: liga e solta,
+pelo `tbb` de `0x01E39E3A`) e liga o amplificador com o OU deles. O da recepção é `b[0x129D4]`: a entrada
+da recepção o liga (`0x01E47E1A`, fora do scan QT) antes de pôr o estado em 4, e o sinal que cai o solta
+(`0x01E47A9E`), nos dois sem olhar o modo de tela. `RECEBENDO_MENU` = estado 4 e esse byte ligado,
+usado pelo `b_sinal` e pelo `le_estado`.
+
+**O indicador sem marca (v64).** O diagnóstico com `-DDIAG_RX` mostrou no rádio que a leitura do nível é
+chamada perto de uma vez por segundo também depois da recepção, e que o estado e o pedido do amplificador
+voltam na hora (recebendo `E4 A1`, depois `E3 A0`). O que falhava era a marca em `b[0x7031]`: o firmware a
+zera por conta própria (`b[0x7031] = 255` em `0x01E45A70`, chamada pelo laço em `0x01E46F52`), e com ela
+zerada o `b_sinal` achava a barra limpa. Agora ele redesenha a barra em toda chamada, no menu, sem marca; e o
+`b[0x7031]` só é escrito pelo firmware.

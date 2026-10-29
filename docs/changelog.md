@@ -5,7 +5,21 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
-## Repository — Oct 29 — it builds on its own
+## v64 — Oct 29 — the indicator goes away, redrawing the bar every time (to be tested)
+
+`firmware/releases/BJ8300_BANK_v64.anc` (sha256 `f782e4a6…`), named V2.9T. The diagnostic answered (the owner's photos,
+menu open): idle, `E3 A0 F0 G0 28`; receiving, `● RX E4 A1 F1 G0 41`; after the other radio's PTT, `E3 A0 F0
+G0 5x`. The counter kept moving, so the level reading is still called after the reception (about once a
+second), and the state and the amplifier request go back to normal at once. The fault was the mark of what
+the bar shows: v62 and v63 kept it in `b[0x7031]`, the meter level already drawn, and the firmware resets it
+on its own (`b[0x7031] = 255` at `0x01E45A70`, which the loop calls at `0x01E46F52`). With the mark reset, the
+indicator thought the bar was clear and did not redraw it. Now, in the menu, `b_sinal` redraws the bar on
+every call, with no mark at all, as the diagnostic did on the radio; `b[0x7031]` belongs to the firmware
+alone again.
+
+The build passed ("tudo certo", with step 6's stack equal to stock) and is reproducible.
+
+## Repository — Oct 29 — it builds on its own, and the end-of-reception diagnostic
 
 - **Building without installing the compiler.** The owner asked that a layperson be able to build with
   everything at hand. The five executables of the JieLi 2.5.3 toolchain the build uses (37 MB of the
@@ -23,6 +37,138 @@ its cause, because that is what stops it happening twice.
   with the arguments), `fluxo.py` (the paths inside a routine) and `escritas.py` (who reads or writes a
   RAM address, to be validated first on a known one).
 - The README explains building step by step, for someone who has never built anything.
+
+**End-of-reception diagnostic** (`firmware/releases/BJ8300_DIAG_RX.anc`, sha256 `7a81c174…`): with v63,
+the amber indicator showed but still did not go away when the reception ended. With `-DDIAG_RX`
+(`build.sh` takes `CFLAGS_EXTRA`), in the menu the bar shows, in place of the icons, the receive state
+(E), the receive amplifier request (A), the flags `b[0x1536F]` (F) and `b[0x15368]` (G) and a counter
+that moves on every `b_sinal` call (in `0x903A` of the settings, free by the validated scan), and
+`b_sinal` redraws the bar on every call. Without the option, the firmware comes out as v63.
+
+## v63 — Oct 29 — the indicator goes away when the reception ends, in amber, and the V2.9T name (tested: amber, but it still did not go away)
+
+`firmware/releases/BJ8300_BANK_v63.anc` (sha256 `ddabab5a…`). The owner, with v62: "now it shows, but when
+I let go of the other radio's PTT it does not go away ... to bring it back I have to touch the menu".
+
+- **The indicator goes away.** v62 only looked at the receive state (`b[0x15367]` = 4), and in the menu
+  it does not leave 4 when the carrier drops. From state 4 the loop's code reaches no write of the
+  state: the return to waiting happens inside called routines. The mark of what the bar shows
+  (`b[0x7031]`) is not to blame: a scan, validated first on the known reads of `0x706D`, only finds
+  writes to it in the channel scan, the QT scan and the level reading itself. Now the indicator also
+  requires the receive audio open: the receive amplifier request (`b[0x129D4]`, which `PEDE_AMPLI(5)`
+  sets on entering reception, `0x01E47E1A`, before setting the state to 4, and `PEDE_AMPLI(6)` clears
+  when the signal drops, `0x01E47A9E`, neither looking at the screen mode). It is the same audio you
+  hear open and close. The preview got the byte on screens 57.
+- **In amber**, at the owner's request: the letter and the text in a box like the receiving band on
+  the main screen (dark amber background, amber badge with a dark letter and amber text), starting
+  after `● RX`, which stays as it was.
+- **The V2.9T name**, at the owner's request: `VERSION` shows `V2.9T`, and the CHIRP driver became
+  `chirp/bj8300_v2.9TEMPRA.py` (model `Bajeton → BJ8300_v2.9TEMPRA`). Images saved under any old name,
+  Baojie or Bajeton, open in it (`teste_chirp_real`: `2c` to `2c8`). The README and the GitHub release
+  come once it is tested.
+
+The build passed ("tudo certo"), the stack is stock's at the three roots and the build is reproducible.
+
+## v62 — Oct 29 — the menu indicator for real, the backlight without PWM at 100% and when off, and CHIRP under Bajeton (tested: the indicator showed and did not go away)
+
+`firmware/releases/BJ8300_BANK_v62.anc` (sha256 `baa4c988…`): v61 with three fixes, after the owner's
+tests.
+
+- **The menu's who-is-receiving indicator never showed** (v59): "that tag with the MDF name that sits
+  on the bar in the menu when someone transmits ... is not showing, but that old-style channel
+  message stopped appearing". v59 relied on the meter, but the signal loop only calls it in screen
+  modes 0 and 3 (`0x01E46216`), and the end of a reception does not go through it at all. The preview
+  faked the call the radio does not make, which is why it showed the indicator. Now it comes from the
+  routine that reads the signal level (`0x01E46166`), which the loop calls every 50 passes in any
+  screen mode: in the menu, a detour at its entry compares the receive state (4 = receiving) with what
+  the bar shows and redraws it when they differ, and every bar drawn in the menu already shows who is
+  receiving. The preview no longer calls the meter on those screens and uses the receive state.
+- **The dimmed backlight's interference.** The owner, with v60: "when I leave 2 radios very close ...
+  the Baofeng picks up noise ... and sometimes the Bajeton itself does, but rarely", and "when the
+  light goes off the interference stops". Every PWM edge spreads a little RF, which a receiver right
+  next to it hears. Now the PWM only exists with the backlight on below 100%: at 100%, the default,
+  and with the backlight off, the pin leaves the channel and is a plain output again, exactly as
+  stock, with no edges at all. The Brightness help in CHIRP warns about the interference.
+- **CHIRP under Bajeton.** At the owner's request, the driver's vendor went from Baojie to Bajeton,
+  the radio's brand, where CHIRP also lists the BJ7800. Images saved under Baojie, the V2.8T module's
+  included, open in it through `MODEL_COMPAT` (`teste_chirp_real`: `2c6` and `2c7`). The README
+  changes when the version is released: today it explains the V2.8T module, which is Baojie.
+
+The build passed ("tudo certo", `4m` with 24 entry detours), the stack is stock's at the three roots
+(the new detour reaches 388 B, within the signal loop's 620) and the build is reproducible.
+
+## v61 — Oct 28 — BRIGHTNESS (replaced by v62 before being flashed)
+
+`firmware/releases/BJ8300_BANK_v61.anc` (sha256 `19b9a190…`): v60 with the **BRIGHTNESS** item in the
+DISPLAY folder, in place of the diagnostic's fixed level: 100%, 60%, 35%, 20% and 10%, spaced for the
+eye and with no 0%, so the screen is never unreadable. 100% is the default, the stock brightness. The
+level lives in `0x9039` of the settings (`b[0x14BE5]`), free like v59's; the factory RESET leaves 163
+there, which counts as 100%. It takes effect at boot, on the item's set (the backlight is on in the
+menu, so it changes at once) and when the settings change outside the menu. The CHIRP driver got
+Brightness, right after Crystal fine (`teste_chirp_real`: `10y` and `10z`), and the preview, screen 58.
+
+**The proof of the free bytes, redone.** v59's scan saying nothing reads or writes `0x9035` to `0x9038`
+was looking at the wrong address: the offset was added by hand (`0x14680` + 2401 = `0x14FE1`; the right
+one is + 1377, `0x14BE1`). The code was right, only the proof did not hold. Redone by script for
+`0x9035` to `0x9039` (the constant, the offset from `0x14680`, halfword and word), it finds nothing, and
+the same scan finds the four real uses of the neighbouring NOISE REDUCTION byte (`0x14BDE`), which shows
+it works.
+
+The build passed ("tudo certo"), the stack is stock's at the three roots and the build is reproducible.
+
+## v60 — Oct 28 — PWM backlight diagnostic, level fixed at 25% ✔️ tested
+
+`firmware/releases/BJ8300_DIAG_LUZ25.anc` (sha256 `f914160a…`): it is v59 with the screen backlight driven
+by PWM, at a fixed 25% level, with no menu item. The owner asked for a brightness setting; the PWM
+comes from a timer the firmware does not use and reaches the backlight pin through one of the chip's
+output channels, and what the disassembly cannot answer, only the radio can: whether the backlight
+dims without flicker, whether the PWM hums in the RX or TX audio, and how it behaves with ABR, SAVE and
+on the way back from flashing mode. If it works, a BRIGHTNESS item goes into the DISPLAY folder. What
+was proven before building is in
+[reverse engineering, section 23](reverse-engineering.md#23-the-screen-backlight-by-pwm-v60-diagnostic).
+
+The build passed ("tudo certo", `4m` with 23 entry detours), the stack is stock's at the three roots
+and the build is reproducible. Tested on the radio: "the light worked, it got dimmer and there was no
+noise, not on the radio, not on TX, not on RX".
+
+## v59 — Oct 28 — the MIC folder, CALIBRATION and the menu while receiving ✔️ tested
+
+Three of the owner's requests in one version:
+
+- **The menu while receiving.** With the menu open, on receive, the stock block of the side in focus
+  showed up over the folder window: the old badge (C came out as B), the name and the channel number.
+  It was stock's whole screen, which the signal loop calls on receive; its hook and the side-in-focus
+  one handed the drawing back to stock outside the main screen. In the menu they no longer draw.
+  Instead, as the owner suggested, the top bar shows who is receiving: `● RX`, the letter's badge (A,
+  B or C) and the name, frequency or channel number, as that side's MDF asks, in place of the icons,
+  which come back when the signal goes. The menu does not close on receive, and only the side in focus
+  keeps receiving, as in stock: entering the menu disarms dual watch, which only arms on the main
+  screen, because its trip to the other side swaps the "current" channel, which is what the menu items
+  read and write.
+- **The MIC folder:** COMPRESSOR (OFF, LOW, MID and HIGH), MIC AGC (ON and OFF) and MIC GAIN, which
+  leaves TX. The radio chip is a BK4819, now with proof: the table boot writes to register `0x09` is
+  the UV-K5's. It has a compressor on the TX audio, which the firmware leaves set to 2:1 and off, and
+  the microphone AGC on. LOW, MID and HIGH compress 1.33:1, 2:1 and 4:1.
+- **The CALIBRATION folder**, with CRYSTAL FINE: the crystal's fine adjustment, −2000 to +2000 Hz at
+  435.5 MHz, in 10 Hz steps, added to the factory calibration, which on the test radio is zero (index
+  8, no fine value). It is proportional to the frequency, as a crystal error is: +120 Hz at 435.5 MHz
+  is +40 Hz at 145 MHz. At 0, the factory one stays exactly as it is. The limit is 4.6 ppm, which at
+  520 MHz is 2.4 kHz, inside the channel; the stock coarse range is ±4 ppm. Typed digits do not move
+  it, only the arrows.
+- **A one-item folder:** EXIT while editing would close the whole menu, as in a one-item quick menu;
+  a new detour (`0x01E4D53C`) takes it back to the folder's list. The menu now has 15 folders.
+- The three settings live in free bytes of the settings block (`0x9035` to `0x9038`), and what the
+  stock RESET leaves there counts as OFF, ON and 0.
+- **The CHIRP driver** got Compressor, Mic AGC and Crystal fine (Hz at 435.5 MHz), right after Mic
+  Gain; `teste_chirp_real` got `10v` to `10x`.
+- **The preview** finds folders and items by name (the numbers changed with the new folders), draws
+  the menu's meter like `b_medidor` (the bar only) and got screens 53 to 57d.
+
+The build passed ("tudo certo", with `3b` accepting the one-item folder and `4t` checking the new
+detour), the stack is stock's at the three roots, the new get, set and exibe stay at up to 320 B, and
+the sha256 is `d0b9ff28…`. `VERSION` still shows `V2.8T`. Tested on the radio (with v60, which contains it): "I tested
+the mic and the crystal and everything worked". Details in
+[reverse engineering, section 22](reverse-engineering.md#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59).
 
 ## V2.8T — Oct 27 — the menu in folders, with the 3rd item's card whole ✅
 

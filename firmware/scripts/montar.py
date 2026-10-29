@@ -144,6 +144,12 @@ TELA_DESVIOS = (
     # rotina de fabrica, com a pilha ja como estava)
     (0x01E48720, bytes.fromhex('7604e29c'), 'desvio_editor_modo', 'b_editor_modo', 'o editor de nome (indicador do modo)'),
     (0x01E4865C, bytes.fromhex('7e042916'), 'desvio_editor_quadro', 'b_editor_quadro', 'a moldura do editor (direto no LCD)'),
+    # v60: a luz da tela (0x01E394D6), por PWM no TIMER2 e no canal de saida 2 (tela.c); nada desvia para
+    # dentro dos 8 bytes cobertos ([--sp] = rets; r1 = 83584)
+    (0x01E394D6, bytes.fromhex('1004c1ff80460100'), 'desvio_luz', 'b_luz', 'a luz da tela (PWM)'),
+    # v62: a leitura do nivel do sinal (0x01E46166), que no menu poe na barra quem recebe (tela.c); nada
+    # desvia para dentro dos 8 bytes cobertos ([--sp] = {rets, r7-r4}; r5 = 83584)
+    (0x01E46166, bytes.fromhex('7704c5ff80460100'), 'desvio_sinal', 'b_sinal', 'a leitura do nivel do sinal (menu: quem recebe)'),
 )
 # Os ajustes do radio (0x01E44C68) gravam o valor alem de desenhar: o gancho chama a de fabrica
 # inteira por aqui (os bytes que o desvio cobre e a volta) e depois desenha.
@@ -310,21 +316,24 @@ R5_R0 = bytes.fromhex('0516')
 
 # v53: os grupos do menu (src/telas.c), um nivel acima dos itens, a pedido do dono. Cada item fica em
 # um grupo so, pelo nome que o radio mostra; grupos e itens entram em ordem alfabetica (sorted), para
-# um item novo cair sozinho no lugar. Nenhum grupo com um item so: com 1 item, o EXIT editando
-# fecharia o menu inteiro, como nos menus rapidos (0x01E4D53C: "if (conta == 1)" vai a saida).
+# um item novo cair sozinho no lugar. Grupo de um item so desde a v59 (o CALIBRATION): com 1 item, o
+# EXIT editando fechava o menu inteiro, como nos menus rapidos (0x01E4D53C: "if (conta == 1)" vai a
+# saida); o desvio_menu_um (MENU_DESVIOS) o faz voltar a lista do grupo.
 GRUPOS = {
     'AUDIO': ('NOISE REDUCTION', 'SQL', 'STE'),
     'BANKS': ('BANK', 'CHANNEL', 'NAME'),
+    'CALIBRATION': ('CRYSTAL FINE',),
     'CHANNEL': ('BCL', 'ENCRYPT', 'RX MODULATION', 'SCRAMBLE', 'STEP', 'TXP', 'W/N'),
-    'DISPLAY': ('ABR', 'MDF-A', 'MDF-B', 'MDF-C', 'MENU EXIT TIME', 'POWER-ON MSG'),
+    'DISPLAY': ('ABR', 'BRIGHTNESS', 'MDF-A', 'MDF-B', 'MDF-C', 'MENU EXIT TIME', 'POWER-ON MSG'),
     'DTMF': ('DTMF CODE', 'DTMFST', 'PTT-LT', 'S-CODE'),
     'KEYS': ('AUTOLOCK', 'BEEP PROMPT', 'PF2', 'PF2 LONG PRESS', 'PF3'),
     'MEMORY': ('CH-NAME', 'DELCH', 'MEMCH'),
+    'MIC': ('COMPRESSOR', 'MIC AGC', 'MIC GAIN'),
     'REPEATER': ('OFFSET', 'RP-STE', 'RPT-RL', 'SFT-D', 'TONE'),
     'SCAN': ('SC-REV', 'SCAN ADD'),
     'SYSTEM': ('AL-MOD', 'BLUETOOTH', 'RESET', 'SAVE', 'VERSION'),
     'TONES': ('R-CTCSS', 'R-DCS', 'T-CTCSS', 'T-DCS'),
-    'TX': ('MIC GAIN', 'ROGER', 'TOT', 'VOX', 'VOX DELAY'),
+    'TX': ('ROGER', 'TOT', 'VOX', 'VOX DELAY'),
     'WATCH': ('TTR', 'TX-A/B/C', 'WATCH'),
 }
 ITENS_POR_GRUPO = 7       # o maior grupo; a janela de pasta mostra 6 linhas e rola o resto (telas.c, pasta_cena)
@@ -425,7 +434,23 @@ ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, ma
                                   get='mdf_c_le', set='mdf_c_grava', titulo='titulo_mdf_c')],
                 NR_ITEM: [dict(nome='MIC GAIN', molde=TDR_ITEM, flags=0, maximo=3, get='mic_le',
                                set='mic_grava', titulo='titulo_mic', exibe='mic_opcoes',
-                               opcoes_cn='mic_opcoes')]}
+                               opcoes_cn='mic_opcoes'),
+                          # v59: o resto da pasta MIC, duas listas como o MIC GAIN, e o ajuste do
+                          # cristal, um numero com exibicao propria (401 linhas, de -2000 a +2000 Hz)
+                          # como o BANK
+                          dict(nome='COMPRESSOR', molde=TDR_ITEM, flags=0, maximo=4, get='compressor_le',
+                               set='compressor_grava', titulo='titulo_compressor',
+                               exibe='compressor_opcoes', opcoes_cn='compressor_opcoes'),
+                          dict(nome='MIC AGC', molde=TDR_ITEM, flags=0, maximo=2, get='agc_le',
+                               set='agc_grava', titulo='titulo_agc', exibe='agc_opcoes',
+                               opcoes_cn='agc_opcoes'),
+                          dict(nome='CRYSTAL FINE', molde=ZONE, flags=FLAGS_NUMERO, maximo=401,
+                               get='cristal_le', set='cristal_grava', titulo='titulo_cristal',
+                               exibe='cristal_exibe'),
+                          # v61: a intensidade da luz, uma lista como o MIC GAIN
+                          dict(nome='BRIGHTNESS', molde=TDR_ITEM, flags=0, maximo=5, get='brilho_le',
+                               set='brilho_grava', titulo='titulo_brilho', exibe='brilho_opcoes',
+                               opcoes_cn='brilho_opcoes')]}
 
 # ---- revisao dos textos em ingles do menu (ver notas/textos-revisao.md) ----
 # As cadeias vem coladas na flash, sem folga: trocar no lugar so pode ter tamanho igual ou menor
@@ -459,7 +484,7 @@ TEXTOS = [
     (0x01E5A60F, 'All', 'ALL'),
     (0x01E5AA81, 'RX Modulation', 'RX MODULATION'),
     # versao do firmware, que o item VERSION mostra (o hardware V01T32 fica como esta)
-    (0x01E5FD10, 'V0.12', 'V2.8T'),
+    (0x01E5FD10, 'V0.12', 'V2.9T'),
     # o nome chines do item e 语音加密 (criptografia de voz): VOICEPRI engana
     (0x01E5A82F, 'VOICEPRI', 'ENCRYPT'),
     # a dupla escuta virou tripla com o TRIPLE (v42): TDR -> TTR, pedido do dono (v48). A cadeia e
@@ -558,8 +583,15 @@ MENU_DESVIOS = ((0x01E4D54A, bytes.fromhex('40e05d01'), 'desvio_menu_sai', 'b_me
 # e segue direto para 0x01E49C7C, e a edicao continua.
 MENU_DESVIOS += ((0x01E49A86, bytes.fromhex('40e0e70c'), 'desvio_menu_marca', 'b_menu_marca', 0x01E49C7C,
                   'menu: OK nos itens de marcar varios continua editando'),)
+# v59: o EXIT editando, depois de cancelar a edicao (0x01E4D4F4..0x01E4D538): "r0 = 1400" (0x01E4D53C) le
+# a quantidade de itens da tabela, e com 1 o menu fecha (0x01E4D566, para 0x01E3C29C); com mais, segue ao
+# bipe de 0x01E4D59A. Num grupo o desvio segue sempre ao bipe: a edicao fecha e a lista do grupo fica,
+# tambem no CALIBRATION, de um item so.
+MENU_DESVIOS += ((0x01E4D53C, bytes.fromhex('40e07805'), 'desvio_menu_um', 'b_menu_um', 0x01E4D59A,
+                  'menu: EXIT editando num grupo de um item volta a lista do grupo'),)
 MENU_SIMBOLOS = ('menu_abre', 'gancho_menu_ok', 'gancho_menu_digito', 'desvio_menu_sai', 'b_menu_sai',
-                 'desvio_menu_marca', 'b_menu_marca', 'nome_tamanho', 'nome_para_editor')
+                 'desvio_menu_marca', 'b_menu_marca', 'desvio_menu_um', 'b_menu_um', 'nome_tamanho',
+                 'nome_para_editor')
 # Instrucoes trocadas por uma chamada e nop no resto: na ida do PTT, a leitura do TX-A/B ("r0 = 1279;
 # r0 = b[r4+r0]", 0x01E43F92) vira "call gancho_tx_abc; nop; nop". O r0 que ele devolve e o que o
 # trecho de fabrica testa em seguida (0x01E43F9A); r1..r3 sao escritos antes de lidos, e o r4 (a base
@@ -652,6 +684,15 @@ NA_LIVRE += ('watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_gra
              'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'gancho_troca_dw', 'gancho_volta_dw', 'gancho_ab',
              'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic', 'gancho_ajustes',
              'gancho_tx_abc', 'gancho_tx_desarma', 'gancho_tx_volta', 'titulo_txabc', 'txabc_opcoes')
+# v59: a pasta MIC e a CALIBRATION, no .livre como o MIC GAIN
+MIC_CAL = ('compressor_le', 'compressor_grava', 'compressor_opcoes', 'titulo_compressor', 'agc_le',
+           'agc_grava', 'agc_opcoes', 'titulo_agc', 'cristal_le', 'cristal_grava', 'cristal_exibe',
+           'titulo_cristal')
+NA_LIVRE += MIC_CAL
+PRECISA += MIC_CAL
+LUZ = ('luz_inicia', 'luz_aplica', 'brilho_le', 'brilho_grava', 'brilho_opcoes', 'titulo_brilho')
+NA_LIVRE += LUZ                            # v60 e v61: a luz por PWM e o BRIGHTNESS
+PRECISA += LUZ
 PRECISA += ESPECTRO_B
 
 # Realce do bloco do VFO em evidencia na tela principal. O gancho entra no ENVIO do pedaco para o
@@ -855,7 +896,7 @@ def monta_menu(app, codigo, tela):
              + [f'{n} sem grupo' for n in sorted(set(itens) - set(listados))]
              + [f'{n} nao e item do menu' for n in sorted(set(listados) - set(itens))]
              + [f'o grupo {g} tem {len(n)} itens' for g, n in GRUPOS.items()
-                if not 2 <= len(n) <= ITENS_POR_GRUPO])
+                if not 1 <= len(n) <= ITENS_POR_GRUPO])
     erros += [f'marca para {g}/{n}, que nao e item do grupo' for g, n in MENU_MARCAS if n not in GRUPOS.get(g, ())]
     if erros:
         raise SystemExit('grupos do menu: ' + '; '.join(erros))

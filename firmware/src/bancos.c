@@ -135,7 +135,10 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 #define NA_LIVRE_COD   __attribute__((section(".livre.bancos.text")))
 #define DADO_NA_LIVRE  __attribute__((section(".livre.bancos.rodata")))
 unsigned watch_vista(void);
-void aplica_mic(void);                    /* o ganho do microfone (v49, MIC GAIN) */
+void aplica_mic(void);                    /* a pasta MIC: ganho (v49), compressor e AGC (v59) */
+void aplica_cristal(void);                /* o CRYSTAL FINE (v59) */
+void luz_inicia(void);                    /* a luz por PWM (v60, tela.c) */
+void luz_aplica(void);                    /* o nivel do BRIGHTNESS na hora (v61, tela.c) */
 #define MAPA_EXISTE    ((volatile u8 *)0x00015D8B)           /* 120 B: canal esta gravado */
 #define MAPA_BUSCA     ((volatile u8 *)0x00015D12)           /* 120 B: canal entra na busca */
 #define ZONAS_EXISTE   (*(volatile u16 *)0x00015D10)         /* mascaras por zona, montadas junto */
@@ -531,7 +534,8 @@ void gancho_partida(void)
 {
     FIM_DA_CARGA();
     IDIOMA = 0;
-    aplica_mic();                          /* por cima da copia da calibracao (MIC GAIN) */
+    aplica_mic();                          /* por cima da copia da calibracao e do init do chip (MIC) */
+    aplica_cristal();                      /* idem (CRYSTAL FINE) */
     if (watch_vista() == WATCH_SINGLE)     /* no SINGLE a dupla escuta fica desligada (WATCH, abaixo) */
         TDR = 0;
     aplica_filtro(0);
@@ -543,6 +547,7 @@ void gancho_partida(void)
      * faixa branca. O canal ja foi arrumado; aqui so desfazemos o pedido, porque a tela inicial e
      * desenhada inteira quando o logo sai. Fora da partida o pedido e bem-vindo e fica. */
     REDESENHA1 = 0;
+    luz_inicia();                          /* a luz por PWM, com a luz acesa no logo (v60) */
 }
 
 /* ---------- gancho do scan ----------
@@ -1249,9 +1254,48 @@ NA_LIVRE_COD u16 mic_le(void)
     return MIC_NIVEL < 3 ? MIC_NIVEL : 0;
 }
 
+/* ---------- COMPRESSOR e MIC AGC: o resto da pasta MIC (v59) ----------
+ * O chip de radio e um BK4819: os 16 valores que a partida escreve no reg 0x09 (0x01E566C0..) sao os do
+ * BK4819 do UV-K5, um a um. Ele tem um compressor no audio de TX, que o firmware deixa configurado e
+ * desligado: a partida poe 0xAA00 no reg 0x29 (razao 2:1, ponto de 0 dB 84) e 0x0B40 no 0x28 (o
+ * expansor do RX, com razao 0: desligado), mas nunca liga o bit 3 do 0x31, que liga os dois. As
+ * escritas do 0x31 leem, mudam o bit 0 (NR) ou o 1 (scramble) e gravam, e o espectro o guarda e o
+ * devolve inteiro (0x01E3FEE4): o bit 3 posto aqui fica. O AGC do microfone e o bit 15 do reg 0x19 (1
+ * desliga), que so a partida escreve, com 0x1041 (0x01E565EE): ligado. Os registradores so voltam ao
+ * padrao no reset da partida (reg 0x00, 0x01E5653C, na carga 0x01E56084, que roda uma vez), antes do
+ * gancho dela. Os dois niveis ficam nos bytes 0x9035 e 0x9036 dos ajustes (b[0x14BE1] e b[0x14BE2]),
+ * livres como o 0x9033: fora as copias do bloco, nada os le nem grava. Os ajustes padrao de fabrica
+ * deixam 197 e 181 neles (a tabela, 0x01E603C3, acaba antes e copia o texto em chines que vem depois):
+ * fora da faixa vale o de fabrica, OFF e ON. */
+FIRMWARE(LE_REG, 0x01E407C0);       unsigned LE_REG(unsigned);              /* reg do chip de radio */
+FIRMWARE(ESCREVE_REG, 0x01E39D82);  void ESCREVE_REG(unsigned, unsigned);
+#define COMPRESSOR     (*(volatile u8 *)0x00014BE1)
+#define MIC_AGC        (*(volatile u8 *)0x00014BE2)
+DADO_NA_LIVRE const char titulo_compressor[] = "COMPRESSOR";
+DADO_NA_LIVRE const char *const compressor_opcoes[4] = {"OFF", "LOW", "MID", "HIGH"};
+DADO_NA_LIVRE const char titulo_agc[] = "MIC AGC";
+DADO_NA_LIVRE const char *const agc_opcoes[2] = {"ON", "OFF"};
+
+NA_LIVRE_COD u16 compressor_le(void)
+{
+    return COMPRESSOR < 4 ? COMPRESSOR : 0;
+}
+
+NA_LIVRE_COD u16 agc_le(void)
+{
+    return MIC_AGC == 1;
+}
+
+/* O ganho, o compressor (razao 1,33:1, 2:1 ou 4:1 nos bits 15:14 do 0x29, o resto como a partida
+ * deixa; desligado, o 0xAA00 dela) e o AGC. */
 NA_LIVRE_COD void aplica_mic(void)
 {
+    unsigned c = compressor_le(), r = LE_REG(0x31);
+
     MIC_GANHO = mic_ganho[mic_le()];
+    ESCREVE_REG(0x29, (c ? c : 2) << 14 | 0x2A00);
+    ESCREVE_REG(0x31, c ? r | 8 : r & ~8u);
+    ESCREVE_REG(0x19, agc_le() ? 0x9041 : 0x1041);
 }
 
 NA_LIVRE_COD void mic_grava(void)
@@ -1262,13 +1306,121 @@ NA_LIVRE_COD void mic_grava(void)
     aplica_mic();                          /* vale ja na proxima transmissao */
 }
 
+NA_LIVRE_COD void compressor_grava(void)
+{
+    COMPRESSOR = VALOR < 4 ? VALOR : 0;
+    aplica_mic();
+}
+
+NA_LIVRE_COD void agc_grava(void)
+{
+    MIC_AGC = VALOR == 1;
+    aplica_mic();
+}
+
+/* ---------- CRYSTAL FINE: o ajuste fino do cristal (v59, a pasta CALIBRATION) ----------
+ * Toda sintonia passa por 0x01E440CE(freq em 10 Hz), que soma a correcao da calibracao de fabrica e
+ * grava os regs 0x38/0x39 do chip (so o espectro os escreve direto, 0x01E4AF1E). A correcao sai dos
+ * bytes 10 a 13 do bloco 0xF210 da calibracao, que a partida copia para 0x7076..0x7079: com a marca
+ * b[0x7077] = 0xA0, o valor de 16 bits com sinal de 0x7078, em 10 Hz a 435,5 MHz e proporcional a
+ * frequencia (freq / 100 x valor / 435500); sem a marca, o indice b[0x7076], de 0 a 16, na tabela de
+ * 0x01E602E0 (40..0..40 decimos de ppm, negativos ate o 8; 17 ou mais vale 8, o zero). O radio de
+ * teste veio com o indice 8 e sem a marca: sem correcao nenhuma.
+ * O ajuste soma ao que a fabrica gravou, de -2000 a +2000 Hz em 435,5 MHz (4,6 ppm; em 520 MHz,
+ * 2,4 kHz, dentro do canal de 12,5 kHz), de 10 em 10: poe a marca e o total no valor fino. Em 0, os
+ * quatro bytes de fabrica voltam como estavam, relidos do chip de dados. Ele fica nos bytes 0x9037 e
+ * 0x9038 dos ajustes (b[0x14BE3], 16 bits com sinal), livres como os da pasta MIC; os ajustes padrao
+ * de fabrica deixam 0xC4C0, fora da faixa: vale 0. Vale na proxima sintonia, e o OK do menu a pede
+ * (zera o estado da recepcao, 0x01E49A86). */
+#define CALIBRACAO_CRISTAL ((volatile u8 *)0x00007076)
+#define TABELA_PPM         ((const u8 *)0x01E602E0)
+#define CRISTAL_L          (*(volatile u8 *)0x00014BE3)
+#define CRISTAL_H          (*(volatile u8 *)0x00014BE4)
+#define CRISTAL_MAX        200                       /* em 10 Hz */
+DADO_NA_LIVRE const char titulo_cristal[] = "CRYSTAL FINE";
+DADO_NA_LIVRE static const char *const cristal_formatos[3] = {"-%d Hz", "%d Hz", "+%d Hz"};
+
+NA_LIVRE_COD static int cristal(void)
+{
+    int v = (short)(CRISTAL_L | CRISTAL_H << 8);
+
+    return v >= -CRISTAL_MAX && v <= CRISTAL_MAX ? v : 0;
+}
+
+NA_LIVRE_COD void aplica_cristal(void)
+{
+    u8 f[4];
+    unsigned i;
+    int v = cristal();
+
+    LE_FLASH(0xF21A, f, 4);
+    if (v) {
+        if (f[1] == 0xA0)
+            v += (short)(f[2] | f[3] << 8);
+        else {                             /* o indice em unidades do fino: 0,5 ppm = 21,775 */
+            i = f[0] < 17 ? f[0] : 8;
+            i = (TABELA_PPM[i] * 4355u + 500) / 1000;
+            v += f[0] < 8 ? -(int)i : (int)i;
+        }
+        f[1] = 0xA0;
+        f[2] = v;
+        f[3] = v >> 8;
+    }
+    for (i = 0; i < 4; i++)
+        CALIBRACAO_CRISTAL[i] = f[i];
+}
+
+NA_LIVRE_COD u16 cristal_le(void)
+{
+    return cristal() + CRISTAL_MAX;
+}
+
+NA_LIVRE_COD void cristal_grava(void)
+{
+    int v = VALOR <= 2 * CRISTAL_MAX ? (int)VALOR - CRISTAL_MAX : 0;
+
+    CRISTAL_L = v;
+    CRISTAL_H = v >> 8;
+    aplica_cristal();
+}
+
+/* "+120 Hz": o valor da linha (0..400) em Hz, com o sinal. */
+NA_LIVRE_COD char *cristal_exibe(void)
+{
+    int hz = ((int)VALOR - CRISTAL_MAX) * 10;
+
+    SPRINTF(TEXTO, cristal_formatos[(hz > 0) - (hz < 0) + 1], hz < 0 ? -hz : hz);
+    return TEXTO;
+}
+
 /* Os ajustes que mudam por fora do menu tambem valem na hora: o 'W' do bloco 0x9000 pelo cabo (o
  * upload do CHIRP) termina num goto para a gravacao dos ajustes (0x01E43A50), e o retorno aos ajustes
  * de fabrica os grava com uma chamada (0x01E4845A), sem reiniciar o radio. Os dois passam por aqui: o
- * ganho do nivel novo, e a gravacao de fabrica (0x01E3AB36, que nao le registrador de entrada). */
+ * microfone, o cristal e a luz do valor novo, e a gravacao de fabrica (0x01E3AB36, que nao le
+ * registrador de entrada). */
+/* ---------- BRIGHTNESS: a intensidade da luz (v61, a pasta DISPLAY) ----------
+ * O nivel fica no 0x9039 dos ajustes (b[0x14BE5]), livre como os da v59; o PWM e o ciclo de cada nivel
+ * estao no tela.c (luz_inicia, b_luz). 0, o padrao, e 100%; fora da faixa tambem. */
+#define BRILHO         (*(volatile u8 *)0x00014BE5)
+DADO_NA_LIVRE const char titulo_brilho[] = "BRIGHTNESS";
+DADO_NA_LIVRE const char *const brilho_opcoes[5] = {"100%", "60%", "35%", "20%", "10%"};
+
+NA_LIVRE_COD u16 brilho_le(void)
+{
+    return BRILHO < 5 ? BRILHO : 0;
+}
+
+NA_LIVRE_COD void brilho_grava(void)
+{
+    BRILHO = VALOR < 5 ? VALOR : 0;
+    luz_aplica();                          /* a luz esta acesa no menu: muda na hora */
+}
+
 NA_LIVRE_COD void gancho_ajustes(void)
 {
     aplica_mic();
+    aplica_cristal();
+    luz_aplica();
     SALVA_AJUSTES();
 }
 

@@ -374,12 +374,12 @@ na seção 13. Na tela de um VFO e no espectro, as rotinas rodam como sempre.
 
 | Rotina | Gancho | O que a tela B redesenha |
 |---|---|---|
-| `0x01E3C132(0)`, a tela inteira | `b_tela` | tudo, e zera o estado de TX como ela |
+| `0x01E3C132(0)`, a tela inteira | `b_tela` | tudo, e zera o estado de TX como ela; no menu, só zera o estado de TX (v59) |
 | `0x01E3B05C`, `0x01E3B03E`, `0x01E3AE50` | `b_barra` | a barra de cima |
 | `0x01E3AF1E(nível)`, a pilha | `b_bateria` | a barra, com o nível que vem (o pisca da bateria fraca) |
 | `0x01E3AEB0(ligado)`, o MO | `b_monitor` | a barra, com o MO que vem |
-| `0x01E453E0` | `b_evidencia` | o lado em evidência |
-| `0x01E4B29C`, `0x01E4B1DE` | `b_digitando` | o lado em evidência com os dígitos; só elas os mostram, como na de fábrica |
+| `0x01E453E0` | `b_evidencia` | o lado em evidência; no menu, nada (v59) |
+| `0x01E4B29C`, `0x01E4B1DE` | `b_digitando` | o lado em evidência com os dígitos; só elas os mostram, como na de fábrica; no menu, nada (v59) |
 | `0x01E413BE`, `0x01E3B2C4` | `b_lado` | os dois lados, porque na tecla A/B o cartão muda de lugar |
 | `0x01E3B592`, o medidor | `b_medidor` | o medidor do lado, com o nível que vem, e a barra (RX) |
 | `0x01E40F1C`, a transmissão | `b_transmissao` | refaz a lógica dela: grava o estado antes de desenhar, e desenha o lado e a barra (2) ou tudo (fim) |
@@ -458,6 +458,18 @@ volta. Em 4 ele desenha, em 0 apaga. Fora da edição, pisca o número do item e
 (`0x01E47062`, `0x01E47290`); editando, a linha do cursor na fonte de fábrica (`0x01E472EA`,
 `0x01E47332`); no editor de nome, a linha do texto com um `_` (`0x01E476B2`). Tudo sai pelo mesmo
 `envia()` de `0x01E476E4`.
+
+**Recebendo com o menu aberto (v59).** A tela inteira de fábrica (`0x01E3C132`, que o laço do sinal
+chama recebendo) e a do lado em evidência (`0x01E453E0`) pintavam o bloco de fábrica (o selo dela, o
+nome e o número) por cima da janela, na geometria do A compacto: no menu os ganchos delas não desenham
+nada. A barra de cima mostra quem recebe, no lugar dos ícones: `● RX`, o selo da letra e o texto do
+MDF do lado em evidência, cortado em x 108, antes da tensão (`quem_recebe`); quem recebe é o lado em
+evidência, porque a dupla escuta não arma no menu. No menu o laço não chama o medidor (só nos modos 0
+e 3, `0x01E46216`): desde a v62 o gatilho é o `desvio_sinal`, na rotina do nível do sinal, que o laço
+chama a cada 50 voltas em qualquer modo, e o `le_estado` põe o RX no menu pelo estado da recepção e, desde a v63, pelo áudio da recepção aberto (o pedido do amplificador, `b[0x129D4]`). Desde a v63 a letra e o texto ficam numa caixa âmbar, como a faixa que recebe
+([engenharia reversa, seção 23](engenharia-reversa.md#23-a-luz-da-tela-por-pwm-v60-diagnóstico)). Na prévia, as cenas 57 a 57d; as 53 a 56 são a pasta
+CALIBRATION nos grupos, o COMPRESSOR na pasta MIC e o CRYSTAL FINE na pasta e aberto
+([engenharia reversa, seção 22](engenharia-reversa.md#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)).
 
 **O editor de nome** (tipo 7 editando). O texto fica em `0x14A3A`, o tamanho em `b[0x14A35]`, o
 máximo em `b[0x14A36]` (gravado pelo get do item) e o modo em `b[0x14A38]`: 0 `abc`, 1 `ABC`,

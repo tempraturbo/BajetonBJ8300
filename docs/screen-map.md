@@ -378,12 +378,12 @@ section 13. On the single-VFO screen and the spectrum, the routines run as alway
 
 | Routine | Hook | What screen B redraws |
 |---|---|---|
-| `0x01E3C132(0)`, the whole screen | `b_tela` | everything, and clears the TX state like it does |
+| `0x01E3C132(0)`, the whole screen | `b_tela` | everything, and clears the TX state like it does; in the menu, only clears the TX state (v59) |
 | `0x01E3B05C`, `0x01E3B03E`, `0x01E3AE50` | `b_barra` | the top bar |
 | `0x01E3AF1E(level)`, the battery | `b_bateria` | the bar, with the incoming level (the low-battery blink) |
 | `0x01E3AEB0(on)`, MO | `b_monitor` | the bar, with the incoming MO |
-| `0x01E453E0` | `b_evidencia` | the highlighted side |
-| `0x01E4B29C`, `0x01E4B1DE` | `b_digitando` | the highlighted side with the digits; only these show them, as in stock |
+| `0x01E453E0` | `b_evidencia` | the highlighted side; in the menu, nothing (v59) |
+| `0x01E4B29C`, `0x01E4B1DE` | `b_digitando` | the highlighted side with the digits; only these show them, as in stock; in the menu, nothing (v59) |
 | `0x01E413BE`, `0x01E3B2C4` | `b_lado` | both sides, since on the A/B key the card moves |
 | `0x01E3B592`, the meter | `b_medidor` | the side's meter with the incoming level, and the bar (RX) |
 | `0x01E40F1C`, transmission | `b_transmissao` | redoes its logic: writes the state before drawing, and draws the side and the bar (2) or everything (end) |
@@ -462,6 +462,18 @@ per pass. At 4 it draws, at 0 it erases. Outside editing it blinks the item numb
 (`0x01E47062`, `0x01E47290`); while editing, the cursor row in the stock font (`0x01E472EA`,
 `0x01E47332`); in the name editor, the text line with a `_` (`0x01E476B2`). All of it goes out
 through the same `envia()` at `0x01E476E4`.
+
+**Receiving with the menu open (v59).** Stock's whole screen (`0x01E3C132`, which the signal loop
+calls on receive) and the side-in-focus one (`0x01E453E0`) painted the stock block (its badge, the
+name and the number) over the window, in the compact-A geometry: in the menu their hooks draw nothing.
+The top bar shows who is receiving, in place of the icons: `● RX`, the letter's badge and the text of
+the in-focus side's MDF, cut at x 108, before the voltage (`quem_recebe`); the receiver is the side in
+focus, because dual watch does not arm in the menu. In the menu the loop does not call the meter (only
+in modes 0 and 3, `0x01E46216`): since v62 the trigger is `desvio_sinal`, in the signal-level routine,
+which the loop calls every 50 passes in any mode, and `le_estado` sets RX in the menu from the receive
+state and, since v63, from the receive audio being open (the amplifier request, `b[0x129D4]`); since v63 the letter and the text sit in an amber box, like the receiving band ([reverse engineering, section 23](reverse-engineering.md#23-the-screen-backlight-by-pwm-v60-diagnostic)). In the preview, screens 57 to 57d; 53 to 56 are the
+CALIBRATION folder among the groups, COMPRESSOR in the MIC folder and CRYSTAL FINE in its folder and
+open ([reverse engineering, section 22](reverse-engineering.md#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59)).
 
 **The name editor** (type 7 being edited). The text is at `0x14A3A`, the length at `b[0x14A35]`, the
 maximum at `b[0x14A36]` (written by the item's get) and the mode at `b[0x14A38]`: 0 `abc`, 1 `ABC`,

@@ -5,7 +5,21 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
-## Repositório — 29/10 — compila sozinho
+## v64 — 29/10 — o indicador some, redesenhando a barra sempre (a testar)
+
+`firmware/releases/BJ8300_BANK_v64.anc` (sha256 `f782e4a6…`), com o nome V2.9T. O diagnóstico respondeu (fotos do
+dono, com o menu aberto): parado, `E3 A0 F0 G0 28`; recebendo, `● RX E4 A1 F1 G0 41`; depois do PTT do outro
+rádio, `E3 A0 F0 G0 5x`. O contador continuou andando, então a leitura do nível segue sendo chamada depois da
+recepção (perto de uma vez por segundo), e o estado e o pedido do amplificador voltam ao normal na hora. O
+defeito era a marca do que a barra mostra: a v62 e a v63 a guardavam em `b[0x7031]`, o nível do medidor já
+desenhado, e o firmware o zera por conta própria (`b[0x7031] = 255` em `0x01E45A70`, que o laço chama em
+`0x01E46F52`). Com a marca zerada, o indicador achava a barra limpa e não a redesenhava. Agora, no menu, o
+`b_sinal` redesenha a barra em toda chamada, sem marca nenhuma, como o diagnóstico fez no rádio; o
+`b[0x7031]` volta a ser só do firmware.
+
+O build passou ("tudo certo", com a pilha da etapa 6 igual à de fábrica) e é reprodutível.
+
+## Repositório — 29/10 — compila sozinho, e o diagnóstico do fim da recepção
 
 - **Compilar sem instalar o compilador.** O dono pediu que uma pessoa leiga consiga compilar com tudo
   à mão. Os cinco executáveis da toolchain JieLi 2.5.3 que o build usa (37 MB dos 155 MB da
@@ -23,6 +37,136 @@ causa, porque é isso que evita repetir.
   endereço, com os argumentos), `fluxo.py` (os caminhos dentro de uma rotina) e `escritas.py` (quem lê
   ou grava um endereço de RAM, a validar antes num endereço conhecido).
 - O README explica a compilação passo a passo, para quem nunca compilou nada.
+
+**Diagnóstico do fim da recepção** (`firmware/releases/BJ8300_DIAG_RX.anc`, sha256 `7a81c174…`): com a
+v63, o indicador em âmbar aparecia mas ainda não sumia no fim da recepção. Com `-DDIAG_RX` (o `build.sh`
+aceita `CFLAGS_EXTRA`), no menu a barra mostra, no lugar dos ícones, o estado da recepção (E), o pedido
+do amplificador da recepção (A), os sinalizadores `b[0x1536F]` (F) e `b[0x15368]` (G) e um contador
+que anda a cada chamada do `b_sinal` (no `0x903A` dos ajustes, livre pela varredura validada), e o
+`b_sinal` redesenha a barra em toda chamada. Sem a opção, o firmware sai igual à v63.
+
+## v63 — 29/10 — o indicador some no fim da recepção, em âmbar, e o nome V2.9T (testada: em âmbar, mas ainda não sumia)
+
+`firmware/releases/BJ8300_BANK_v63.anc` (sha256 `ddabab5a…`). O dono, com a v62: "agora ele aparece, mas
+quando largo o PTT do outro rádio ele não some ... pra voltar eu tenho que mexer no menu".
+
+- **O indicador some.** A v62 olhava só o estado da recepção (`b[0x15367]` = 4), e no menu ele não
+  sai do 4 quando a portadora cai. Do estado 4, o código do laço não chega a nenhuma escrita do
+  estado: a volta para a espera acontece dentro de rotinas chamadas. A marca do que a barra mostra
+  (`b[0x7031]`) não é a culpada: uma varredura, validada antes nas leituras conhecidas do `0x706D`,
+  só acha escritas dela na varredura de canais, no scan QT e na própria leitura do nível. Agora o
+  indicador também exige o áudio da recepção aberto: o pedido do amplificador da recepção
+  (`b[0x129D4]`, que `PEDE_AMPLI(5)` liga na entrada da recepção, `0x01E47E1A`, antes de pôr o estado
+  em 4, e `PEDE_AMPLI(6)` solta quando o sinal cai, `0x01E47A9E`, nos dois sem olhar o modo de tela).
+  É o mesmo áudio que se ouve abrir e fechar. A prévia ganhou o byte nas telas 57.
+- **Em âmbar**, a pedido do dono: a letra e o texto numa caixa como a faixa que recebe na tela
+  principal (o fundo âmbar escuro, o selo âmbar com a letra escura e o texto âmbar), começando depois
+  do `● RX`, que fica como estava.
+- **O nome V2.9T**, a pedido do dono: o `VERSION` mostra `V2.9T`, e o driver do CHIRP virou
+  `chirp/bj8300_v2.9TEMPRA.py` (modelo `Bajeton → BJ8300_v2.9TEMPRA`). As imagens salvas com
+  qualquer nome antigo, Baojie ou Bajeton, abrem nele (`teste_chirp_real`: `2c` a `2c8`). O README e o
+  release do GitHub vêm quando ela for testada.
+
+O build passou ("tudo certo"), a pilha é a de fábrica nas três raízes e o build é reprodutível.
+
+## v62 — 29/10 — o indicador do menu de verdade, a luz sem PWM a 100% e apagada, e o CHIRP em Bajeton (testada: o indicador aparecia e não sumia)
+
+`firmware/releases/BJ8300_BANK_v62.anc` (sha256 `baa4c988…`): a v61 com três correções, depois dos testes
+do dono.
+
+- **O indicador de quem recebe no menu não aparecia** (v59): "aquele tag com o nome do MDF que fica na
+  barra quando tá no menu e alguém manda sinal ... não tá saindo, porém parou de aparecer aquela
+  mensagem com grafia antiga do canal". A v59 contava com o medidor, mas o laço do sinal só o chama
+  nos modos de tela 0 e 3 (`0x01E46216`), e o fim da recepção nem passa por ele. A prévia simulava a
+  chamada que o rádio não faz, e por isso mostrava o indicador. Agora ele sai da rotina que lê o nível
+  do sinal (`0x01E46166`), que o laço chama a cada 50 voltas em qualquer modo de tela: no menu, um
+  desvio na entrada dela compara o estado da recepção (4 = recebendo) com o que a barra mostra e a
+  redesenha quando muda, e toda barra desenhada no menu já sai com quem recebe. A prévia deixou de
+  chamar o medidor nessas telas e usa o estado da recepção.
+- **A interferência da luz escurecida.** O dono, com a v60: "quando eu deixo 2 rádios muito
+  próximos ... o Baofeng fica pegando ruído ... e às vezes o próprio Bajeton pega, mas raro", e
+  "quando a luz apaga a interferência some". Cada borda do PWM espalha um pouco de RF, que um receptor
+  encostado ouve. Agora o PWM só existe com a luz acesa abaixo de 100%: a 100%, o padrão, e com a luz
+  apagada, o pino sai do canal e volta a ser saída comum, exatamente como de fábrica, sem borda
+  nenhuma. A ajuda do Brightness no CHIRP avisa da interferência.
+- **O CHIRP em Bajeton.** A pedido do dono, o fabricante do driver passou de Baojie para Bajeton, a
+  marca do rádio, onde o CHIRP também lista o BJ7800. As imagens salvas com Baojie, inclusive as do
+  módulo da V2.8T, abrem nele pelo `MODEL_COMPAT` (`teste_chirp_real`: `2c6` e `2c7`). O README muda
+  quando a versão for lançada: hoje ele explica o módulo da V2.8T, que é Baojie.
+
+O build passou ("tudo certo", a `4m` com 24 desvios de entrada), a pilha é a de fábrica nas três
+raízes (o desvio novo chega a 388 B, dentro dos 620 do laço do sinal) e o build é reprodutível.
+
+## v61 — 28/10 — o BRIGHTNESS (substituída pela v62, sem ser gravada)
+
+`firmware/releases/BJ8300_BANK_v61.anc` (sha256 `19b9a190…`): a v60 com o item **BRIGHTNESS** na pasta
+DISPLAY, no lugar do nível fixo do diagnóstico: 100%, 60%, 35%, 20% e 10%, espaçados para o olho e sem
+0%, para a tela nunca ficar ilegível. 100% é o padrão, o brilho de fábrica. O nível fica no `0x9039` dos
+ajustes (`b[0x14BE5]`), livre como os da v59; o RESET de fábrica deixa 163 nele, que vale 100%. Ele
+vale na partida, no set do item (a luz está acesa no menu, e muda na hora) e quando os ajustes mudam por
+fora do menu. O driver do CHIRP ganhou o Brightness, logo depois do Crystal fine (`teste_chirp_real`:
+`10y` e `10z`), e a prévia, a tela 58.
+
+**A prova dos bytes livres, refeita.** A varredura da v59 que dizia que nada lê nem grava o `0x9035` ao
+`0x9038` procurava o endereço errado: o deslocamento foi somado de cabeça (`0x14680` + 2401 =
+`0x14FE1`; o certo é + 1377, `0x14BE1`). O código estava certo, só a prova não valia. Refeita por script
+para o `0x9035` ao `0x9039` (a constante, o deslocamento de `0x14680`, meia palavra e palavra), ela não
+acha nada, e a mesma varredura acha os quatro usos reais do byte vizinho do NOISE REDUCTION
+(`0x14BDE`), o que mostra que ela funciona.
+
+O build passou ("tudo certo"), a pilha é a de fábrica nas três raízes e o build é reprodutível.
+
+## v60 — 28/10 — diagnóstico da luz por PWM, nível fixo em 25% ✔️ testada
+
+`firmware/releases/BJ8300_DIAG_LUZ25.anc` (sha256 `f914160a…`): é a v59 com a luz da tela por PWM, num
+nível fixo de 25%, sem item no menu. O dono pediu um ajuste de intensidade; o PWM sai de um
+temporizador que o firmware não usa e chega ao pino da luz por um canal de saída do chip, e o que não
+dá para responder no desmontado, só no rádio: se a luz escurece sem piscar, se o PWM faz zumbido no
+áudio do RX ou do TX, e como ela se comporta no ABR, no SAVE e na volta do modo de gravação. Se der
+certo, o item BRIGHTNESS entra na pasta DISPLAY. O que foi provado antes de montar está na
+[engenharia reversa, seção 23](engenharia-reversa.md#23-a-luz-da-tela-por-pwm-v60-diagnóstico).
+
+O build passou ("tudo certo", a `4m` com 23 desvios de entrada), a pilha é a de fábrica nas três
+raízes e o build é reprodutível. Testada no rádio: "a luz funcionou, ficou mais fraca e não teve ruído,
+nem no rádio, nem no TX, nem no RX".
+
+## v59 — 28/10 — a pasta MIC, a CALIBRATION e o menu recebendo ✔️ testada
+
+Três pedidos do dono numa versão só:
+
+- **O menu recebendo.** Com o menu aberto, ao receber, aparecia por cima da janela de pasta o bloco de
+  fábrica do lado em evidência: o selo antigo (a C saía B), o nome e o número do canal. Era a tela
+  inteira de fábrica, que o laço do sinal chama recebendo; o gancho dela e o do lado em evidência
+  devolviam o desenho à de fábrica fora da tela principal. No menu eles não desenham mais. No lugar,
+  como o dono propôs, a barra de cima mostra quem recebe: `● RX`, o selo da letra (A, B ou C) e o nome,
+  a frequência ou o número do canal, como o MDF daquele lado pede, no lugar dos ícones, que voltam
+  quando o sinal some. O menu não fecha ao receber, e continua só o lado em evidência recebendo, como
+  de fábrica: a entrada do menu desarma a dupla escuta, que só arma na tela principal, porque a ida
+  dela ao outro lado troca o canal "corrente", que é o que os itens do menu leem e gravam.
+- **A pasta MIC:** COMPRESSOR (OFF, LOW, MID e HIGH), MIC AGC (ON e OFF) e o MIC GAIN, que sai do TX. O
+  chip de rádio é um BK4819, agora com prova: a tabela que a partida escreve no registrador `0x09` é a
+  do UV-K5. Ele tem um compressor no áudio de TX, que o firmware deixa configurado em 2:1 e desligado,
+  e o AGC do microfone ligado. LOW, MID e HIGH comprimem 1,33:1, 2:1 e 4:1.
+- **A pasta CALIBRATION**, com o CRYSTAL FINE: o ajuste fino do cristal, de −2000 a +2000 Hz em
+  435,5 MHz, de 10 em 10, somado à calibração de fábrica, que no rádio de teste é zero (índice 8, sem
+  o valor fino). Ele é proporcional à frequência, como o erro de um cristal: +120 Hz em 435,5 MHz são
+  +40 Hz em 145 MHz. Em 0, a de fábrica fica exatamente como está. O limite é 4,6 ppm, que em 520 MHz
+  dá 2,4 kHz, dentro do canal; a faixa grossa de fábrica é ±4 ppm. Os números digitados não andam
+  nele, só as setas.
+- **Uma pasta de um item só:** o EXIT editando fecharia o menu inteiro, como num menu rápido de um
+  item; um desvio novo (`0x01E4D53C`) o faz voltar à lista da pasta. O menu tem agora 15 pastas.
+- Os três ajustes ficam em bytes livres do bloco de ajustes (`0x9035` a `0x9038`), e o que o RESET de
+  fábrica deixa neles vale OFF, ON e 0.
+- **O driver do CHIRP** ganhou Compressor, Mic AGC e Crystal fine (Hz at 435.5 MHz), logo depois do Mic
+  Gain; o `teste_chirp_real` ganhou as `10v` a `10x`.
+- **A prévia** acha as pastas e os itens pelo nome (os números mudaram com as pastas novas), desenha o
+  medidor do menu como o `b_medidor` (só a barra) e ganhou as telas 53 a 57d.
+
+O build passou ("tudo certo", com a `3b` aceitando a pasta de um item e a `4t` conferindo o desvio
+novo), a pilha é a de fábrica nas três raízes, os get, set e exibe novos ficam em até 320 B, e o
+sha256 é `d0b9ff28…`. O `VERSION` ainda mostra `V2.8T`. Testada no rádio (com a v60, que a contém): "testei o mic
+e o cristal e tudo funcionou". Detalhes na
+[engenharia reversa, seção 22](engenharia-reversa.md#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59).
 
 ## V2.8T — 27/10 — o menu em pastas, com o cartão do 3º item inteiro ✅
 

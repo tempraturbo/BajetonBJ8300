@@ -67,7 +67,7 @@ by looking for where content starts mirroring address 0:
 | Range | Contents |
 |---|---|
 | `0x00000–0x09FFF` | 960 channels, 32 B each |
-| `0x0A000–0x0FFFF` | settings; `0x0F000–0x0F24F` is factory calibration (TX power at `0xF000–0xF0BF`, [section 20](#20-tx-power-map-read-only); microphone gain at `0xF210`, [section 19](#19-microphone-gain-and-mic-gain-v49)) |
+| `0x0A000–0x0FFFF` | settings; `0x0F000–0x0F24F` is factory calibration (TX power at `0xF000–0xF0BF`, [section 20](#20-tx-power-map-read-only); microphone gain at `0xF210`, [section 19](#19-microphone-gain-and-mic-gain-v49); squelch, sub-tone and crystal, [section 22](#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59)) |
 | `0x10000–0x1AFFF` | **boot image**: 160×138 RGB565 little-endian, 44160 B |
 | `0x20000–0x99FFF` | fonts and Chinese text (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 records of 60 B used by the firmware |
@@ -185,6 +185,9 @@ destination in r0, source in r1, size in r2). Read only. It is what showed the v
 | `0x00014B83` | roger: 0 OFF, 1 BEEP, 2 TONE1200; 3 = BEEP 2 (v22) |
 | `0x00014BDF` | MIC GAIN: 0 HIGH, 1 MID, 2 LOW (v49; `0x9033` of the settings, section 19) |
 | `0x0000706C` | microphone gain put into register `0x7D` on every TX (copy of `0xF210`; since v49, of MIC GAIN) |
+| `0x00014BE1` / `0x00014BE2` | COMPRESSOR (0 OFF, 1 to 3 = 1.33:1, 2:1 and 4:1) and MIC AGC (0 ON, 1 OFF): `0x9035` and `0x9036` of the settings (v59, section 22) |
+| `0x00014BE3` | CRYSTAL FINE, signed 16 bits, in 10 Hz at 435.5 MHz: `0x9037` of the settings (v59, section 22) |
+| `0x00007076`..`0x00007079` | the calibration's crystal correction (copy of `0xF21A`; since v59, with CRYSTAL FINE added; section 22) |
 | `0x00014B7F` | TX-A/B (`0x9013` of the settings): 0 OFF, 1 A, 2 B; since v50, 3 = C (section 18) |
 | `0x00015384` | PTT side-swap flag: 1 = swapped (swaps back at the end of TX); since v51, bit 7 = TX on the third, bit 6 = it is already on side B, bit 5 = the swap to B was TX-A/B/C's, bits 0..3 = B's power |
 | `0x00015E2C` / `0x000129A4` | scramble of the current channel or VFO / the tuned one: 0 OFF, 1 3400 Hz, 2 2900 Hz, 3–8 = 2700, 2800, 3000…3300 Hz (v25) |
@@ -1087,9 +1090,10 @@ CHIRP touches it (CHIRP downloads the calibration, `0xF000..0xF24F`, and does no
 
 **The scale.** The firmware writes 6 bits, and the BK4819 datasheet puts the microphone
 sensitivity in bits 4 to 0 (0 to 31, in 0.5 dB steps). The other registers the firmware uses match
-that chip (`0x36` amplifier, `0x43` filter, `0x47`/`0x48` audio, `0x71` scramble), but there is no
-direct proof of the chip in the firmware: no text with its name, no read of its ID. That is why MIC
-GAIN does not go above 31. On the test radio, over the cable, `0xF210` went to 18 and then to 31,
+that chip (`0x36` amplifier, `0x43` filter, `0x47`/`0x48` audio, `0x71` scramble). No text in the
+firmware names it, and up to v58 there was no direct proof; v59's is the table boot writes to `0x09`,
+the UV-K5's BK4819 one ([section 22](#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59)).
+That is why MIC GAIN does not go above 31. On the test radio, over the cable, `0xF210` went to 18 and then to 31,
 and the difference heard (18 → 31: "it changed a lot") fits that scale.
 
 **The MIC GAIN item** (v49, right after NOISE REDUCTION, modelled on TDR): HIGH, MID and LOW, which
@@ -1206,3 +1210,193 @@ B builds it the same way. Digits count from 1, as in the main menu; OK and EXIT 
 **The stack.** The folder window is drawn by the title send, at the bottom of the menu engine. With
 the window's two texts at 28 B each, the interface reached 744 B (v56), 4 above stock; they became 12
 and 20 B, and the three roots are back at stock's 740, 620 and 696 B.
+
+## 22. The MIC folder, CRYSTAL FINE and the menu while receiving (v59)
+
+**The radio chip is a BK4819.** The 16 values boot writes to register `0x09`
+(`0x01E566C0..0x01E56766`, from `0x006F` to `0xF09F`) are, one by one, the BK4819 initialization of
+the UV-K5, and the bandwidth register `0x43` (`0x01E4416E`: `0x4008` wide, `0x3028` narrow) matches
+its bit layout. Every write to the chip goes through `0x01E39D82(reg, value)`: 154 sites, counting
+tail `goto`s (the `call`s alone give 138). The read is `0x01E407C0(reg)`, which sends the register
+with bit 7 set.
+
+**The TX compressor** comes configured and off. Boot puts `0xAA00` in `0x29` (`0x01E56602`: 2:1 ratio
+in bits 15:14, 0 dB point 84) and `0x0B40` in `0x28` (`0x01E565F8`: the RX expander, with ratio 0,
+off), but nothing sets bit 3 of `0x31`, which turns both on. The writes to `0x31` read it, change bit
+0 (NR: `0x01E44078`, `0x01E440A2`, `0x01E4B0B8`, `0x01E4B0DE`) or bit 1 (scramble: `0x01E4090E`,
+`0x01E4092A`, `0x01E4094A`) and write it back; the spectrum saves and restores the whole `0x31`, with
+ten more (`0x01E3FEE4`, the list at `0x01E5FF7B`: `0x13`, `0x30`, `0x31`, `0x37`, `0x3D`, `0x40`,
+`0x43`, `0x47`, `0x48`, `0x7D`, `0x7E`). The bit we set stays. **The microphone AGC** is bit 15 of
+`0x19` (1 turns it off), which only boot writes, with `0x1041` (`0x01E565EE`): on. The registers only
+go back to their defaults on boot's reset (`0x00`, `0x01E5653C`), in the loader `0x01E56084`, which
+runs once (`0x01E56CB6`), before the boot hook.
+
+**The MIC folder** gathers COMPRESSOR (OFF, LOW, MID and HIGH: 1.33:1, 2:1 and 4:1 in bits 15:14 of
+`0x29`, the rest as boot leaves it; OFF puts `0xAA00` back and clears bit 3), MIC AGC (ON and OFF) and
+MIC GAIN, which leaves TX. The levels live in `0x9035` and `0x9036` of the settings (`b[0x14BE1]` and
+`b[0x14BE2]`), which the firmware does not use: no instruction reads or writes them outside the block
+copies, checked across the whole disassembly (constant, `0x14680` base with offset, halfword and
+word). Saving the settings (`0x01E3AB36`) takes 39 B from `0x14BCC`, so they go to the data flash with
+the others, and the cable serves and receives the block's 64 B from RAM
+([section 4](#4-cable-protocol)). The factory defaults (`0x01E4842E`) copy 39 B from `0x01E603C3`, but
+the table ends early and runs into the Chinese text after it: 197 and 181 land there, which count as
+OFF and ON, the stock ones. `aplica_mic` sets all three at boot (in `gancho_partida`, after the chip
+reset), in each item's set, and when the settings change outside the menu (`gancho_ajustes`: the CHIRP
+upload and RESET).
+
+**The crystal.** Every tuning goes through `0x01E440CE(freq)`, with the frequency in 10 Hz: it adds
+the calibration's correction and writes `0x38` and `0x39`. Only the spectrum writes the two directly
+(`0x01E4AF1E`). The correction comes from bytes 10 to 13 of the `0xF210` block, which boot copies to
+`0x7076..0x7079` (`0x01E561BE`):
+
+| Byte | RAM | What it is |
+|---|---|---|
+| `0xF21A` | `b[0x7076]` | coarse index, 0 to 16, into the table at `0x01E602E0` = {40, 35, …, 5, 0, 5, …, 40} tenths of ppm, negative up to 8; 17 or more counts as 8, zero (and is written back as 8) |
+| `0xF21B` | `b[0x7077]` | `0xA0` = use the fine value instead of the index |
+| `0xF21C`, `0xF21D` | `0x7078` | the fine value, signed 16 bits: adds `freq / 100 × value / 435500`, i.e. 10 Hz per unit at 435.5 MHz, proportional to the frequency |
+
+On the test radio (calibration read over the cable on Oct 26) the index is 8 and the mark `0xFF`: no
+factory correction at all.
+
+**CRYSTAL FINE** (CALIBRATION folder) adds an adjustment on top of what the factory wrote: −2000 to
++2000 Hz at 435.5 MHz, in 10 Hz steps (401 lines, a number with its own display, like BANK). +2000 Hz
+is 4.6 ppm, and at 520 MHz that is 2.4 kHz, inside a 12.5 kHz channel; the stock coarse range is ±4
+ppm. With the adjustment other than 0, `aplica_cristal` sets the mark and puts the adjustment plus the
+factory one in the fine value (its fine value, or the index converted: 0.5 ppm = 21.775 units,
+rounded); with 0, the four factory bytes go back as they were, read again from the data flash. The
+adjustment lives in `0x9037` and `0x9038` (`b[0x14BE3]`, signed 16 bits), free like the MIC folder's;
+the factory defaults leave `0xC4C0`, out of range, which counts as 0. It takes effect on the next
+tuning, and the menu's OK asks for one: after the set the firmware clears the receive state
+(`0x01E49A86`). With the item open, typed digits do nothing (`gancho_menu_digito`): they would pick
+the line of that number, from −2000 Hz up.
+
+**A one-item folder.** On EXIT while editing, after cancelling the edit, `r0 = 1400` (`0x01E4D53C`)
+reads the table's item count, and with 1 the whole menu closes (`0x01E4D566`, to `0x01E3C29C`), as in a
+one-item quick menu; with more it goes on to EXIT's beep (`0x01E4D59A`). `desvio_menu_um` hooks in
+there: in a group it always goes to the beep, and the group's list stays, CALIBRATION included.
+Nothing branches into the covered bytes, and r0 is written at `0x01E4D59A` before it is read.
+
+**The menu while receiving.** With the menu open, on receive, the stock block of the side in focus
+showed up over the folder window: its badge (which only knows A and B: C came out as B), the name and
+the channel number. The signal loop calls stock's whole screen (`0x01E3C132`, through `0x01E44812`),
+and only three routines paint the block and the complement (`0x01E3BD04` and `0x01E3C06E`): that one,
+the side-in-focus one (`0x01E453E0`) and the one-side one (`0x01E413BE`). All three have our detour;
+the last one already drew nothing in the menu, and the others handed the drawing back to stock outside
+the main screen (`layout()` at 0), where it paints in the compact-A geometry, over the window's title
+and first line. Since v59, `b_tela`, `b_evidencia` and `b_digitando` draw nothing in screen mode 1,
+and `b_tela` clears the TX state as stock does (only with 0: with 1, the one-VFO screen, `0x01E3C152`
+skips `0x01E3C1D4`). Leaving the menu (`0x01E3C29C`) clears the screen mode (`0x01E3C322`) before
+redrawing (`0x01E3C33E`), so the main screen comes back whole. The menu does not close on receive: the
+step into "receiving" (`0x01E47D98..0x01E47E38`) does not touch the screen mode.
+
+Instead, the top bar shows who is receiving: `● RX`, the letter's badge (`LETRA()`, so C shows C) and
+the text that side's MDF asks for, cut before the voltage, in place of the icons (VOX, DW, MO, NR, the
+note, Bluetooth and the padlock), which come back when the signal goes. Who receives is always the
+side in focus: entering the menu disarms dual watch (`0x01E4CBBC`, to `0x01E3FDE4`) and the signal
+loop only arms it in screen mode 0 (`0x01E47C10`: `b[0x15379]`, the mode and `b[0x14950]` must be
+zero). The side that reaches the meter in the menu is always A (`0x01E452E8`), which is why the
+indicator does not use it. Dual watch paused in the menu is a stock choice and it stays: its trip to
+the other side swaps the "current" channel, which is what the menu items read and write.
+
+**Other calibrations mapped (read only).** `0xF0C0` and `0xF0D0` are the squelch's open and close
+thresholds per level (10 B each, to `0x7052` and `0x705F`, read at `0x01E4762C` and `0x01E476A6`);
+`0xF0E0`, `0xF0F0` and `0xF110` are per-band corrections read on the same path (`0x01E4765E`,
+`0x01E47AE4` and `0x01E4769A`), and `0xF100` goes to `0x1496C`, with no reader checked. `0xF211`
+(`b[0x706D]`) is the sub-tone level, put in bits 6:0 of `0x51` (`0x01E441A6`, `0x01E443C8`); 70 on the
+test radio.
+
+**Checked at build time:** `3b` accepts a one-item group, and `4t` checks `desvio_menu_um` byte by
+byte. The stack is stock's at the three roots (740, 620 and 696 B), and the new get, set and exibe,
+measured at the call site, stay at up to 320 B.
+
+## 23. The screen backlight by PWM (v60, diagnostic)
+
+**The pin.** The backlight is PB7 (pin 23). `0x01E001BA(pin)` returns the port base from the table at
+`0x01E006D0` (`0x1E5000`, `0x1E5040`, `0x1E5080`, `0x1E50C0`: JieLi's SDK `JL_PORTA..D`), and the
+backlight routine (`0x01E394D6`) only sets and clears bit 7 of port B's OUT and writes the mark
+`b[0x15386]`. It is called to light up by ABR (`0x01E3951C`, which calls it at `0x01E39552`), to turn
+off in the signal loop (`0x01E46578`, where v49's `gancho_luz` hooks in) and twice at boot, which
+lights the logo (`0x01E55FB0`, `0x01E5607E`). Outside boot only it touches the pin: board init
+(`0x01E5483E`) and the SDK's `main` (`0x01E53D2E`) configure the pin before the boot hook.
+
+**The PWM.** The BR23 timers sit at `0x1E0400`, `0x1E0500`, `0x1E0600` and `0x1E0700` (CON, CNT, PRD
+and PWM): TIMER0 does the waits, TIMER1 is the 2 ms tick (`0x01E3E44C`), and TIMER2 does not appear in
+app.bin. PB7 is not a fixed PWM pin (the SDK's are PA05, PA12, PB03 and PB05), so the path is output
+channel 2, which carries `CH2_T2_PWM_OUT` (46, `0x2E`). The firmware has the routine that sets up a
+channel, the SDK's `gpio_output_channle` at `0x01E4370A(pin, source)`: group = source >> 4, source & 0xF
+into bits 11:8 of IOMAP CON1 (`0x1E511C`) for CH0 or bits 23:20 and 27:24 of CON3 (`0x1E5124`) for CH1
+and CH2, and the pin with PU = PD = 1 and {OUT, DIE} = {0, 0}, {0, 1} or {1, 0}. `luz_inicia`, at the end
+of the boot hook, sets TIMER2 up as the SDK's `timer_pwm_init` does (CON = `0x18`: the 24 MHz crystal and
+/4; PRD = 240, 25 kHz, above audio; PWM = 60, 25%, with the backlight on; CNT = 0; CON |= 1) and sets up
+the channel (23, `0x2E`). Without CON bit 8, which drives the PWM onto TIMER2's fixed pin (PB3, which
+is not the backlight's): the SDK does not set it on the channel path either.
+
+**The backlight routine replaced.** With the pin on the channel, OUT selects the channel, and the stock
+routine, turning off, would move the pin to CH0. `desvio_luz` hooks into it (8 bytes: `[--sp] = rets;
+r1 = 83584`, nothing branches into them): with TIMER2 counting, it writes the mark as stock does and
+sets the duty to 60 or 0; before that (the logo's light) it lets stock run.
+
+**CH2 and the UARTs.** The channel routine has only two callers. The cable, at boot (`0x01E55AF4`, the
+configuration at `0x01E5FCB6` = {62, 61, 0, 17}), is UART1 on CH1. The generic open (`0x01E6A974`,
+through `0x01E4381A`, on the switch to update mode at `0x01E4C096` and at `0x01E54A92`) takes the first
+free UART (bit 0 of CON0 at `0x1E2000`, `0x1E2100` and `0x1E2200`, `0x01E6A94C`): UART0 on CH0, UART1
+on CH1 and UART2 on CH2. UART0 may come on from the bootloader (`main` tests it at `0x01E53E5C` for its
+messages), so CH2 would only be taken with the cable and it busy. `luz_inicia` does not start the PWM
+with UART2 on, so as not to take the channel from a UART; if it comes on later, the pin just echoes its
+TX while it lasts.
+
+**What only the radio can answer:** whether the backlight dims without flicker at 25 kHz, whether there
+is hum on RX or TX, and how it behaves with ABR, SAVE and on the way back from flashing mode. The worst
+case is the backlight stuck full (the pin off the channel goes back to an output with OUT = 1) or off
+until another version is flashed; none of it touches boot before its hook or the flashing mode.
+
+**Checked at build time:** `4m` checks `desvio_luz` byte by byte with the other 22, and the stack is
+stock's at the three roots (the detour weighs 28 B where the backlight is called).
+
+**The BRIGHTNESS item (v61).** The diagnostic worked on the radio: the backlight got dimmer, with no
+flicker and no noise on RX or TX. The fixed level became the BRIGHTNESS item of the DISPLAY folder:
+100%, 60%, 35%, 20% and 10% (duties 240, 144, 84, 48 and 24 of 240), at `0x9039` of the settings
+(`b[0x14BE5]`; out of range, as the factory RESET leaves it, counts as 100%). `luz_ciclo` reads the level;
+`luz_inicia` and `b_luz` use it, and `luz_aplica` applies it at once, on the item's set and in
+`gancho_ajustes`, with the backlight's mark as it is. `0x9039` is free by the same scan as v59's bytes,
+redone by script and validated on the NOISE REDUCTION byte
+([section 22](#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59)).
+
+**No PWM at 100% and when off (v62).** With v60 the owner heard noise on a Baofeng right next to it (and
+now and then on the radio itself), which stopped with the backlight off: every PWM edge spreads a
+little RF. `luz_poe` puts the pin on the channel only with the backlight on below 100% (the channel is
+set up once, while PB7's PD is 0); at 100% and when off, the pin leaves the channel and is a plain
+output again, with PD at 0, DIE at 1 and OUT, as board init leaves it (`0x01E54844..0x01E54854`), with no
+edges at all. TIMER2 keeps counting with no pin. With UART2 on, a dimmed level stays at 100%.
+
+**The fix for the menu's receive indicator (v62).** v59's indicator
+([section 22](#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59)) relied on the meter,
+but on the radio it never showed: the signal loop only calls the meter in screen modes 0 and 3
+(`0x01E46216`, in the signal-level routine), and the end of a reception does not go through it. The
+level routine (`0x01E46166`) is called in any mode: the loop has a fast counter (`b[0x14612]`, 0 to 9 on
+every pass) and a slow one (`b[0x14614]`, which moves every 10), and on the pass where the fast one is
+0 the slow one picks the task (the `tbh` at `0x01E46A38`); 3 and 8 go to it (`0x01E46C7A`), that is,
+every 50 passes. `desvio_sinal` hooks its entry (8 bytes, `[--sp] = {rets, r7-r4}; r5 = 83584`; nothing
+branches into them): outside the menu, stock; in the menu, instead of it (there it would only read RSSI
+and the level kept at `b[0x7031]`), it compares the receive state (`b[0x15367]` = 4) with what the bar
+shows, kept in the same `b[0x7031]` (0xFE receiving, 0xFF not), and redraws the bar when they differ.
+`le_estado` sets RX in the menu from the same state, so every bar drawn there (battery, padlock)
+agrees. In modes 0 and 3 no level (0 to 4) is 0xFE, and leaving the menu redraws the meter as after
+stock's 0xFF.
+
+**The end of a reception in the menu (v63).** With v62 the indicator showed and never went away: in the
+menu the receive state does not leave 4 when the carrier drops (from state 4 the loop's code reaches no
+write of the state; the return to waiting happens inside called routines). The indicator now also
+requires the receive amplifier request: `0x01E39E2C(n)` (`PEDE_AMPLI`) keeps one byte per request from
+`0x129D2` (1 and 2 the first, 3 and 4 the second, 5 and 6 the third, ...: set and clear, through the
+`tbb` at `0x01E39E3A`) and turns the amplifier on with their OR. The receive one is `b[0x129D4]`:
+entering reception sets it (`0x01E47E1A`, outside the QT scan) before setting the state to 4, and the
+dropping signal clears it (`0x01E47A9E`), neither looking at the screen mode. `RECEBENDO_MENU` = state 4
+and that byte set, used by `b_sinal` and `le_estado`.
+
+**The indicator without a mark (v64).** The `-DDIAG_RX` diagnostic showed on the radio that the level
+reading is called about once a second after the reception too, and that the state and the amplifier request
+go back at once (receiving `E4 A1`, afterwards `E3 A0`). What failed was the mark in `b[0x7031]`: the firmware
+resets it on its own (`b[0x7031] = 255` at `0x01E45A70`, called by the loop at `0x01E46F52`), and with it reset
+`b_sinal` thought the bar was clear. Now it redraws the bar on every call, in the menu, with no mark; and
+`b[0x7031]` is written by the firmware alone.

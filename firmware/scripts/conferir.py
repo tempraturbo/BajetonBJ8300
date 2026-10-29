@@ -491,7 +491,8 @@ if montar.MENU_NOVO:
                 or campo(g, 'opcoes_cn') != campo(g, 'exibe') or tab[g * T + 0x1B]
                 or opcoes != [campo(p + i, 'nome') for i in range(n)]):
             problemas.append(f'o item do grupo {nome} nao e uma lista sem get nem set com os nomes dos itens')
-        if filhos != sorted(filhos) or not 2 <= n <= montar.ITENS_POR_GRUPO:
+        # um item so desde a v59 (o CALIBRATION): o desvio_menu_um (4t) faz o EXIT editando voltar a lista
+        if filhos != sorted(filhos) or not 1 <= n <= montar.ITENS_POR_GRUPO:
             problemas.append(f'{nome}: {n} itens, ou fora de ordem: {filhos}')
         marcas = [txt[4 + p + i] for i in range(n)]       # v55: SEM_VALOR e VARIOS, por posicao
         if marcas != [montar.MENU_MARCAS.get((nome, f), 0) for f in filhos] or any(txt[4 + g:5 + g]):

@@ -62,6 +62,14 @@ FIRMWARE(ENVIA, 0x01E3ADBC);   void ENVIA(void);
 #define NIVEL_BATERIA    RAM(u32, 0x000149C0)
 #define MODO_TELA        RAM(u8, 0x0001533D)             /* 0/3/5 dois VFOs, 1 menu, 2 radio, 7 DTMF,
                                                           * 17 scan QT, 20 espectro */
+#define ESTADO_RX        RAM(u8, 0x00015367)             /* 0 e 1 sintoniza, 2 espera, 3 vigia,
+                                                          * 4 recebendo, 5 MO (0x01E467A6) */
+#define AMPLI_RX         RAM(u8, 0x000129D4)             /* o pedido do amplificador da recepcao: */
+                                                         /* PEDE_AMPLI(5) liga, (6) solta (0x01E39E2C) */
+/* No menu, recebendo (v63): o estado em 4 e o audio da recepcao aberto. A entrada da recepcao pede o
+ * amplificador (0x01E47E1A) antes de por o estado em 4, e o sinal que cai o solta (0x01E47A9E): na v62,
+ * so com o estado, o indicador ficava na barra depois do fim da recepcao. */
+#define RECEBENDO_MENU   (ESTADO_RX == 4 && AMPLI_RX != 0)
 
 /* As cores do rascunho B (#rrggbb convertido para RGB565). */
 #define COR_FUNDO          0x0040u   /* #050806 */
@@ -184,7 +192,7 @@ static void le_estado(struct estado *e)
 
     e->evidencia = LADO_B != 0;
     e->tx = EM_TX == 2;
-    e->rx = 0;
+    e->rx = MODO_TELA == 1 && RECEBENDO_MENU;  /* no menu, quem recebe na barra (v62) */
     for (i = 0; i < 2; i++)
         le_lado(&e->lado[i], i, e->tx && i == e->evidencia);
     if (e->tx)
@@ -700,6 +708,58 @@ SEPARADA static void compacto(const struct estado *e, unsigned i)
 
 /* Barra de cima: o que esta ligado (VOX, DW, MO, NR em texto; DTMF ST, Bluetooth e trava em icone),
  * RX ou TX, e a tensao com a pilha. */
+/* No menu, recebendo (v59), no lugar dos icones: o selo do lado que recebe e o texto que o MDF dele
+ * pede, como no resumo, cortado antes da tensao, numa caixa ambar como a faixa que recebe na tela
+ * principal (v63: o fundo ambar escuro, o selo ambar com a letra escura e o texto ambar). Quem recebe e
+ * o lado em evidencia: a entrada do menu desarma a dupla escuta (0x01E4CBBC) e o laco do sinal so a
+ * arma no modo de tela 0 (0x01E47C10). O lado que chega ao medidor no menu e sempre o A (0x01E452E8),
+ * e por isso nao serve aqui. */
+#define FIM_RECEBENDO 110u
+SEPARADA static void quem_recebe(const struct estado *e, unsigned x)
+{
+    unsigned i = e->evidencia, n;
+    const struct lado *l = &e->lado[i];
+    char s[16];
+
+    if (!l->canal || l->exibicao == 1)
+        frequencia(s, l->freq, 5);
+    else if (l->exibicao == 0)
+        nome_ou_sem(s, i);
+    else
+        texto_canal(s, l->canal);
+    for (n = 0; s[n]; n++)
+        ;
+    while (n && x + 18 + largura(s, 1) + 3 > FIM_RECEBENDO)
+        s[--n] = 0;
+    pinta(x, 2, x + 18 + largura(s, 1) + 3, 13, COR_CHIP_AMBAR);
+    pinta(x + 2, 3, x + 13, 12, COR_TEXTO_AMBAR);
+    letra(x + 5, 4, 'A' + LETRA(e, i), 1, COR_CHIP_AMBAR);
+    texto(x + 18, 4, s, 1, COR_TEXTO_AMBAR);
+}
+
+#ifdef DIAG_RX
+/* Diagnostico do fim da recepcao no menu (v63d, so com -DDIAG_RX): no lugar dos icones, no menu, o
+ * estado da recepcao (E, b[0x15367]), o pedido do amplificador da recepcao (A, b[0x129D4]), os dois
+ * sinalizadores que a leitura do nivel olha (F, b[0x1536F]; G, b[0x15368]) e um contador que anda a
+ * cada chamada do b_sinal (no 0x903A dos ajustes, b[0x14BE6], livre). */
+#define DIAG_CONTA RAM(u8, 0x00014BE6)
+SEPARADA static void diag_rx(unsigned x)
+{
+    static const u32 enderecos[4] = {0x15367, 0x129D4, 0x1536F, 0x15368};
+    static const char letras[4] = {'E', 'A', 'F', 'G'};
+    char s[24], *p = s;
+    unsigned i;
+
+    for (i = 0; i < 4; i++) {
+        *p++ = letras[i];
+        p = numero(p, RAM(u8, enderecos[i]), 1);
+        *p++ = ' ';
+    }
+    numero(p, DIAG_CONTA % 100, 2);
+    texto(x + 1, 4, s, 1, COR_TEXTO_AMBAR);
+}
+#endif
+
 SEPARADA static void barra_estado(const struct estado *e)
 {
     char s[8], *p;
@@ -716,20 +776,29 @@ SEPARADA static void barra_estado(const struct estado *e)
         texto(x + 8, 4, e->tx ? "TX" : "RX", 1, cor);
         x += 24;
     }
-    if (e->vox)
-        x = etiqueta(x, 2, "VOX", COR_CHIP_DW, COR_TEXTO, 0);
-    if (e->dw)
-        x = etiqueta(x, 2, "DW", COR_CHIP_DW, COR_TEXTO, 0);
-    if (e->mo)
-        x = etiqueta(x, 2, "MO", COR_CHIP_DW, COR_TEXTO, 0);
-    if (e->nr)
-        x = etiqueta(x, 2, "NR", COR_CHIP_DW, COR_TEXTO, 0);
-    if (e->dtmf)
-        x = texto(x + 1, 4, ICONE_NOTA, 1, COR_VERDE) + 1;
-    if (e->bt)
-        x = texto(x + 1, 4, ICONE_BLUETOOTH, 1, COR_VERDE) + 1;
-    if (e->trava)
-        texto(x + 1, 4, ICONE_CADEADO, 1, COR_VERDE);
+#ifdef DIAG_RX
+    if (MODO_TELA == 1) {
+        diag_rx(x);
+    } else
+#endif
+    if (e->rx && MODO_TELA == 1) {
+        quem_recebe(e, x);
+    } else {
+        if (e->vox)
+            x = etiqueta(x, 2, "VOX", COR_CHIP_DW, COR_TEXTO, 0);
+        if (e->dw)
+            x = etiqueta(x, 2, "DW", COR_CHIP_DW, COR_TEXTO, 0);
+        if (e->mo)
+            x = etiqueta(x, 2, "MO", COR_CHIP_DW, COR_TEXTO, 0);
+        if (e->nr)
+            x = etiqueta(x, 2, "NR", COR_CHIP_DW, COR_TEXTO, 0);
+        if (e->dtmf)
+            x = texto(x + 1, 4, ICONE_NOTA, 1, COR_VERDE) + 1;
+        if (e->bt)
+            x = texto(x + 1, 4, ICONE_BLUETOOTH, 1, COR_VERDE) + 1;
+        if (e->trava)
+            texto(x + 1, 4, ICONE_CADEADO, 1, COR_VERDE);
+    }
 
     p = numero(s, e->tensao / 10, 1);
     *p++ = '.';
@@ -854,9 +923,12 @@ static inline __attribute__((always_inline)) void medidor_b(unsigned estado, uns
 }
 
 #ifdef PREVIA
+/* Como o b_medidor: nas outras telas (o menu, o radio, o scan QT) e no espectro, so a barra. */
 void tela_b_medidor(unsigned estado, unsigned nivel, unsigned lado)
 {
-    medidor_b(estado, nivel, lado, 0);
+    unsigned m = MODO_TELA;
+
+    medidor_b(estado, nivel, lado, m == 1 || m == 2 || m == 17 || m == 20);
 }
 #endif
 
@@ -1054,12 +1126,22 @@ u32 b_menu_sai(void)
     return 1;
 }
 
+/* No EXIT editando, depois de cancelar a edicao (0x01E4D53C, desvio_menu_um): a quantidade de itens
+ * em 1 fecha o menu inteiro (0x01E4D566), como num menu rapido de um item. Num grupo (o CALIBRATION
+ * tem um item so, v59) devolve 1, e o desvio segue ao bipe do EXIT (0x01E4D59A), por onde o de fabrica
+ * passa com mais de um item: a edicao fecha e a lista do grupo fica. */
+u32 b_menu_um(void)
+{
+    unsigned n = menu_nivel();
+
+    return n != 0 && n < RADIO;
+}
+
 /* Depois do set, no OK editando (0x01E49A86, onde o firmware zera o estado da recepcao, b[0x15367], e
  * fecha a edicao): nos itens de marcar varios (MARCA_VARIOS: o BANK e o CHANNEL dos BANKS, v55) a
  * edicao continua. So o estado da recepcao vai a 0 - sintoniza de novo, como o de fabrica faz depois
  * de mudar o ajuste - e o desvio segue para o redesenho e a volta (0x01E49C7C). O EXIT sai: cada OK
  * ja gravou. */
-#define ESTADO_RX RAM(u8, 0x00015367)
 u32 b_menu_marca(void)
 {
     unsigned n = menu_nivel();
@@ -1075,12 +1157,17 @@ u32 b_menu_marca(void)
  * fora da edicao, nas nossas tabelas e no menu do radio (v56), o numero vai ao item de mesmo numero, contando de 1 como a tela
  * mostra - o de fabrica conta de 0 (0x01E4A2DA). Dois digitos seguidos, antes do tempo do digito
  * acabar e sem seta no meio, fazem um numero so, como no de fabrica (0x01E4A274..0x01E4A2CE). */
+u16 cristal_le(void);                 /* bancos.c: o get do CRYSTAL FINE (v59) */
 u32 gancho_menu_digito(unsigned tecla)
 {
     unsigned d = tecla - '0', conta = MENU_CONTA, n;
+    u32 get = MENU_TABELA + MENU_NUMERO * TAM_ITEM + 3;
 
-    if (MENU_EDITANDO == 1 && MENU_TIPO == 8)
-        return 0;                     /* o VERSION aberto e so leitura (v55) */
+    get = RAM(u8, get) | RAM(u8, get + 1) << 8 | RAM(u8, get + 2) << 16 | (u32)RAM(u8, get + 3) << 24;
+    /* o VERSION aberto e so leitura (v55); o CRYSTAL FINE so anda pelas setas (v59): o numero digitado
+     * escolheria a linha desse numero, de -2000 Hz em diante */
+    if (MENU_EDITANDO == 1 && (MENU_TIPO == 8 || get == (u32)cristal_le))
+        return 0;
     if (MENU_EDITANDO == 1 || menu_nivel() == FORA)
         return DIGITO_MENU(tecla);
     TEMPO_MENU();
@@ -1372,10 +1459,25 @@ void gancho_espectro_limpa(void)
     telas_faixa(20, 0, 128, 0, 0);
 }
 
+/* No menu aberto (v59) nada da tela principal se desenha: a de fabrica pintava o lado em evidencia (o
+ * selo de fabrica, que so conhece A e B, o nome e o numero) por cima da janela de pasta, no lugar do
+ * resumo do menu de fabrica. O laco do sinal a chama recebendo (0x01E3C132 por 0x01E44812), e as tres
+ * rotinas que pintam o bloco e o complemento (0x01E3BD04 e 0x01E3C06E) sao esta, a do lado em
+ * evidencia (0x01E453E0) e a de um lado (0x01E413BE, no b_lado). */
+static unsigned no_menu(void)
+{
+    return MODO_TELA == 1;
+}
+
 /* 0x01E3C132(0): a tela inteira. Ela zera o estado de TX (0x01E3C1D4); o gancho tambem. Com 1 e a
- * tela de um VFO, que fica a de fabrica. */
+ * tela de um VFO, que fica a de fabrica e nao mexe no estado de TX (0x01E3C152 pula 0x01E3C1D4). */
 u32 b_tela(u32 um_vfo)
 {
+    if (no_menu()) {
+        if (!um_vfo)
+            EM_TX = 0;
+        return 1;
+    }
     if (um_vfo || !ativa())
         return 0;
     EM_TX = 0;
@@ -1434,6 +1536,8 @@ u32 b_evidencia(void)
 {
     struct estado e;
 
+    if (no_menu())
+        return 1;
     if (!ativa())
         return 0;
     le_estado(&e);
@@ -1444,6 +1548,8 @@ u32 b_evidencia(void)
 /* 0x01E4B29C e 0x01E4B1DE: o numero de canal e a frequencia sendo digitados. */
 u32 b_digitando(void)
 {
+    if (no_menu())
+        return 1;
     if (!ativa())
         return 0;
     tela_b_digitando();
@@ -1479,6 +1585,35 @@ u32 b_lado(void)
     return lado_principal();
 }
 
+/* 0x01E46166, a leitura do nivel do sinal (v62). O laco do sinal a chama em qualquer modo de tela, perto
+ * de uma vez por segundo: na volta em que o contador rapido (b[0x14612], de 0 a 9 a cada volta) da 0, o
+ * lento (b[0x14614]) escolhe a tarefa (o tbh de 0x01E46A38), e o 3 e o 8 vem aqui (0x01E46C7A). Ela le o
+ * RSSI e so chama o medidor nos modos 0 e 3 (0x01E46216), e o fim da recepcao nao passa pelo medidor:
+ * no menu nada redesenhava a barra, e o indicador da v59 nunca aparecia. No menu (modo 1) o desvio faz
+ * o trabalho no lugar dela, que ali so leria o RSSI: redesenha a barra, que o le_estado monta com quem
+ * recebe (RECEBENDO_MENU). Em toda chamada, sem lembrar o que a barra mostra (v64): a v62 e a v63
+ * guardavam isso em b[0x7031], o nivel do medidor ja desenhado, e o firmware o zera por conta propria
+ * (b[0x7031] = 255 em 0x01E45A70, que o laco chama em 0x01E46F52); o indicador achava a barra limpa e
+ * nao sumia no fim da recepcao. O diagnostico (v63d) provou no radio que redesenhar sempre funciona. */
+SEPARADA static void barra_menu(void)
+{
+    struct estado e;
+
+    le_estado(&e);
+    desenha(&e, 0, ALTURA_ESTADO);
+}
+
+u32 b_sinal(void)
+{
+    if (MODO_TELA != 1)
+        return 0;
+#ifdef DIAG_RX
+    DIAG_CONTA++;
+#endif
+    barra_menu();
+    return 1;
+}
+
 /* 0x01E3B592(estado, nivel, lado, janela propria), o medidor; fora da tela inteira e da TX (que sao
  * nossas), so o RX chama (0x01E45328). O nivel que vem e o que vale (o MO passa 10, 0x01E4532C), e a
  * barra de cima acompanha, pelo RX. No espectro so a tecla MO chega aqui (o laco do sinal so chama o
@@ -1492,6 +1627,97 @@ u32 b_medidor(u32 estado, u32 nivel, u32 lado)
         return 0;
     medidor_b(estado, nivel, lado, outra);
     return 1;
+}
+
+/* ---------- a luz da tela por PWM (v60; o BRIGHTNESS, v61) ----------
+ * A luz e o PB7 (pino 23): a rotina de fabrica (0x01E394D6) so liga e desliga o bit 7 do OUT da porta
+ * B (0x1E5040, da tabela de 0x01E006D0 que 0x01E001BA le) e grava a marca b[0x15386]. O TIMER2
+ * (0x1E0600), que o firmware nao usa, gera o PWM, como o timer_pwm_init do SDK da JieLi (o cristal de
+ * 24 MHz, /4, contando), e o canal de saida 2 o leva ao pino: a rotina de fabrica que liga um canal
+ * (0x01E4370A(pino, fonte), o gpio_output_channle do SDK) poe a fonte nos bits 27:24 do CON3 do IOMAP
+ * (0x1E5124) e o pino com PU = PD = 1, OUT = 1 e DIE = 0. Com o pino no canal, o OUT escolhe o canal, e
+ * a rotina de fabrica nao pode mais rodar (apagar passaria o pino ao CH0): o desvio na entrada dela
+ * acende e apaga pelo ciclo do PWM. Antes do PWM (a partida acende a luz no logo, 0x01E55FB0 e
+ * 0x01E5607E) roda a de fabrica. O CH2 so e usado pela UART2: a abertura generica de serial
+ * (0x01E6A974, so na troca para o modo de atualizacao, 0x01E4C096, e em 0x01E54A92) pega a primeira
+ * livre, a UART0 no CH0, a UART1 no CH1 e a UART2 no CH2; o cabo da partida e a UART1 no CH1
+ * (0x01E55AF4, a fonte 17 de 0x01E5FCB6). Com a UART2 ligada, o PWM nao entra e a luz fica a de
+ * fabrica; se ela for ligada depois, o pino so repete o TX dela. */
+#define T2_CON       RAM(u32, 0x001E0600)
+#define T2_CNT       RAM(u32, 0x001E0604)
+#define T2_PRD       RAM(u32, 0x001E0608)
+#define T2_PWM       RAM(u32, 0x001E060C)
+#define UART2_CON0   RAM(u32, 0x001E2200)
+#define PB_OUT       RAM(u32, 0x001E5040)   /* a porta B (JL_PORTB): OUT, DIE +0x0C, PD +0x14 */
+#define PB_DIE       RAM(u32, 0x001E504C)
+#define PB_PD        RAM(u32, 0x001E5054)
+#define PINO_LUZ     0x80u                  /* o PB7 */
+#define MARCA_LUZ    RAM(u8, 0x00015386)
+#define LUZ_PRD      240u                   /* 24 MHz / 4 / 240 = 25 kHz, fora do audio */
+/* O BRIGHTNESS (v61): o nivel no 0x9039 dos ajustes (b[0x14BE5], livre como os da v59), de 0 = 100% a
+ * 4 = 10%, espacados para o olho; fora da faixa (o RESET de fabrica deixa 163) vale 100%. */
+#define BRILHO       RAM(u8, 0x00014BE5)
+static const u8 luz_ciclos[5] = {240, 144, 84, 48, 24};
+#define CH2_T2_PWM   0x2E                   /* o CH2_T2_PWM_OUT do gpio.h do SDK */
+FIRMWARE(CANAL_SAIDA, 0x01E4370A); void CANAL_SAIDA(unsigned pino, unsigned fonte);
+
+static unsigned luz_ciclo(void)
+{
+    return luz_ciclos[BRILHO < 5 ? BRILHO : 0];
+}
+
+/* O pino da luz com o ciclo dado (v62). Cada borda do PWM espalha um pouco de RF, que um receptor
+ * encostado ouve (e o proprio radio, as vezes): o PWM so existe com a luz acesa abaixo de 100%. Acesa
+ * a 100% ou apagada, o pino e saida comum, como a de fabrica - fora do canal, com o PD em 0 e o DIE em 1,
+ * como a iniciacao da placa o deixa (0x01E54844..0x01E54854), e o OUT. Para o canal, a rotina de
+ * fabrica, so com a UART2 desligada (o CH2 e dela). */
+static void luz_poe(unsigned ciclo)
+{
+    if (ciclo && ciclo < LUZ_PRD && !(UART2_CON0 & 1)) {
+        T2_PWM = ciclo;
+        if (!(PB_PD & PINO_LUZ))
+            CANAL_SAIDA(23, CH2_T2_PWM);
+        return;
+    }
+    PB_PD &= ~PINO_LUZ;
+    PB_DIE |= PINO_LUZ;
+    if (ciclo)
+        PB_OUT |= PINO_LUZ;
+    else
+        PB_OUT &= ~PINO_LUZ;
+}
+
+/* Do gancho da partida (bancos.c), com a luz como a partida a deixou: o TIMER2 fica contando, e o pino
+ * so vai ao canal quando o nivel pede. */
+void luz_inicia(void)
+{
+    if (UART2_CON0 & 1)
+        return;
+    T2_CON = 0;
+    T2_CON = 2 << 2 | 1 << 4;
+    T2_PRD = LUZ_PRD;
+    T2_PWM = 0;
+    T2_CNT = 0;
+    T2_CON |= 1;
+    luz_poe(MARCA_LUZ ? luz_ciclo() : 0);
+}
+
+/* 0x01E394D6(acende): com o PWM ligado, a marca como a de fabrica grava e o ciclo; sem ele, a de
+ * fabrica. */
+u32 b_luz(u32 acende)
+{
+    if (!(T2_CON & 1))
+        return 0;
+    MARCA_LUZ = acende != 0;
+    luz_poe(acende ? luz_ciclo() : 0);
+    return 1;
+}
+
+/* O nivel novo na hora (o set do BRIGHTNESS e os ajustes que mudam por fora do menu, bancos.c). */
+void luz_aplica(void)
+{
+    if (T2_CON & 1)
+        luz_poe(MARCA_LUZ ? luz_ciclo() : 0);
 }
 
 /* 0x01E40F1C(estado), a transmissao, refeita: 1 so grava o estado; 2 grava e desenha o lado em
@@ -1556,6 +1782,8 @@ DESVIO(desvio_lado, b_lado, 0x01E413C2, "0x76, 0x04, 0xe2, 0x9e");
 DESVIO(desvio_informacoes, b_lado, 0x01E3B2C8, "0x7a, 0x04, 0xe2, 0x9c");
 DESVIO(desvio_medidor, b_medidor, 0x01E3B596, "0x7c, 0x04, 0xe2, 0x9c");
 DESVIO(desvio_transmissao, b_transmissao, 0x01E40F20, "0x76, 0x04, 0xe2, 0x9e");
+DESVIO(desvio_luz, b_luz, 0x01E394DE, "0x10, 0x04, 0xc1, 0xff, 0x80, 0x46, 0x01, 0x00");
+DESVIO(desvio_sinal, b_sinal, 0x01E4616E, "0x77, 0x04, 0xc5, 0xff, 0x80, 0x46, 0x01, 0x00");
 DESVIO(desvio_radio, b_radio, 0x01E44FB4, "0x77, 0x04, 0xe2, 0x9b");
 DESVIO(desvio_radio_freq, b_radio_freq, 0x01E449BE, "0x79, 0x04, 0xe2, 0x9a");
 DESVIO(desvio_radio_nome, b_radio_nome, 0x01E44B2C, "0x75, 0x04, 0xe2, 0x95");
@@ -1594,6 +1822,9 @@ DESVIO_MEIO(desvio_menu_sai, b_menu_sai, 0x01E4D54E, 0x01E4D59A, "0x40, 0xe0, 0x
 /* O OK editando, depois do set: "r0 = 3303" (0x01E49A86) comeca o fechamento da edicao; nos itens de
  * marcar varios segue para o redesenho e a volta (0x01E49C7C). */
 DESVIO_MEIO(desvio_menu_marca, b_menu_marca, 0x01E49A8A, 0x01E49C7C, "0x40, 0xe0, 0xe7, 0x0c");
+/* O EXIT editando, depois de cancelar a edicao: "r0 = 1400" (0x01E4D53C) le a quantidade de itens, que
+ * com 1 fecha o menu; num grupo segue ao bipe do EXIT (0x01E4D59A), como com mais itens (v59). */
+DESVIO_MEIO(desvio_menu_um, b_menu_um, 0x01E4D540, 0x01E4D59A, "0x40, 0xe0, 0x78, 0x05");
 
 /* 0x01E44C68 de fabrica, chamada como rotina: os bytes que o desvio cobre e a volta. O rets que o
  * primeiro deles empilha e o de quem chamou esta, entao a de fabrica volta para la. */

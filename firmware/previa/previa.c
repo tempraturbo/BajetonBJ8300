@@ -185,6 +185,32 @@ static void menu_em(unsigned g, unsigned i)
     memoria[0x14BFA] = i;
 }
 
+/* O grupo pelo nome, e o menu no item de nome i dele (v59: com o MIC e o CALIBRATION, os numeros dos
+ * grupos que vem depois mudaram, e o MIC GAIN saiu do TX). */
+static unsigned grupo(const char *g)
+{
+    unsigned n;
+
+    for (n = 0; n < MENU_PREVIA_GRUPOS; n++)
+        if (!strcmp(menu_previa_nomes[n], g))
+            return n;
+    fprintf(stderr, "grupo %s nao existe\n", g);
+    exit(1);
+}
+
+static void menu_no(const char *g, const char *i)
+{
+    unsigned n = grupo(g), p = menu_inicio(n), k;
+
+    for (k = 0; k < menu_previa_itens[n]; k++)
+        if (!strcmp(menu_previa_nomes[p + k], i)) {
+            menu_em(n, k);
+            return;
+        }
+    fprintf(stderr, "item %s nao existe no grupo %s\n", i, g);
+    exit(1);
+}
+
 /* O radio em repouso: bateria cheia em 8,1 V, sem recepcao, sem zona, os dois lados em canal. */
 static void limpa(void)
 {
@@ -459,7 +485,7 @@ int main(int argc, char **argv)
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "ROGER");
-        menu_em(11, 1);
+        menu_no("TX", "ROGER");
         for (i = 0; i < 3; i++)
             LINHA(i, i == 1 ? 2 : 1, roger[i]);
         memoria[0x14C10] = 1;
@@ -470,7 +496,7 @@ int main(int argc, char **argv)
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "SQL");
-        menu_em(0, 1);
+        menu_no("AUDIO", "SQL");
         LINHA(0, 2, "1");
         LINHA(1, 1, "2");
         LINHA(2, 1, "3");
@@ -482,7 +508,7 @@ int main(int argc, char **argv)
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "NOISE REDUCTION");
-        menu_em(0, 0);
+        menu_no("AUDIO", "NOISE REDUCTION");
         LINHA(0, 1, "OFF");
         LINHA(1, 2, "ON");
         memoria[0x14C10] = 1;
@@ -497,7 +523,7 @@ int main(int argc, char **argv)
         memoria[0x15E04] = 1;
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "TX-A/B/C");
-        menu_em(12, 1);
+        menu_no("WATCH", "TX-A/B/C");
         LINHA(0, 1, "B");
         LINHA(1, 2, "C");
         LINHA(2, 1, "OFF");
@@ -527,7 +553,7 @@ int main(int argc, char **argv)
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "BANK");
-        menu_em(1, 0);
+        menu_no("BANKS", "BANK");
         memoria[0x14C00] = 0;
         LINHA(0, 2, "1 BAOFENG\x01");
         LINHA(1, 1, "2 MOTOROLA");
@@ -542,7 +568,7 @@ int main(int argc, char **argv)
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "NAME");
-        menu_em(1, 2);
+        menu_no("BANKS", "NAME");
         memoria[0x14C00] = 7;
         LINHA(0, 0, "MOTOROLA");
         memoria[0x14C10] = 2;
@@ -552,7 +578,7 @@ int main(int argc, char **argv)
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "CH-NAME");
-        menu_em(6, 0);
+        menu_no("MEMORY", "CH-NAME");
         memoria[0x14C00] = 7;
         LINHA(0, 0, "BF888-01");
         telas_b(1, 0);
@@ -563,7 +589,7 @@ int main(int argc, char **argv)
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "NAME");
-        menu_em(1, 2);
+        menu_no("BANKS", "NAME");
         memoria[0x14C00] = 7;
         memoria[0x14BF9] = 1;
         digitando("MOTOR");
@@ -580,7 +606,7 @@ int main(int argc, char **argv)
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "OFFSET");
-        menu_em(7, 0);
+        menu_no("REPEATER", "OFFSET");
         memoria[0x14C00] = 3;
         LINHA(0, 1, "123.4---");
         memoria[0x14BF9] = 1;
@@ -590,13 +616,13 @@ int main(int argc, char **argv)
         /* v53: os grupos do menu, a janela de pasta - o BANKS (3 itens) e o CHANNEL (7, o maior) */
         BASE_TELAS();
         memoria[0x1533D] = 1;
-        menu_em(NOS_GRUPOS, 1);
+        menu_em(NOS_GRUPOS, grupo("BANKS"));
         telas_b(1, 0);
         grava("40-menu-grupos-banks");
-        menu_em(NOS_GRUPOS, 2);
+        menu_em(NOS_GRUPOS, grupo("CHANNEL"));
         telas_b(1, 0);
         grava("41-menu-grupos-channel");
-        menu_em(NOS_GRUPOS, 12);
+        menu_em(NOS_GRUPOS, grupo("WATCH"));
         telas_b(1, 0);
         grava("42-menu-grupos-watch");
 
@@ -604,13 +630,13 @@ int main(int argc, char **argv)
          * "L" embaixo (das linhas que o motor montou para ele); o CHANNEL (7 itens + o valor) rola */
         BASE_TELAS();
         memoria[0x1533D] = 1;
-        menu_em(11, 1);
+        menu_no("TX", "ROGER");
         LINHA(0, 1, "BEEP 2");
         LINHA(1, 2, "COIN");
         LINHA(2, 1, "TONE1200");
         telas_b(1, 0);
         grava("43-menu-item-roger");
-        menu_em(1, 2);
+        menu_no("BANKS", "NAME");
         memoria[0x14C00] = 7;
         LINHA(0, 0, "MOTOROLA");
         LINHA(1, 0, "");
@@ -618,25 +644,25 @@ int main(int argc, char **argv)
         telas_b(1, 0);
         grava("44-menu-item-nome");
         memoria[0x14C00] = 0;
-        menu_em(2, 1);
+        menu_no("CHANNEL", "ENCRYPT");
         LINHA(0, 2, "OFF");
         LINHA(1, 1, "ON");
         LINHA(2, 0, "");
         telas_b(1, 0);
         grava("45-menu-item-rola-para-baixo");
-        menu_em(2, 6);
+        menu_no("CHANNEL", "W/N");
         LINHA(0, 1, "WIDE");
         LINHA(1, 2, "NARROW");
         telas_b(1, 0);
         grava("46-menu-item-rola-para-cima");
-        menu_em(9, 2);
+        menu_no("SYSTEM", "RESET");
         LINHA(0, 2, "VFO");
         LINHA(1, 1, "ALL");
         telas_b(1, 0);
         grava("47-menu-item-sem-valor");
         /* v58: o cursor no 3o item, com o valor - o cartao (y 63..87) atravessa a divisa das faixas do
          * firmware em y 80, e ate a v57 a faixa de baixo nao o pintava */
-        menu_em(2, 2);
+        menu_no("CHANNEL", "RX MODULATION");
         LINHA(0, 2, "FM");
         LINHA(1, 1, "AM");
         LINHA(2, 0, "");
@@ -691,7 +717,7 @@ int main(int argc, char **argv)
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "VERSION");
-        menu_em(9, 4);
+        menu_no("SYSTEM", "VERSION");
         memoria[0x14C00] = 8;
         memoria[0x14BF9] = 1;
         LINHA(0, 0, "Firmware:V2.7T");
@@ -699,6 +725,66 @@ int main(int argc, char **argv)
         memoria[0x14C10] = 1;
         telas_b(1, 0);
         grava("48-menu-version-aberto");
+
+        /* v59: a pasta CALIBRATION nos grupos, o COMPRESSOR na pasta MIC e o CRYSTAL FINE, na pasta e
+         * aberto (as linhas como o cristal_exibe as monta) */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        menu_em(NOS_GRUPOS, grupo("CALIBRATION"));
+        telas_b(1, 0);
+        grava("53-menu-grupos-calibration");
+        menu_no("MIC", "COMPRESSOR");
+        LINHA(0, 1, "LOW");
+        LINHA(1, 2, "MID");
+        LINHA(2, 1, "HIGH");
+        telas_b(1, 0);
+        grava("54-menu-mic-compressor");
+        menu_no("CALIBRATION", "CRYSTAL FINE");
+        LINHA(0, 1, "+110 Hz");
+        LINHA(1, 2, "+120 Hz");
+        LINHA(2, 1, "+130 Hz");
+        telas_b(1, 0);
+        grava("55-menu-calibration-cristal");
+        strcpy((char *)&memoria[0x15494], "CRYSTAL FINE");
+        memoria[0x14BF9] = 1;
+        memoria[0x14C10] = 1;
+        telas_b(1, 0);
+        grava("56-menu-cristal-aberto");
+        memoria[0x14BF9] = 0;
+
+        /* v61: o BRIGHTNESS na pasta DISPLAY, com o valor em 35% */
+        menu_no("DISPLAY", "BRIGHTNESS");
+        LINHA(0, 1, "60%");
+        LINHA(1, 2, "35%");
+        LINHA(2, 1, "20%");
+        telas_b(1, 0);
+        grava("58-menu-display-brightness");
+
+        /* v59 e v62: o menu aberto recebendo (o estado da recepcao em 4, que o b_sinal acompanha e o
+         * le_estado le) - o lado em evidencia na barra de cima, no lugar dos icones: o B pelo nome, a C
+         * (TRIPLE, a C no lado B) pela frequencia, um nome longo cortado antes da tensao, e o sinal sumindo */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        memoria[0x15E04] = 1;
+        memoria[0x15367] = 4;
+        memoria[0x129D4] = 1;              /* v63: o audio da recepcao aberto */
+        menu_em(NOS_GRUPOS, grupo("AUDIO"));
+        telas_b(1, 0);
+        grava("57-menu-recebendo-b");
+        previa_vista = 3;
+        previa_mdf_c = 1;
+        telas_b(1, 0);
+        grava("57b-menu-recebendo-c");
+        previa_vista = 0;
+        previa_mdf_c = 0;
+        memoria[0x15E04] = 0;
+        lado(0, 44062500, 44062500, "REPETIDORA 2", 101, 0, 0);
+        telas_b(1, 0);
+        grava("57c-menu-recebendo-nome-longo");
+        memoria[0x15367] = 2;
+        memoria[0x129D4] = 0;
+        telas_b(1, 0);
+        grava("57d-menu-sinal-sumiu");
 
         BASE_TELAS();
         memoria[0x1533D] = 17;
