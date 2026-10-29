@@ -1,4 +1,4 @@
-# Baojie BJ-8300 — firmware V2.8T: menu em pastas, escuta tripla, tela nova, bancos de canais e driver do CHIRP
+# Bajeton BJ-8300 — firmware V2.9T: menu em pastas, escuta tripla, microfone e brilho ajustáveis, tela nova, bancos de canais e driver do CHIRP
 
 <p align="center">
   <a href="README.en.md"><img src="docs/imagens/botao-english.svg" alt="English version" height="56"></a>
@@ -7,27 +7,34 @@
 Firmware modificado para o rádio **Baojie/Bajeton BJ-8300** (JieLi AC695X, CPU pi32v2), feito por
 engenharia reversa do firmware de fábrica **V0.12**, sem documentação do fabricante. Traz um **menu
 em pastas**, a **escuta tripla (TRIPLE)**, inédita neste rádio, **uma tela nova em todas as telas**,
-**16 bancos de canais de verdade**, scramble compatível com o Baofeng UV-17L, ganho do microfone no menu, espectro mais
-rápido e um **driver do CHIRP** próprio. O "T" da versão é de **Tempra**.
+**16 bancos de canais de verdade**, scramble compatível com o Baofeng UV-17L, ganho, compressor e AGC do
+microfone no menu, ajuste fino do cristal, brilho da tela, espectro mais rápido e um **driver do CHIRP** próprio. O "T" da versão é de **Tempra**.
 
 > [!TIP]
-> ## 🎉 V2.8T — o menu em pastas, com o cartão do 3º item inteiro
+> ## 🎉 V2.9T — a pasta MIC, a CALIBRATION, o brilho da tela e quem recebe no menu
 >
-> **[⬇️ Baixar a V2.8T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.8T)**
+> **[⬇️ Baixar a V2.9T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.9T)**
 >
 > | Arquivo do release | Para que serve |
 > |---|---|
-> | `BJ8300_BANK_v2.8T.anc` | o firmware, para gravar no rádio |
-> | `bj8300_v2.8TEMPRA.py` | o módulo do CHIRP para este firmware |
+> | `BJ8300_BANK_v2.9T.anc` | o firmware, para gravar no rádio |
+> | `bj8300_v2.9TEMPRA.py` | o módulo do CHIRP para este firmware |
 > | `BinTalk-V1.1.zip` | o gravador (BinTe ANC Bootloader) |
 > | `CH340-driver.zip` | o driver do cabo de programação USB |
 >
-> A V2.8T é a V2.7T com o fundo âmbar do 3º item de cada pasta, e do menu do rádio, inteiro: na
-> V2.7T a metade de baixo dele, a do valor, saía sem fundo.
+> A V2.9T é a V2.8T com:
+>
+> - a **pasta MIC**: o **COMPRESSOR** do áudio de TX (OFF, LOW, MID e HIGH), o **MIC AGC** e o MIC GAIN;
+> - a **pasta CALIBRATION**, com o **CRYSTAL FINE**: o ajuste fino do cristal, de −2000 a +2000 Hz, para
+>   acertar a frequência do rádio;
+> - o **BRIGHTNESS** na pasta DISPLAY: a luz da tela de 100% a 10%;
+> - **quem recebe com o menu aberto**: a letra e o nome do canal numa caixa âmbar na barra de cima, que
+>   some quando o sinal acaba (o bloco antigo que aparecia por cima do menu não aparece mais);
+> - o **CHIRP em Bajeton**: o modelo agora fica na lista do Bajeton, como `BJ8300_v2.9TEMPRA`.
 >
 > Testada no rádio. Para gravar: [passo a passo](#-como-gravar-o-firmware-passo-a-passo). Para o
 > CHIRP: [passo a passo](#-como-usar-o-chirp-com-este-firmware). As anteriores continuam
-> disponíveis: a [V2.7T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T), o mesmo menu com aquele defeito, a [V2.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), com a
+> disponíveis: a [V2.8T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.8T), o menu em pastas sem as novidades acima, a [V2.7T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T), o mesmo menu com o fundo do 3º item pela metade, a [V2.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), com a
 > escuta tripla e o menu numa lista só, a [V2.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.0T),
 > com a tela nova e sem o WATCH, e a [v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T),
 > com a tela de fábrica.
@@ -39,13 +46,13 @@ ajuda a próxima versão a sair.
 
 ## 📁 Menu novo: tudo em pastas
 
-O menu de fábrica é uma fila de mais de 50 itens. Desde a V2.7T eles ficam em **13 pastas por assunto**,
+O menu de fábrica é uma fila de mais de 50 itens. Desde a V2.7T eles ficam em pastas por assunto (**15 na V2.9T**),
 em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes de abrir.
 
 | | | |
 |:---:|:---:|:---:|
 | <img src="docs/imagens/tela-menu-pastas.png" alt="As pastas do menu" width="260"> | <img src="docs/imagens/tela-menu-itens.png" alt="Os itens de uma pasta, com o valor e a rolagem" width="260"> | <img src="docs/imagens/tela-menu-radio.png" alt="O menu do rádio na mesma janela" width="260"> |
-| **As pastas:** ▲▼ escolhem, os itens dela aparecem embaixo, e os pontinhos mostram qual das 13 está escolhida | **Dentro da pasta:** o item do cursor num cartão e o valor dele embaixo, em verde; quando a lista não cabe, as setas e a barra mostram que tem mais | **O menu do rádio** (FM, AM e SSB) na mesma janela, com os itens da modulação de agora |
+| **As pastas:** ▲▼ escolhem, os itens dela aparecem embaixo, e os pontinhos mostram qual das 15 está escolhida | **Dentro da pasta:** o item do cursor num cartão e o valor dele embaixo, em verde; quando a lista não cabe, as setas e a barra mostram que tem mais | **O menu do rádio** (FM, AM e SSB) na mesma janela, com os itens da modulação de agora |
 
 - **OK** abre a pasta e, nela, **OK** já abre o item para mudar o valor, sem um segundo OK. Gravando
   ou cancelando, volta para a pasta, no mesmo item. **EXIT** volta para as pastas, e de novo sai do
@@ -60,23 +67,43 @@ em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes 
 |---|---|
 | 1 AUDIO | NOISE REDUCTION, SQL, STE |
 | 2 BANKS | BANK, CHANNEL, NAME |
-| 3 CHANNEL | BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N |
-| 4 DISPLAY | ABR, MDF-A, MDF-B, MDF-C, MENU EXIT TIME, POWER-ON MSG |
-| 5 DTMF | DTMF CODE, DTMFST, PTT-LT, S-CODE |
-| 6 KEYS | AUTOLOCK, BEEP PROMPT, PF2, PF2 LONG PRESS, PF3 |
-| 7 MEMORY | CH-NAME, DELCH, MEMCH |
-| 8 REPEATER | OFFSET, RP-STE, RPT-RL, SFT-D, TONE |
-| 9 SCAN | SC-REV, SCAN ADD |
-| 10 SYSTEM | AL-MOD, BLUETOOTH, RESET, SAVE, VERSION |
-| 11 TONES | R-CTCSS, R-DCS, T-CTCSS, T-DCS |
-| 12 TX | MIC GAIN, ROGER, TOT, VOX, VOX DELAY |
-| 13 WATCH | TTR, TX-A/B/C, WATCH |
+| 3 CALIBRATION | CRYSTAL FINE |
+| 4 CHANNEL | BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N |
+| 5 DISPLAY | ABR, BRIGHTNESS, MDF-A, MDF-B, MDF-C, MENU EXIT TIME, POWER-ON MSG |
+| 6 DTMF | DTMF CODE, DTMFST, PTT-LT, S-CODE |
+| 7 KEYS | AUTOLOCK, BEEP PROMPT, PF2, PF2 LONG PRESS, PF3 |
+| 8 MEMORY | CH-NAME, DELCH, MEMCH |
+| 9 MIC | COMPRESSOR, MIC AGC, MIC GAIN |
+| 10 REPEATER | OFFSET, RP-STE, RPT-RL, SFT-D, TONE |
+| 11 SCAN | SC-REV, SCAN ADD |
+| 12 SYSTEM | AL-MOD, BLUETOOTH, RESET, SAVE, VERSION |
+| 13 TONES | R-CTCSS, R-DCS, T-CTCSS, T-DCS |
+| 14 TX | ROGER, TOT, VOX, VOX DELAY |
+| 15 WATCH | TTR, TX-A/B/C, WATCH |
+
+### 🆕 O que a V2.9T trouxe ao menu
+
+| | | |
+|:---:|:---:|:---:|
+| <img src="docs/imagens/tela-menu-recebendo.png" alt="Quem recebe, na barra de cima, com o menu aberto" width="260"> | <img src="docs/imagens/tela-menu-mic.png" alt="A pasta MIC" width="260"> | <img src="docs/imagens/tela-menu-cristal.png" alt="O CRYSTAL FINE aberto" width="260"> |
+| **Quem recebe, com o menu aberto:** a letra e o nome (ou a frequência, ou o canal, como o MDF do lado pede) numa caixa âmbar, como a faixa que recebe na tela principal; some quando o sinal acaba | **A pasta MIC:** o compressor do áudio de TX, que deixa a voz mais cheia e constante, o AGC do microfone e o ganho | **O CRYSTAL FINE:** corrige a frequência do rádio, de 10 em 10 Hz, somando à calibração de fábrica |
+
+- **COMPRESSOR:** LOW, MID e HIGH comprimem 1,33:1, 2:1 e 4:1 (o chip de rádio já tem o compressor;
+  a fábrica o deixava desligado). OFF é o de fábrica.
+- **MIC AGC:** ON é o de fábrica e nivela o volume do microfone; OFF deixa a voz com a variação natural.
+- **CRYSTAL FINE:** o valor vale em 435,5 MHz e é proporcional à frequência, como o erro de um cristal
+  (+120 Hz em 435,5 MHz são +40 Hz em 145 MHz). Se o rádio transmite 300 Hz acima, ponha −300. O limite
+  de ±2000 Hz (4,6 ppm) não deixa o sinal sair do canal. Em 0, fica a calibração de fábrica. Para
+  acertar, meça com uma referência (um SDR ou um rádio que você saiba estar na frequência).
+- **BRIGHTNESS:** 100% é a luz de fábrica. Abaixo disso a luz é escurecida por PWM, que um receptor
+  encostado no rádio pode ouvir como ruído (e às vezes o próprio rádio); a 100%, ou com a luz apagada
+  pelo ABR, fica como de fábrica.
 
 ---
 
 ## 🔺 TRIPLE: o BJ-8300 escutando três frequências
 
-O firmware de fábrica só tem dois lados, A e B, e a dupla escuta (TDR) vigia os dois. A V2.8T põe um
+O firmware de fábrica só tem dois lados, A e B, e a dupla escuta (TDR) vigia os dois. Desde a V2.6T, ele tem um
 **terceiro lado, a C**, e o rádio passa a vigiar **três frequências** ao mesmo tempo. Nenhum
 firmware do BJ-8300 fazia isso.
 
@@ -117,17 +144,20 @@ firmware do BJ-8300 fazia isso.
 As imagens saem da prévia no PC ([firmware/previa/](firmware/previa/)), que roda o mesmo código de
 desenho que vai para o rádio.
 
-## ✨ O que mudou da V0.12 de fábrica para a V2.8T
+## ✨ O que mudou da V0.12 de fábrica para a V2.9T
 
 ### 🆕 Recursos novos
 
 | Recurso | Como fica no rádio |
 |---|---|
-| 📁 **Menu em pastas** | Os itens do menu ficam em 13 pastas por assunto, em ordem alfabética, numa janela âmbar que mostra os itens de cada pasta, e dentro dela o valor do item do cursor, com rolagem quando a lista não cabe. OK no item já abre a edição, e gravar ou cancelar volta para a pasta. O menu do rádio (FM/AM/SSB) usa a mesma janela ([veja acima](#-menu-novo-tudo-em-pastas)) |
+| 📁 **Menu em pastas** | Os itens do menu ficam em 15 pastas por assunto, em ordem alfabética, numa janela âmbar que mostra os itens de cada pasta, e dentro dela o valor do item do cursor, com rolagem quando a lista não cabe. OK no item já abre a edição, e gravar ou cancelar volta para a pasta. O menu do rádio (FM/AM/SSB) usa a mesma janela ([veja acima](#-menu-novo-tudo-em-pastas)) |
 | 🔺 **WATCH: SINGLE, DUAL e TRIPLE** | Item novo do menu. **SINGLE** mostra só o lado em evidência, em tela cheia: a frequência em tamanho grande, um medidor largo e, com deslocamento, a frequência de transmissão embaixo (a escuta fica desligada). **DUAL** é o A/B de sempre. **TRIPLE** põe um terceiro lado, a C, e a escuta passa pelas três ([veja acima](#-triple-o-bj-8300-escutando-três-frequências)) |
 | 📡 **O lado C** | Um lado completo, em VFO ou em canal, com as mesmas opções do A e do B. A tecla A/B passa por A → B → C → A, e com a C em evidência ela transmite e muda como os outros, canal incluído. Menu novo: `MDF-C` (como a faixa dela aparece: nome, frequência ou canal) |
 | 📤 **TX-A/B/C** | O `TX-A/B` de fábrica (em que lado o PTT transmite com a escuta ligada) vira `TX-A/B/C`: OFF, A, B e C. No TRIPLE, em C, a C fica em evidência enquanto o PTT está apertado, como o A e o B ficam, mesmo estando fora dos dois lados, e ao soltar tudo volta como estava, sem gravar nada |
-| 🎙️ **MIC GAIN** | Item novo do menu, logo depois do `NOISE REDUCTION`, com três níveis: **HIGH** (31, um degrau acima do 30 que a calibração de fábrica tinha no rádio de teste), **MID** (25) e **LOW** (19). Até a V2.0T o ganho vinha só da calibração, sem ajuste. Começa em HIGH. Vale na hora, sem desligar o rádio, mudado pelo menu, pelo CHIRP ou pelo retorno aos ajustes de fábrica |
+| 🎙️ **Pasta MIC** | **MIC GAIN** com três níveis: **HIGH** (31, um degrau acima do 30 que a calibração de fábrica tinha no rádio de teste), **MID** (25) e **LOW** (19); até a V2.0T o ganho vinha só da calibração, sem ajuste. **COMPRESSOR** do áudio de TX (OFF, LOW, MID e HIGH: 1,33:1, 2:1 e 4:1), que o chip tem e a fábrica deixava desligado. **MIC AGC** (ON, o de fábrica, ou OFF). Valem na hora, sem desligar o rádio, mudados pelo menu, pelo CHIRP ou pelo retorno aos ajustes de fábrica ([veja acima](#-o-que-a-v29t-trouxe-ao-menu)) |
+| 🎯 **CRYSTAL FINE** | Pasta nova **CALIBRATION**: o ajuste fino do cristal, de −2000 a +2000 Hz em 435,5 MHz, de 10 em 10, proporcional à frequência e somado à calibração de fábrica (que no rádio de teste era zero). Em 0, a de fábrica fica como está |
+| 🔆 **BRIGHTNESS** | Na pasta DISPLAY: a luz da tela em 100% (a de fábrica), 60%, 35%, 20% ou 10%, por PWM. A 100% e com a luz apagada o pino fica como de fábrica, sem PWM |
+| 📡 **Quem recebe, com o menu aberto** | Recebendo com o menu aberto, a barra de cima mostra, numa caixa âmbar, a letra do lado (A, B ou C) e o nome, a frequência ou o canal, como o MDF dele pede; some quando o sinal acaba |
 | 💡 **Luz acesa no espectro** | Enquanto o espectro está na tela, a luz não apaga. Ao sair, o tempo do `ABR` volta a valer, e o rádio nunca liga com a luz presa |
 | 🖥️ **Tela nova em todo o rádio** | Todas as telas foram redesenhadas: a principal (o lado em evidência num cartão com a frequência grande e o medidor, etiquetas coloridas de potência, modulação e tons, e a barra de cima só com o que está ligado), os menus e o editor de nome, o rádio FM/AM/SSB, o scan QT, o DTMF, o espectro e a tensão na partida ([veja acima](#-a-cara-nova)) |
 | 🗂️ **16 bancos de canais** | Cada banco tem **nome de 12 caracteres**, e um canal pode estar em **quantos bancos quiser**. Dá para ligar **vários bancos ao mesmo tempo**: o sobe/desce e a busca passam a ver só os canais dos bancos ligados. Sem nenhum ligado, o rádio funciona como de fábrica. Pasta nova **BANKS**, com `BANK`, `CHANNEL` e `NAME` ([como usar](#usando-os-bancos-no-rádio)) |
@@ -136,7 +166,7 @@ desenho que vai para o rádio.
 | 📊 **Espectro com 320 e 640 pontos** e **passo de 10 kHz** | Além dos 160 pontos de fábrica, para ver uma faixa maior de uma vez |
 | 📈 **Pico seguro no espectro** | A barra sobe na hora e, quando o sinal some, desce aos poucos |
 | 🎯 **Espectro que mostra mais** | A coluna que está sendo medida em branco, a frequência que roda no alto, a frequência do pico de cada passada em verde, com o dBm |
-| 🔌 **Driver do CHIRP próprio** | Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, o WATCH, o VFO C e o MIC GAIN, numa sessão só pelo cabo. Recusa gravar num rádio com firmware de fábrica ([como usar](#-como-usar-o-chirp-com-este-firmware)) |
+| 🔌 **Driver do CHIRP próprio** | Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, o WATCH, o VFO C, o MIC GAIN, o compressor, o AGC, o CRYSTAL FINE e o BRIGHTNESS, numa sessão só pelo cabo; fica na lista do **Bajeton**. Recusa gravar num rádio com firmware de fábrica ([como usar](#-como-usar-o-chirp-com-este-firmware)) |
 | 🧰 **Comando estendido no cabo** | Leitura do chip de dados inteiro (endereço de 24 bits) e gravação só na área dos bancos. É o que o driver do CHIRP usa |
 
 ### 🖥️ A tela nova, tela por tela
@@ -149,7 +179,7 @@ etiquetas coloridas e uma fonte própria:
 | **Principal** (os dois lados) | O lado em evidência fica num **cartão de borda verde**, com o nome, o canal, a **frequência grande** (os dois últimos dígitos pequenos) e um **medidor de 20 segmentos** (verde, amarelo e vermelho). O outro lado fica compacto, numa faixa fina. Etiquetas coloridas: potência (**H** vermelho, **M** âmbar, **L** verde), FM/AM, tom (CT/DCS), banda estreita, deslocamento, scramble e zona |
 | **Principal em SINGLE** | Só o lado em evidência, da barra ao pé da tela: a frequência ainda maior, as etiquetas, um medidor largo e, com deslocamento, a frequência de transmissão embaixo |
 | **Principal em TRIPLE** | O lado em evidência no cartão e os outros dois em faixas, na ordem A, B, C, cada uma com a letra, o texto e o canal (ou `VFO`). A faixa que está recebendo fica em âmbar ([veja acima](#-triple-o-bj-8300-escutando-três-frequências)) |
-| **Barra de cima** | Mostra **só o que está ligado**: RX e TX numa etiqueta com bolinha (verde no RX, vermelha no TX), dupla escuta (DW), VOX, MO, redução de ruído (NR), DTMF ST, Bluetooth e cadeado; a **tensão em volts** e a bateria, que fica com contorno vermelho e pisca quando está fraca |
+| **Barra de cima** | Mostra **só o que está ligado**: RX e TX numa etiqueta com bolinha (verde no RX, vermelha no TX), dupla escuta (DW), VOX, MO, redução de ruído (NR), DTMF ST, Bluetooth e cadeado; a **tensão em volts** e a bateria, que fica com contorno vermelho e pisca quando está fraca. Com o menu aberto, recebendo, quem recebe numa caixa âmbar no lugar dos ícones |
 | **Transmitindo** | A linha grande passa para a frequência de transmissão, e o medidor fica **vermelho, cheio pela potência** |
 | **Digitando** | A frequência entra no lugar dela, sobre a máscara `---.---`; o canal, na etiqueta do canal |
 | **DTMF** (tecla `#`) | Uma caixa âmbar no lugar do cartão do lado em uso, com os dígitos |
@@ -169,12 +199,13 @@ etiquetas coloridas e uma fonte própria:
 | 🟩 **Lado em evidência destacado** | O lado ativo fica num cartão de borda verde, com a frequência grande e o medidor; o outro fica compacto |
 | 📻 **Rádio FM/AM/SSB** | A troca de modulação ficou ~2,5 s mais rápida, e os ajustes salvos (passo, largura, LNA, BFO e as memórias) são conferidos ao entrar e a cada troca: valor fora dos limites dos menus volta ao padrão |
 | ↕️ **Setas do menu invertidas** | A seta de cima passa a subir na lista, em vez de avançar o valor |
-| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TTR` (Transmitter Triple Receiver), porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX-A/B/C`. O menu `VERSION` mostra `Firmware: V2.8T` |
+| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TTR` (Transmitter Triple Receiver), porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX-A/B/C`. O menu `VERSION` mostra `Firmware: V2.9T` |
 
 ### 🐞 Correções
 
-| Problema da V0.12 | Na V2.8T |
+| Problema da V0.12 | Na V2.9T |
 |---|---|
+| Com o menu aberto, ao receber, o lado em evidência aparecia por cima da janela no formato antigo (e a C saía como B) | Não aparece mais; a barra de cima mostra quem recebe |
 | Durante o scan, a barra de sinal ficava congelada no último canal achado, e o número do canal descasava do nome | A tela acompanha cada canal da varredura |
 | Na partida com a tensão, e segurando o `0`, o texto `   Voltage` tinha a tensão escrita por cima, e o "ge" sumia | `VOLTAGE` inteiro, com a tensão num cartão |
 | Nome de canal gravado pelo CHIRP abria no editor com `?` no fim e `12/12`: o editor contava os bytes de preenchimento | O editor conta só as letras, como a tela já mostrava |
@@ -222,8 +253,8 @@ o firmware nem chega a ligar, mas ele **nunca foi testado**.
 Precisa de um PC com Windows e do **cabo de programação USB** do rádio (o de chip CH340, o mesmo do
 CPS de fábrica).
 
-**1. Baixe os arquivos.** Na [página do release V2.8T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.8T),
-baixe o `BJ8300_BANK_v2.8T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
+**1. Baixe os arquivos.** Na [página do release V2.9T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.9T),
+baixe o `BJ8300_BANK_v2.9T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
 o `CH340-driver.zip`. Descompacte os zips. (Os mesmos arquivos estão no repositório, em
 `firmware/releases/`, `tools/anc-bootloader/` e `tools/ch340-driver/`.)
 
@@ -238,7 +269,7 @@ Feche antes qualquer programa que use a porta COM (CHIRP, CPS).
 
 <p align="center"><img src="docs/imagens/gravador.png" alt="Janela do gravador BinTalk V1.1" width="300"></p>
 
-- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v2.8T.anc`.
+- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v2.9T.anc`.
 - **Port:** a COM do cabo (a do passo 2).
 - **Baudrate:** **115200** (já vem assim).
 
@@ -249,7 +280,7 @@ o rádio **segurando PTT2 + o botão de atalho**, até aparecer `UPDATE` na tela
 `Update 3%` → `Jump To Loader` → `Progress 100%` → `Finish`. Não desconecte nada no meio.
 
 **6. Confira.** Desligue e ligue o rádio. O menu abre nas pastas, e em `SYSTEM` → `VERSION` deve
-aparecer `Firmware: V2.8T`.
+aparecer `Firmware: V2.9T`.
 
 **Se der `Retry1..5 / Failure!`:** desligue o rádio, confira que nenhum outro programa está com a
 porta COM, volte ao passo 4 e tente de novo.
@@ -259,10 +290,11 @@ porta COM, volte ao passo 4 e tente de novo.
 ## 📻 Como usar o CHIRP com este firmware
 
 > [!CAUTION]
-> **Com a V2.8T, use só o módulo `bj8300_v2.8TEMPRA.py` deste release.** Ele substitui os
-> anteriores (`bj8300_v2.6TEMPRA.py`, `bj8300_v2.0TEMPRA.py` e `bj8300_v1.0TEMPRA.py`; o modelo no
-> CHIRP passou a ser `BJ8300_v2.8TEMPRA`), e uma imagem `.img` salva com um módulo antigo abre nele
-> normalmente. As versões anteriores têm o módulo delas no release de cada uma.
+> **Com a V2.9T, use só o módulo `bj8300_v2.9TEMPRA.py` deste release.** Ele substitui os
+> anteriores (de `bj8300_v1.0TEMPRA.py` a `bj8300_v2.8TEMPRA.py`). O modelo no CHIRP passou a ser
+> **Bajeton → `BJ8300_v2.9TEMPRA`** (até a V2.8T ele ficava em Baojie), e uma imagem `.img` salva com
+> um módulo antigo abre nele normalmente. As versões anteriores têm o módulo delas no release de cada
+> uma.
 >
 > - **Não use os modelos de fábrica do CHIRP** que servem para o BJ-8300 de fábrica (**Bajeton
 >   BJ7800** e **Radtel RT-920**). Eles não leem nem gravam os bancos, e não conhecem o roger BEEP
@@ -284,7 +316,7 @@ CHIRP**. O modo fica ligado nas próximas vezes.
 
 **3. Carregue o módulo (toda vez que abrir o CHIRP).** Menu **File** → **Load Module...** (só
 aparece com o modo desenvolvedor). O CHIRP avisa que carregar módulo é perigoso: clique **Yes** e
-escolha o `bj8300_v2.8TEMPRA.py`. A janela fica **vermelha** e o título mostra
+escolha o `bj8300_v2.9TEMPRA.py`. A janela fica **vermelha** e o título mostra
 `CHIRP **Module Loaded**`: é o sinal de que o módulo está carregado. Ao fechar o CHIRP, ele é
 descarregado, e na próxima vez é preciso carregar de novo.
 
@@ -294,14 +326,14 @@ descarregado, e na próxima vez é preciso carregar de novo.
 | Campo | Escolha |
 |---|---|
 | **Port** | a COM do cabo |
-| **Vendor** | **Baojie** (não é "Bajeton") |
-| **Model** | **BJ8300_v2.8TEMPRA** |
+| **Vendor** | **Bajeton** |
+| **Model** | **BJ8300_v2.9TEMPRA** (não o BJ7800, que é o modelo de fábrica) |
 
 O CHIRP mostra o aviso *"Experimental driver"*, com as instruções do módulo: clique **Yes** e
 depois **OK** para ler.
 
 > [!NOTE]
-> Se o `BJ8300_v2.8TEMPRA` não aparece em **Baojie**, o módulo não está carregado: volte ao passo 3.
+> Se o `BJ8300_v2.9TEMPRA` não aparece em **Bajeton**, o módulo não está carregado: volte ao passo 3.
 
 **5. Edite.** No lado direito aparece a lista das partes do rádio:
 
@@ -309,8 +341,9 @@ depois **OK** para ler.
   estão aqui.
 - **Banks (VHF/UHF):** uma coluna por banco; marque em quais bancos cada canal está. Para
   renomear um banco, **dê duplo clique no cabeçalho da coluna** dele.
-- **Settings:** os ajustes do rádio, com o roger de 4 opções e, no **BJ8300_v2.8TEMPRA Specific**,
-  o **Mic Gain** (HIGH, MID ou LOW) logo depois do Noise reduction.
+- **Settings:** os ajustes do rádio, com o roger de 4 opções e, no **BJ8300_v2.9TEMPRA Specific**,
+  logo depois do Noise reduction, o **Mic Gain** (HIGH, MID ou LOW), o **Compressor**, o **Mic AGC**, o
+  **Crystal fine** (em Hz, em 435,5 MHz) e o **Brightness**.
 - **Settings → Banks:** um bloco por banco, de **BANK 1** a **BANK 16**:
 
   | Linha | O que é |
@@ -369,7 +402,7 @@ marcado para o outro.
 
 ## Como o driver do CHIRP funciona
 
-O arquivo é [chirp/bj8300_v2.8TEMPRA.py](chirp/bj8300_v2.8TEMPRA.py). O nome é proposital: só
+O arquivo é [chirp/bj8300_v2.9TEMPRA.py](chirp/bj8300_v2.9TEMPRA.py). O nome é proposital: só
 funciona com **este** firmware, e assim ninguém com um BJ-8300 de fábrica o usa por engano. Ele
 deriva do `radtel_rt900.py` do CHIRP, que já trata este rádio como família RT-920/BJ7800, e
 acrescenta:
@@ -420,8 +453,9 @@ quê, está no [histórico](docs/historico.md).
 
 | Arquivo | Estado |
 |---|---|
-| `BJ8300_BANK_v2.8T.anc` | **estável, a recomendada** — a v58: a V2.7T com o fundo âmbar do 3º item de cada pasta e do menu do rádio inteiro; use com o driver do CHIRP do mesmo release |
-| `BJ8300_BANK_v2.7T.anc` | estável anterior, o menu em pastas — a v57: a V2.6T + o menu em 13 pastas (com o valor do item, a rolagem, OK abrindo já na edição, BANK e CHANNEL de marcar vários e o VERSION só leitura), a letra do menu maior, o menu do rádio na mesma janela, sem o item CH-C, o editor de nome contando só as letras e só com ABC e 123, e a tensão do `0` segurado no tema novo, mas o fundo âmbar do 3º item sai pela metade; use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v2.9T.anc` | **estável, a recomendada** — a v64: a V2.8T + a pasta MIC (COMPRESSOR, MIC AGC e o MIC GAIN, que saiu do TX), a pasta CALIBRATION com o CRYSTAL FINE, o BRIGHTNESS no DISPLAY, quem recebe na barra de cima com o menu aberto (sem o bloco antigo por cima do menu) e o driver do CHIRP em Bajeton; use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v2.8T.anc` | estável anterior — a v58: a V2.7T com o fundo âmbar do 3º item de cada pasta e do menu do rádio inteiro; use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v2.7T.anc` | o menu em pastas com o fundo do 3º item pela metade — a v57: a V2.6T + o menu em 13 pastas (com o valor do item, a rolagem, OK abrindo já na edição, BANK e CHANNEL de marcar vários e o VERSION só leitura), a letra do menu maior, o menu do rádio na mesma janela, sem o item CH-C, o editor de nome contando só as letras e só com ABC e 123, e a tensão do `0` segurado no tema novo, mas o fundo âmbar do 3º item sai pela metade; use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v2.6T.anc` | a escuta tripla com o menu numa lista só — a v51: a v41 + o WATCH (SINGLE, DUAL e TRIPLE), o lado C completo (VFO ou canal), o TX-A/B/C, o MIC GAIN, a luz acesa no espectro, o TTR e a caixa do DTMF no tema novo; use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v2.0T.anc` | a tela nova sem o WATCH — a v41 com o nome da versão (mesmo arquivo); use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v45.anc` | v41 + o menu `WATCH` (SINGLE: um lado em tela cheia; DUAL: o A/B de sempre; TRIPLE: uma terceira frequência, a C, escolhida no `CH-C` e mostrada como o `MDF-C` pede, que a dupla escuta vigia com o mesmo tempo das outras e a tecla A/B põe em evidência) — testado no rádio |
@@ -519,15 +553,15 @@ variável `JL_TOOLCHAIN` para ela.
 
 **Orçamento de espaço:** o código novo mora em três lugares, todos no mesmo endereço nas 6 imagens:
 
-- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a V2.8T usa 2286);
+- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a V2.9T usa 2330);
 - **o espaço que era das vozes**, com o espectro, mas só dentro dos arquivos C0 e C1 (1066 bytes,
-  dos quais a V2.8T usa 674), porque o carregador do rádio recusa a imagem que muda mais arquivos de
+  dos quais a V2.9T usa 674), porque o carregador do rádio recusa a imagem que muda mais arquivos de
   voz;
 - **o lugar dos decodificadores G.729 e MP3**, dentro do `app.bin`, com as telas B, o WATCH, o
-  TRIPLE, o menu em pastas e a tabela de menus (38884 bytes, dos quais a V2.8T usa 22878).
+  TRIPLE, o menu em pastas e a tabela de menus (38884 bytes, dos quais a V2.9T usa 24230).
 
-A tabela de menus fica nesse último lugar desde a v43, num vetor de 80 vagas (a V2.8T usa 68: as 13
-pastas e os 55 itens); a original, de 54, fica intacta. [docs/engenharia-reversa.md](docs/engenharia-reversa.md)
+A tabela de menus fica nesse último lugar desde a v43, num vetor de 80 vagas (a V2.9T usa 74: as 15
+pastas e os 59 itens); a original, de 54, fica intacta. [docs/engenharia-reversa.md](docs/engenharia-reversa.md)
 explica como medir, onde já foi economizado e por que esses lugares são seguros.
 
 **Prévia da tela B no PC:** `python -I previa/previa.py <pasta>`, de dentro de `firmware/`, grava
@@ -548,7 +582,7 @@ firmware/
   original/     BJ8300_V0.12.anc — firmware de fábrica
   releases/     .anc prontos para gravar
   build.sh      compila, monta e confere
-chirp/          driver do CHIRP (bj8300_v2.8TEMPRA.py)
+chirp/          driver do CHIRP (bj8300_v2.9TEMPRA.py)
 tools/
   jl-toolchain-2.5.3/  o compilador da JieLi (os 5 executáveis que o build usa)
   anc-bootloader/  gravador BinTe ANC Bootloader (BinTalk V1.1)

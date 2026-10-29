@@ -5,6 +5,18 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V2.9T — 29/10 — a pasta MIC, a CALIBRATION, o brilho da tela e quem recebe no menu ✅
+
+A v64 virou a **V2.9T**: `firmware/releases/BJ8300_BANK_v2.9T.anc` (sha256 `f782e4a6…`, o mesmo
+arquivo; a v64 já saiu com o nome V2.9T). Testada no rádio: "funcionou perfeito o que precisávamos".
+É a V2.8T com a pasta MIC (COMPRESSOR, MIC AGC e o MIC GAIN, que saiu do TX), a pasta CALIBRATION com
+o CRYSTAL FINE, o BRIGHTNESS no DISPLAY, quem recebe numa caixa âmbar na barra de cima com o menu
+aberto (sem o bloco antigo por cima do menu) e o driver do CHIRP em Bajeton (`bj8300_v2.9TEMPRA.py`).
+
+Publicada no [release V2.9T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.9T), com o módulo do CHIRP, o gravador e o driver do cabo. O
+README aponta para ela, mostra as 15 pastas e as telas novas (quem recebe, a pasta MIC e o CRYSTAL
+FINE) e mantém a V2.8T entre as anteriores.
+
 ## Driver do CHIRP — 29/10 — o nome da V2.9T, em Bajeton, e os ajustes novos
 
 - O módulo virou `chirp/bj8300_v2.9TEMPRA.py`, e o modelo no CHIRP, `Bajeton → BJ8300_v2.9TEMPRA`: o
@@ -17,7 +29,7 @@ causa, porque é isso que evita repetir.
 - O `teste_chirp_real` ganhou a `10v` a `10z` (os ajustes novos) e a `2c6` a `2c8` (as imagens Baojie
   e Bajeton).
 
-## v64 — 29/10 — o indicador some, redesenhando a barra sempre (a testar)
+## v64 — 29/10 — o indicador some, redesenhando a barra sempre ✅ (é a V2.9T)
 
 `firmware/releases/BJ8300_BANK_v64.anc` (sha256 `f782e4a6…`), com o nome V2.9T. O diagnóstico respondeu (fotos do
 dono, com o menu aberto): parado, `E3 A0 F0 G0 28`; recebendo, `● RX E4 A1 F1 G0 41`; depois do PTT do outro

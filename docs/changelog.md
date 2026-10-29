@@ -5,6 +5,19 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V2.9T — Oct 29 — the MIC folder, CALIBRATION, screen brightness and who is receiving in the menu ✅
+
+v64 became **V2.9T**: `firmware/releases/BJ8300_BANK_v2.9T.anc` (sha256 `f782e4a6…`, the same file;
+v64 already came out named V2.9T). Tested on the radio: "it worked perfectly, what we needed". It is
+V2.8T with the MIC folder (COMPRESSOR, MIC AGC and MIC GAIN, which left TX), the CALIBRATION folder
+with CRYSTAL FINE, BRIGHTNESS in DISPLAY, who is receiving in an amber box on the top bar with the menu
+open (without the old block over the menu) and the CHIRP driver under Bajeton
+(`bj8300_v2.9TEMPRA.py`).
+
+Published in the [V2.9T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.9T), together with the CHIRP module, the flasher and the cable
+driver. The README points to it, shows the 15 folders and the new screens (who is receiving, the MIC
+folder and CRYSTAL FINE) and keeps V2.8T among the earlier ones.
+
 ## CHIRP driver — Oct 29 — the V2.9T name, under Bajeton, and the new settings
 
 - The module became `chirp/bj8300_v2.9TEMPRA.py`, and the model in CHIRP, `Bajeton →
@@ -18,7 +31,7 @@ its cause, because that is what stops it happening twice.
 - `teste_chirp_real` got `10v` to `10z` (the new settings) and `2c6` to `2c8` (the Baojie and Bajeton
   images).
 
-## v64 — Oct 29 — the indicator goes away, redrawing the bar every time (to be tested)
+## v64 — Oct 29 — the indicator goes away, redrawing the bar every time ✅ (it is V2.9T)
 
 `firmware/releases/BJ8300_BANK_v64.anc` (sha256 `f782e4a6…`), named V2.9T. The diagnostic answered (the owner's photos,
 menu open): idle, `E3 A0 F0 G0 28`; receiving, `● RX E4 A1 F1 G0 41`; after the other radio's PTT, `E3 A0 F0
