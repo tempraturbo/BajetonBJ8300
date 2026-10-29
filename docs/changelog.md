@@ -5,6 +5,14 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 29 — Light PWM
+
+- In **BJ8300_v2.9TEMPRA Specific**, after Brightness, **Light PWM** (`0x903B`): 240 Hz, 580 Hz, 1 kHz,
+  5 kHz and 25 kHz, in frequency order, as in the radio's menu. The list stores the radio's value, not the
+  position (240 Hz = 3, 580 Hz = 4, 1 kHz = 0, 5 kHz = 1, 25 kHz = 2), and an out-of-range value (the
+  factory reset's 189) reads 240 Hz, v69's default.
+- `teste_chirp_real` got `10za` to `10zd`.
+
 ## v69 — Oct 29 — LIGHT PWM at 240 Hz by default, and half a second of carrier before APRS (to be tested)
 
 `firmware/releases/BJ8300_BANK_v69.anc` (sha256 `5936c260…`). The v68 test: at 240 Hz, "no flicker and no

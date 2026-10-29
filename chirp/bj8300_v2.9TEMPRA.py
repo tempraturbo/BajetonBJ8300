@@ -685,6 +685,11 @@ CRYSTAL_MAX_HZ = 2000
 # DISPLAY > BRIGHTNESS (firmware v61): the screen backlight by PWM, at 0x9039 (0 = 100%, the stock level,
 # up to 4 = 10%); out of range, as the factory reset leaves it, counts as 100%.
 BRIGHTNESS_OPTIONS = ['100%', '60%', '35%', '20%', '10%']
+# CALIBRATION > LIGHT PWM (firmware v67): the backlight PWM frequency at 0x903B. The radio keeps the values
+# of v67 and v68 (0 = 1 kHz, 1 = 5 kHz, 2 = 25 kHz, 3 = 240 Hz, 4 = 580 Hz) and shows them by frequency;
+# out of range, as the factory reset leaves it (189), counts as 240 Hz, the default since v69.
+LIGHT_PWM_OPTIONS = ['240 Hz', '580 Hz', '1 kHz', '5 kHz', '25 kHz']
+LIGHT_PWM_VALUES = [3, 4, 0, 1, 2]                       # list position -> value in the radio
 
 
 def _compressor_setting(level):
@@ -737,6 +742,25 @@ def _brightness_setting(level):
                'noise by a receiver right next to the radio (and now and then by the radio itself, '
                'and on its AM/SW band); at 100%, or with the backlight off, it is as stock. Needs '
                'firmware v62 or later.')
+    return rs
+
+
+class _LightPwmSetting(MemSetting):
+    """LIGHT PWM in frequency order: it stores the radio's value, not the list position."""
+
+    def apply_to_memobj(self, memobj):
+        memobj.settings.unknown_903b = LIGHT_PWM_VALUES[int(self.value)]
+
+
+def _light_pwm_setting(value):
+    value = int(value)
+    rs = _LightPwmSetting('settings.unknown_903b', 'Light PWM', RadioSettingValueList(
+        LIGHT_PWM_OPTIONS, current_index=LIGHT_PWM_VALUES.index(value) if value < 5 else 0))
+    rs.set_doc('Frequency of the PWM that dims the backlight below 100%, as the radio\'s CALIBRATION > '
+               'LIGHT PWM item. Every switching edge leaks a little RF that a receiver right next to the '
+               'radio can hear: the energy landing in a channel falls with the frequency, and 240 Hz, '
+               'the default, gave no interference and no visible flicker on the test radio. Needs '
+               'firmware v69 or later (v67 and v68 had 1 kHz as the default).')
     return rs
 
 
@@ -962,6 +986,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         _put(parent, _mic_agc_setting(self._memobj.settings.unknown_9036), after='settings_unknown_9035')
         _put(parent, _crystal_setting(self._memobj.settings), after='settings_unknown_9036')
         _put(parent, _brightness_setting(self._memobj.settings.unknown_9039), after='settings_unknown_9037')
+        _put(parent, _light_pwm_setting(self._memobj.settings.unknown_903b), after='settings_unknown_9039')
         if _take(settings, 'settings_voice') is None:
             LOG.warning('voice prompts setting not found in the base class')
         # The banks firmware (v37 onwards) is English only: the LANGUAGE menu item is gone and the

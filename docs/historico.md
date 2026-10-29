@@ -5,6 +5,14 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 29/10 — o Light PWM
+
+- No **BJ8300_v2.9TEMPRA Specific**, depois do Brightness, o **Light PWM** (o `0x903B`): 240 Hz, 580 Hz,
+  1 kHz, 5 kHz e 25 kHz, em ordem de frequência, como no menu do rádio. A lista grava o valor do rádio, não
+  a posição (240 Hz = 3, 580 Hz = 4, 1 kHz = 0, 5 kHz = 1, 25 kHz = 2), e valor fora da faixa (o 189 do
+  reset de fábrica) lê 240 Hz, o padrão da v69.
+- O `teste_chirp_real` ganhou a `10za` a `10zd`.
+
 ## v69 — 29/10 — o LIGHT PWM em 240 Hz de padrão, e meio segundo de portadora antes do APRS (a testar)
 
 `firmware/releases/BJ8300_BANK_v69.anc` (sha256 `5936c260…`). O teste da v68: a 240 Hz, "não deu

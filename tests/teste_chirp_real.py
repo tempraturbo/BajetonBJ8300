@@ -515,6 +515,25 @@ def main():
     s['settings_unknown_9039'].value.set_value('20%')
     aj.apply_to(r._memobj)
     confere('10z. 20% grava 3 em 0x9039', r._mmap[0x9039], bytes([3]))
+    # 10za. LIGHT PWM (firmware v67 a v69): 0x903B, depois do Brightness, em ordem de frequencia; o 189 do
+    # reset de fabrica le 240 Hz, o padrao, e a lista grava o valor do radio, nao a posicao
+    r = bj.BJ8300(imagem())
+    r._mmap[0x903B] = bytes([189])
+    aj = r.get_settings()
+    spec = aj['spec']
+    s = {x.get_name(): x for x in aj.walk()}
+    confere('10za. Light PWM depois do Brightness; o 189 do reset le 240 Hz',
+            (spec.keys()[spec.keys().index('settings_unknown_9039') + 1], str(s['settings_unknown_903b'].value)),
+            ('settings_unknown_903b', '240 Hz'))
+    s['settings_unknown_903b'].value.set_value('580 Hz')
+    aj.apply_to(r._memobj)
+    confere('10zb. 580 Hz grava 4 em 0x903B (o valor do radio, nao a posicao)', r._mmap[0x903B], bytes([4]))
+    s['settings_unknown_903b'].value.set_value('240 Hz')
+    aj.apply_to(r._memobj)
+    confere('10zc. 240 Hz grava 3', r._mmap[0x903B], bytes([3]))
+    r._mmap[0x903B] = bytes([0])
+    confere('10zd. o 0 gravado (o padrao da v67 e da v68) le 1 kHz',
+            str(ajuste_de(r, 'settings_unknown_903b').value), '1 kHz')
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')
