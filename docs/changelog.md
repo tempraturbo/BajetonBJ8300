@@ -5,6 +5,19 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 29 — the V2.9T name, under Bajeton, and the new settings
+
+- The module became `chirp/bj8300_v2.9TEMPRA.py`, and the model in CHIRP, `Bajeton →
+  BJ8300_v2.9TEMPRA`: the owner asked for it to show up in the Bajeton list, not in Baojie's.
+  `MODEL_COMPAT` takes images saved as Baojie (from v1.0T to `BJ8300_v2.8TEMPRA`) and as Bajeton, and
+  all of them open in this one.
+- In **BJ8300_v2.9TEMPRA Specific**, after Mic Gain: **Compressor** (`0x9035`), **Mic AGC**
+  (`0x9036`), **Crystal fine** (`0x9037..0x9038`, in Hz, from −2000 to +2000 in steps of 10) and
+  **Brightness** (`0x9039`). What the factory reset leaves in those bytes (197, 181, `0xC4C0` and 163)
+  reads Off, On, 0 and 100%, as the firmware does.
+- `teste_chirp_real` got `10v` to `10z` (the new settings) and `2c6` to `2c8` (the Baojie and Bajeton
+  images).
+
 ## v64 — Oct 29 — the indicator goes away, redrawing the bar every time (to be tested)
 
 `firmware/releases/BJ8300_BANK_v64.anc` (sha256 `f782e4a6…`), named V2.9T. The diagnostic answered (the owner's photos,

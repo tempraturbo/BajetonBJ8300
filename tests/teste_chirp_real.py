@@ -26,7 +26,7 @@ except ImportError:
     print('chirp nao instalado - nada a testar aqui (o teste_bj8300.py cobre o resto)')
     sys.exit(0)
 
-CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v2.8TEMPRA.py')
+CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v2.9TEMPRA.py')
 _nome = 'chirp.loaded.%s' % os.path.splitext(os.path.basename(CAMINHO))[0]
 _spec = importlib.util.spec_from_file_location(_nome, CAMINHO)
 bj = importlib.util.module_from_spec(_spec)
@@ -106,7 +106,7 @@ def main():
 
     # 1. a classe e um radio do CHIRP, registrado e com o nome combinado
     confere('1. deriva de CloneModeRadio', issubclass(bj.BJ8300, chirp_common.CloneModeRadio), True)
-    confere('1b. nome do modelo', (bj.BJ8300.VENDOR, bj.BJ8300.MODEL), ('Baojie', 'BJ8300_v2.8TEMPRA'))
+    confere('1b. nome do modelo', (bj.BJ8300.VENDOR, bj.BJ8300.MODEL), ('Bajeton', 'BJ8300_v2.9TEMPRA'))
     confere('1c. 960 canais, como o radio', bj.BJ8300._upper, 960)
 
     # 2. abre uma imagem (e o caminho que o CHIRP usa ao carregar um .img)
@@ -126,14 +126,24 @@ def main():
 
     with tempfile.TemporaryDirectory() as pasta:
         arq = os.path.join(pasta, 'antigo.img')
+        # ate o modulo da V2.8T o fabricante era Baojie; desde entao e Bajeton (v62), e as imagens
+        # salvas com Baojie, inclusive as do BJ8300_v2.8TEMPRA, abrem neste (o da V2.9T)
+        Antigo.VENDOR = 'Baojie'
         for letra, Antigo.MODEL in (('', 'BJ8300_v1.0TEMPRA'), ('2', 'BJ8300_v2.0TEMPRA'),
                                     ('3', 'BJ8300_v2.5TEMPRA'), ('4', 'BJ8300_v2.6TEMPRA'),
-                                    ('5', 'BJ8300_v2.7TEMPRA')):
+                                    ('5', 'BJ8300_v2.7TEMPRA'), ('6', 'BJ8300_v2.8TEMPRA')):
             Antigo(imagem()).save_mmap(arq)
             aberto = directory.get_radio_by_image(arq)
-            confere(f'2c{letra}. .img do {Antigo.MODEL} abre neste, com o modelo novo',
+            confere(f'2c{letra}. .img Baojie do {Antigo.MODEL} abre neste, como Bajeton',
                     (isinstance(aberto, bj.BJ8300), aberto.VENDOR, aberto.MODEL),
-                    (True, 'Baojie', 'BJ8300_v2.8TEMPRA'))
+                    (True, 'Bajeton', 'BJ8300_v2.9TEMPRA'))
+        Antigo.VENDOR = 'Bajeton'
+        for letra, Antigo.MODEL in (('7', 'BJ8300_v2.8TEMPRA'), ('8', 'BJ8300_v2.9TEMPRA')):
+            Antigo(imagem()).save_mmap(arq)
+            aberto = directory.get_radio_by_image(arq)
+            confere(f'2c{letra}. .img Bajeton do {Antigo.MODEL} abre neste',
+                    (isinstance(aberto, bj.BJ8300), aberto.VENDOR, aberto.MODEL),
+                    (True, 'Bajeton', 'BJ8300_v2.9TEMPRA'))
         Antigo.MODEL = 'BJ8300_v9.9XYZ'
         Antigo(imagem()).save_mmap(arq)
         try:
@@ -356,7 +366,7 @@ def main():
     aj = r.get_settings()
     confere('10c. VFO A/B/C Channel e FM/AM/SSB Modulation fora do Specific, no topo',
             [g.get_shortname() for g in aj],
-            ['Basic Settings', 'DTMF Settings', 'BJ8300_v2.8TEMPRA Specific', 'VFO A/B/C Channel',
+            ['Basic Settings', 'DTMF Settings', 'BJ8300_v2.9TEMPRA Specific', 'VFO A/B/C Channel',
              'FM/AM/SSB Modulation', 'Banks'])
     abc = aj['abblock']
     confere('10c2. o WATCH e o TTR primeiro no VFO A/B/C Channel, e um bloco para cada lado',
@@ -470,6 +480,41 @@ def main():
     aj.apply_to(r._memobj)
     confere('10t. C grava 3 nos 2 bits de 0x9013, sem mexer nos outros', r._mmap[0x9013], bytes([0xFF]))
     confere('10u. e le de volta C', str(ajuste_de(r, 'settings_dualtx').value), 'C')
+    # 10v. a pasta MIC e o CALIBRATION (firmware v59): 0x9035 o compressor, 0x9036 o AGC e 0x9037..0x9038
+    # o cristal, em 10 Hz com sinal, logo depois do Mic Gain; o que o reset de fabrica deixa (197, 181 e
+    # 0xC4C0) le Off, On e 0, como o firmware
+    r = bj.BJ8300(imagem())
+    r._mmap[0x9035] = bytes([197, 181, 0xC0, 0xC4])
+    aj = r.get_settings()
+    spec = aj['spec']
+    i = spec.keys().index('settings_unknown_9033')
+    confere('10v. Compressor, Mic AGC e Crystal fine depois do Mic Gain; o lixo do reset le Off, On e 0',
+            (spec.keys()[i + 1:i + 4], str(ajuste_de(r, 'settings_unknown_9035').value),
+             str(ajuste_de(r, 'settings_unknown_9036').value), int(ajuste_de(r, 'settings_unknown_9037').value)),
+            (['settings_unknown_9035', 'settings_unknown_9036', 'settings_unknown_9037'], 'Off', 'On', 0))
+    aj = r.get_settings()
+    s = {x.get_name(): x for x in aj.walk()}
+    s['settings_unknown_9035'].value.set_value('High')
+    s['settings_unknown_9036'].value.set_value('Off')
+    s['settings_unknown_9037'].value.set_value(-300)
+    aj.apply_to(r._memobj)
+    confere('10w. High grava 3, Off grava 1 e -300 Hz grava -30 (0xFFE2)', r._mmap[0x9035:0x9039],
+            bytes([3, 1, 0xE2, 0xFF]))
+    confere('10x. e le de volta High, Off e -300', (str(ajuste_de(r, 'settings_unknown_9035').value),
+            str(ajuste_de(r, 'settings_unknown_9036').value), int(ajuste_de(r, 'settings_unknown_9037').value)),
+            ('High', 'Off', -300))
+    # 10y. BRIGHTNESS (firmware v61): 0x9039, depois do Crystal fine; o 163 do reset de fabrica le 100%
+    r = bj.BJ8300(imagem())
+    r._mmap[0x9039] = bytes([163])
+    aj = r.get_settings()
+    spec = aj['spec']
+    s = {x.get_name(): x for x in aj.walk()}
+    confere('10y. Brightness depois do Crystal fine; o 163 do reset le 100%',
+            (spec.keys()[spec.keys().index('settings_unknown_9037') + 1], str(s['settings_unknown_9039'].value)),
+            ('settings_unknown_9039', '100%'))
+    s['settings_unknown_9039'].value.set_value('20%')
+    aj.apply_to(r._memobj)
+    confere('10z. 20% grava 3 em 0x9039', r._mmap[0x9039], bytes([3]))
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')

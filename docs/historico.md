@@ -5,6 +5,18 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 29/10 — o nome da V2.9T, em Bajeton, e os ajustes novos
+
+- O módulo virou `chirp/bj8300_v2.9TEMPRA.py`, e o modelo no CHIRP, `Bajeton → BJ8300_v2.9TEMPRA`: o
+  dono pediu que ele saísse na lista do Bajeton, e não na do Baojie. O `MODEL_COMPAT` aceita as
+  imagens salvas como Baojie (do v1.0T ao `BJ8300_v2.8TEMPRA`) e como Bajeton, e todas abrem neste.
+- No **BJ8300_v2.9TEMPRA Specific**, depois do Mic Gain: o **Compressor** (`0x9035`), o **Mic AGC**
+  (`0x9036`), o **Crystal fine** (`0x9037..0x9038`, em Hz, de −2000 a +2000 de 10 em 10) e o
+  **Brightness** (`0x9039`). O que o reset de fábrica deixa nesses bytes (197, 181, `0xC4C0` e 163) lê
+  Off, On, 0 e 100%, como o firmware.
+- O `teste_chirp_real` ganhou a `10v` a `10z` (os ajustes novos) e a `2c6` a `2c8` (as imagens Baojie
+  e Bajeton).
+
 ## v64 — 29/10 — o indicador some, redesenhando a barra sempre (a testar)
 
 `firmware/releases/BJ8300_BANK_v64.anc` (sha256 `f782e4a6…`), com o nome V2.9T. O diagnóstico respondeu (fotos do

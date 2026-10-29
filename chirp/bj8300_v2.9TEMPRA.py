@@ -673,6 +673,73 @@ def _mic_gain_setting(level):
     return rs
 
 
+# The radio's MIC folder (firmware v59): COMPRESSOR (0x9035: 0 Off, then the TX compressor at 1.33:1,
+# 2:1 and 4:1) and MIC AGC (0x9036: 0 On, the stock one, 1 Off), bytes the stock firmware does not use.
+# The radio reads any other value as Off and On, which is what its factory reset leaves there.
+COMPRESSOR_OPTIONS = ['Off', 'Low', 'Mid', 'High']
+MIC_AGC_OPTIONS = ['On', 'Off']
+# CALIBRATION > CRYSTAL FINE (firmware v59): a signed 16-bit value at 0x9037, in 10 Hz at 435.5 MHz
+# (the radio scales it with the frequency, like a crystal error), from -2000 to +2000 Hz; out of range
+# counts as 0. It adds to the factory crystal calibration, which stays as it is.
+CRYSTAL_MAX_HZ = 2000
+# DISPLAY > BRIGHTNESS (firmware v61): the screen backlight by PWM, at 0x9039 (0 = 100%, the stock level,
+# up to 4 = 10%); out of range, as the factory reset leaves it, counts as 100%.
+BRIGHTNESS_OPTIONS = ['100%', '60%', '35%', '20%', '10%']
+
+
+def _compressor_setting(level):
+    rs = MemSetting('settings.unknown_9035', 'Compressor', RadioSettingValueList(
+        COMPRESSOR_OPTIONS, current_index=int(level) if int(level) < 4 else 0))
+    rs.set_doc('The radio chip\'s TX audio compressor, as the radio\'s COMPRESSOR item: Low, Mid and '
+               'High compress 1.33:1, 2:1 and 4:1, so weak syllables come out louder and the voice '
+               'more even. Off is the stock behaviour. Needs firmware v59 or later.')
+    return rs
+
+
+def _mic_agc_setting(value):
+    rs = MemSetting('settings.unknown_9036', 'Mic AGC', RadioSettingValueList(
+        MIC_AGC_OPTIONS, current_index=1 if int(value) == 1 else 0))
+    rs.set_doc('The radio chip\'s microphone automatic gain control, as the radio\'s MIC AGC item. '
+               'On (stock) evens out the microphone level; Off keeps the voice\'s natural dynamics. '
+               'Needs firmware v59 or later.')
+    return rs
+
+
+class _CrystalSetting(MemSetting):
+    """CRYSTAL FINE: Hz in the setting, 10 Hz steps in the radio, over two bytes."""
+
+    def apply_to_memobj(self, memobj):
+        steps = int(round(int(self.value) / 10.0)) & 0xFFFF
+        memobj.settings.unknown_9037 = steps & 0xFF
+        memobj.settings.unknown_9038 = steps >> 8
+
+
+def _crystal_setting(settings):
+    raw = int(settings.unknown_9037) | int(settings.unknown_9038) << 8
+    steps = raw - 0x10000 if raw >= 0x8000 else raw
+    hz = steps * 10 if abs(steps) * 10 <= CRYSTAL_MAX_HZ else 0
+    rs = _CrystalSetting('settings.unknown_9037', 'Crystal fine (Hz at 435.5 MHz)',
+                         RadioSettingValueInteger(-CRYSTAL_MAX_HZ, CRYSTAL_MAX_HZ, hz, step=10))
+    rs.set_doc('Fine frequency correction, as the radio\'s CALIBRATION > CRYSTAL FINE item, in 10 Hz '
+               'steps at 435.5 MHz: the radio scales it with the frequency, as a crystal error goes '
+               '(+120 Hz at 435.5 MHz is +40 Hz at 145 MHz). If the radio transmits 300 Hz high '
+               'there, set -300. It adds to the factory calibration; 0 leaves the factory one alone. '
+               'Measure against a reference (an SDR or a radio known to be on frequency). Needs '
+               'firmware v59 or later.')
+    return rs
+
+
+def _brightness_setting(level):
+    rs = MemSetting('settings.unknown_9039', 'Brightness', RadioSettingValueList(
+        BRIGHTNESS_OPTIONS, current_index=int(level) if int(level) < 5 else 0))
+    rs.set_doc('Screen backlight level, as the radio\'s DISPLAY > BRIGHTNESS item: 100% is the stock '
+               'level, and the others dim it by PWM. While dimmed and lit, the PWM can be heard as '
+               'noise by a receiver right next to the radio (and now and then by the radio itself, '
+               'and on its AM/SW band); at 100%, or with the backlight off, it is as stock. Needs '
+               'firmware v62 or later.')
+    return rs
+
+
 TXABC_OPTIONS = ['Off', 'A', 'B', 'C']                  # the radio's TX-A/B/C item (0x9013, 2 bits)
 
 
@@ -708,22 +775,27 @@ def _vfo_scramble_setting(old, side, vfo):
 
 # The module is named after the firmware release: bj8300_v1.0TEMPRA.py (model BJ8300_v1.0TEMPRA)
 # until V2.0T, bj8300_v2.0TEMPRA.py until V2.5T, bj8300_v2.5TEMPRA.py (never released) until V2.6T,
-# bj8300_v2.6TEMPRA.py until V2.7T, bj8300_v2.7TEMPRA.py until V2.8T. An image keeps the vendor and
+# bj8300_v2.6TEMPRA.py until V2.7T, bj8300_v2.7TEMPRA.py until V2.8T, bj8300_v2.8TEMPRA.py until
+# V2.9T. An image keeps the vendor and
 # model it was saved with, and CHIRP only opens it with a driver whose model matches, directly or
 # through directory.MODEL_COMPAT (get_radio_by_image): this keeps the images saved with the old
-# modules opening here, without more models in the radio list.
+# modules opening here, without more models in the radio list. Up to the V2.8T module the vendor was
+# Baojie; since then it is Bajeton, the brand on the radio, where CHIRP also lists the BJ7800, so the
+# images saved under Baojie map here too (and the ones saved under Bajeton by the test module of v62,
+# still named v2.8TEMPRA).
 if isinstance(getattr(directory, 'MODEL_COMPAT', None), dict):
-    directory.MODEL_COMPAT.update({('Baojie', old): ('Baojie', 'BJ8300_v2.8TEMPRA')
+    directory.MODEL_COMPAT.update({('Baojie', old): ('Bajeton', 'BJ8300_v2.9TEMPRA')
                                    for old in ('BJ8300_v1.0TEMPRA', 'BJ8300_v2.0TEMPRA',
                                                'BJ8300_v2.5TEMPRA', 'BJ8300_v2.6TEMPRA',
-                                               'BJ8300_v2.7TEMPRA')})
+                                               'BJ8300_v2.7TEMPRA', 'BJ8300_v2.8TEMPRA')})
+    directory.MODEL_COMPAT[('Bajeton', 'BJ8300_v2.8TEMPRA')] = ('Bajeton', 'BJ8300_v2.9TEMPRA')
 
 
 @directory.register
 class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
-    """Baojie BJ-8300 running the channel banks firmware."""
-    VENDOR = 'Baojie'
-    MODEL = 'BJ8300_v2.8TEMPRA'        # its own name: it only works with the modified firmware
+    """Bajeton BJ-8300 running the channel banks firmware."""
+    VENDOR = 'Bajeton'
+    MODEL = 'BJ8300_v2.9TEMPRA'        # its own name: it only works with the modified firmware
     VARIANT = ''
 
     # the channel scramble with the firmware's options, in menu order (see SCRAMBLE_OPTIONS)
@@ -885,6 +957,11 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             LOG.warning('noise reduction setting not found: Mic Gain goes to the end')
             parent = settings[-1]
         _put(parent, _mic_gain_setting(self._memobj.settings.unknown_9033), after='settings_unknown_9032')
+        # COMPRESSOR, MIC AGC and CRYSTAL FINE (firmware v59) right after it, in the same block
+        _put(parent, _compressor_setting(self._memobj.settings.unknown_9035), after='settings_unknown_9033')
+        _put(parent, _mic_agc_setting(self._memobj.settings.unknown_9036), after='settings_unknown_9035')
+        _put(parent, _crystal_setting(self._memobj.settings), after='settings_unknown_9036')
+        _put(parent, _brightness_setting(self._memobj.settings.unknown_9039), after='settings_unknown_9037')
         if _take(settings, 'settings_voice') is None:
             LOG.warning('voice prompts setting not found in the base class')
         # The banks firmware (v37 onwards) is English only: the LANGUAGE menu item is gone and the
@@ -1189,6 +1266,6 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
 
 class BJ8300VhfUhf(BJ8300):
     """VHF/UHF sub-device: this is where the 960 channels are and, with them, the banks."""
-    VENDOR = 'Baojie'
-    MODEL = 'BJ8300_v2.8TEMPRA'
+    VENDOR = 'Bajeton'
+    MODEL = 'BJ8300_v2.9TEMPRA'
     VARIANT = 'VHF/UHF'
