@@ -2,8 +2,10 @@
  *   quadro <origem> <caminho> <info>    imprime o quadro AX.25 em hexa ("Q ...")
  *   afsk <origem> <caminho> <info>      manda o quadro em AFSK: as escritas no chip ("R ...")
  *   morse <wpm> <hz> <texto>            toca o texto em Morse: as escritas no chip
- *   hdlc <arquivo>                      passa os bits de linha do arquivo ('0'/'1') pelo decodificador
- *                                       e imprime cada quadro achado ("Q ...") */
+ *   hdlc <arquivo> <max>                passa os bits de linha do arquivo ('0'/'1') pelo decodificador,
+ *                                       com um buffer de max bytes, e imprime cada quadro achado ("Q ...")
+ *                                       e, no fim, os FCS errados e os consertados ("C ruins consertados")
+ *   texto <quadro em hexa> <meu>        o quadro (sem o FCS) em texto legivel ("T para_mim texto") */
 #include <stdlib.h>
 #include <string.h>
 #include "../firmware/src/mensagem.c"
@@ -32,17 +34,29 @@ int main(int argc, char **argv)
     } else if (argc == 5 && !strcmp(argv[1], "morse")) {
         morse_toca(argv[4], strlen(argv[4]), atoi(argv[2]), atoi(argv[3]));
         printf("R %u 0 0\n", relogio_us);
-    } else if (argc == 3 && !strcmp(argv[1], "hdlc")) {
+    } else if (argc == 4 && !strcmp(argv[1], "hdlc")) {
         struct hdlc h;
         FILE *f = fopen(argv[2], "rb");
         int c;
 
-        hdlc_comeca(&h, q, 330);
+        hdlc_comeca(&h, q, atoi(argv[3]));
+        h.ruins = h.consertados = 0;
         while ((c = fgetc(f)) != EOF)
             if (c == '0' || c == '1')
                 if ((n = hdlc_bit(&h, c == '1')))
                     hexa(q, n);
         fclose(f);
+        printf("C %u %u\n", h.ruins, h.consertados);
+    } else if (argc == 4 && !strcmp(argv[1], "texto")) {
+        char s[49];
+        unsigned k, para_mim;
+
+        for (n = 0; argv[2][2 * n] && argv[2][2 * n + 1]; n++) {
+            sscanf(argv[2] + 2 * n, "%2x", &k);
+            q[n] = k;
+        }
+        para_mim = aprs_texto(s, q, n, argv[3], strlen(argv[3]));
+        printf("T %u %s\n", para_mim, s);
     } else {
         return 2;
     }

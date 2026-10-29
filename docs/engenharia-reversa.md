@@ -76,6 +76,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | **`0xD3000–0xD3FFF`** | **os VFOs da C** (v49: o da C e o do B guardado; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v51)) |
 | **`0xD4000–0xD4FFF`** | **a mensagem do Morse**, a velocidade e o tom (v65; [seção 24](#24-morse-e-aprs-v65)) |
 | **`0xD5000–0xD5FFF`** | **o APRS**: indicativo, SSID, destinatário, mensagem e caminho (v65) |
+| **`0xD6000–0xD6FFF`** | **o histórico do APRS RX**: até 63 pacotes recebidos (v70) |
 | `0xFA000` | 4 KB de uso do firmware |
 | livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -1564,6 +1565,44 @@ quantos chegaram.
 (no UV-K5 há relato dos dois lados: o TA1JS decodificou um TH-D75; outro projeto não achou nenhum quadro
 com FCS certo); se trocar o reg 0x71 no meio do tom é contínuo em fase; o desvio do AFSK com o ganho do
 roger; e o tempo de uma escrita no chip.
+
+### APRS: a recepção na v70
+
+No rádio, o modo FFSK 1200/1800 decodificou um beacon real (o digipeater PY2ARS-14, da rede APRS-SP),
+mas pouco do tráfego do canal. A v70 ataca as causas do nosso lado:
+
+- **Quadro de qualquer tamanho.** Até a v69 o decodificador guardava o quadro inteiro para conferir o FCS
+  e descartava o que passasse do buffer de 128 B: beacons de digipeater com comentário e quadros já
+  repetidos passam disso. Agora o FCS é calculado byte a byte enquanto o quadro chega, e só os primeiros
+  128 bytes ficam guardados, para a tela.
+- **Correção de erro, como o FIX_BITS do Direwolf.** Quadro guardado inteiro com o FCS errado passa por
+  uma busca de um bit errado ou de dois vizinhos (um tom trocado no ar vira dois bits errados seguidos
+  depois do NRZI), pela linearidade do CRC: o registro que sobrou difere do certo (`0xF0B8`) pelo efeito
+  do erro, e o de um bit na posição p é o passo do CRC aplicado (total − p) vezes a um 1, uma conta por
+  posição, sem refazer o CRC. O conserto só vale se o quadro tiver forma de APRS (endereços de letras e
+  números, de 2 a 10, controle 0x03, PID 0xF0): com ~2000 tentativas, uma em 30 acertaria o CRC por acaso.
+- **Contadores na tela:** os syncs que o modem achou, os quadros com o FCS errado (BAD) e os consertados
+  (FIX), para ver onde o tráfego se perde.
+- **Quatro modos do modem na tecla #**, para comparar com o tráfego real: 1 o `0x3FC3`, 2 a banda de RX
+  larga (`0x3FC9`, bits 3:1 = 100), 3 o FFSK 1200/2400 (`0x33C9`) e 4 o ganho de RX 0 (`0x3CC3`). A troca
+  zera os contadores.
+- **O receptor acordado** (`0x01E39EE4`) ao entrar: o laço não deixa a economia de bateria rodar.
+- **A tela legível** (`aprs_texto`): a posição sem compressão (`!`, `=`, `/` e `@`, estes com a hora) em
+  graus e minutos com o símbolo pelo nome (DIGI, GATE, CAR, HOME, WX…); a mensagem para outro como
+  `ORIGEM>DESTINO: texto`, a para mim como `ORIGEM> texto`, e a confirmação como `ACK n`. O resto, como
+  veio, até 48 caracteres, quebrados num espaço.
+- **O histórico na flash**, no setor `0xD6000` ("HST1"): até 63 registros de 64 B (o texto e a cor), gravados
+  sem apagar até o setor encher; cheio, ele é apagado e recomeça. Só é usado se estiver apagado ou já for
+  nosso. As setas andam por ele, dois por vez.
+
+Para a pilha, o laço chama a tela direto, sem rotina no meio, e a tela corta as linhas no próprio registro
+(um zero por um instante no lugar da quebra) em vez de copiá-las: 732 B no ponto da chamada, de 740.
+
+**O EXIT segurado no editor (v70).** No editor de texto, o EXIT apaga a última letra (`0x01E4D486`, só
+alcançada pelo EXIT editando texto, de `0x01E4C7B4`). O gancho no lugar da primeira chamada dela (a recarga
+do MENU EXIT TIME, `0x01E484F8`) espera enquanto o EXIT continua apertado: passando de ~0,6 s, põe o cursor
+(`b[0x14A37]`) em 0, e o resto da rotina de fábrica, que com o cursor no começo sai da edição sem salvar
+(`0x01E4D4F4`), faz o resto. Solto antes, apaga a letra, como sempre. Vale em todos os editores de texto.
 
 ### A pilha
 

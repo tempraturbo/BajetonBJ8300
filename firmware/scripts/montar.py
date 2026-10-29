@@ -745,12 +745,14 @@ CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o e
                    (0x01E46D8C, 0x01E44604, 'gancho_fim_tx', 'Morse e APRS: o conteudo no lugar do roger'),
                    (0x01E46CCE, 0x01E19DCC, 'texto15', 'editor: a copia do texto na piscada, ate 24'),
                    (0x01E476BE, 0x01E19DCC, 'texto15', 'editor: a outra copia da piscada, ate 24'),
-                   (0x01E48FBA, 0x01E19DCC, 'texto15', 'editor: a copia para o TEXTO, ate 24'))
+                   (0x01E48FBA, 0x01E19DCC, 'texto15', 'editor: a copia para o TEXTO, ate 24'),
+                   # v70: o EXIT segurado no editor sai sem salvar
+                   (0x01E4D486, 0x01E484F8, 'gancho_exit_editor', 'editor: EXIT segurado sai sem salvar'))
 EDITOR_REMENDOS += ((0x01E4A0F0, bytes.fromhex('02fc041c'), bytes.fromhex('02fc0448'),
                      'o limite fixo da insercao vai de 15 a 37 letras'),)
 # (onde, o ponteiro de fabrica, o simbolo novo, o que e)
 PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com o espaco primeiro e - / = + @'),)
-MENSAGEM = ('texto15', 'gancho_ida_ptt', 'gancho_fim_tx', 'tecla_zero', 'acao_le', 'envia_opcoes',
+MENSAGEM = ('texto15', 'gancho_exit_editor', 'gancho_ida_ptt', 'gancho_fim_tx', 'tecla_zero', 'acao_le', 'envia_opcoes',
             'morse_msg_le', 'morse_msg_grava', 'morse_msg_exibe', 'titulo_morse_msg', 'morse_envia_grava',
             'titulo_morse_envia', 'morse_wpm_le', 'morse_wpm_grava', 'morse_wpm_exibe', 'titulo_morse_wpm',
             'morse_tom_le', 'morse_tom_grava', 'morse_tom_exibe', 'titulo_morse_tom',

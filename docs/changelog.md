@@ -5,6 +5,18 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v70 — Oct 29 — APRS reception of any length, with correction, counters and history, and holding EXIT (to be tested)
+
+`firmware/releases/BJ8300_BANK_v70.anc` (sha256 `0cb2b580…`). On the radio, v69 decoded a real beacon off
+the air (PY2ARS-14, "REDE APRS-SP-C"), but only that one of the channel's traffic. The cause on our side:
+the decoder dropped every frame longer than 128 B. In v70 the FCS is computed byte by byte (any length), a
+frame with a bad FCS goes through the one-bit or two-adjacent-bit correction (like Direwolf), the screen
+shows the syncs, the frames with a bad FCS and the fixed ones, the # key switches between four modem modes to
+compare, a position comes out in degrees with the symbol, messages with source and addressee, and packets
+go to a 63-entry history in flash that the arrows scroll. And, at the owner's request, holding EXIT in the
+text editor leaves without saving (a short EXIT still deletes the last letter).
+[Section 24](reverse-engineering.md#24-morse-and-aprs-v65).
+
 ## CHIRP driver — Oct 29 — Light PWM
 
 - In **BJ8300_v2.9TEMPRA Specific**, after Brightness, **Light PWM** (`0x903B`): 240 Hz, 580 Hz, 1 kHz,

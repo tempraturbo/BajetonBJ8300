@@ -76,6 +76,7 @@ by looking for where content starts mirroring address 0:
 | **`0xD3000–0xD3FFF`** | **C's VFOs** (v49: C's and the saved B's; [section 18](#18-dual-watch-and-triple-v42-to-v51)) |
 | **`0xD4000–0xD4FFF`** | **the Morse message**, speed and tone (v65; [section 24](#24-morse-and-aprs-v65)) |
 | **`0xD5000–0xD5FFF`** | **APRS**: callsign, SSID, addressee, message and path (v65) |
+| **`0xD6000–0xD6FFF`** | **the APRS RX history**: up to 63 received packets (v70) |
 | `0xFA000` | 4 KB used by the firmware |
 | free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -1589,6 +1590,47 @@ registers 0x3F, 0x70 and 0x72 are read first and restored at the end, and any ke
 from the mark (on the UV-K5 there are reports both ways: TA1JS decoded a TH-D75; another project found no
 frame with a good FCS); whether switching reg 0x71 mid-tone is phase continuous; the AFSK deviation with the
 roger's gain; and how long one chip write takes.
+
+### APRS: receiving in v70
+
+On the radio, the FFSK 1200/1800 mode decoded a real beacon (the PY2ARS-14 digipeater, of the APRS-SP
+network), but little of the channel's traffic. v70 goes after the causes on our side:
+
+- **Frames of any length.** Up to v69 the decoder kept the whole frame to check the FCS and dropped what
+  did not fit the 128 B buffer: digipeater beacons with a comment and already repeated frames go past
+  that. Now the FCS is computed byte by byte as the frame comes in, and only the first 128 bytes are
+  kept, for the screen.
+- **Error correction, like Direwolf's FIX_BITS.** A frame kept whole with a bad FCS goes through a search
+  for one wrong bit or two adjacent ones (one wrong tone on the air becomes two wrong bits in a row after
+  NRZI), using the CRC's linearity: the remaining register differs from the right one (`0xF0B8`) by the
+  error's effect, and that of one bit at position p is the CRC step applied (total − p) times to a 1, one
+  step per position, without redoing the CRC. The fix only counts if the frame looks like APRS (addresses
+  of letters and digits, 2 to 10 of them, control 0x03, PID 0xF0): with ~2000 tries, one in 30 would hit
+  the CRC by chance.
+- **Counters on the screen:** the syncs the modem found, the frames with a bad FCS (BAD) and the fixed
+  ones (FIX), to see where the traffic is lost.
+- **Four modem modes on the # key**, to compare with real traffic: 1 `0x3FC3`, 2 the wide RX band
+  (`0x3FC9`, bits 3:1 = 100), 3 FFSK 1200/2400 (`0x33C9`) and 4 RX gain 0 (`0x3CC3`). Switching zeroes the
+  counters.
+- **The receiver woken up** (`0x01E39EE4`) on entry: the loop keeps battery saving from running.
+- **A readable screen** (`aprs_texto`): an uncompressed position (`!`, `=`, `/` and `@`, these with the
+  time) in degrees and minutes with the symbol by name (DIGI, GATE, CAR, HOME, WX…); a message to someone
+  else as `SOURCE>ADDRESSEE: text`, one to me as `SOURCE> text`, and an acknowledgement as `ACK n`. The
+  rest as it came, up to 48 characters, broken at a space.
+- **The history in flash**, in sector `0xD6000` ("HST1"): up to 63 records of 64 B (the text and the
+  colour), written without erasing until the sector fills up; full, it is erased and starts over. It is
+  only used if erased or already ours. The arrows move through it, two at a time.
+
+For the stack, the loop calls the screen directly, with no routine in between, and the screen cuts the
+lines in the record itself (a zero for a moment at the break) instead of copying them: 732 B at the call
+point, out of 740.
+
+**Holding EXIT in the editor (v70).** In the text editor, EXIT deletes the last letter (`0x01E4D486`,
+only reached by EXIT while editing text, from `0x01E4C7B4`). The hook in place of its first call (the MENU
+EXIT TIME reload, `0x01E484F8`) waits while EXIT stays pressed: past ~0.6 s it sets the cursor
+(`b[0x14A37]`) to 0, and the rest of the stock routine, which with the cursor at the start leaves editing
+without saving (`0x01E4D4F4`), does the rest. Released earlier, it deletes the letter, as always. It
+applies to every text editor.
 
 ### The stack
 

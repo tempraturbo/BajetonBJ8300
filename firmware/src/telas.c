@@ -1019,34 +1019,69 @@ static void esp_limite(unsigned x0, unsigned x1, unsigned y)
         pinta(x0, y, x0 + 2, y + 1, COR_TEXTO_AMBAR);
 }
 
-/* ---------- APRS RX (v65) ----------
- * A tela do laco de recepcao do APRS (mensagem.c, aprs_rx_grava), a tela inteira: o titulo com
- * quantos quadros chegaram, e os 2 quadros mais novos em duas linhas cada, o de cima o mais novo. As
- * linhas com o bit ligado em `ambar` (mensagem para o meu indicativo) saem em ambar. */
-SEPARADA static void aprs_cena(const char (*l)[25], unsigned ambar, unsigned total)
+/* ---------- APRS RX (v65; v70 com o historico e os contadores) ----------
+ * A tela do laco de recepcao do APRS (mensagem.c, aprs_rx_grava), a tela inteira: no alto o modo do modem
+ * e a posicao no historico; dois quadros de ate 48 caracteres em duas linhas cada, o de cima o mais
+ * novo (os com o bit ligado em `ambar`, mensagem para o meu indicativo, em ambar); embaixo os contadores
+ * (syncs, FCS errado, consertados) e as teclas. num: modo, posicao, quantos, syncs, BAD, FIX. Os dois
+ * textos vem soltos (0 = vazio) e sao cortados no lugar, um zero no 25o caractere enquanto a primeira
+ * linha sai, e a linha dos contadores sai em pedacos: o laco que chama ja tem o pacote e o historico na
+ * pilha, e esta cadeia tem de caber no resto dos 740 B de fabrica. */
+SEPARADA static void aprs_cena(char *t0, char *t1, unsigned ambar, const u16 *num)
 {
+    static const char *const ROTULOS[3] = {"SYNC ", "  BAD ", "  FIX "};
     char s[12];
-    unsigned i;
+    unsigned i, k, x;
 
     pinta(0, 0, 160, 17, COR_ESTADO);
-    etiqueta(4, 3, "APRS RX", COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 0);
-    numero(s, total, 1);
-    texto(156 - largura(s, 1), 5, s, 1, COR_CINZA);
+    i = etiqueta(4, 3, "APRS RX", COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 0);
+    numero(junta(s, "M"), num[0] + 1, 1);
+    etiqueta(i, 3, s, COR_CHIP_RX, COR_TEXTO_RX, 0);
+    if (num[2]) {
+        numero(junta(numero(s, num[1], 1), "/"), num[2], 1);
+        texto(156 - largura(s, 1), 5, s, 1, COR_CINZA);
+    }
     pinta(0, 17, 160, 18, COR_LINHA);
-    for (i = 0; i < 4; i++)
-        texto(4, 26 + (i >> 1) * 42 + (i & 1) * 12, l[i], 1,
-              ambar >> i & 1 ? COR_TEXTO_AMBAR : COR_TEXTO);
-    pinta(4, 63, 156, 64, COR_LINHA);
-    texto(4, 119, "ANY KEY: EXIT", 1, COR_CINZA);
+    for (i = 0; i < 2; i++) {              /* 24 por linha, quebrando num espaco */
+        char *l = i ? t1 : t0, c;
+        unsigned cor = ambar >> i & 1 ? COR_TEXTO_AMBAR : COR_TEXTO, j, y = 24 + i * 44;
+        if (!l)
+            continue;
+        for (k = 0; k < 24 && l[k]; k++)
+            ;
+        if (k < 24 || !l[24]) {
+            texto(4, y, l, 1, cor);
+            continue;
+        }
+        for (j = 24; j > 12 && l[j] != ' '; j--)
+            ;
+        if (l[j] != ' ')
+            j = 24;
+        c = l[j];
+        l[j] = 0;
+        texto(4, y, l, 1, cor);
+        l[j] = c;
+        j += c == ' ';
+        for (k = 0; k < 24 && l[j + k]; k++)
+            ;
+        c = l[j + k];
+        l[j + k] = 0;
+        texto(4, y + 12, l + j, 1, cor);
+        l[j + k] = c;
+    }
+    pinta(4, 59, 156, 60, COR_LINHA);
+    for (i = 0, x = 4; i < 3; i++) {
+        numero(junta(s, ROTULOS[i]), num[3 + i], 1);
+        x = texto(x, 107, s, 1, COR_CINZA);
+    }
+    texto(4, 118, "#: MODE   ARROWS: LIST", 1, COR_CINZA);
 }
 
-void tela_aprs(const char (*l)[25], unsigned ambar, unsigned total)
+void tela_aprs(char *t0, char *t1, unsigned ambar, const u16 *num, unsigned y0)
 {
-    unsigned y;
-
-    for (y = 0; y < 128; y += 32) {
-        janela_b(0, 160, y, y + 32, COR_FUNDO);
-        aprs_cena(l, ambar, total);
+    for (; y0 < 128; y0 += 32) {
+        janela_b(0, 160, y0, y0 + 32, COR_FUNDO);
+        aprs_cena(t0, t1, ambar, num);
         ENVIA();
     }
 }

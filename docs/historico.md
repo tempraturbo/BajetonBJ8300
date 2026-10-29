@@ -5,6 +5,17 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v70 — 29/10 — a recepção do APRS de qualquer tamanho, com correção, contadores e histórico, e o EXIT segurado (a testar)
+
+`firmware/releases/BJ8300_BANK_v70.anc` (sha256 `0cb2b580…`). No rádio, a v69 decodificou do ar um beacon
+real (PY2ARS-14, "REDE APRS-SP-C"), mas só esse do tráfego do canal. A causa do nosso lado: o decodificador
+descartava todo quadro com mais de 128 B. Na v70 o FCS é calculado byte a byte (qualquer tamanho), o quadro
+com o FCS errado passa pela correção de um bit ou de dois vizinhos (como o Direwolf), a tela mostra os
+syncs, os quadros com FCS errado e os consertados, a tecla # troca entre quatro modos do modem para
+comparar, a posição sai em graus com o símbolo, as mensagens com origem e destino, e os pacotes vão para um
+histórico de 63 na flash, que as setas rolam. E, a pedido do dono, segurar o EXIT no editor de texto sai sem
+salvar (o EXIT curto continua apagando a última letra). [Seção 24](engenharia-reversa.md#24-morse-e-aprs-v65).
+
 ## Driver do CHIRP — 29/10 — o Light PWM
 
 - No **BJ8300_v2.9TEMPRA Specific**, depois do Brightness, o **Light PWM** (o `0x903B`): 240 Hz, 580 Hz,

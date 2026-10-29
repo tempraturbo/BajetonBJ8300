@@ -228,20 +228,43 @@ def linha_de(quadros_com_fcs, polaridade, ruido, rnd):
     return linha
 
 
+def decodifica(linha, maximo, nome):
+    """O decodificador do C: os quadros achados e os contadores (FCS errado, consertados)."""
+    arq = os.path.join(pasta, nome)
+    open(arq, 'w').write(''.join(map(str, linha)))
+    saida = roda('hdlc', arq, maximo).splitlines()
+    return ([bytes.fromhex(l.split()[1]) for l in saida if l.startswith('Q')],
+            tuple(int(x) for x in saida[-1].split()[1:]))
+
+
 rnd = random.Random(8300)
 bons = [quadro_ref(o, c, i) for o, c, i in CASOS]
 errado = bytearray(bons[0])
-errado[20] ^= 0x10                         # um bit trocado: o FCS nao bate
+errado[20] ^= 0x10                         # um bit trocado: o FCS nao bate, e a correcao o acha
 abortado = bons[1][:12]                    # cortado no meio (sem FCS valido)
+lixo = bytes(rnd.getrandbits(8) & 0xFE for _ in range(30))   # 30 bytes que nao sao APRS
 for polaridade in (0, 1):
-    linha = linha_de([bons[0], bytes(errado), bons[1], abortado, bons[2], bons[3]], polaridade, 200, rnd)
-    arq = os.path.join(pasta, f'linha{polaridade}.txt')
-    open(arq, 'w').write(''.join(map(str, linha)))
-    achados = [bytes.fromhex(l.split()[1]) for l in roda('hdlc', arq).splitlines()]
-    confere(f'3. HDLC polaridade {polaridade}: so os quadros bons, sem o FCS', achados,
+    linha = linha_de([bons[0], bytes(errado), bons[1], abortado, bons[2], lixo, bons[3]], polaridade, 200, rnd)
+    achados, (ruins, consertados) = decodifica(linha, 330, f'linha{polaridade}.txt')
+    confere(f'3. HDLC polaridade {polaridade}: os bons e o de um bit errado consertado, sem o lixo',
+            achados, [bons[i][:-2] for i in (0, 0, 1, 2, 3)])
+    confere(f'3. polaridade {polaridade}: um consertado, e o lixo contado como FCS errado',
+            (consertados, ruins >= 1), (1, True))
+    confere(f'3. a referencia daqui concorda nos bons (polaridade {polaridade})', hdlc_ref(linha),
             [bons[i][:-2] for i in (0, 1, 2, 3)])
-    confere(f'3. a referencia daqui concorda (polaridade {polaridade})', hdlc_ref(linha),
-            [bons[i][:-2] for i in (0, 1, 2, 3)])
+
+# um tom trocado no ar: um bit de linha errado vira dois bits errados seguidos depois do NRZI
+linha = linha_de([bons[1]], 0, 0, rnd)
+linha[8 * 8 + 20 * 8 + 3] ^= 1             # no meio do quadro, depois das 8 flags
+achados, (ruins, consertados) = decodifica(linha, 330, 'tom.txt')
+confere('3. um tom trocado (dois bits vizinhos) e consertado', (achados, consertados), ([bons[1][:-2]], 1))
+
+# quadro maior que o buffer: o FCS confere byte a byte, e so o comeco fica guardado
+longo = quadro_ref('PY2ARS-14', 2, '>' + 'comentario comprido de digipeater ' * 6)
+achados, _ = decodifica(linha_de([longo], 1, 50, rnd), 330, 'longo.txt')
+confere(f'3. quadro de {len(longo)} B com o buffer de 330: inteiro', achados, [longo[:-2]])
+achados, _ = decodifica(linha_de([longo], 1, 50, rnd), 64, 'longo64.txt')
+confere(f'3. o mesmo com o buffer de 64: aceito, com os 64 primeiros bytes', achados, [longo[:64]])
 
 
 # ---------- 4. Morse ----------
@@ -276,6 +299,23 @@ for wpm, texto in ((20, 'CQ CQ de PY2ABC/8300 k'), (12, 'Ola, 73! (teste) 1+1=2 
     confere(f'4. Morse a {wpm} wpm: so pontos de 1 e tracos de 3 unidades', sorted(set(sinais)), [1, 3])
     confere(f'4. Morse a {wpm} wpm: tom de 700 Hz', {round(unidade_hz(v)) for t, v in eventos if v},
             {700})
+
+# ---------- 5. o quadro em texto legivel (a tela do APRS RX) ----------
+def texto(origem, caminho, info, meu):
+    linha = roda('texto', quadro_ref(origem, caminho, info)[:-2].hex(), meu).rstrip('\n')
+    return int(linha[2]), linha[4:]
+
+
+for origem, info, meu, esperado in (
+        ('PY2ARS-14', '!2318.07S/04635.59W#REDE APRS-SP-C', 'PY2ABC-7',
+         (0, 'PY2ARS-14: 23 18.07S 046 35.59W DIGI REDE APRS-S')),
+        ('PU2XYZ-9', ':PY2ABC-7 :Ola tudo bem?{12', 'PY2ABC-7', (1, 'PU2XYZ-9> Ola tudo bem?')),
+        ('PU2XYZ-9', ':PY5ZZZ   :Bom dia{3', 'PY2ABC-7', (0, 'PU2XYZ-9>PY5ZZZ: Bom dia{3')),
+        ('PU2XYZ-9', ':PY2ABC-7 :ack12', 'PY2ABC-7', (1, 'PU2XYZ-9> ACK 12')),
+        ('PY2ABC', '>BJ-8300 V2.9T', 'PY2ABC', (0, 'PY2ABC: >BJ-8300 V2.9T')),
+        ('PY2MOV-9', '@092345z2318.07S/04635.59W>Movel', '', (0, 'PY2MOV-9: 23 18.07S 046 35.59W CAR Movel')),
+        ('PY2ZZZ', '!23xx.07S/04635.59W#nao e posicao', '', (0, 'PY2ZZZ: !23xx.07S/04635.59W#nao e posicao'))):
+    confere(f'5. texto de {info[:22]!r}', texto(origem, 1, info, meu), esperado)
 
 print()
 print('tudo certo' if not falhas else f'FALHARAM {len(falhas)}: {", ".join(falhas)}')

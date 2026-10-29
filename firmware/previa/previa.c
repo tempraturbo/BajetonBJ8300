@@ -42,7 +42,7 @@ void JANELA(unsigned x0, unsigned x1, unsigned y0, unsigned y1, unsigned limpar,
 }
 
 /* envia() 0x01E3ADBC: manda o buffer da janela aberta para a tela. */
-void tela_aprs(const char (*l)[25], unsigned ambar, unsigned total);   /* telas.c (v65) */
+void tela_aprs(char *t0, char *t1, unsigned ambar, const u16 *num, unsigned y0);   /* telas.c (v70) */
 
 void ENVIA(void)
 {
@@ -820,10 +820,11 @@ int main(int argc, char **argv)
         telas_b(1, 0);
         grava("61b-editor-mensagem-20");
         {
-            static const char rx[4][25] = {"PU2XYZ-9> OLA, RECEBI O", "SEU TESTE{3",
-                                           "PY2RPT-1: >BJ-8300 V2.9T", "TESTE DO APRS"};
+            static char rx0[49] = "PU2XYZ-9> OLA, RECEBI O SEU TESTE DO BJ-8300";
+            static char rx1[49] = "PY2ARS-14: 23 18.07S 046 35.59W DIGI REDE APRS-S";
+            static const u16 num[6] = {0, 1, 57, 12, 3, 1};
 
-            tela_aprs(rx, 3, 7);
+            tela_aprs(rx0, rx1, 1, num, 0);
             grava("62-aprs-rx");
         }
 
