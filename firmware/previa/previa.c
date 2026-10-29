@@ -42,7 +42,7 @@ void JANELA(unsigned x0, unsigned x1, unsigned y0, unsigned y1, unsigned limpar,
 }
 
 /* envia() 0x01E3ADBC: manda o buffer da janela aberta para a tela. */
-void tela_aprs(char *t0, char *t1, unsigned ambar, const u16 *num, unsigned y0);   /* telas.c (v70) */
+void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas);   /* telas.c (v74) */
 
 void ENVIA(void)
 {
@@ -820,12 +820,22 @@ int main(int argc, char **argv)
         telas_b(1, 0);
         grava("61b-editor-mensagem-20");
         {
-            static char rx0[49] = "PU2XYZ-9> OLA, RECEBI O SEU TESTE DO BJ-8300";
-            static char rx1[49] = "PY2ARS-14: 23 18.07S 046 35.59W DIGI REDE APRS-S";
-            static const u16 num[6] = {0, 1, 57, 12, 3, 1};
+            /* dois registros do historico (v74: a tela os le da flash), aqui num canto do chip imitado */
+            static const char *const rx[2] = {
+                "PU2XYZ-9> OLA, RECEBI O SEU TESTE DO BJ-8300. ESTOU NA ESTRADA E CHAMO DE NOVO MAIS TARDE, 73",
+                "PY2ARS-14: 23 18.07S 046 35.59W DIGI REDE APRS-S"};
+            static const u16 num[7] = {3, 1, 57, 9, 3, 2, 1};
+            unsigned i;
 
-            tela_aprs(rx0, rx1, 1, num, 0);
+            for (i = 0; i < 2; i++) {
+                chip[0x8000 + i * 128] = 0x5A;
+                chip[0x8001 + i * 128] = i == 0;
+                strcpy((char *)chip + 0x8002 + i * 128, rx[i]);
+            }
+            tela_aprs(0x8000, 0x8080, 0, num, 15);
             grava("62-aprs-rx");
+            tela_aprs(0x8000, 0x8080, 1, num, 15);
+            grava("62b-aprs-rx-aberta");
         }
 
         BASE_TELAS();

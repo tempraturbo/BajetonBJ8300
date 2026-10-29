@@ -76,7 +76,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | **`0xD3000–0xD3FFF`** | **os VFOs da C** (v49: o da C e o do B guardado; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v51)) |
 | **`0xD4000–0xD4FFF`** | **a mensagem do Morse**, a velocidade e o tom (v65; [seção 24](#24-morse-e-aprs-v65)) |
 | **`0xD5000–0xD5FFF`** | **o APRS**: indicativo, SSID, destinatário, mensagem e caminho (v65) |
-| **`0xD6000–0xD6FFF`** | **o histórico do APRS RX**: até 63 pacotes recebidos (v70) |
+| **`0xD6000–0xD7FFF`** | **o histórico do APRS RX**: até 63 pacotes recebidos (v70; o `0xD7000` desde a v74) |
 | `0xFA000` | 4 KB de uso do firmware |
 | livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -1602,7 +1602,169 @@ Para a pilha, o laço chama a tela direto, sem rotina no meio, e a tela corta as
 alcançada pelo EXIT editando texto, de `0x01E4C7B4`). O gancho no lugar da primeira chamada dela (a recarga
 do MENU EXIT TIME, `0x01E484F8`) espera enquanto o EXIT continua apertado: passando de ~0,6 s, põe o cursor
 (`b[0x14A37]`) em 0, e o resto da rotina de fábrica, que com o cursor no começo sai da edição sem salvar
-(`0x01E4D4F4`), faz o resto. Solto antes, apaga a letra, como sempre. Vale em todos os editores de texto.
+(`0x01E4D4F4`), faz o resto. Solto antes, apaga a letra, como sempre. Vale em todos os editores de texto. (No rádio não funcionou: o
+EXIT chega a essa rotina já solto. Ver "O EXIT segurado, de verdade (v72)".)
+
+### APRS: a polaridade do preâmbulo (v71)
+
+**O que a v70 mostrou no rádio.** O modo 1 decodificou o beacon do digipeater e pacotes de um igate, sempre
+das mesmas estações, e em ~95% dos pacotes do canal nenhum contador se mexia: nem SYNC, nem BAD. O modo 2
+(banda larga) dava sync e nenhum quadro; o 3 (1200/2400 com banda larga) e o 4 (ganho 0) não ouviam nada.
+Os WAVs tocados num Baofeng, com o alto-falante colado no microfone, contaram o porquê: com o tom de 2200 Hz
+de −9 a +9 dB do de 1200 Hz, nenhum fez sync; com dois tipos alternados, o mesmo quadro com o preâmbulo
+parado em 2200 Hz (tipo A) e em 1200 Hz (tipo B), o B fez sync todas as cinco vezes e o A nenhuma.
+
+**A causa.** Numa flag em NRZI um tom fica 7 bits parado e o outro aparece 1 bit, e qual é qual depende do
+estado do NRZI do transmissor ao começar. O chip só sincroniza no padrão do `0x5A`/`0x5B`: com `FE FE`, só
+nas flags paradas na marca. O sync negativo, que o `0x0B` bit 7 indica no MDC1200 do OneOfEleven, não
+aconteceu em nenhum quadro do tipo A.
+
+**A v71:**
+
+- **As duas polaridades.** Esperando, o laço troca a cada 50 ms entre `FE FE` e `01 01` (parado no espaço),
+  com o sync de 2 bytes (`0x59` = `0x4000`/`0x1000`, bit 3 em 0) para caber folgado na janela. Sete bits de
+  linha iguais só existem nas flags (o stuffing os corta dentro do quadro), então nenhum dos dois padrões
+  aparece no meio de um. O nível de linha do começo vem da polaridade armada (`pol ^ 0x0B bit 7`).
+- **A captura segue depois do sync.** O chip passa os bits crus do quadro dele inteiro, 2048 bytes
+  (13,6 s), e o `hdlc_bit` acha sozinho as flags dos quadros seguintes, de qualquer polaridade. O laço não
+  rearma mais depois de um quadro bom nem 2,5 s depois do sync: só no fim do quadro do chip (`0x02` bit
+  13), ou se a FIFO parar de chegar por 300 ms. As 4 palavras de cada aviso saem todas, mesmo depois de um
+  quadro achado, para a FIFO não encher.
+- **Os contadores** separam os syncs das duas polaridades (`SYNC marca/espaço`).
+- **Os modos**, cada um mudando uma coisa só do 1: 1 o `0x3FC3`; 2 o FFSK 1200/2400 com a banda do 1
+  (`0x33C3`); 3 e 4 os mesmos sem o de-ênfase do RX, o bit 8 do `0x2B` (pela documentação do BK4819 da
+  comunidade do UV-K5; a fábrica só grava 0 nele, em `0x01E440BE`, e a tela o devolve ao sair). O de-ênfase
+  tira uns 5 dB do 2200 Hz em relação ao 1200 Hz.
+- **Quadro de terceiros** (`}` no começo da info, o que um igate traz da internet): a tela mostra a estação
+  de dentro e a info dela (posição, mensagem), em vez do cabeçalho cru.
+- **Onde se ouve.** No alto, no lugar do "APRS RX", o lado em evidência como o MDF dele pede (nome,
+  frequência ou número; no VFO, a frequência), lido da RAM como a tela principal (`0x14DC4`, `0x14B79`,
+  `0x14B86`, `0x15E0C`), sem a cadeia do `le_estado`, que não caberia na pilha. Com a C no lado B (TRIPLE),
+  o formato segue o MDF-B.
+- **O EXIT segurado (~0,6 s) apaga o histórico** e fica na tela: o setor `0xD6000` é apagado e recebe a
+  marca de novo (a mesma rotina do histórico cheio), só se o setor for nosso. O EXIT curto sai, como antes.
+
+A pilha do laço caiu para 728 B no ponto da chamada, de 740.
+
+### O EXIT segurado, de verdade (v72)
+
+**O que a v71 mostrou.** A recepção passou a decodificar uns metade dos pacotes no modo 1, e o resto foi
+quase todo para o BAD (o quadro chega inteiro, com bits errados). O modo 3 (sem o de-ênfase) ficou igual ao
+1, e o 4 igual ao 2 (1200/2400, pior): o bit 8 do `0x2B` não muda nada que se veja. E o EXIT segurado no
+editor (v70) não saía: segurando, nada acontecia, e ao soltar apagava a letra.
+
+**A máquina de teclas de fábrica** (o laço do sinal, a cada 10 ms) lê a tecla em `0x01E46280`, só aceita a
+mesma em três leituras seguidas, e conta as voltas dela em `b[0x14680]` (a anterior fica em `b[0x7030]`).
+Fora da TX (`b[0x1533C]` diferente de 1), apertar não manda nada (`0x01E46372`, a tabela por tipo de
+evento); com 100 voltas (1 s) manda o código longo da tecla (`0x01E6037B` + o código cru: 35 no EXIT) e marca
+`b[0x146F4]`; o solto manda o toque curto (o código de `0x01E60369`, 18 no EXIT), a não ser que a marca do
+longo esteja ligada. Ou seja: o EXIT do editor roda quando a tecla já foi solta, e o gancho da v70 na
+rotina dele (`0x01E4D486`) nunca a via apertada. Ele saiu, e a chamada voltou a ser a de fábrica.
+
+**A v72** troca a leitura das teclas do laço (`0x01E46280`, `call 0x01E43D50`) pelo `gancho_teclas`: com o
+EXIT na 60ª volta (0,6 s) no editor de texto (`b[0x14C00]` = 7 e `b[0x14BF9]` = 1, como a tela B o
+reconhece), põe o cursor (`b[0x14A37]`) em 0 e passa a devolver "nenhuma tecla". A fábrica vê o EXIT solto
+depois de três leituras, manda o toque curto, e a rotina do EXIT do editor, com o cursor no começo, sai sem
+salvar (`0x01E4D4F4`), com a tecla ainda apertada. Enquanto o EXIT continuar apertado a leitura segue
+devolvendo "nenhuma", senão o solto de verdade viraria outro EXIT e subiria o menu. A marca disso fica no
+byte `0x903C` dos ajustes (`b[0x14BE8]`): no desmontado de fábrica não há acesso a ele, nem pela base
+`0x14680` (o deslocamento 1384 nunca é carregado), nem pelo endereço. Um valor que sobre nele se apaga na
+primeira leitura sem o EXIT.
+
+Na tela do APRS RX, que lê as teclas por conta própria, o EXIT segurado já apagava o histórico aos 0,6 s,
+mas a tela só se redesenhava depois de soltar: agora o laço redesenha antes de esperar a tecla soltar, e
+isso vale também para as setas e o `#`. A pilha do laço ficou em 740 B no ponto da chamada, de 740.
+
+### O ganho do modem: CALIBRATION > MODEM GAIN (v73)
+
+O ganho de entrada do modem FSK do chip são os bits 9:8 do `0x58`: 4 níveis, sem escala pública (a
+documentação do UV-K5 só lhe dá o nome). A fábrica usa o 3 (o `0x3FC3` do roger TONE1200); o 0 (o modo 4 da
+v70) não ouvia nada. Com o 2200 Hz fora do que o modem espera, um sinal forte demais pode saturar a entrada.
+
+Na v73 ele vira um item da pasta CALIBRATION, **MODEM GAIN**: OFF, LOW, MEDIUM e HIGH (0 a 3), gravado no
+`0x903D` dos ajustes (`b[0x14BE9]`, livre pela varredura da v59) como `0xA0` + o ganho. Qualquer outro
+valor vale HIGH, o de fábrica: é o caso do rádio que nunca mudou o item, e do RESET de fábrica, que põe no
+byte o que vier depois da tabela `0x01E603C3` (hoje 198). O APRS RX entra com o ganho escolhido, e o `#` o
+troca só ali, para comparar (no alto da tela, no lugar do M1 a M4 da v71, o nome do ganho); ao sair, a
+próxima entrada volta ao da CALIBRATION.
+
+O ganho só existe com o modem ligado, e só o APRS RX o usa na recepção: o único uso de fábrica do modem é o
+roger TONE1200 (`0x01E44676..0x01E44790`), que só transmite, programa `0x58` (`0x3FC3`), `0x59`,
+`0x5A..0x5D`, `0x3F`, `0x70` e `0x72` a cada vez, e no fim deixa o `0x58` em 0, o modem desligado. A saída do
+APRS RX grava o mesmo 0 no `0x58` e, desde a v73, devolve também o `0x5E` (os limites da FIFO), que a
+fábrica nunca grava e o RX mudava sem devolver. A recepção de voz não passa pelo modem.
+
+Com o item, o laço do RX chegava a 744 B no ponto da chamada, de 740: o começo do quadro guardado para a
+tela foi de 128 a 120 bytes (o FCS continua conferido no quadro inteiro, e a tela usa até 48 caracteres),
+e a pilha ficou em 736 B.
+
+### A v74: o texto inteiro, nenhum bit para trás e a auditoria
+
+**Nenhum bit para trás.** Da v71 à v73, quando um quadro fechava certo, a leitura parava no meio do bloco
+de 4 palavras da FIFO: até 63 bits depois dele iam fora. Um igate ou um digipeater que manda vários quadros
+na mesma transmissão, separados por uma a três flags, perdia o começo do seguinte. Agora o quadro bom vira
+texto e vai para o histórico ali mesmo (`guarda`, chamada no meio do laço dos 64 bits, antes de o seguinte
+ocupar o `q`), e os bits seguem. A tela, que levava as 4 faixas de uma vez depois de cada quadro, vai uma
+faixa de 32 linhas por volta do laço, entre as leituras do modem (`pede`): a FIFO nunca espera mais que uma
+faixa.
+
+**O texto inteiro.** O quadro em texto vai até 120 caracteres (`TEXTO_MAX`; eram 48, o que cabia em duas
+linhas), e o histórico passou a registros de 128 B nos setores `0xD6000` e `0xD7000` (o mapa do chip de
+dados dá os dois como livres), com a marca "HST2": ainda 63 registros. O histórico das v70 a v73 ("HST1",
+registros de 64 B) é apagado na primeira entrada. A tela não guarda mais os textos na pilha: lê cada linha
+da flash na hora de desenhar (`aprs_linhas`, de 25 em 25 bytes), e isso liberou a pilha para o `q` de 160 B.
+Na lista, cada quadro tem duas linhas, e a segunda termina em `>` quando o texto continua; o **OK** abre o de
+cima inteiro, em até 6 linhas, as setas seguem andando com ele aberto, e o OK ou o EXIT curto voltam à
+lista. As letras de U+00C0 a U+00FF (UTF-8 `0xC3 xx`) aparecem sem o acento, e °, º e ª como o, o e a.
+
+**A tela.** O quadro de cima, o da posição no alto, fica no fundo do selo do ganho, e os contadores e as
+teclas, no fundo da barra de cima. O rodapé diz as teclas: `#:GAIN OK:OPEN HOLD EXIT:CLR` (aberto,
+`OK:BACK`).
+
+**A auditoria.** Uma revisão independente do código do APRS (o código e os fatos medidos, sem as
+conclusões do autor; fuzz da conversão em texto e do decodificador, simulação de erros de tom e de ruído)
+não achou erro crítico e confirmou o FCS, os endereços, os formatos, o tempo do AFSK, o HDLC e a memória.
+Entraram na v74:
+
+- **O microfone ia ao ar** nos 0,5 s de portadora muda antes do APRS (e enquanto o OK do SEND continuava
+  apertado): o `AUDIO_TX(4)` (reg 0x30 = 0xC3FA) vinha depois das esperas. Agora vem logo no começo do
+  `gancho_fim_tx`.
+- **O preâmbulo do nosso TX parava em 2200 Hz**, a polaridade que o sync de um BK4819 não pega (o "tipo A"
+  da v71): o AFSK começava na marca, e o primeiro bit 0 da flag já o trocava. Agora começa no espaço, e as
+  flags param em 1200 Hz. Para o Direwolf e as TNCs tanto faz; um UV-K5 ou um BJ-8300 antigo passam a
+  sincronizar.
+- **A correção aceitava ~1% de quadros errados** (com 2 ou mais erros, a busca acerta o CRC por acaso, e o
+  conferido era só o cabeçalho). A busca de um bit só saiu: o CRC-CCITT tem o fator (x+1), então a síndrome
+  de um erro de peso par, que é todo tom trocado, tem paridade par, e a de um bit, ímpar; nunca casavam, e
+  ela só aceitava falso positivo. O conserto agora também confere a info (de 0x1C em diante, CR e LF, como o
+  sanity check do Direwolf) e é desfeito quando não passa. No teste, 40 quadros com dois tons trocados:
+  nenhum aceito.
+- **O BAD conta o que deve:** só o quadro com cabeçalho de APRS (`cabecalho_aprs`), alinhado ou não. Antes o
+  ruído depois do pacote contava, e o quadro real que se desalinhava por um erro sumia sem contar. O quadro
+  AX.25 de outro protocolo (controle diferente de UI ou PID diferente de 0xF0) não vai mais para a tela.
+- **Na conversão em texto:** "ack" só é confirmação com o id de 1 a 5 caracteres e nada depois ("ackermann"
+  não é); o símbolo só sai pelo nome na tabela primária (`/`); a letra do hemisfério é conferida; e
+  caractere de controle ou acima de 0x7E no destinatário, no indicativo de terceiros ou no símbolo vira
+  ponto.
+- O buffer do rodapé foi de 16 a 18 B ("SYNC 65535/65535" e o 0), e o teste do PC apaga a pasta temporária
+  (eram 1,4 MB a cada execução).
+
+**A próxima fase** (achados da auditoria que mudam comportamento, para decidir depois):
+
+- **ack automático** para a mensagem dirigida a mim (o remetente repete até receber) e o mesmo id ao
+  reenviar a mesma mensagem (hoje cada SEND troca o id, e o outro lado a vê como nova);
+- **histórico em anel**, um setor por vez, sem apagar os 63 de uma vez quando enche, e **sem as cópias** do
+  mesmo pacote ouvido direto e pelos digipeaters (um resumo do texto nos bytes livres do registro);
+- **ler o modem durante as esperas** de tecla (o redesenho inteiro depois de uma tecla, a espera do EXIT
+  segurado, o soltar da tecla) e **apagar a flash fora do laço dos bits** (os dois setores do histórico
+  cheio são apagados no meio de uma rajada);
+- no envio, **desligar o scramble e o subtom** (o scramble usa o mesmo reg 0x71 do AFSK) e **recusar
+  indicativo inválido** (com `-`, espaço ou `/`, que a tecla 0 dá);
+- conferir de quem é o `0xD7000` antes de apagá-lo, e gravar o byte "usado" do registro por último (queda
+  de energia no meio);
+- passar o indicativo e o destinatário para maiúsculas ao gravar (o editor só tem ABC e 123, mas o RX
+  compara letra a letra);
+- testes no PC do laço do RX, do histórico e da tela, que hoje só rodam no rádio.
 
 ### A pilha
 

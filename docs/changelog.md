@@ -5,7 +5,49 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
-## v70 — Oct 29 — APRS reception of any length, with correction, counters and history, and holding EXIT (to be tested)
+## v74 — Oct 29 — APRS RX without losing the next frame, the whole text on OK, and the audit (to be tested)
+
+`firmware/releases/BJ8300_BANK_v74.anc` (sha256 `84b1d6e2…`). On the radio, v73 showed more syncs than frames,
+and a cut text. The cause on our side: since v71 a good frame stopped reading in the middle of the FIFO
+block, and the start of the next frame of the same transmission was thrown away. v74 reads every bit, stores
+the frame right away and draws the screen one strip at a time; keeps the whole text (up to 120 characters,
+in a two-sector history) and opens it on OK; strips accents from letters; and highlights the selected frame
+and the footer. An independent audit of the APRS code found the microphone on air before the packet, the TX
+preamble on the polarity the BK4819 does not catch, ~1% of wrong frames accepted by the correction and
+counters that measured something else: all four were fixed in v74, along with text conversion fixes. The
+rest of the audit is noted for the next phase. [Section 24](reverse-engineering.md#24-morse-and-aprs-v65).
+
+## v73 — Oct 29 — the modem gain in CALIBRATION, and APRS RX changes gain on # (to be tested)
+
+`firmware/releases/BJ8300_BANK_v73.anc` (sha256 `9a49fb6c…`). At the owner's request, the modem input gain
+became the **MODEM GAIN** item of the CALIBRATION folder (OFF, LOW, MEDIUM and HIGH; HIGH, the stock one,
+while the item is never changed). APRS RX starts with it, `#` changes the gain there only to compare (in
+place of modes M1 to M4), and leaving turns the modem off like the stock roger, now also restoring the FIFO
+thresholds (`0x5E`). [Section 24](reverse-engineering.md#24-morse-and-aprs-v65).
+
+## v72 — Oct 29 — holding EXIT in the editor really leaves, and the RX screen responds at once (not flashed: v73 includes it)
+
+`firmware/releases/BJ8300_BANK_v72.anc` (sha256 `2dcc2550…`). On the radio, v71 decoded about half the
+packets in mode 1 (nearly all the rest as BAD; the modes without de-emphasis the same as with it, and
+1200/2400 worse), and holding EXIT in the editor did not leave. The cause: the stock firmware only sends a
+key's short press when it is released, and v70's hook in the EXIT routine never saw it held. v72 watches
+EXIT in the loop's key read: at 0.6 s in the editor it leaves without saving, with the key still held. On the
+APRS RX screen, holding EXIT clears the history and the screen shows it at once, before release.
+[Section 24](reverse-engineering.md#24-morse-and-aprs-v65).
+
+## v71 — Oct 29 — APRS RX on both preamble polarities, the MDF at the top, holding EXIT clears the history (tested: v72 tells the result)
+
+`firmware/releases/BJ8300_BANK_v71.anc` (sha256 `0496be72…`). On the radio, v70 only decoded the same
+stations, and on ~95% of the packets not even SYNC went up; modes 2 to 4 did not help. WAVs played into a
+Baofeng showed the cause: the chip only syncs on a preamble resting on 1200 Hz, and the other half of the
+transmitters rest on 2200 Hz. v71 looks for both polarities (switching the sync pattern every 50 ms), keeps
+capturing after the sync (the following frames come through the same bits, of either polarity), splits the
+syncs of the two in the counter, replaces the modes with variations of 1 (1200/2400 and without
+de-emphasis), shows an igate packet by its inner station, puts the channel at the top as the MDF asks and,
+at the owner's request, holding EXIT clears the history.
+[Section 24](reverse-engineering.md#24-morse-and-aprs-v65).
+
+## v70 — Oct 29 — APRS reception of any length, with correction, counters and history, and holding EXIT (tested: v71 tells the result)
 
 `firmware/releases/BJ8300_BANK_v70.anc` (sha256 `0cb2b580…`). On the radio, v69 decoded a real beacon off
 the air (PY2ARS-14, "REDE APRS-SP-C"), but only that one of the channel's traffic. The cause on our side:

@@ -733,7 +733,12 @@ ITENS_DEPOIS[ROGER_ITEM] += [
     dict(nome='LIGHT PWM', molde=TDR_ITEM, flags=0, maximo=5, get='luz_pwm_le', set='luz_pwm_grava',
          titulo='titulo_luz_pwm', exibe='luz_pwm_opcoes', opcoes_cn='luz_pwm_opcoes'),
 ]
-GRUPOS['CALIBRATION'] = ('CRYSTAL FINE', 'LIGHT PWM')
+# v73: o ganho de entrada do modem do APRS RX (mensagem.c), na pasta CALIBRATION; o 0x903D
+ITENS_DEPOIS[ROGER_ITEM] += [
+    dict(nome='MODEM GAIN', molde=TDR_ITEM, flags=0, maximo=4, get='modem_ganho_le', set='modem_ganho_grava',
+         titulo='titulo_modem_ganho', exibe='modem_ganho_opcoes', opcoes_cn='modem_ganho_opcoes'),
+]
+GRUPOS['CALIBRATION'] = ('CRYSTAL FINE', 'LIGHT PWM', 'MODEM GAIN')
 LUZ_PWM = ('luz_pwm_le', 'luz_pwm_grava', 'titulo_luz_pwm', 'luz_pwm_opcoes')
 NA_LIVRE += LUZ_PWM
 PRECISA += LUZ_PWM
@@ -746,13 +751,14 @@ CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o e
                    (0x01E46CCE, 0x01E19DCC, 'texto15', 'editor: a copia do texto na piscada, ate 24'),
                    (0x01E476BE, 0x01E19DCC, 'texto15', 'editor: a outra copia da piscada, ate 24'),
                    (0x01E48FBA, 0x01E19DCC, 'texto15', 'editor: a copia para o TEXTO, ate 24'),
-                   # v70: o EXIT segurado no editor sai sem salvar
-                   (0x01E4D486, 0x01E484F8, 'gancho_exit_editor', 'editor: EXIT segurado sai sem salvar'))
+                   # v72: o EXIT segurado no editor sai sem salvar (a leitura das teclas do laco do sinal;
+                   # o gancho da v70, na rotina do EXIT, nunca via o EXIT apertado: o toque vai no solto)
+                   (0x01E46280, 0x01E43D50, 'gancho_teclas', 'editor: EXIT segurado 0,6 s sai sem salvar'))
 EDITOR_REMENDOS += ((0x01E4A0F0, bytes.fromhex('02fc041c'), bytes.fromhex('02fc0448'),
                      'o limite fixo da insercao vai de 15 a 37 letras'),)
 # (onde, o ponteiro de fabrica, o simbolo novo, o que e)
 PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com o espaco primeiro e - / = + @'),)
-MENSAGEM = ('texto15', 'gancho_exit_editor', 'gancho_ida_ptt', 'gancho_fim_tx', 'tecla_zero', 'acao_le', 'envia_opcoes',
+MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'tecla_zero', 'acao_le', 'envia_opcoes',
             'morse_msg_le', 'morse_msg_grava', 'morse_msg_exibe', 'titulo_morse_msg', 'morse_envia_grava',
             'titulo_morse_envia', 'morse_wpm_le', 'morse_wpm_grava', 'morse_wpm_exibe', 'titulo_morse_wpm',
             'morse_tom_le', 'morse_tom_grava', 'morse_tom_exibe', 'titulo_morse_tom',
@@ -761,7 +767,8 @@ MENSAGEM = ('texto15', 'gancho_exit_editor', 'gancho_ida_ptt', 'gancho_fim_tx', 
             'aprs_dest_le', 'aprs_dest_grava', 'aprs_dest_exibe', 'titulo_aprs_dest',
             'aprs_msg_le', 'aprs_msg_grava', 'aprs_msg_exibe', 'titulo_aprs_msg',
             'aprs_envia_grava', 'titulo_aprs_envia', 'aprs_caminho_le', 'aprs_caminho_grava',
-            'aprs_caminho_opcoes', 'titulo_aprs_caminho', 'aprs_rx_grava', 'aprs_rx_opcoes', 'titulo_aprs_rx')
+            'aprs_caminho_opcoes', 'titulo_aprs_caminho', 'aprs_rx_grava', 'aprs_rx_opcoes', 'titulo_aprs_rx',
+            'modem_ganho_le', 'modem_ganho_grava', 'titulo_modem_ganho', 'modem_ganho_opcoes')
 NA_LIVRE += MENSAGEM
 PRECISA += MENSAGEM
 

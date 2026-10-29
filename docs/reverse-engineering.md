@@ -76,7 +76,7 @@ by looking for where content starts mirroring address 0:
 | **`0xD3000–0xD3FFF`** | **C's VFOs** (v49: C's and the saved B's; [section 18](#18-dual-watch-and-triple-v42-to-v51)) |
 | **`0xD4000–0xD4FFF`** | **the Morse message**, speed and tone (v65; [section 24](#24-morse-and-aprs-v65)) |
 | **`0xD5000–0xD5FFF`** | **APRS**: callsign, SSID, addressee, message and path (v65) |
-| **`0xD6000–0xD6FFF`** | **the APRS RX history**: up to 63 received packets (v70) |
+| **`0xD6000–0xD7FFF`** | **the APRS RX history**: up to 63 received packets (v70; `0xD7000` since v74) |
 | `0xFA000` | 4 KB used by the firmware |
 | free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -1630,7 +1630,173 @@ only reached by EXIT while editing text, from `0x01E4C7B4`). The hook in place o
 EXIT TIME reload, `0x01E484F8`) waits while EXIT stays pressed: past ~0.6 s it sets the cursor
 (`b[0x14A37]`) to 0, and the rest of the stock routine, which with the cursor at the start leaves editing
 without saving (`0x01E4D4F4`), does the rest. Released earlier, it deletes the letter, as always. It
-applies to every text editor.
+applies to every text editor. (On the radio it did not work: EXIT reaches that routine already released.
+See "Holding EXIT, for real (v72)".)
+
+### APRS: the preamble polarity (v71)
+
+**What v70 showed on the radio.** Mode 1 decoded the digipeater's beacon and packets from an igate, always
+from the same stations, and on ~95% of the channel's packets no counter moved at all: neither SYNC nor BAD.
+Mode 2 (wide band) gave syncs and no frames; 3 (1200/2400 with the wide band) and 4 (gain 0) heard nothing.
+WAVs played into a Baofeng, with the phone speaker against the microphone, told why: with the 2200 Hz tone
+from −9 to +9 dB of the 1200 Hz one, none synced; with two types alternating, the same frame with the
+preamble resting on 2200 Hz (type A) and on 1200 Hz (type B), B synced all five times and A never did.
+
+**The cause.** In an NRZI flag one tone rests for 7 bits and the other shows up for 1, and which is which
+depends on the transmitter's NRZI state when it starts. The chip only syncs on the pattern in `0x5A`/`0x5B`:
+with `FE FE`, only on flags resting on mark. The negative sync, which bit 7 of `0x0B` signals in
+OneOfEleven's MDC1200, did not happen on any type A frame.
+
+**v71:**
+
+- **Both polarities.** While waiting, the loop switches every 50 ms between `FE FE` and `01 01` (resting on
+  space), with the 2-byte sync (`0x59` = `0x4000`/`0x1000`, bit 3 at 0) to fit the window with room to
+  spare. Seven equal line bits only exist in flags (stuffing breaks them up inside the frame), so neither
+  pattern shows up in the middle of one. The starting line level comes from the armed polarity
+  (`pol ^ 0x0B bit 7`).
+- **Capture goes on after the sync.** The chip hands over the raw bits of its whole frame, 2048 bytes
+  (13.6 s), and `hdlc_bit` finds the flags of the following frames by itself, of either polarity. The loop
+  no longer re-arms after a good frame or 2.5 s after the sync: only at the end of the chip's frame (`0x02`
+  bit 13), or if the FIFO stops coming for 300 ms. All 4 words of each notice are read, even after a frame
+  is found, so the FIFO does not fill up.
+- **The counters** split the syncs of the two polarities (`SYNC mark/space`).
+- **The modes**, each changing one thing only from 1: 1 `0x3FC3`; 2 FFSK 1200/2400 with mode 1's band
+  (`0x33C3`); 3 and 4 the same without RX de-emphasis, bit 8 of `0x2B` (per the UV-K5 community's BK4819
+  documentation; the stock firmware only writes 0 to it, at `0x01E440BE`, and the screen restores it on
+  exit). De-emphasis takes about 5 dB off 2200 Hz relative to 1200 Hz.
+- **Third-party frames** (`}` at the start of the info, what an igate brings from the internet): the screen
+  shows the inner station and its info (position, message) instead of the raw header.
+- **Where it listens.** At the top, in place of "APRS RX", the side in focus as its MDF asks (name,
+  frequency or number; on VFO, the frequency), read from RAM like the main screen (`0x14DC4`, `0x14B79`,
+  `0x14B86`, `0x15E0C`), without the `le_estado` chain, which would not fit the stack. With C on side B
+  (TRIPLE), the format follows MDF-B.
+- **Holding EXIT (~0.6 s) clears the history** and stays on the screen: sector `0xD6000` is erased and gets
+  its marker again (the same routine as a full history), only if the sector is ours. A short EXIT leaves,
+  as before.
+
+The loop's stack went down to 728 B at the call point, out of 740.
+
+### Holding EXIT, for real (v72)
+
+**What v71 showed.** Reception started decoding about half the packets in mode 1, and nearly all the rest
+went to BAD (the frame arrives whole, with wrong bits). Mode 3 (without de-emphasis) behaved like 1, and 4
+like 2 (1200/2400, worse): bit 8 of `0x2B` changes nothing visible. And holding EXIT in the editor (v70) did
+not leave: while held nothing happened, and on release it deleted the letter.
+
+**The stock key machine** (the signal loop, every 10 ms) reads the key at `0x01E46280`, only accepts the
+same one on three reads in a row, and counts its rounds in `b[0x14680]` (the previous one is kept in
+`b[0x7030]`). Outside TX (`b[0x1533C]` other than 1), pressing sends nothing (`0x01E46372`, the table by
+event type); at 100 rounds (1 s) it sends the key's long code (`0x01E6037B` + the raw code: 35 for EXIT) and
+sets `b[0x146F4]`; release sends the short press (the code from `0x01E60369`, 18 for EXIT), unless the long
+mark is set. In other words: the editor's EXIT runs when the key has already been released, and v70's hook
+in that routine (`0x01E4D486`) never saw it held. It is gone, and the call is the stock one again.
+
+**v72** replaces the loop's key read (`0x01E46280`, `call 0x01E43D50`) with `gancho_teclas`: with EXIT on
+its 60th round (0.6 s) in the text editor (`b[0x14C00]` = 7 and `b[0x14BF9]` = 1, as screen B recognises
+it), it sets the cursor (`b[0x14A37]`) to 0 and starts returning "no key". The stock code sees EXIT
+released after three reads, sends the short press, and the editor's EXIT routine, with the cursor at the
+start, leaves without saving (`0x01E4D4F4`), with the key still held. While EXIT stays held the read keeps
+returning "no key", otherwise the real release would become another EXIT and go up the menu. The mark for
+this lives in settings byte `0x903C` (`b[0x14BE8]`): the stock disassembly has no access to it, neither
+through the `0x14680` base (offset 1384 is never loaded) nor by address. A value left in it is cleared on
+the first read without EXIT.
+
+On the APRS RX screen, which reads the keys itself, holding EXIT already cleared the history at 0.6 s, but
+the screen was only redrawn after release: the loop now redraws before waiting for the key to be released,
+which also applies to the arrows and `#`. The loop's stack is at 740 B at the call point, out of 740.
+
+### The modem gain: CALIBRATION > MODEM GAIN (v73)
+
+The chip's FSK modem input gain is bits 9:8 of `0x58`: 4 levels, with no public scale (the UV-K5
+documentation only names it). The stock firmware uses 3 (the roger TONE1200's `0x3FC3`); 0 (v70's mode 4)
+heard nothing. With 2200 Hz outside what the modem expects, too strong a signal can saturate the input.
+
+In v73 it becomes an item of the CALIBRATION folder, **MODEM GAIN**: OFF, LOW, MEDIUM and HIGH (0 to 3),
+stored in settings byte `0x903D` (`b[0x14BE9]`, free per the v59 scan) as `0xA0` + the gain. Any other value
+means HIGH, the stock one: that is the case of a radio that never changed the item, and of the stock RESET,
+which puts in the byte whatever follows the `0x01E603C3` table (198 today). APRS RX starts with the chosen
+gain, and `#` changes it there only, to compare (at the top of the screen, in place of v71's M1 to M4, the
+gain's name); on leaving, the next entry goes back to the CALIBRATION one.
+
+The gain only exists with the modem on, and only APRS RX uses it for receiving: the modem's only stock use
+is the roger TONE1200 (`0x01E44676..0x01E44790`), which only transmits, programs `0x58` (`0x3FC3`), `0x59`,
+`0x5A..0x5D`, `0x3F`, `0x70` and `0x72` every time, and at the end leaves `0x58` at 0, the modem off. Leaving
+APRS RX writes the same 0 to `0x58` and, since v73, also restores `0x5E` (the FIFO thresholds), which the
+stock firmware never writes and RX used to change without restoring. Voice reception does not go through
+the modem.
+
+With the item, the RX loop reached 744 B at the call point, out of 740: the start of the frame kept for the
+screen went from 128 to 120 bytes (the FCS is still checked over the whole frame, and the screen uses up to
+48 characters), and the stack is at 736 B.
+
+### v74: the whole text, no bit left behind, and the audit
+
+**No bit left behind.** From v71 to v73, when a frame closed correctly, reading stopped in the middle of the
+FIFO's 4-word block: up to 63 bits after it were thrown away. An igate or digipeater that sends several
+frames in one transmission, separated by one to three flags, lost the start of the next one. Now the good
+frame becomes text and goes to the history right there (`guarda`, called inside the 64-bit loop, before the
+next frame takes over `q`), and the bits go on. The screen, which took all 4 strips at once after each frame,
+now goes one 32-line strip per loop round, between modem reads (`pede`): the FIFO never waits for more than
+one strip.
+
+**The whole text.** The frame as text goes up to 120 characters (`TEXTO_MAX`; it was 48, what fit in two
+lines), and the history moved to 128 B records in sectors `0xD6000` and `0xD7000` (the data chip map gives
+both as free), with the "HST2" marker: still 63 records. The v70 to v73 history ("HST1", 64 B records) is
+erased on the first entry. The screen no longer keeps the texts on the stack: it reads each line from flash
+when drawing (`aprs_linhas`, 25 bytes at a time), which freed the stack for a 160 B `q`. In the list each
+frame has two lines, and the second ends in `>` when the text goes on; **OK** opens the top one whole, in up
+to 6 lines, the arrows keep moving with it open, and OK or a short EXIT go back to the list. Letters from
+U+00C0 to U+00FF (UTF-8 `0xC3 xx`) show without the accent, and °, º and ª as o, o and a.
+
+**The screen.** The top frame, the one whose position is at the top, sits on the gain chip's background,
+and the counters and keys on the top bar's background. The footer lists the keys: `#:GAIN OK:OPEN HOLD
+EXIT:CLR` (open, `OK:BACK`).
+
+**The audit.** An independent review of the APRS code (the code and the measured facts, without the
+author's conclusions; fuzzing of the text conversion and the decoder, simulation of tone errors and noise)
+found no critical bug and confirmed the FCS, the addresses, the formats, the AFSK timing, HDLC and memory
+safety. Into v74 went:
+
+- **The microphone went on air** during the 0.5 s of silent carrier before APRS (and while the SEND's OK
+  stayed pressed): `AUDIO_TX(4)` (reg 0x30 = 0xC3FA) came after the waits. It now comes right at the start
+  of `gancho_fim_tx`.
+- **Our TX preamble rested on 2200 Hz**, the polarity a BK4819's sync does not catch (v71's "type A"): the
+  AFSK started on mark, and the flag's first 0 bit switched it right away. It now starts on space, and the
+  flags rest on 1200 Hz. Direwolf and TNCs do not care; a UV-K5 or an older BJ-8300 now sync.
+- **The correction accepted ~1% of wrong frames** (with 2 or more errors the search hits the CRC by chance,
+  and only the header was checked). The single-bit search is gone: CRC-CCITT has the (x+1) factor, so the
+  syndrome of an even-weight error, which every wrong tone is, has even parity, and a single bit's has odd
+  parity; they never matched, and it only accepted false positives. The fix now also checks the info (0x1C
+  and up, CR and LF, like Direwolf's sanity check) and is undone when it fails. In the test, 40 frames with
+  two wrong tones: none accepted.
+- **BAD counts what it should:** only frames with an APRS header (`cabecalho_aprs`), aligned or not. Before,
+  the noise after a packet counted, and a real frame thrown out of alignment by an error vanished uncounted.
+  An AX.25 frame of another protocol (control other than UI or PID other than 0xF0) no longer reaches the
+  screen.
+- **In the text conversion:** "ack" is only an acknowledgement with a 1 to 5 character id and nothing after
+  it ("ackermann" is not); the symbol only shows by name in the primary table (`/`); the hemisphere letter is
+  checked; and a control character or one above 0x7E in the addressee, the third-party callsign or the
+  symbol becomes a dot.
+- The footer buffer went from 16 to 18 B ("SYNC 65535/65535" and the 0), and the PC test deletes its temp
+  folder (1.4 MB every run).
+
+**The next phase** (audit findings that change behaviour, to decide later):
+
+- **automatic ack** for a message addressed to me (the sender repeats until it gets one), and the same id
+  when resending the same message (today each SEND changes the id, and the other side sees it as new);
+- **ring history**, one sector at a time, without erasing all 63 when it fills up, and **without the
+  copies** of the same packet heard direct and through digipeaters (a digest of the text in the record's
+  spare bytes);
+- **reading the modem during key waits** (the full redraw after a key, the held-EXIT wait, the key
+  release) and **erasing flash outside the bit loop** (the full history's two sectors are erased in the
+  middle of a burst);
+- on send, **turning off scramble and the subtone** (scramble uses the same reg 0x71 as the AFSK) and
+  **refusing an invalid callsign** (with `-`, space or `/`, which key 0 gives);
+- checking who owns `0xD7000` before erasing it, and writing the record's "used" byte last (power loss in
+  the middle);
+- uppercasing the callsign and addressee when saving (the editor only has ABC and 123, but RX compares
+  letter by letter);
+- PC tests for the RX loop, the history and the screen, which today only run on the radio.
 
 ### The stack
 

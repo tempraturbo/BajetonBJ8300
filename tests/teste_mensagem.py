@@ -36,7 +36,8 @@ def confere(nome, obtido, esperado):
 
 
 # ---------- o programa em C ----------
-pasta = tempfile.mkdtemp()
+_temporaria = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)   # apagada no fim (v74)
+pasta = _temporaria.name
 exe = os.path.join(pasta, 'teste_mensagem.exe')
 r = subprocess.run([sys.executable, '-m', 'ziglang', 'cc', '-O1', '-Wall', '-Wextra', '-DTESTE_PC',
                     '-I', os.path.join(RAIZ, 'tests'), '-o', exe,
@@ -240,16 +241,16 @@ def decodifica(linha, maximo, nome):
 rnd = random.Random(8300)
 bons = [quadro_ref(o, c, i) for o, c, i in CASOS]
 errado = bytearray(bons[0])
-errado[20] ^= 0x10                         # um bit trocado: o FCS nao bate, e a correcao o acha
+errado[20] ^= 0x18                         # dois bits vizinhos (o que um tom trocado faz): a correcao o acha
 abortado = bons[1][:12]                    # cortado no meio (sem FCS valido)
 lixo = bytes(rnd.getrandbits(8) & 0xFE for _ in range(30))   # 30 bytes que nao sao APRS
 for polaridade in (0, 1):
     linha = linha_de([bons[0], bytes(errado), bons[1], abortado, bons[2], lixo, bons[3]], polaridade, 200, rnd)
     achados, (ruins, consertados) = decodifica(linha, 330, f'linha{polaridade}.txt')
-    confere(f'3. HDLC polaridade {polaridade}: os bons e o de um bit errado consertado, sem o lixo',
+    confere(f'3. HDLC polaridade {polaridade}: os bons e o de dois bits vizinhos consertado, sem o lixo',
             achados, [bons[i][:-2] for i in (0, 0, 1, 2, 3)])
-    confere(f'3. polaridade {polaridade}: um consertado, e o lixo contado como FCS errado',
-            (consertados, ruins >= 1), (1, True))
+    confere(f'3. polaridade {polaridade}: um consertado, e o lixo (sem cabecalho de APRS) fora do BAD',
+            (consertados, ruins), (1, 0))
     confere(f'3. a referencia daqui concorda nos bons (polaridade {polaridade})', hdlc_ref(linha),
             [bons[i][:-2] for i in (0, 1, 2, 3)])
 
@@ -258,6 +259,29 @@ linha = linha_de([bons[1]], 0, 0, rnd)
 linha[8 * 8 + 20 * 8 + 3] ^= 1             # no meio do quadro, depois das 8 flags
 achados, (ruins, consertados) = decodifica(linha, 330, 'tom.txt')
 confere('3. um tom trocado (dois bits vizinhos) e consertado', (achados, consertados), ([bons[1][:-2]], 1))
+
+# dois tons trocados longe um do outro: a correcao nao conserta, e o quadro conta como BAD (v74)
+linha = linha_de([bons[1]], 0, 0, rnd)
+linha[8 * 8 + 20 * 8 + 3] ^= 1
+linha[8 * 8 + (len(bons[1]) - 4) * 8 + 5] ^= 1   # perto do fim, longe do primeiro
+achados, (ruins, consertados) = decodifica(linha, 160, 'dois.txt')
+confere('3. dois tons trocados: recusado e contado como BAD', (achados, ruins, consertados), ([], 1, 0))
+
+# a correcao nao inventa quadro (v74): 40 quadros com dois tons trocados, nenhum aceito errado
+erros = 0
+for k in range(40):
+    linha = linha_de([bons[k % 4]], 0, 0, rnd)
+    for _ in range(2):
+        linha[8 * 8 + 18 * 8 + rnd.randrange(len(linha) - 8 * 8 - 18 * 8 - 3 * 8)] ^= 1
+    achados, _ = decodifica(linha, 160, 'varios.txt')
+    erros += sum(q != bons[k % 4][:-2] for q in achados)
+confere('3. dois tons trocados em 40 quadros: nenhum aceito com conteudo errado', erros, 0)
+
+# um quadro AX.25 certo que nao e APRS (controle 0x00): nao vai para a tela (v74)
+outro = endereco('APZBJ8', comando=True) + endereco('PU2XYZ-9', ultimo=True) + b'\x00\xf0teste de outro'
+outro += bytes([crc_x25(outro) & 0xFF, crc_x25(outro) >> 8])
+achados, (ruins, _) = decodifica(linha_de([outro, bons[0]], 0, 50, rnd), 160, 'outro.txt')
+confere('3. o quadro AX.25 que nao e APRS fica de fora', (achados, ruins), ([bons[0][:-2]], 0))
 
 # quadro maior que o buffer: o FCS confere byte a byte, e so o comeco fica guardado
 longo = quadro_ref('PY2ARS-14', 2, '>' + 'comentario comprido de digipeater ' * 6)
@@ -308,13 +332,33 @@ def texto(origem, caminho, info, meu):
 
 for origem, info, meu, esperado in (
         ('PY2ARS-14', '!2318.07S/04635.59W#REDE APRS-SP-C', 'PY2ABC-7',
-         (0, 'PY2ARS-14: 23 18.07S 046 35.59W DIGI REDE APRS-S')),
+         (0, 'PY2ARS-14: 23 18.07S 046 35.59W DIGI REDE APRS-SP-C')),
         ('PU2XYZ-9', ':PY2ABC-7 :Ola tudo bem?{12', 'PY2ABC-7', (1, 'PU2XYZ-9> Ola tudo bem?')),
         ('PU2XYZ-9', ':PY5ZZZ   :Bom dia{3', 'PY2ABC-7', (0, 'PU2XYZ-9>PY5ZZZ: Bom dia{3')),
         ('PU2XYZ-9', ':PY2ABC-7 :ack12', 'PY2ABC-7', (1, 'PU2XYZ-9> ACK 12')),
         ('PY2ABC', '>BJ-8300 V2.9T', 'PY2ABC', (0, 'PY2ABC: >BJ-8300 V2.9T')),
         ('PY2MOV-9', '@092345z2318.07S/04635.59W>Movel', '', (0, 'PY2MOV-9: 23 18.07S 046 35.59W CAR Movel')),
-        ('PY2ZZZ', '!23xx.07S/04635.59W#nao e posicao', '', (0, 'PY2ZZZ: !23xx.07S/04635.59W#nao e posicao'))):
+        ('PY2ZZZ', '!23xx.07S/04635.59W#nao e posicao', '', (0, 'PY2ZZZ: !23xx.07S/04635.59W#nao e posicao')),
+        # de terceiros (v71): o que um igate traz da internet, mostrado pela estacao de dentro
+        ('PY2IGT-10', '}PU2XYZ-9>APRS,TCPIP,PY2IGT-10*:!2300.00S/04600.00W>Movel', '',
+         (0, 'PU2XYZ-9: 23 00.00S 046 00.00W CAR Movel')),
+        ('PY2IGT-10', '}PU2XYZ-9>APRS,TCPIP,PY2IGT-10*::PY2ABC-7 :Oi pela internet{5', 'PY2ABC-7',
+         (1, 'PU2XYZ-9> Oi pela internet')),
+        ('PY2IGT-10', '}sem seta nenhuma aqui', '', (0, 'PY2IGT-10: }sem seta nenhuma aqui')),
+        ('PY2IGT-10', '}PU2XYZ-9>APRS sem dois pontos', '', (0, 'PU2XYZ-9: ')),
+        # v74: ate 120 caracteres, e as letras acentuadas (UTF-8) sem o acento
+        ('PU2XYZ-9', ':PY2ABC-7 :' + 'Mensagem comprida de teste, ' * 4 + '{9', 'PY2ABC-7',
+         (1, ('PU2XYZ-9> ' + 'Mensagem comprida de teste, ' * 4)[:120])),
+        ('PU2XYZ-9', '>Estação móvel em São José, ÁÉÍÓÚ çãõ'.encode().decode('latin-1'), '',   # em UTF-8
+         (0, 'PU2XYZ-9: >Estacao movel em Sao Jose, AEIOU cao')),
+        # v74: so "ack" e o id e confirmacao; a tabela alternativa nao usa os nomes; hemisferio conferido;
+        # graus e ordinal; byte de controle no destinatario
+        ('PU2XYZ-9', ':PY5ZZZ   :ackermann chegou', '', (0, 'PU2XYZ-9>PY5ZZZ: ackermann chegou')),
+        ('PU2XYZ-9', ':PY5ZZZ   :ack12345', '', (0, 'PU2XYZ-9>PY5ZZZ: ACK 12345')),
+        ('PU2XYZ-9', '!2300.00S\\04600.00Wbpoeira', '', (0, 'PU2XYZ-9: 23 00.00S 046 00.00W b poeira')),
+        ('PU2XYZ-9', '!2300.00X/04600.00Q>sem hemisferio', '', (0, 'PU2XYZ-9: !2300.00X/04600.00Q>sem hemisferio')),
+        ('PU2XYZ-9', '>25°C, 1º lugar, 2ª'.encode().decode('latin-1'), '', (0, 'PU2XYZ-9: >25oC, 1o lugar, 2a')),
+        ('PU2XYZ-9', ':PY5\x01ZZ   :oi', '', (0, 'PU2XYZ-9>PY5.ZZ: oi'))):
     confere(f'5. texto de {info[:22]!r}', texto(origem, 1, info, meu), esperado)
 
 print()

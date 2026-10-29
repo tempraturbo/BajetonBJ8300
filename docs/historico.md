@@ -5,7 +5,48 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
-## v70 — 29/10 — a recepção do APRS de qualquer tamanho, com correção, contadores e histórico, e o EXIT segurado (a testar)
+## v74 — 29/10 — o APRS RX sem perder o quadro seguinte, o texto inteiro no OK, e a auditoria (a testar)
+
+`firmware/releases/BJ8300_BANK_v74.anc` (sha256 `84b1d6e2…`). No rádio, a v73 mostrou mais syncs que quadros, e
+um texto cortado. A causa do nosso lado: desde a v71, o quadro bom parava a leitura no meio do bloco da
+FIFO, e o começo do quadro seguinte da mesma transmissão ia fora. A v74 lê todos os bits, guarda o quadro na
+hora e desenha a tela uma faixa por vez; guarda o texto inteiro (até 120 caracteres, num histórico de dois
+setores) e o abre no OK; tira o acento das letras; e destaca o quadro selecionado e o rodapé. Uma auditoria
+independente do APRS achou o microfone no ar antes do pacote, o preâmbulo do TX na polaridade que o BK4819
+não pega, ~1% de quadros errados aceitos pela correção e contadores que mediam outra coisa: os quatro
+saíram na v74, junto com ajustes da conversão em texto. O resto da auditoria ficou anotado para a próxima
+fase. [Seção 24](engenharia-reversa.md#24-morse-e-aprs-v65).
+
+## v73 — 29/10 — o ganho do modem na CALIBRATION, e o APRS RX troca de ganho no # (a testar)
+
+`firmware/releases/BJ8300_BANK_v73.anc` (sha256 `9a49fb6c…`). A pedido do dono, o ganho de entrada do modem
+virou o item **MODEM GAIN** da pasta CALIBRATION (OFF, LOW, MEDIUM e HIGH; HIGH, o de fábrica, enquanto o
+item nunca for mudado). O APRS RX entra com ele, o `#` troca o ganho só ali para comparar (no lugar dos modos
+M1 a M4), e a saída deixa o modem desligado como o roger de fábrica, agora devolvendo também os limites da
+FIFO (`0x5E`). [Seção 24](engenharia-reversa.md#24-morse-e-aprs-v65).
+
+## v72 — 29/10 — o EXIT segurado no editor sai de verdade, e a tela do RX responde na hora (não gravada: a v73 a inclui)
+
+`firmware/releases/BJ8300_BANK_v72.anc` (sha256 `2dcc2550…`). No rádio, a v71 decodificou uns metade dos
+pacotes no modo 1 (o resto quase todo em BAD; os modos sem o de-ênfase iguais aos com ele, e o 1200/2400
+pior), e o EXIT segurado no editor não saía. A causa: a fábrica só manda o toque curto de uma tecla quando
+ela é solta, e o gancho da v70 na rotina do EXIT nunca a via apertada. A v72 vigia o EXIT na leitura das
+teclas do laço: aos 0,6 s no editor, sai sem salvar com a tecla ainda apertada. Na tela do APRS RX, o EXIT
+segurado apaga o histórico e a tela já mostra na hora, antes de soltar.
+[Seção 24](engenharia-reversa.md#24-morse-e-aprs-v65).
+
+## v71 — 29/10 — o APRS RX nas duas polaridades do preâmbulo, o MDF no alto, o EXIT segurado apaga o histórico (testada: a v72 conta o resultado)
+
+`firmware/releases/BJ8300_BANK_v71.anc` (sha256 `0496be72…`). No rádio, a v70 só decodificava as mesmas
+estações, e em ~95% dos pacotes nem o SYNC subia; os modos 2 a 4 não ajudaram. WAVs tocados num Baofeng
+mostraram a causa: o chip só sincroniza no preâmbulo parado em 1200 Hz, e a outra metade dos transmissores
+para em 2200 Hz. A v71 procura as duas polaridades (troca o padrão do sync a cada 50 ms), segue capturando
+depois do sync (os quadros seguintes vêm pelos mesmos bits, de qualquer polaridade), separa os syncs das
+duas no contador, troca os modos por variações do 1 (1200/2400 e sem o de-ênfase), mostra o pacote de igate
+pela estação de dentro, põe no alto o canal como o MDF pede e, a pedido do dono, o EXIT segurado apaga o
+histórico. [Seção 24](engenharia-reversa.md#24-morse-e-aprs-v65).
+
+## v70 — 29/10 — a recepção do APRS de qualquer tamanho, com correção, contadores e histórico, e o EXIT segurado (testada: a v71 conta o resultado)
 
 `firmware/releases/BJ8300_BANK_v70.anc` (sha256 `0cb2b580…`). No rádio, a v69 decodificou do ar um beacon
 real (PY2ARS-14, "REDE APRS-SP-C"), mas só esse do tráfego do canal. A causa do nosso lado: o decodificador

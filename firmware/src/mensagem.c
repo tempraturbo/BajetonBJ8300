@@ -220,14 +220,17 @@ static void afsk_byte(struct afsk *a, unsigned v, unsigned stuffing)
 }
 
 /* Manda o quadro com o gerador ja ligado: flags de abertura (o TXDELAY), o quadro com stuffing e
- * flags de fecho. O tom comeca na marca. */
+ * flags de fecho. O tom comeca no espaco (v74; ate a v73, na marca): o primeiro bit 0 da flag ja o troca,
+ * e as flags ficam paradas na marca, 1200 Hz, a polaridade que o sync de um BK4819 pega (um UV-K5 ou um
+ * BJ-8300 de antes da v71 nao sincronizavam no preambulo parado em 2200 Hz). */
 void afsk_manda(const u8 *q, unsigned n, unsigned flags)
 {
     struct afsk a;
     unsigned i;
 
-    a.tom = a.uns = a.terco = 0;
-    TOM(MARCA, 0);
+    a.uns = a.terco = 0;
+    a.tom = 1;
+    TOM(ESPACO, 0);
     a.alvo = agora_us();
     for (i = 0; i < flags; i++)
         afsk_byte(&a, 0x7E, 0);
@@ -245,7 +248,8 @@ void afsk_manda(const u8 *q, unsigned n, unsigned flags)
  * (v70): o quadro pode ter qualquer tamanho do AX.25, e so os primeiros `max` bytes ficam em h->q, que
  * e o que a tela usa (a v65 a v69 descartavam todo quadro maior que o buffer, de 128 B: os beacons de
  * digipeater com comentario e os quadros ja repetidos passam disso). Quadro com o FCS errado e guardado
- * inteiro passa pela correcao (conserta) antes de ser recusado. */
+ * inteiro passa pela correcao (conserta) antes de ser recusado. So o quadro APRS e devolvido, e so ele
+ * conta como FCS errado (v74, cabecalho_aprs). */
 struct hdlc {
     u8 *q;
     u16 max, n;                            /* n conta o quadro inteiro, mesmo o que nao coube */
@@ -267,10 +271,11 @@ void hdlc_comeca(struct hdlc *h, u8 *q, unsigned max)
     h->crc = 0xFFFF;
 }
 
-/* O quadro tem forma de APRS? Enderecos de 6 letras ou numeros (com espaco), de 2 a 10, o ultimo com o
- * bit 0, controle UI (0x03) e PID 0xF0. A correcao so aceita um conserto que passe aqui: com ~2000
- * tentativas por quadro, uma em 30 acertaria o CRC por acaso. */
-static unsigned parece_aprs(const u8 *q, unsigned n)
+/* O cabecalho tem forma de APRS? Enderecos de 6 letras ou numeros (com espaco), de 2 a 10, o ultimo com
+ * o bit 0, controle UI (0x03) e PID 0xF0. Devolve onde a info comeca, ou 0. O ruido quase nunca passa
+ * aqui (v74): e o que separa o quadro APRS que chegou com bits errados (o BAD) do lixo depois do pacote,
+ * e o quadro AX.25 que nao e APRS (de outro protocolo) nao vai para a tela. */
+static unsigned cabecalho_aprs(const u8 *q, unsigned n)
 {
     unsigned i = 0, k, c;
 
@@ -287,13 +292,35 @@ static unsigned parece_aprs(const u8 *q, unsigned n)
         }
         i += 7;
     } while (!(q[i - 1] & 1));
-    return i >= 14 && q[i] == 0x03 && q[i + 1] == 0xF0;
+    return i >= 14 && q[i] == 0x03 && q[i + 1] == 0xF0 ? i + 2 : 0;
 }
 
-/* Um bit errado, ou dois vizinhos (o NRZI faz de um tom trocado dois bits errados seguidos), como o
- * FIX_BITS do Direwolf, pela linearidade do CRC: o registro que sobrou difere do certo pelo efeito do
- * erro, e o de um bit na posicao p e o passo do CRC aplicado (total - p) vezes a um 1 - de tras para
- * frente, um passo por posicao, sem refazer o CRC do quadro. Devolve 1 com o quadro consertado. */
+/* O quadro inteiro tem forma de APRS: o cabecalho e a info so com o que o APRS manda, de 0x1C em diante,
+ * CR e LF (como o sanity check do Direwolf; v74). A correcao so aceita um conserto que passe aqui. */
+static unsigned parece_aprs(const u8 *q, unsigned n)
+{
+    unsigned i = cabecalho_aprs(q, n);
+
+    if (!i)
+        return 0;
+    for (; i < n; i++)
+        if (q[i] < 0x1C && q[i] != '\r' && q[i] != '\n')
+            return 0;
+    return 1;
+}
+
+static void troca_par(u8 *q, unsigned p)
+{
+    q[p >> 3] ^= 1 << (p & 7);
+    q[(p + 1) >> 3] ^= 1 << ((p + 1) & 7);
+}
+
+/* Dois bits vizinhos errados (o NRZI faz de um tom trocado dois bits errados seguidos), como o FIX_BITS do
+ * Direwolf, pela linearidade do CRC: o registro que sobrou difere do certo pelo efeito do erro, e o de um
+ * bit na posicao p e o passo do CRC aplicado (total - p) vezes a um 1 - de tras para frente, um passo por
+ * posicao, sem refazer o CRC do quadro. Troca o par e devolve 1 + a posicao do primeiro, ou 0. A busca de
+ * um bit so (ate a v73) saiu: o CRC-CCITT tem o fator (x+1), entao a sindrome de um erro de peso par (todo
+ * tom trocado) tem paridade par e a de um bit so, impar - nunca casam, e ela so aceitava falso positivo. */
 static unsigned conserta(u8 *q, unsigned n, u16 crc)
 {
     u16 s = crc ^ CRC_CERTO, v = 1, ant = 0;
@@ -301,14 +328,9 @@ static unsigned conserta(u8 *q, unsigned n, u16 crc)
 
     while (p--) {
         v = v & 1 ? v >> 1 ^ 0x8408 : v >> 1;
-        if (v == s) {
-            q[p >> 3] ^= 1 << (p & 7);
-            return 1;
-        }
         if (ant && (v ^ ant) == s) {
-            q[p >> 3] ^= 1 << (p & 7);
-            q[(p + 1) >> 3] ^= 1 << ((p + 1) & 7);
-            return 1;
+            troca_par(q, p);
+            return p + 1;
         }
         ant = v;
     }
@@ -317,7 +339,7 @@ static unsigned conserta(u8 *q, unsigned n, u16 crc)
 
 unsigned hdlc_bit(struct hdlc *h, unsigned linha)
 {
-    unsigned b = linha == h->linha, n, crc;
+    unsigned b = linha == h->linha, n, m, crc;
 
     h->linha = linha;
     if (b) {
@@ -336,18 +358,25 @@ unsigned hdlc_bit(struct hdlc *h, unsigned linha)
             h->n = h->nbits = h->byte = 0;
             h->crc = 0xFFFF;
             h->dentro = 1;
-            /* a flag deixou os seus 7 primeiros bits no byte em curso: o quadro so vale se tinha
-             * fechado alinhado antes dela */
-            if (!alinhado || n < 17)
+            if (n < 17)
                 return 0;
-            if (crc != CRC_CERTO) {
-                if (n > h->max || !conserta(h->q, n, crc) || !parece_aprs(h->q, n - 2)) {
-                    h->ruins++;
-                    return 0;
+            m = n - 2 < h->max ? n - 2 : h->max;
+            /* a flag deixou os seus 7 primeiros bits no byte em curso: o quadro so fechou inteiro se
+             * estava alinhado antes dela */
+            if (alinhado && crc == CRC_CERTO)
+                return cabecalho_aprs(h->q, m) ? m : 0;
+            if (alinhado && n <= h->max && (crc = conserta(h->q, n, crc))) {
+                if (parece_aprs(h->q, m)) {
+                    h->consertados++;
+                    return m;
                 }
-                h->consertados++;
+                troca_par(h->q, crc - 1);  /* o conserto nao era: desfeito */
             }
-            return n - 2 < h->max ? n - 2 : h->max;
+            /* o BAD (v74): um quadro com cabecalho de APRS que chegou com bits errados, alinhado ou nao
+             * (antes so o alinhado contava). O ruido depois do pacote quase nunca tem esse cabecalho. */
+            if (cabecalho_aprs(h->q, m))
+                h->ruins++;
+            return 0;
         }
         if (uns == 5)                      /* 0 de enchimento: some */
             return 0;
@@ -408,6 +437,9 @@ static char *aprs_coordenada(char *s, const u8 *p, unsigned graus)
     for (k = 0; k < graus + 5; k++)
         if (k == graus + 2 ? p[k] != '.' : (p[k] < '0' || p[k] > '9') && p[k] != ' ')
             return 0;
+    k = p[graus + 5];                      /* o hemisferio (v74) */
+    if (graus == 2 ? k != 'N' && k != 'S' : k != 'E' && k != 'W')
+        return 0;
     for (k = 0; k < graus + 6; k++) {
         if (k == graus)
             *s++ = ' ';
@@ -416,11 +448,32 @@ static char *aprs_coordenada(char *s, const u8 *p, unsigned graus)
     return s;
 }
 
-/* O quadro em texto legivel, ate 48 caracteres (as duas linhas da tela), terminado em 0:
+#define TEXTO_MAX  120                  /* o quadro em texto, na tela e no historico (v74) */
+
+/* O caractere como a tela o mostra: o que nao e ASCII visivel vira ponto (um 0 cortaria o texto, e um
+ * byte de 0x80 em diante e icone na fonte do radio). */
+static unsigned visivel(unsigned c)
+{
+    return c >= ' ' && c < 127 ? c : '.';
+}
+
+static unsigned alfanumerico(unsigned c)
+{
+    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
+/* As letras de U+00C0 a U+00FF (os bytes 0xC3 0x80..0xBF do UTF-8) sem o acento: a fonte do radio nao as
+ * tem, e cada byte virava um ponto (v74). */
+static const char SEM_ACENTO[65] = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYPsaaaaaaaceeeeiiiidnooooo/ouuuuypy";
+
+/* O quadro em texto legivel, ate TEXTO_MAX caracteres (48 ate a v73: o que cabia em duas linhas; a tela
+ * abre o resto no OK), terminado em 0:
  *  - mensagem para o meu indicativo: "ORIGEM> texto" (sem o "{id", que e so da confirmacao), e devolve 1;
  *  - mensagem para outro: "ORIGEM>DESTINO: texto"; a confirmacao: "ORIGEM>DESTINO: ACK id";
  *  - posicao sem compressao (! = / @): "ORIGEM: 23 18.07S 046 35.59W DIGI comentario";
- *  - o resto: "ORIGEM: info", como veio. */
+ *  - o resto: "ORIGEM: info", como veio.
+ * Num quadro de terceiros (v71: "}" no comeco da info, o que um igate traz da internet), ORIGEM e a
+ * estacao de dentro, e a info e a dela. */
 unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned n_meu)
 {
     char *p = s, *f;
@@ -429,8 +482,20 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
 
     while (i + 7 <= n && !(q[i + 6] & 1))  /* o fim dos enderecos: o bit 0 do ultimo */
         i += 7;
-    p = aprs_indicativo(p, q + 7);
     i += 7 + 2;                            /* controle e PID */
+    for (k = i + 1; i < n && q[i] == '}' && k < n && k < i + 11 && q[k] != '>'; k++)
+        ;
+    if (i < n && q[i] == '}' && k < n && q[k] == '>') {
+        /* de terceiros (v71), o que um igate traz da internet, "}ORIGEM>DESTINO,CAMINHO:info": a
+         * estacao e a de dentro, e o resto segue pela info dela */
+        while (++i < k)
+            *p++ = visivel(q[i]);
+        while (k < n && q[k] != ':')
+            k++;
+        i = k + 1;
+    } else {
+        p = aprs_indicativo(p, q + 7);
+    }
     if (i + 11 <= n && q[i] == ':' && q[i + 10] == ':') {
         for (k = 0; k < 9 && (k < n_meu ? q[i + 1 + k] == (u8)meu[k] : q[i + 1 + k] == ' '); k++)
             ;
@@ -438,14 +503,16 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
         *p++ = '>';
         if (!para_mim) {
             for (k = 1; k < 10 && q[i + k] != ' '; k++)
-                *p++ = q[i + k];
+                *p++ = visivel(q[i + k]);
             *p++ = ':';
         }
         *p++ = ' ';
         i += 11;
-        if (i + 3 <= n && q[i] == 'a' && q[i + 1] == 'c' && q[i + 2] == 'k') {
-            p = copia(p, "ACK ");
-            i += 3;
+        for (k = i + 3; k < n && k < i + 8 && alfanumerico(q[k]); k++)
+            ;
+        if (k == n && k > i + 3 && q[i] == 'a' && q[i + 1] == 'c' && q[i + 2] == 'k') {
+            p = copia(p, "ACK ");          /* "ack" e o id, de 1 a 5, e nada depois (v74: "ackermann" */
+            i += 3;                        /* nao e confirmacao) */
         }
     } else {
         *p++ = ':';
@@ -457,7 +524,7 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
             && (f = aprs_coordenada(p, x, 2))) {
             *f++ = ' ';
             if ((f = aprs_coordenada(f, x + 9, 3))) {
-                const char *t = SIMBOLOS;
+                const char *t = x[8] == '/' ? SIMBOLOS : "";   /* a lista e da tabela primaria (v74) */
                 p = f;
                 while (*t && *t != x[18])  /* o simbolo pelo nome, se e da lista */
                     while (*t++)
@@ -466,16 +533,23 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
                 if (*t)
                     p = copia(p, t + 1);
                 else
-                    *p++ = x[18];
+                    *p++ = visivel(x[18]);
                 *p++ = ' ';
                 i = x + 19 - q;
             }
         }
     }
-    for (; i < n && p < s + 48 && !(para_mim && q[i] == '{'); i++)
-        *p++ = q[i] >= ' ' && q[i] < 127 ? q[i] : '.';
-    if (p > s + 48)
-        p = s + 48;
+    for (; i < n && p < s + TEXTO_MAX && !(para_mim && q[i] == '{'); i++) {
+        k = q[i];
+        if ((k == 0xC2 || k == 0xC3) && i + 1 < n && q[i + 1] >= 0x80 && q[i + 1] < 0xC0) {
+            i++;
+            if (k == 0xC3)
+                k = SEM_ACENTO[q[i] - 0x80];
+            else                           /* U+00B0 e U+00BA (graus, ordinal) e U+00AA (v74) */
+                k = q[i] == 0xB0 || q[i] == 0xBA ? 'o' : q[i] == 0xAA ? 'a' : '.';
+        }
+        *p++ = visivel(k);
+    }
     *p = 0;
     return para_mim;
 }
@@ -668,27 +742,53 @@ static void espera_soltar(void)
     }
 }
 
-/* No lugar da primeira chamada da rotina que apaga a letra do editor (0x01E4D486: o EXIT editando
- * texto, so alcancada de 0x01E4C7B4), a recarga do MENU EXIT TIME (0x01E484F8), v70: com o EXIT
- * segurado por ~0,6 s, sai sem salvar. O cursor vai a 0, e o resto da rotina de fabrica, que com o cursor
- * no comeco sai da edicao (0x01E4D4F4: desliga a edicao e sai do editor como o CH-NAME), faz o resto;
- * solto antes, apaga a ultima letra, como sempre. Vale para todos os editores de texto. */
-FIRMWARE(TEMPO_MENU, 0x01E484F8);  void TEMPO_MENU(void);
 #define TECLA_EXIT   5                     /* o codigo cru da varredura (a tabela 0x01E60369) */
 
-void gancho_exit_editor(void)
+/* O EXIT continua apertado por ~0,6 s? (a tela do APRS RX, v71). Separada: dentro do laco do RX, os
+ * registros dela pesariam na pilha dele. */
+__attribute__((noinline)) static unsigned segurou_exit(void)
 {
     unsigned i;
 
-    TEMPO_MENU();
     for (i = 0; i < 300 && tecla() == TECLA_EXIT; i++) {
         WDT();
         ESPERA_2MS(1);
     }
-    if (i == 300) {
+    return i == 300;
+}
+
+/* O EXIT segurado no editor de texto sai sem salvar (v72). No uso normal a fabrica manda o toque curto
+ * de uma tecla so quando ela e solta (o laco do sinal, 0x01E46372: apertar nao manda nada; segurar 1 s
+ * manda o codigo longo, 35 no EXIT, e marca b[0x146F4] para o solto nao mandar nada), e por isso o
+ * gancho da v70, na rotina do EXIT do editor, nunca via o EXIT apertado. Este fica no lugar da leitura
+ * das teclas do laco do sinal (0x01E46280, a cada 10 ms), que conta as voltas da mesma tecla em
+ * b[0x14680] e so aceita a tecla igual em tres leituras seguidas. Com o EXIT na 60a volta (0,6 s) no
+ * editor de texto (MENU_TIPO 7 editando, como a tela B o reconhece), o cursor vai a 0 e a leitura passa a
+ * devolver "nenhuma": a fabrica ve o EXIT solto, manda o toque curto, e a rotina do EXIT do editor, com o
+ * cursor no comeco, sai sem salvar (0x01E4D486 -> 0x01E4D4F4). Enquanto o EXIT continuar apertado a
+ * leitura segue devolvendo "nenhuma" (a marca no 0x903C dos ajustes, b[0x14BE8], livre: nenhum acesso de
+ * fabrica pela base 0x14680 nem pelo endereco), para o solto de verdade nao virar outro EXIT, que subiria
+ * o menu. Um valor que sobre na marca (os ajustes gravados com ela ligada) se apaga na primeira leitura
+ * sem o EXIT. */
+#define CONTA_TECLA   RAM(u8, 0x00014680)   /* voltas com a mesma tecla, no laco do sinal */
+#define MENU_EDITANDO RAM(u8, 0x00014BF9)
+#define MENU_TIPO     RAM(u8, 0x00014C00)
+#define EXIT_PRESO    RAM(u8, 0x00014BE8)   /* 0x903C */
+
+unsigned gancho_teclas(void)
+{
+    unsigned k = TECLAS();
+
+    if (k != TECLA_EXIT)
+        EXIT_PRESO = 0;
+    else if (EXIT_PRESO)
+        k = 255;
+    else if (MENU_TIPO == 7 && MENU_EDITANDO == 1 && CONTA_TECLA >= 60) {
         EDITOR_CURSOR = 0;
-        espera_soltar();
+        EXIT_PRESO = 1;
+        k = 255;
     }
+    return k;
 }
 
 /* Parar no meio: o PTT ou qualquer tecla. */
@@ -812,11 +912,12 @@ void gancho_fim_tx(void)
         return;
     }
     ESTADO_MSG = 0;
+    AUDIO_TX(4);                           /* o microfone cortado ja, antes das esperas (v74): a portadora
+                                            * muda levava o som do ambiente ao ar */
     espera_soltar();
     if (e == NO_AR(ARMADO_APRS))           /* v69: 0,5 s de portadora muda antes do pacote, para o */
         ESPERA_2MS(250);                   /* receptor (economia de bateria, squelch lento) abrir */
     GERADOR(1);
-    AUDIO_TX(4);
     AF(1);
     WDT();
     REG_W(0x70, 0xE000);
@@ -1085,66 +1186,129 @@ void aprs_caminho_grava(void)
 }
 
 /* ---------- APRS RX ----------
- * O modem FSK do chip em captura crua: FFSK a 1200 bps (reg 0x72 = 0x3065), sync de 4 bytes = quatro
- * flags 0x7E em NRZI (FE FE FE FE), sem o CRC do chip, quadro de 2048 bytes. Os bits de linha vao para o
- * hdlc_bit (NRZI, destuffing, FCS e a correcao aqui). O Bell 202 tem o espaco em 2200 Hz, e o modem e
- * de 1200/1800 ou 1200/2400: no radio, o modo 1 (0x3FC3, o do roger TONE1200 de fabrica) decodificou um
- * beacon real (v65). A tecla # troca entre quatro modos do reg 0x58 para comparar (v70): 1 o 0x3FC3; 2 a
- * banda de RX larga (bits 3:1 = 100); 3 o FFSK 1200/2400 (RX 100, banda 100); 4 o ganho de RX 0 (bits
- * 9:8). A FIFO de RX tem 8 palavras (107 ms), e o laco a le de 4 em 4 a cada aviso de quase cheia,
- * olhando o pedido de interrupcao (reg 0x0C bit 0) a cada 2 ms.
+ * O modem FSK do chip em captura crua: FFSK a 1200 bps (reg 0x72 = 0x3065), sync de 2 bytes = duas flags
+ * 0x7E em NRZI, sem o CRC do chip, quadro de 2048 bytes. Os bits de linha vao para o hdlc_bit (NRZI,
+ * destuffing, FCS e a correcao aqui). A FIFO de RX tem 8 palavras (107 ms), e o laco a le de 4 em 4 a
+ * cada aviso de quase cheia, olhando o pedido de interrupcao (reg 0x0C bit 0) a cada 2 ms.
+ *
+ * A polaridade (v71). Numa flag em NRZI um tom fica 7 bits parado e o outro aparece 1 bit, e qual e qual
+ * depende do transmissor. O chip so sincroniza no padrao do 0x5A: com FE FE (parado na marca, 1200 Hz), um
+ * WAV com as duas polaridades alternadas so fez sync nas paradas em 1200 Hz, e 95% do trafego real nem
+ * mexia no contador (v70). Esperando, o laco troca a cada 50 ms entre FE FE e 01 01 (parado no espaco).
+ * Sete bits de linha iguais so existem nas flags (o stuffing os corta dentro do quadro), entao nenhum dos
+ * dois padroes aparece no meio de um quadro. Depois do sync o chip passa os bits crus do quadro dele
+ * inteiro, de 2048 bytes (13,6 s), e o hdlc_bit acha sozinho as flags dos quadros seguintes, de qualquer
+ * polaridade: o laco so rearma no fim desse quadro do chip, ou se a FIFO parar por 300 ms.
+ *
+ * Nenhum bit fica para tras (v74). Da v71 a v73, o quadro bom parava a leitura no meio do bloco de 4
+ * palavras: ate 63 bits depois dele iam fora, e um igate ou um digipeater que manda varios quadros na mesma
+ * transmissao, separados por uma a tres flags, perdia o comeco do seguinte. Agora o quadro bom vira texto e
+ * vai para o historico ali mesmo (guarda), antes de o seguinte ocupar o q, e os bits seguem. A tela, que
+ * levava 4 faixas de uma vez depois de cada quadro, vai uma faixa de 32 linhas por volta do laco, entre as
+ * leituras do modem (pede): a FIFO nunca espera mais que uma faixa.
+ *
+ * O modem e o 0x3CC3 (FFSK 1200/1800, o do roger TONE1200 de fabrica, o melhor na v71) com o ganho de
+ * entrada da CALIBRATION > MODEM GAIN nos bits 9:8 (v73, ganho_modem, abaixo); a tecla # troca o ganho so
+ * aqui, para comparar, e a proxima entrada volta ao da CALIBRATION. Na v70 a banda larga so dava sync sem
+ * quadro e o ganho 0 nao ouvia nada; na v71 o 1200/2400 (0x33C3) decodificou menos que o 1200/1800, e tirar
+ * o de-enfase do RX (bit 8 do 0x2B) nao mudou nada.
+ *
+ * A saida devolve o modem como a fabrica o deixa. O unico uso de fabrica dele e o roger TONE1200
+ * (0x01E44676..0x01E44790), que programa 0x58 (0x3FC3, o ganho 3), 0x59, 0x5A..0x5D, 0x3F, 0x70 e 0x72 a
+ * cada vez e no fim deixa o 0x58 em 0, o modem desligado: a saida grava 0 no 0x58 (o ganho de um modo de
+ * teste nao fica no radio) e 0 no 0x59, e devolve o 0x3F, o 0x70, o 0x72 e o 0x5E (os limites da FIFO, que
+ * a fabrica nunca grava, v73) como estavam na entrada.
  *
  * O laco e do set do item, com o menu aberto: o laco do sinal nao roda, entao o receptor e acordado da
  * economia de bateria e a dupla escuta desarmada antes (fica no lado em evidencia), e o watchdog e
- * limpo aqui. Os quadros vao para o historico na flash (o setor 0xD6000, "HST1": ate 63 registros de 64
- * B, gravados sem apagar ate o setor encher; cheio, ele e apagado e recomeca), e a tela mostra dois por
- * vez, o mais novo em cima; as setas andam pelo historico, o # troca o modo, e as outras teclas saem. Na
- * barra de baixo, quantos syncs o modem achou, quantos quadros chegaram com o FCS errado (BAD) e quantos
- * a correcao salvou (FIX), desde a entrada ou a ultima troca de modo. */
+ * limpo aqui. Os quadros vao para o historico na flash, e a tela os le de la (v74): os setores 0xD6000 e
+ * 0xD7000 ("HST2", ate 63 registros de 128 B, o texto inteiro e a cor), gravados sem apagar ate encher;
+ * cheio, os dois sao apagados e recomeca. A tela mostra dois por vez, o mais novo em cima, o de cima
+ * (o da posicao no alto) num fundo proprio; as setas andam pelo historico, o OK abre o de cima inteiro (e
+ * fecha), o # troca o ganho, o EXIT segurado apaga o historico (v71), o EXIT curto fecha o aberto ou sai, e
+ * as outras teclas saem. Na barra de baixo, quantos syncs o modem achou em cada polaridade, quantos quadros
+ * chegaram com o FCS errado (BAD) e quantos a correcao salvou (FIX), desde a entrada ou a ultima troca de
+ * ganho. */
 FIRMWARE(LE_FLASH, 0x01E390AC);     void LE_FLASH(u32, void *, u32);
 FIRMWARE(APAGA_SETOR, 0x01E3A126);  void APAGA_SETOR(u32);
 FIRMWARE(GRAVA_FLASH, 0x01E3A25A);  void GRAVA_FLASH(u32, const void *, u32);
 
-/* A tela (telas.c): os dois textos (0 = vazio), as linhas ambar (bit 0 o de cima, bit 1 o de baixo) e os
- * numeros (o modo, a posicao no historico, quantos ha, syncs, BAD, FIX), de y0 ate o fim. */
-void tela_aprs(char *t0, char *t1, unsigned ambar, const u16 *num, unsigned y0);
+/* A tela (telas.c): os registros do historico na flash, o de cima e o de baixo (0 = vazio); aberto, so o de
+ * cima, inteiro; os numeros (o ganho, a posicao no historico, quantos ha, syncs na marca e no espaco, BAD,
+ * FIX); e as faixas de 32 linhas a desenhar (bit 0 a de cima). */
+void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas);
 
-#define SETOR_HIST   0x000D6000u
-#define MARCA_HIST   0x31545348u           /* "HST1" */
-#define REG_HIST     64u
+#define SETOR_HIST   0x000D6000u           /* e o 0xD7000 (v74): o mapa do chip de dados os da livres */
+#define MARCA_HIST   0x32545348u           /* "HST2" (v74) */
+#define MARCA_V70    0x31545348u           /* "HST1", o das v70 a v73, com registros de 64 B */
+#define REG_HIST     128u
 #define HIST_MAX     63
 #define USADO        0x5A
-#define TECLA_CIMA   3                     /* os codigos crus da varredura (a tabela 0x01E60369) */
+#define TECLA_OK     2                     /* os codigos crus da varredura (a tabela 0x01E60369) */
+#define TECLA_CIMA   3
 #define TECLA_BAIXO  4
 #define TECLA_MODO   17                    /* # */
 
 struct registro_rx {
     u8 usado, ambar;
-    char texto[49];
+    char texto[REG_HIST - 2];              /* ate TEXTO_MAX e o 0 */
 };
 
-static const u16 MODO_58[4] = {0x3FC3, 0x3FC9, 0x33C9, 0x3CC3};
+#define MODEM_RX     0x3CC3                /* FFSK 1200/1800, sem o ganho (bits 9:8) */
 
-static void fsk_rx_arma(void)
+/* MODEM GAIN (v73, a pasta CALIBRATION): o ganho de entrada do modem FSK do chip, os bits 9:8 do 0x58, que
+ * so o APRS RX usa na recepcao (o roger TONE1200 de fabrica so transmite, e a voz nao passa pelo modem).
+ * Gravado no 0x903D dos ajustes (b[0x14BE9], livre pela varredura da v59) como 0xA0 + o ganho: qualquer
+ * outro valor vale HIGH, o 3 de fabrica - o do radio que nunca mudou o item, e o do RESET de fabrica, que
+ * poe no byte o que vier depois da tabela 0x01E603C3 (hoje 198). */
+#define GANHO_MODEM  RAM(u8, 0x00014BE9)
+#define GANHO_MARCA  0xA0
+const char titulo_modem_ganho[] = "MODEM GAIN";
+const char *const modem_ganho_opcoes[4] = {"OFF", "LOW", "MEDIUM", "HIGH"};
+
+static unsigned ganho_modem(void)
 {
-    REG_W(0x59, 0x4008);                   /* limpa a FIFO de RX, sync de 4 bytes */
-    REG_W(0x59, 0x1008);                   /* liga a recepcao */
+    return (GANHO_MODEM & 0xFC) == GANHO_MARCA ? GANHO_MODEM & 3 : 3;
 }
 
-/* Os bits de uma palavra da FIFO: o byte baixo primeiro, o bit alto de cada byte primeiro (a ordem
- * do TX do chip, que o TA1JS usou no UV-K5 com o aprs.fi decodificando, e que o beacon da v65 provou). */
-static unsigned rx_palavra(struct hdlc *h, unsigned w)
+u16 modem_ganho_le(void)
 {
-    unsigned k, n;
+    return ganho_modem();
+}
 
-    for (k = 0; k < 16; k++)
-        if ((n = hdlc_bit(h, w >> (k < 8 ? 7 - k : 23 - k) & 1)))
-            return n;
+void modem_ganho_grava(void)
+{
+    GANHO_MODEM = GANHO_MARCA | (VALOR < 4 ? VALOR : 3);
+}
+
+/* Arma a captura com o sync de uma polaridade: 0 parado na marca (FE FE), 1 no espaco (01 01). */
+static void fsk_rx_arma(unsigned pol)
+{
+    unsigned s = pol ? 0x0101 : 0xFEFE;
+
+    REG_W(0x5A, s);
+    REG_W(0x5B, s);
+    REG_W(0x59, 0x4000);                   /* limpa a FIFO de RX, sync de 2 bytes */
+    REG_W(0x59, 0x1000);                   /* liga a recepcao */
+}
+
+/* Apaga o historico (cheio, o EXIT segurado na tela, ou o formato velho): os dois setores e a marca de
+ * novo. Devolve quantos ha, 0, ou o -1 de um historico que nao e nosso, sem mexer nele. */
+static int hist_limpa(int n)
+{
+    u32 m = MARCA_HIST;
+
+    if (n < 0)
+        return n;
+    APAGA_SETOR(SETOR_HIST);
+    APAGA_SETOR(SETOR_HIST + 0x1000);
+    GRAVA_FLASH(SETOR_HIST, &m, 4);
     return 0;
 }
 
-/* Abre o historico: confere a marca do setor (ou a grava, com o setor apagado) e conta os registros.
- * Devolve quantos ha, ou -1 se o setor tem outra coisa: ai nada e gravado nele. */
+/* Abre o historico: confere a marca e conta os registros. Apagado, ou com o historico das v70 a v73 (os
+ * registros de 64 B nao se leem como os de 128), comeca de novo. Devolve quantos ha, ou -1 se o setor tem
+ * outra coisa: ai nada e gravado nele. */
 static int hist_abre(void)
 {
     u32 m;
@@ -1152,12 +1316,8 @@ static int hist_abre(void)
     int n;
 
     LE_FLASH(SETOR_HIST, &m, 4);
-    if (m != MARCA_HIST) {
-        if (m != 0xFFFFFFFFu)
-            return -1;
-        m = MARCA_HIST;
-        GRAVA_FLASH(SETOR_HIST, &m, 4);
-    }
+    if (m != MARCA_HIST)
+        return m == 0xFFFFFFFFu || m == MARCA_V70 ? hist_limpa(0) : -1;
     for (n = 0; n < HIST_MAX; n++) {
         LE_FLASH(SETOR_HIST + (n + 1) * REG_HIST, &b, 1);
         if (b != USADO)
@@ -1168,31 +1328,35 @@ static int hist_abre(void)
 
 static int hist_grava(int n, const struct registro_rx *r)
 {
-    u32 m = MARCA_HIST;
-
+    if (n >= HIST_MAX)                     /* cheio: recomeca */
+        n = hist_limpa(n);
     if (n < 0)
         return n;
-    if (n >= HIST_MAX) {                   /* cheio: recomeca */
-        APAGA_SETOR(SETOR_HIST);
-        GRAVA_FLASH(SETOR_HIST, &m, 4);
-        n = 0;
-    }
     GRAVA_FLASH(SETOR_HIST + (n + 1) * REG_HIST, r, sizeof *r);
     return n + 1;
 }
 
-/* O registro i do historico (0 o mais velho), ou vazio. */
-static void hist_le(int n, int i, struct registro_rx *r)
+/* Onde esta o registro i do historico (0 o mais velho), ou 0 se nao ha. */
+static u32 hist_endereco(int n, int i)
 {
-    r->usado = 0;
-    r->texto[0] = 0;
-    if (i >= 0 && i < n)
-        LE_FLASH(SETOR_HIST + (i + 1) * REG_HIST, r, sizeof *r);
-    r->texto[48] = 0;
+    return i >= 0 && i < n ? SETOR_HIST + (i + 1) * REG_HIST : 0;
+}
+
+/* Um quadro que acabou de chegar, em texto, no historico. Separada: o registro (128 B) so pesa na pilha
+ * aqui, fora do caminho da tela; e chamada no meio dos bits, antes de o quadro seguinte ocupar o q. */
+__attribute__((noinline)) static int guarda(int hist, const u8 *q, unsigned n, const char *meu, unsigned n_meu)
+{
+    struct registro_rx r;
+
+    r.usado = USADO;
+    r.ambar = aprs_texto(r.texto, q, n, meu, n_meu);
+    return hist_grava(hist, &r);
 }
 
 /* Direto na tela, sem rotina no meio: o quadro dela pesaria na pilha do laco. */
-#define RX_MOSTRA(r, num, y0)     tela_aprs((r)[0].usado == USADO ? (r)[0].texto : 0, (r)[1].usado == USADO ? (r)[1].texto : 0,               ((r)[0].usado == USADO && (r)[0].ambar) | ((r)[1].usado == USADO && (r)[1].ambar) << 1,               (num), (y0))
+#define RX_MOSTRA(faixas) \
+    (num[1] = topo + 1, num[2] = hist < 0 ? 0 : hist, num[5] = h.ruins, num[6] = h.consertados, \
+     tela_aprs(hist_endereco(hist, hist - 1 - topo), hist_endereco(hist, hist - 2 - topo), aberto, num, (faixas)))
 
 /* O meu indicativo em texto ("PY2ABC-7"); devolve o tamanho. Separada: o registro sai da pilha antes
  * do laco. */
@@ -1213,50 +1377,50 @@ __attribute__((noinline)) static unsigned meu_indicativo(char *meu)
 
 void aprs_rx_grava(void)
 {
-    u8 q[128];
+    u8 q[160];                             /* o comeco do quadro: os enderecos e ate ~120 de info */
     struct hdlc h;
-    struct registro_rx r[2];
     char meu[10];
-    u16 num[6];                            /* modo, posicao, quantos, syncs, BAD, FIX */
-    unsigned i, f, n, k, n_meu = meu_indicativo(meu), ativo = 0, desde = 0;
-    unsigned era3f = REG_R(0x3F), era70 = REG_R(0x70), era72 = REG_R(0x72);
+    u16 num[7];                            /* ganho, posicao, quantos, syncs na marca e no espaco, BAD, FIX */
+    unsigned i, f, n, k, w = 0, n_meu = meu_indicativo(meu), ativo = 0, pol = 0, desde = TIQUE_MS;
+    unsigned pede = 0, aberto = 0;         /* as faixas da tela a redesenhar; o de cima aberto inteiro */
+    unsigned era3f = REG_R(0x3F), era70 = REG_R(0x70), era72 = REG_R(0x72), era5e = REG_R(0x5E);
     int hist = hist_abre(), topo = 0;
 
-    espera_soltar();                       /* o OK que abriu */
     ACORDA();
     DESARMA_DW();
     REG_W(0x70, 0x00E0);                   /* o FSK ligado, com o ganho do roger TONE1200 */
     REG_W(0x72, 0x3065);                   /* 1200 bps */
-    REG_W(0x58, MODO_58[0]);
-    REG_W(0x5A, 0xFEFE);
-    REG_W(0x5B, 0xFEFE);
+    num[0] = ganho_modem();
+    REG_W(0x58, MODEM_RX | num[0] << 8);
     REG_W(0x5C, 0xAA30);                   /* sem o CRC do chip */
     REG_W(0x5D, 0xFFE0);                   /* 2048 bytes */
     REG_W(0x5E, 0x0204);                   /* quase cheia com 4 palavras */
     REG_W(0x3F, 0x3002);                   /* avisos: sync, quase cheia, fim */
     REG_W(0x02, 0);
-    fsk_rx_arma();
+    fsk_rx_arma(0);
     hdlc_comeca(&h, q, sizeof q);
     h.ruins = h.consertados = 0;
-    num[0] = num[3] = 0;
-    hist_le(hist, hist - 1, &r[0]);
-    hist_le(hist, hist - 2, &r[1]);
+    num[3] = num[4] = 0;
     for (;;) {
-        num[1] = topo + 1;
-        num[2] = hist < 0 ? 0 : hist;
-        num[4] = h.ruins;
-        num[5] = h.consertados;
-        RX_MOSTRA(r, num, 0);
-        n = 0;
-        while (!n) {
+        RX_MOSTRA(15);
+        espera_soltar();                   /* a tecla que trouxe aqui (o OK que abriu, a que mudou a tela),
+                                            * depois de a tela ja mostrar o efeito dela (v72) */
+        for (;;) {
             WDT();
             if ((k = tecla()) != 255)
                 break;
             ESPERA_2MS(1);
             if (!(REG_R(0x0C) & 1)) {
-                if (ativo && TIQUE_MS - desde > 2500) {   /* sync sem quadro: espera o proximo */
+                /* esperando, a outra polaridade a cada 50 ms; recebendo, a FIFO parou: volta a esperar */
+                if (TIQUE_MS - desde > (ativo ? 300u : 50u)) {
+                    pol ^= !ativo;
                     ativo = 0;
-                    fsk_rx_arma();
+                    fsk_rx_arma(pol);
+                    desde = TIQUE_MS;
+                } else if (pede) {         /* uma faixa da tela por volta, entre as leituras do modem */
+                    k = pede & -pede;
+                    pede ^= k;
+                    RX_MOSTRA(k);
                 }
                 continue;
             }
@@ -1265,56 +1429,64 @@ void aprs_rx_grava(void)
             if (f & 0x0002) {              /* sync: as flags ja passaram, o quadro vem */
                 hdlc_comeca(&h, q, sizeof q);
                 h.dentro = 1;
-                h.linha = REG_R(0x0B) >> 7 & 1;     /* o sync invertido termina em 1 */
+                h.linha = pol ^ (REG_R(0x0B) >> 7 & 1);     /* a flag acaba no tom do bit sozinho */
                 ativo = 1;
                 desde = TIQUE_MS;
-                num[3]++;
+                num[3 + pol]++;
+                pede |= 8;
             }
             i = h.ruins + h.consertados;
-            if (f & 0x1000)
-                for (k = 0; k < 4 && !n; k++)
-                    n = rx_palavra(&h, REG_R(0x5F));
-            if (f & 0x2000) {              /* o quadro do chip acabou: espera o proximo sync */
+            if (f & 0x1000) {
+                desde = TIQUE_MS;
+                /* as 4 palavras bit a bit: o byte baixo primeiro, o bit alto de cada byte primeiro (a ordem
+                 * do TX do chip, que o TA1JS usou no UV-K5 com o aprs.fi decodificando, e que o beacon da
+                 * v65 provou) */
+                for (k = 0; k < 64; k++) {
+                    if (!(k & 15))
+                        w = REG_R(0x5F);
+                    if ((n = hdlc_bit(&h, w >> (k & 8 ? 23 - (k & 15) : 7 - (k & 15)) & 1))) {
+                        hist = guarda(hist, q, n, meu, n_meu);
+                        if (aberto && hist > 1)     /* o aberto continua o mesmo (o historico nao recomecou) */
+                            topo++;
+                        else                        /* senao, o novo vai para cima */
+                            topo = aberto = 0;
+                        pede = 15;
+                    }
+                }
+            }
+            if (f & 0x2000) {              /* o quadro do chip acabou: volta a esperar um sync */
                 ativo = 0;
-                fsk_rx_arma();
+                fsk_rx_arma(pol);
+                desde = TIQUE_MS;
             }
-            if (!n && (f & 0x0002 || i != h.ruins + h.consertados)) {
-                num[4] = h.ruins;          /* so a barra de baixo, para a FIFO nao encher */
-                num[5] = h.consertados;
-                RX_MOSTRA(r, num, 96);
-            }
-        }
-        if (n) {                           /* um quadro com o FCS certo (ou consertado) */
-            for (k = 0; k < sizeof r[0]; k++)       /* o de cima desce (sem memcpy: nao ha) */
-                ((u8 *)&r[1])[k] = ((const u8 *)&r[0])[k];
-            r[0].usado = USADO;
-            r[0].ambar = aprs_texto(r[0].texto, q, n, meu, n_meu);
-            hist = hist_grava(hist, &r[0]);
-            topo = 0;
-            ativo = 0;
-            fsk_rx_arma();
-            continue;
+            if (i != h.ruins + h.consertados)
+                pede |= 8;
         }
         if (k == TECLA_MODO) {
             num[0] = (num[0] + 1) & 3;
-            REG_W(0x58, MODO_58[num[0]]);
-            fsk_rx_arma();
+            REG_W(0x58, MODEM_RX | num[0] << 8);
             ativo = 0;
-            num[3] = h.ruins = h.consertados = 0;
+            fsk_rx_arma(pol);
+            desde = TIQUE_MS;
+            num[3] = num[4] = h.ruins = h.consertados = 0;
         } else if (k == TECLA_CIMA || k == TECLA_BAIXO) {
-            if (k == TECLA_CIMA ? topo > 0 : topo + 1 < hist) {
+            if (k == TECLA_CIMA ? topo > 0 : topo + 1 < hist)
                 topo += k == TECLA_CIMA ? -1 : 1;
-                hist_le(hist, hist - 1 - topo, &r[0]);
-                hist_le(hist, hist - 2 - topo, &r[1]);
-            }
+        } else if (k == TECLA_OK) {
+            aberto = !aberto && hist > 0;
+        } else if (k == TECLA_EXIT && segurou_exit()) {     /* segurado: apaga o historico e fica */
+            hist = hist_limpa(hist);
+            topo = aberto = 0;
+        } else if (k == TECLA_EXIT && aberto) {
+            aberto = 0;
         } else {
             break;
         }
-        espera_soltar();
     }
     espera_soltar();
     REG_W(0x59, 0);
-    REG_W(0x58, 0);
+    REG_W(0x58, 0);                        /* desligado, como o roger de fabrica deixa (0x01E44788) */
+    REG_W(0x5E, era5e);
     REG_W(0x3F, era3f);
     REG_W(0x70, era70);
     REG_W(0x72, era72);

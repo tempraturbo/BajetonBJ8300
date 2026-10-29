@@ -48,7 +48,7 @@ int main(int argc, char **argv)
         fclose(f);
         printf("C %u %u\n", h.ruins, h.consertados);
     } else if (argc == 4 && !strcmp(argv[1], "texto")) {
-        char s[49];
+        char s[TEXTO_MAX + 1];
         unsigned k, para_mim;
 
         for (n = 0; argv[2][2 * n] && argv[2][2 * n + 1]; n++) {
