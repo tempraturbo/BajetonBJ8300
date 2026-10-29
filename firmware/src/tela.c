@@ -1656,10 +1656,14 @@ u32 b_medidor(u32 estado, u32 nivel, u32 lado)
 #define LUZ_PRD      240u                   /* a escala dos ciclos: 24 MHz / 4 / 240 = 25 kHz */
 /* A frequencia do PWM (v67, o LIGHT PWM da pasta CALIBRATION): o 0x903B dos ajustes (b[0x14BE7]), livre
  * pela mesma varredura da v59 (de 0x14BDF a 0x14BEB nenhum acesso de fabrica fora as copias do bloco),
- * 0 = 1 kHz, o padrao, 1 = 5 kHz, 2 = 25 kHz e, desde a v68, 3 = 240 Hz e 4 = 580 Hz (o PRD a 6 MHz:
- * 6000, 1200, 240, 25000 e 10345); fora da faixa (o RESET de fabrica) vale 1 kHz. O menu as mostra em
- * ordem de frequencia (luz_pwm_posicao). O ciclo de cada nivel vai na mesma escala (luz_ciclo). */
+ * 0 = 1 kHz, 1 = 5 kHz, 2 = 25 kHz e, desde a v68, 3 = 240 Hz e 4 = 580 Hz (o PRD a 6 MHz: 6000, 1200,
+ * 240, 25000 e 10345). Fora da faixa vale 240 Hz, o padrao desde a v69 (no radio do dono, sem cintilar
+ * e sem interferencia num radio encostado): e o que o RESET de fabrica deixa, 189 (a tabela 0x01E603C3
+ * tem no lugar do 0x903B o byte 189 do texto que vem depois dela). Os valores gravados ficam os da v68.
+ * O menu as mostra em ordem de frequencia (luz_pwm_posicao). O ciclo de cada nivel vai na mesma escala
+ * (luz_ciclo). */
 #define LUZ_FREQ     RAM(u8, 0x00014BE7)
+#define LUZ_PADRAO   3                      /* 240 Hz */
 static const u16 luz_prd[5] = {6000, 1200, 240, 25000, 10345};
 /* O BRIGHTNESS (v61): o nivel no 0x9039 dos ajustes (b[0x14BE5], livre como os da v59), de 0 = 100% a
  * 4 = 10%, espacados para o olho; fora da faixa (o RESET de fabrica deixa 163) vale 100%. */
@@ -1670,7 +1674,7 @@ FIRMWARE(CANAL_SAIDA, 0x01E4370A); void CANAL_SAIDA(unsigned pino, unsigned font
 
 static unsigned luz_prd_de(void)
 {
-    return luz_prd[LUZ_FREQ < 5 ? LUZ_FREQ : 0];
+    return luz_prd[LUZ_FREQ < 5 ? LUZ_FREQ : LUZ_PADRAO];
 }
 
 /* O ciclo do nivel, na escala do PRD de agora. */
@@ -1741,8 +1745,9 @@ void luz_aplica(void)
 
 /* ---------- LIGHT PWM (v67, a pasta CALIBRATION) ----------
  * A frequencia do PWM da luz (LUZ_FREQ, acima). A energia das bordas que cai num canal de VHF/UHF e
- * proporcional a ela: no teste da v66, o dono achou 1 kHz melhor, sem interferencia. O teste da forca
- * do pino (os bits do PB7 em 0x1E5058 e 0x1E505C, o HD0 e o HD do SDK) nao mudou nada na luz, e saiu. */
+ * proporcional a ela: 25 kHz e 1 kHz ainda deram interferencia num radio encostado, 240 Hz nao (v69,
+ * o padrao). O teste da forca do pino (os bits do PB7 em 0x1E5058 e 0x1E505C, o HD0 e o HD do SDK) nao
+ * mudou nada na luz, e saiu. */
 #define VALOR_LINHA  RAM(u16, 0x00014BFC)   /* o valor da linha do item, no menu (o VALOR do bancos.c) */
 const char titulo_luz_pwm[] = "LIGHT PWM";
 const char *const luz_pwm_opcoes[5] = {"240 HZ", "580 HZ", "1 KHZ", "5 KHZ", "25 KHZ"};
@@ -1751,12 +1756,12 @@ static const u8 luz_pwm_posicao[5] = {2, 3, 4, 0, 1};    /* valor gravado -> pos
 
 u16 luz_pwm_le(void)
 {
-    return luz_pwm_posicao[LUZ_FREQ < 5 ? LUZ_FREQ : 0];
+    return luz_pwm_posicao[LUZ_FREQ < 5 ? LUZ_FREQ : LUZ_PADRAO];
 }
 
 void luz_pwm_grava(void)
 {
-    LUZ_FREQ = luz_pwm_valor[VALOR_LINHA < 5 ? VALOR_LINHA : 2];
+    LUZ_FREQ = luz_pwm_valor[VALOR_LINHA < 5 ? VALOR_LINHA : 0];
     luz_aplica();
 }
 

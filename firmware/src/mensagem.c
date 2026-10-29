@@ -610,6 +610,8 @@ void gancho_fim_tx(void)
     }
     ESTADO_MSG = 0;
     espera_soltar();
+    if (e == NO_AR(ARMADO_APRS))           /* v69: 0,5 s de portadora muda antes do pacote, para o */
+        ESPERA_2MS(250);                   /* receptor (economia de bateria, squelch lento) abrir */
     GERADOR(1);
     AUDIO_TX(4);
     AF(1);

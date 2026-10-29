@@ -1391,9 +1391,11 @@ de VHF/UHF é proporcional a ela. A 1 kHz o rádio encostado não ouviu interfer
 padrão. A escolha fica no `0x903B` dos ajustes (`b[0x14BE7]`, livre pela mesma varredura da v59: de
 `0x14BDF` a `0x14BEB` nenhum acesso de fábrica fora as cópias do bloco, conferida no `0x14BDE` do NOISE
 REDUCTION), 0 = 1 kHz (PRD 6000), 1 = 5 kHz (1200), 2 = 25 kHz (240) e, desde a v68, 3 = 240 Hz (25000) e
-4 = 580 Hz (10345), que o menu mostra em ordem de frequência; fora da faixa (o reset de fábrica) vale 1 kHz.
+4 = 580 Hz (10345), que o menu mostra em ordem de frequência; fora da faixa vale 240 Hz desde a v69 (1 kHz na v67 e na v68).
 O dono ainda ouviu interferência a 1 kHz: nenhuma frequência a elimina (a energia que cai num canal só
-diminui com ela), e as mais baixas são para comparar. O ciclo de cada nível vai na mesma escala (`ciclo × PRD / 240`), e a partida, o set e os ajustes
+diminui com ela), e as mais baixas eram para comparar. Em 240 Hz não houve interferência nem
+cintilação, e desde a v69 é o padrão: o reset de fábrica deixa 189 no `0x903B` (o byte do texto que vem
+depois da tabela `0x01E603C3`), fora da faixa, e os valores já gravados continuam os da v68. O ciclo de cada nível vai na mesma escala (`ciclo × PRD / 240`), e a partida, o set e os ajustes
 pelo cabo a aplicam (`luz_aplica`).
 
 ## 24. Morse e APRS (v65)
@@ -1523,7 +1525,9 @@ sem destinatário, o status `>texto`.
 **O AFSK.** O modem FSK do chip só faz pares fixos (FFSK 1200/1800 e 1200/2400; o reg 0x72 é a taxa de
 bits; no UV-K5 mediram 1200/1800 no SDR), e o APRS é o Bell 202, **1200/2200 Hz**. Então o AFSK sai pelo
 gerador de tom: a cada bit 0 a frequência do tom 1 (reg 0x71) troca entre 1200 e 2200 Hz (NRZI), com bit
-stuffing depois de cinco 1s, 40 flags de abertura (270 ms) e 3 de fecho. O tempo de cada bit (833,3 µs) sai
+stuffing depois de cinco 1s, 40 flags de abertura (270 ms) e 3 de fecho. Antes das flags, desde a v69,
+vão 0,5 s de portadora sem modulação, para o receptor (economia de bateria, squelch lento) abrir antes
+do pacote. O tempo de cada bit (833,3 µs) sai
 do relógio: `b[0x14810]` conta milissegundos, de 2 em 2 no tique do TIMER1, e o contador do TIMER1
 (`0x1E0504`, de 0 ao PRD em `0x1E0508`) é a fração do tique, a conta de `0x01E4F888`. O alvo anda 833, 833
 e 834 µs (2500 a cada 3 bits, sem acumular erro) e dá a volta nos 32 bits junto com o relógio.

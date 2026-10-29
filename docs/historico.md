@@ -5,7 +5,15 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
-## v68 — 29/10 — o LIGHT PWM também em 240 e 580 Hz (a testar)
+## v69 — 29/10 — o LIGHT PWM em 240 Hz de padrão, e meio segundo de portadora antes do APRS (a testar)
+
+`firmware/releases/BJ8300_BANK_v69.anc` (sha256 `5936c260…`). O teste da v68: a 240 Hz, "não deu
+cintilação e não deu interferência". Ele vira o padrão: valor fora da faixa (o reset de fábrica deixa 189
+no `0x903B`) vale 240 Hz, e os valores já gravados continuam os mesmos. E, a pedido do dono, o APRS ganhou
+0,5 s de portadora sem modulação antes das flags, para o rádio do outro lado (economia de bateria, squelch
+lento) abrir antes do pacote.
+
+## v68 — 29/10 — o LIGHT PWM também em 240 e 580 Hz ✔️ testada: 240 Hz sem cintilação nem interferência
 
 `firmware/releases/BJ8300_BANK_v68.anc` (sha256 `5125f62b…`). A 1 kHz o rádio encostado ainda pegou
 interferência. A pedido do dono, o LIGHT PWM ganhou 240 Hz e 580 Hz, para comparar; o menu mostra as cinco

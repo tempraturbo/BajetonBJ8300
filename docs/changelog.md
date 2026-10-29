@@ -5,7 +5,15 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
-## v68 — Oct 29 — LIGHT PWM also at 240 and 580 Hz (to be tested)
+## v69 — Oct 29 — LIGHT PWM at 240 Hz by default, and half a second of carrier before APRS (to be tested)
+
+`firmware/releases/BJ8300_BANK_v69.anc` (sha256 `5936c260…`). The v68 test: at 240 Hz, "no flicker and no
+interference". It becomes the default: an out-of-range value (the factory reset leaves 189 at `0x903B`)
+means 240 Hz, and values already saved stay the same. And, at the owner's request, APRS got 0.5 s of
+unmodulated carrier before the flags, so the radio at the other end (battery saving, slow squelch) opens
+before the packet.
+
+## v68 — Oct 29 — LIGHT PWM also at 240 and 580 Hz ✔️ tested: 240 Hz with no flicker or interference
 
 `firmware/releases/BJ8300_BANK_v68.anc` (sha256 `5125f62b…`). At 1 kHz the radio held close still picked up
 interference. At the owner's request, LIGHT PWM got 240 Hz and 580 Hz, to compare; the menu shows all five in

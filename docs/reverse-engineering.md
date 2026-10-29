@@ -1414,9 +1414,11 @@ is proportional to it. At 1 kHz the radio held close heard no interference, and 
 default. The choice lives in settings byte `0x903B` (`b[0x14BE7]`, free per the same v59 scan: from
 `0x14BDF` to `0x14BEB` no stock access other than the block copies, checked on NOISE REDUCTION's
 `0x14BDE`), 0 = 1 kHz (PRD 6000), 1 = 5 kHz (1200), 2 = 25 kHz (240) and, since v68, 3 = 240 Hz (25000) and
-4 = 580 Hz (10345), which the menu shows in frequency order; out of range (the factory reset) means 1 kHz.
+4 = 580 Hz (10345), which the menu shows in frequency order; out of range means 240 Hz since v69 (1 kHz in v67 and v68).
 The owner still heard interference at 1 kHz: no frequency removes it (the energy landing in a channel only
-falls with it), and the lower ones are there to compare. Each level's duty goes on the same scale (`duty × PRD / 240`), and power-up, the set and the
+falls with it), and the lower ones were there to compare. At 240 Hz there was no interference and no
+flicker, and since v69 it is the default: the factory reset leaves 189 at `0x903B` (the byte of the text
+after the `0x01E603C3` table), out of range, and values already saved keep their v68 meaning. Each level's duty goes on the same scale (`duty × PRD / 240`), and power-up, the set and the
 settings by cable apply it (`luz_aplica`).
 
 ## 24. Morse and APRS (v65)
@@ -1547,7 +1549,9 @@ acknowledge) or, with no addressee, the status `>text`.
 **The AFSK.** The chip's FSK modem only does fixed pairs (FFSK 1200/1800 and 1200/2400; reg 0x72 is the bit
 rate; on the UV-K5 1200/1800 was measured with an SDR), and APRS is Bell 202, **1200/2200 Hz**. So the AFSK
 comes from the tone generator: on each 0 bit the frequency of tone 1 (reg 0x71) switches between 1200 and
-2200 Hz (NRZI), with bit stuffing after five 1s, 40 opening flags (270 ms) and 3 closing ones. Each bit's
+2200 Hz (NRZI), with bit stuffing after five 1s, 40 opening flags (270 ms) and 3 closing ones. Before the flags, since
+v69, there is 0.5 s of unmodulated carrier, so the receiver (battery saving, slow squelch) opens before
+the packet. Each bit's
 time (833.3 µs) comes from the clock: `b[0x14810]` counts milliseconds, 2 at a time on the TIMER1 tick,
 and the TIMER1 counter (`0x1E0504`, from 0 to the PRD at `0x1E0508`) is the fraction of the tick, the
 `0x01E4F888` formula. The target moves 833, 833 and 834 µs (2500 every 3 bits, with no accumulated
