@@ -144,6 +144,8 @@ def nosso(f, pilha=frozenset()):
             v = fab(alvo)
         else:
             continue                       # desvio dentro da propria rotina
+        if tipo == 'goto':                 # salto de cauda para outra rotina: o quadro daqui ja saiu,
+            v -= qn.get(f, 0)              # como no grafo de fabrica (v65)
         melhor = max(melhor, v)
     memo_n[f] = qn.get(f, 0) + melhor
     return memo_n[f]

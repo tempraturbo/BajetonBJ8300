@@ -74,6 +74,8 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | **`0xC1000–0xD1FFF`** | **os bancos** (cabeçalho + 16 setores de 4 KB) |
 | **`0xD2000–0xD2FFF`** | **o registro do WATCH** (v43; o cabo o grava desde a v46; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v51)) |
 | **`0xD3000–0xD3FFF`** | **os VFOs da C** (v49: o da C e o do B guardado; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v51)) |
+| **`0xD4000–0xD4FFF`** | **a mensagem do Morse**, a velocidade e o tom (v65; [seção 24](#24-morse-e-aprs-v65)) |
+| **`0xD5000–0xD5FFF`** | **o APRS**: indicativo, SSID, destinatário, mensagem e caminho (v65) |
 | `0xFA000` | 4 KB de uso do firmware |
 | livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -1377,3 +1379,192 @@ voltam na hora (recebendo `E4 A1`, depois `E3 A0`). O que falhava era a marca em
 zera por conta própria (`b[0x7031] = 255` em `0x01E45A70`, chamada pelo laço em `0x01E46F52`), e com ela
 zerada o `b_sinal` achava a barra limpa. Agora ele redesenha a barra em toda chamada, no menu, sem marca; e o
 `b[0x7031]` só é escrito pelo firmware.
+
+**O teste das bordas (v66) e o LIGHT PWM (v67).** Para achar o que tira a interferência do PWM num
+rádio encostado, a v66 trouxe dois itens de teste na pasta CALIBRATION. O **LIGHT DRIVE** trocava a força
+de saída do pino: o bit do PB7 nos dois registradores depois do PD da porta B, `0x1E5058` e `0x1E505C`, o
+HD0 e o HD do `JL_PORT` do SDK (os seis primeiros, OUT a PD, estão provados pelas rotinas de pino de
+fábrica, `0x01E001D2` e vizinhas; estes dois não). No rádio, nenhuma combinação mudou nada na luz, e o
+item saiu: ou a borda depende do transistor da luz, ou esses não são os registradores de força. O
+**LIGHT PWM** troca o PRD do TIMER2, e com ele a frequência do PWM: a energia das bordas que cai num canal
+de VHF/UHF é proporcional a ela. A 1 kHz o rádio encostado não ouviu interferência, e desde a v67 é o
+padrão. A escolha fica no `0x903B` dos ajustes (`b[0x14BE7]`, livre pela mesma varredura da v59: de
+`0x14BDF` a `0x14BEB` nenhum acesso de fábrica fora as cópias do bloco, conferida no `0x14BDE` do NOISE
+REDUCTION), 0 = 1 kHz (PRD 6000), 1 = 5 kHz (1200), 2 = 25 kHz (240) e, desde a v68, 3 = 240 Hz (25000) e
+4 = 580 Hz (10345), que o menu mostra em ordem de frequência; fora da faixa (o reset de fábrica) vale 1 kHz.
+O dono ainda ouviu interferência a 1 kHz: nenhuma frequência a elimina (a energia que cai num canal só
+diminui com ela), e as mais baixas são para comparar. O ciclo de cada nível vai na mesma escala (`ciclo × PRD / 240`), e a partida, o set e os ajustes
+pelo cabo a aplicam (`luz_aplica`).
+
+## 24. Morse e APRS (v65)
+
+Duas pastas novas, para mandar texto num padrão que qualquer rádio entende. O código está no
+`firmware/src/mensagem.c`, inteiro na faixa dos decodificadores (`.livre`), sem `.data` nem `.bss`.
+
+| Pasta | Item | O que faz |
+|---|---|---|
+| APRS | APRS CALLSIGN | o indicativo, até 6 letras (editor de texto) |
+| APRS | APRS SSID | 0 (nenhum) a 15 |
+| APRS | APRS TO | o destinatário da mensagem, até 9 (com o SSID depois do `-`); vazio = status |
+| APRS | APRS MESSAGE | a mensagem, até 37 |
+| APRS | APRS SEND | OK manda (ação, sem valor na pasta) |
+| APRS | APRS PATH | WIDE1-1, WIDE1-1,WIDE2-1 ou NONE |
+| APRS | APRS RX | OK escuta: a tela dos pacotes recebidos, qualquer tecla sai |
+| MORSE | MORSE MESSAGE | a mensagem, até 37 |
+| MORSE | MORSE SEND | OK manda |
+| MORSE | MORSE SPEED | 5 a 40 palavras por minuto (padrão 15) |
+| MORSE | MORSE TONE | 400 a 1200 Hz, de 50 em 50 (padrão 700) |
+
+**Onde fica gravado.** Dois setores próprios, livres no levantamento pelo cabo (seção 3), no formato dos
+outros (marca, soma e a trava de só gravar em setor apagado ou que já seja nosso, `grava_registro`):
+`0xD4000` "MRS1" (48 B: tamanho, wpm, tom em dezenas de Hz, o texto) e `0xD5000` "APR1" (64 B: os
+tamanhos, o SSID, o caminho, o número da mensagem, o indicativo, o destinatário e o texto). Zerado vale o
+padrão.
+
+### O editor de texto a 37 caracteres
+
+O editor é o do CH-NAME. O mapa da RAM em volta do texto (`0x14A3A`):
+
+| Endereço | O que é |
+|---|---|
+| `b[0x14A35]` / `b[0x14A36]` | tamanho / máximo (o máximo é o mesmo byte do modo de digitação da tela principal) |
+| `b[0x14A37]` | **o cursor**, a posição de inserção (`0x01E49666`, `0x01E49F24`, `0x01E4D4BA`). O `b[0x12A74]` que a v38 chamava de cursor é a contagem do pinyin |
+| `b[0x14A38]` / `b[0x14A39]` | modo (1 ABC, 2 123) / marca 0xAA (a primeira tecla troca o texto todo) |
+| `0x14A3A..0x14A49` | os 16 bytes de fábrica do texto (a limpeza `0x01E3AC52` zera `0x14A34..0x14A49`) |
+| `0x14A4A..0x14A5F` | os 11 registradores do chip que o espectro guarda ao entrar (`0x01E4CF9C`) e devolve ao sair (`0x01E3FF0E`, só no modo 20) |
+| `0x14A60..0x14A77` | a estrutura do sistema de arquivos da flash do SDK (`0x01E12F1C` e vizinhas): **não se toca** |
+
+Daí os 37: o texto e o zero do fim vão até `0x14A5F`. A cópia do espectro é segura: o editor só existe
+no menu (modo 1), e o despacho das teclas por modo (`0x01E4B988`) manda tudo do modo 20 ao tratador do
+espectro (`0x01E4BFBE`), que não abre o menu; o modo 1 só é gravado pela entrada do menu na tela
+principal. O editor nunca fica aberto entre o espectro guardar e devolver.
+
+Os remendos (`montar.py`):
+
+- o limite fixo de 15 da inserção, `0x01E4A0F0` `02 fc 04 1c` (`if (r2 > 14)`), vira `02 fc 04 48`
+  (`if (r2 > 36)`, a codificação conferida montando a instrução com o clang da JieLi). Esse caminho
+  (`0x01E4A0CC`) só é chamado pelo editor (`0x01E4A4CA`); o CH-NAME e o NAME seguem limitados a 12 pelo
+  máximo deles;
+- as três cópias de fábrica do texto com `"%15s"` (`0x01E46CCE` e `0x01E476BE`, para `sp+21` no laço do
+  sinal, com um `_` no 26º byte; `0x01E48FBA`, para o `TEXTO` de 28 B em `0x129B0`) chamam o `texto15`:
+  o mesmo resultado até 15 letras, e no máximo 24. O tema B não mostra nenhuma delas;
+- a tecla 0 do editor (o ponteiro em `0x01E60B60`, tabela das teclas no ABC) aponta para
+  `" -/=+@()*#0"`: o espaço no primeiro toque e o `-` do SSID, que nenhuma tecla alcançava (as sequências
+  `@$%&` e ` =+-_` são das teclas `:` e `;`, que o teclado não gera). A sequência de fábrica era
+  `"()/\*# 0"`;
+- o desenho do editor (`editor_cena`, `telas.c`) põe o que não cabe numa linha em duas, no médio ou no
+  pequeno.
+
+O get de cada texto preenche o editor (zera até o 38º byte, porque a inserção não escreve o zero do fim),
+põe o cursor no fim e a marca 0xAA; o set copia `tamanho` letras e sai do editor como o CH-NAME
+(`LIMPA(2)` e `0x01E3C7AA`). O OK no item chama o set sem comparar valor (`0x01E49A00`, depois do bipe
+`0x01E38BD4(61, 6)`): por isso os SEND e o RX são listas de uma opção.
+
+### A transmissão: a máquina de estados de fábrica
+
+O firmware nunca transmite com o menu aberto, e a TX é uma máquina de estados no laço do sinal
+(`0x01E4622A`, a cada 10 ms pelo `sys_timer` `0x01E4DEA8`):
+
+| Variável | O que é |
+|---|---|
+| `b[0x1533C]` | 0 parado, 1 TX, 2 recusada (bipando até soltar o PTT) |
+| `b[0x1534A]` | o passo: 0 liga (corta o áudio de RX, frequência, potência, reg 0x30 = 0xC1FE), 1 espera uma volta e arma o TOT, 2 TOT e PTT (solto vai ao 3), 3 chama o fim (`0x01E44604`), 4 cauda e desliga, 8 depois do TOT |
+| `b[0x14950]` / `b[0x14924]` | alarme / bipe tocando (a ida do PTT não transmite com nenhum dos dois, `0x01E43F42`) |
+| PA12, `[0x1E5004]` bit 12 | o PTT: 0 = apertado (`0x01E47986`) |
+
+O início (`0x01E41022`) fecha o menu (`0x01E40768` → `0x01E3C29C`, que grava os ajustes), desarma a
+dupla escuta, confere a faixa permitida e o canal ocupado. O fim (`0x01E44604`) toca o roger ainda
+transmitindo, com o microfone cortado (reg 0x30 = 0xC3FA por `0x01E3FF3E(4)`), e volta à recepção.
+
+O envio usa essa máquina inteira:
+
+1. o SEND só arma: `b[0x14BE6] = 'M'` ou `'A'` (o byte `0x903A` dos ajustes, livre pela varredura da
+   v59; o padrão de fábrica deixa 202 nele);
+2. **gancho na chamada da ida do PTT** (`0x01E46540`, `call 0x01E43E8A`, em toda volta do laço): com o
+   envio armado, sem bipe tocando (o do próprio OK), sem TX, sem alarme e com o PTT solto, põe o "no ar"
+   (`'m'`/`'a'`) e chama o início da TX como a ida do PTT (`0x01E39EE4`, `0x01E3951C`, `0x01E41022`); a ida
+   de fábrica vem por último, como salto. Com o PTT apertado ou a TX parada (recusada), o "no ar" é
+   desfeito;
+3. sem o PTT apertado, o passo 2 vai direto ao 3, e o **gancho na chamada do fim** (`0x01E46D8C`, a
+   única que o passo 3 faz) toca o conteúdo no lugar do roger: o mesmo preparo e o mesmo desligar do roger
+   BEEP (`0x01E43AFE(1)`, `0x01E3FF3E(4)`, `0x01E39DEA(1)`; `0x01E39E2C(10)`, `TOM(0, 0)`,
+   `0x01E43AFE(0)`, `0x01E39DEA(0)`), o tom 2 desligado (reg 0x70 = 0xE000), e o fim de fábrica com o roger
+   zerado em volta da chamada (o fim não grava os ajustes).
+
+A partida e os ajustes que chegam pelo cabo ou pelo retorno aos de fábrica zeram o `b[0x14BE6]`: nada
+transmite sozinho. Antes do conteúdo, o gancho espera as teclas soltarem (o OK que armou ainda pode estar
+apertado).
+
+**Watchdog.** De 4096 ms (a partida, `0x01E53BF4`: o índice 12 da tabela `0x01E5F1B4`), limpo pela
+interface a cada volta (`0x01E4B41A`), pela `janela()`, pelas esperas longas e pelo próprio roger
+(`0x01E44634`). Enquanto o conteúdo toca, a interface não roda: o nosso código chama `0x01E37E76` antes
+de cada caractere e de cada elemento do Morse e em volta do pacote do APRS.
+
+**Parar no meio.** O PTT ou qualquer tecla: a varredura `0x01E43D50()` (255 = nenhuma) seguida de
+`0x01E43CF4(60)`, como o laço faz. Depois de uma tecla, espera soltar: o laço não rodou enquanto ela
+descia e, ao voltar, a veria como tecla nova (o EXIT viraria o A/B na tela principal).
+
+### Morse
+
+Pelo gerador de tom, como o roger: `TOM(f, 0)` liga e `TOM(0, 0)` desliga, em FM (MCW). A unidade é
+1200/wpm ms (a palavra PARIS): ponto 1, traço 3, 1 entre elementos, 3 entre letras e 7 entre palavras, pela
+`ESPERA_2MS`. A tabela tem os 53 caracteres da ITU de `!` a `Z` (um byte cada: uma marca e um bit por
+elemento), gerada e conferida na volta por script; os sem código (`# % * < >`) viram espaço. O tom de um
+valor que só se sabe na hora usa a conta inteira Hz × 330382 / 32000 (= × 10,32444, a do roger).
+
+### APRS: o pacote e o AFSK
+
+**O pacote** é o AX.25 de UI do APRS: destino `APZBJ8` (APZ = software experimental), a origem com o SSID,
+o caminho, controle `0x03`, PID `0xF0`, o campo de informação e o FCS (CRC-16 do X.25: polinômio 0x8408
+refletido, começa em 0xFFFF, sai invertido, byte baixo primeiro). O campo é a mensagem
+`:DESTINO  :texto{id` (o destinatário em 9 colunas, o número de 1 a 99 para o outro lado confirmar) ou,
+sem destinatário, o status `>texto`.
+
+**O AFSK.** O modem FSK do chip só faz pares fixos (FFSK 1200/1800 e 1200/2400; o reg 0x72 é a taxa de
+bits; no UV-K5 mediram 1200/1800 no SDR), e o APRS é o Bell 202, **1200/2200 Hz**. Então o AFSK sai pelo
+gerador de tom: a cada bit 0 a frequência do tom 1 (reg 0x71) troca entre 1200 e 2200 Hz (NRZI), com bit
+stuffing depois de cinco 1s, 40 flags de abertura (270 ms) e 3 de fecho. O tempo de cada bit (833,3 µs) sai
+do relógio: `b[0x14810]` conta milissegundos, de 2 em 2 no tique do TIMER1, e o contador do TIMER1
+(`0x1E0504`, de 0 ao PRD em `0x1E0508`) é a fração do tique, a conta de `0x01E4F888`. O alvo anda 833, 833
+e 834 µs (2500 a cada 3 bits, sem acumular erro) e dá a volta nos 32 bits junto com o relógio.
+
+**Conferido no PC** (`tests/teste_mensagem.py`, com o zig): o `mensagem.c` compila com o chip e o relógio
+imitados (o relógio atravessa a volta dos 32 bits no meio do pacote); o quadro bate com um montador
+independente; as trocas de tom viram áudio de fase contínua, e um demodulador independente (correlação em
+1200 e 2200 Hz, relógio pelas transições, NRZI, destuffing, FCS) acha o quadro certo, com cada troca a
+menos de 10 µs da grade de 833,3 µs; o decodificador HDLC acha só os quadros bons nas duas polaridades,
+com ruído entre eles, um com um bit errado e um abortado; e o Morse volta igual a 12 e 20 wpm. O áudio
+fica em `firmware/build/aprs.wav`.
+
+### APRS: a recepção
+
+Não achamos o áudio recebido num ADC do processador (o ADC lento em `0x1E3100` só lê a bateria), então a
+recepção usa o modem do chip em captura crua, como o roger TONE1200 de fábrica e o TA1JS no UV-K5:
+reg 0x58 = 0x3FC3 (FFSK 1200/1800), 0x72 = 0x3065 (1200 bps), 0x70 = 0x00E0, sync de 4 bytes = quatro flags
+em NRZI (0x5A = 0x5B = 0xFEFE), sem o CRC do chip (0x5C = 0xAA30), quadro de 2048 bytes (0x5D = 0xFFE0),
+quase cheia com 4 palavras (0x5E = 0x0204), avisos de sync, quase cheia e fim (0x3F = 0x3002), e
+0x59 = 0x4008 / 0x1008 para limpar e ligar. O laço olha o pedido de interrupção (reg 0x0C bit 0) a cada
+2 ms, limpa e lê o 0x02, e a cada quase cheia lê 4 palavras do 0x5F (a FIFO de RX tem 8, 107 ms). Os bits
+vão ao `hdlc_bit`, o byte baixo da palavra primeiro e o bit alto de cada byte primeiro (a ordem do TX do
+chip que o TA1JS usou com o aprs.fi decodificando). No sync, o decodificador começa já "dentro" de uma
+flag, com o nível de linha da polaridade que o chip viu (reg 0x0B bit 7). Um quadro com o FCS certo, ou
+2,5 s sem nada depois do sync, rearma a captura.
+
+O laço é do set do item, com o menu aberto: o laço do sinal não roda, então a dupla escuta é desarmada
+antes (`0x01E3FDE4`, que volta ao lado em evidência), o watchdog é limpo aqui, os registradores 0x3F, 0x70 e
+0x72 são lidos antes e devolvidos no fim, e qualquer tecla sai. A tela (`tela_aprs`, `telas.c`) mostra os
+2 quadros mais novos em duas linhas cada, a mensagem para o meu indicativo em âmbar (sem o `{id`), e
+quantos chegaram.
+
+**O que só o rádio prova:** se o demodulador FFSK 1200/1800 do chip separa o espaço de 2200 Hz da marca
+(no UV-K5 há relato dos dois lados: o TA1JS decodificou um TH-D75; outro projeto não achou nenhum quadro
+com FCS certo); se trocar o reg 0x71 no meio do tom é contínuo em fase; o desvio do AFSK com o ganho do
+roger; e o tempo de uma escrita no chip.
+
+### A pilha
+
+O conteúdo roda no slot do roger, no laço do sinal, e o laço do RX no set do item; os dois dentro do de
+fábrica (620 e 740 B). O gancho da ida do PTT põe o "no ar" antes do início e chama o início e a ida de
+fábrica como saltos (o quadro dele já desfeito), e o `pilha.py` passou a tratar o `goto` do nosso código
+para outra rotina como no grafo de fábrica (salto de cauda: o quadro de quem salta não soma). A V2.9T dá
+os mesmos números com o `pilha.py` novo.

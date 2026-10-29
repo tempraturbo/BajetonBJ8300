@@ -74,6 +74,8 @@ by looking for where content starts mirroring address 0:
 | **`0xC1000–0xD1FFF`** | **the banks** (header + 16 sectors of 4 KB) |
 | **`0xD2000–0xD2FFF`** | **the WATCH record** (v43; the cable writes it since v46; [section 18](#18-dual-watch-and-triple-v42-to-v51)) |
 | **`0xD3000–0xD3FFF`** | **C's VFOs** (v49: C's and the saved B's; [section 18](#18-dual-watch-and-triple-v42-to-v51)) |
+| **`0xD4000–0xD4FFF`** | **the Morse message**, speed and tone (v65; [section 24](#24-morse-and-aprs-v65)) |
+| **`0xD5000–0xD5FFF`** | **APRS**: callsign, SSID, addressee, message and path (v65) |
 | `0xFA000` | 4 KB used by the firmware |
 | free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -1400,3 +1402,194 @@ go back at once (receiving `E4 A1`, afterwards `E3 A0`). What failed was the mar
 resets it on its own (`b[0x7031] = 255` at `0x01E45A70`, called by the loop at `0x01E46F52`), and with it reset
 `b_sinal` thought the bar was clear. Now it redraws the bar on every call, in the menu, with no mark; and
 `b[0x7031]` is written by the firmware alone.
+
+**The edge test (v66) and LIGHT PWM (v67).** To find what removes the PWM interference on a radio held
+close, v66 brought two test items in the CALIBRATION folder. **LIGHT DRIVE** changed the pin's output
+strength: PB7's bit in the two registers after port B's PD, `0x1E5058` and `0x1E505C`, the SDK `JL_PORT`'s
+HD0 and HD (the first six, OUT to PD, are proven by the stock pin routines, `0x01E001D2` and neighbours;
+these two are not). On the radio no combination changed anything in the light, and the item was removed:
+either the edge depends on the backlight transistor, or these are not the strength registers. **LIGHT
+PWM** changes TIMER2's PRD, and with it the PWM frequency: the edge energy that lands in a VHF/UHF channel
+is proportional to it. At 1 kHz the radio held close heard no interference, and since v67 it is the
+default. The choice lives in settings byte `0x903B` (`b[0x14BE7]`, free per the same v59 scan: from
+`0x14BDF` to `0x14BEB` no stock access other than the block copies, checked on NOISE REDUCTION's
+`0x14BDE`), 0 = 1 kHz (PRD 6000), 1 = 5 kHz (1200), 2 = 25 kHz (240) and, since v68, 3 = 240 Hz (25000) and
+4 = 580 Hz (10345), which the menu shows in frequency order; out of range (the factory reset) means 1 kHz.
+The owner still heard interference at 1 kHz: no frequency removes it (the energy landing in a channel only
+falls with it), and the lower ones are there to compare. Each level's duty goes on the same scale (`duty × PRD / 240`), and power-up, the set and the
+settings by cable apply it (`luz_aplica`).
+
+## 24. Morse and APRS (v65)
+
+Two new folders, to send text in a standard any radio understands. The code is in
+`firmware/src/mensagem.c`, all of it in the decoders' area (`.livre`), with no `.data` or `.bss`.
+
+| Folder | Item | What it does |
+|---|---|---|
+| APRS | APRS CALLSIGN | the callsign, up to 6 letters (text editor) |
+| APRS | APRS SSID | 0 (none) to 15 |
+| APRS | APRS TO | the message's addressee, up to 9 (with the SSID after the `-`); empty = status |
+| APRS | APRS MESSAGE | the message, up to 37 |
+| APRS | APRS SEND | OK sends (an action, no value in the folder) |
+| APRS | APRS PATH | WIDE1-1, WIDE1-1,WIDE2-1 or NONE |
+| APRS | APRS RX | OK listens: the received packets screen, any key leaves |
+| MORSE | MORSE MESSAGE | the message, up to 37 |
+| MORSE | MORSE SEND | OK sends |
+| MORSE | MORSE SPEED | 5 to 40 words per minute (default 15) |
+| MORSE | MORSE TONE | 400 to 1200 Hz, in steps of 50 (default 700) |
+
+**Where it is stored.** Two sectors of our own, free in the cable survey (section 3), in the same format as
+the others (marker, checksum and the lock of only writing an erased sector or one that is already ours,
+`grava_registro`): `0xD4000` "MRS1" (48 B: length, wpm, tone in tens of Hz, the text) and `0xD5000`
+"APR1" (64 B: the lengths, the SSID, the path, the message number, the callsign, the addressee and the
+text). Zeroed means the default.
+
+### The text editor at 37 characters
+
+The editor is CH-NAME's. The RAM map around the text (`0x14A3A`):
+
+| Address | What it is |
+|---|---|
+| `b[0x14A35]` / `b[0x14A36]` | length / maximum (the maximum is the same byte as the main screen's digit-entry mode) |
+| `b[0x14A37]` | **the cursor**, the insertion position (`0x01E49666`, `0x01E49F24`, `0x01E4D4BA`). The `b[0x12A74]` that v38 called the cursor is the pinyin count |
+| `b[0x14A38]` / `b[0x14A39]` | mode (1 ABC, 2 123) / 0xAA marker (the first key replaces the whole text) |
+| `0x14A3A..0x14A49` | the stock 16 bytes of text (the clear routine `0x01E3AC52` zeroes `0x14A34..0x14A49`) |
+| `0x14A4A..0x14A5F` | the 11 chip registers the spectrum saves on entry (`0x01E4CF9C`) and restores on exit (`0x01E3FF0E`, mode 20 only) |
+| `0x14A60..0x14A77` | the SDK flash file system structure (`0x01E12F1C` and neighbours): **never touched** |
+
+Hence 37: the text and its closing zero reach `0x14A5F`. The spectrum copy is safe: the editor only exists
+in the menu (mode 1), and the per-mode key dispatch (`0x01E4B988`) sends everything in mode 20 to the
+spectrum handler (`0x01E4BFBE`), which does not open the menu; mode 1 is only written by the menu entry
+from the main screen. The editor is never open between the spectrum saving and restoring.
+
+The patches (`montar.py`):
+
+- the insertion's fixed 15 limit, `0x01E4A0F0` `02 fc 04 1c` (`if (r2 > 14)`), becomes `02 fc 04 48`
+  (`if (r2 > 36)`, the encoding checked by assembling the instruction with JieLi's clang). That path
+  (`0x01E4A0CC`) is only called by the editor (`0x01E4A4CA`); CH-NAME and NAME stay limited to 12 by
+  their own maximum;
+- the three stock copies of the text with `"%15s"` (`0x01E46CCE` and `0x01E476BE`, into `sp+21` in the
+  signal loop, with a `_` in the 26th byte; `0x01E48FBA`, into the 28 B `TEXTO` at `0x129B0`) call
+  `texto15`: the same result up to 15 letters, and at most 24. Theme B shows none of them;
+- the editor's 0 key (the pointer at `0x01E60B60`, the ABC key table) points to `" -/=+@()*#0"`: a space
+  on the first press and the SSID's `-`, which no key reached (the `@$%&` and ` =+-_` sequences belong to
+  the `:` and `;` keys, which the keypad never produces). The stock sequence was `"()/\*# 0"`;
+- the editor drawing (`editor_cena`, `telas.c`) puts what does not fit one line on two, in the medium or
+  the small font.
+
+Each text's get fills the editor (zeroing up to the 38th byte, because the insertion does not write the
+closing zero), puts the cursor at the end and the 0xAA marker; the set copies `length` letters and leaves
+the editor like CH-NAME does (`LIMPA(2)` and `0x01E3C7AA`). OK on the item calls the set without
+comparing values (`0x01E49A00`, after the `0x01E38BD4(61, 6)` beep): that is why SEND and RX are
+single-option lists.
+
+### Transmitting: the stock state machine
+
+The firmware never transmits with the menu open, and TX is a state machine in the signal loop
+(`0x01E4622A`, every 10 ms through the `0x01E4DEA8` `sys_timer`):
+
+| Variable | What it is |
+|---|---|
+| `b[0x1533C]` | 0 idle, 1 TX, 2 refused (beeping until PTT is released) |
+| `b[0x1534A]` | the step: 0 keys up (mutes RX audio, frequency, power, reg 0x30 = 0xC1FE), 1 waits one pass and arms TOT, 2 TOT and PTT (released goes to 3), 3 calls the end (`0x01E44604`), 4 tail and keys down, 8 after TOT |
+| `b[0x14950]` / `b[0x14924]` | alarm / beep playing (the PTT press does not transmit with either, `0x01E43F42`) |
+| PA12, `[0x1E5004]` bit 12 | the PTT: 0 = pressed (`0x01E47986`) |
+
+The start (`0x01E41022`) closes the menu (`0x01E40768` → `0x01E3C29C`, which saves the settings),
+disarms dual watch, checks the allowed band and the busy channel. The end (`0x01E44604`) plays the roger
+while still transmitting, with the microphone cut (reg 0x30 = 0xC3FA through `0x01E3FF3E(4)`), and goes back
+to receive.
+
+Sending uses that whole machine:
+
+1. SEND only arms: `b[0x14BE6] = 'M'` or `'A'` (byte `0x903A` of the settings, free per the v59 scan;
+   the factory default leaves 202 in it);
+2. **a hook on the PTT-press call** (`0x01E46540`, `call 0x01E43E8A`, on every loop pass): with a send
+   armed, no beep playing (OK's own), no TX, no alarm and PTT released, it sets "on air" (`'m'`/`'a'`)
+   and calls the TX start like the PTT press does (`0x01E39EE4`, `0x01E3951C`, `0x01E41022`); the stock
+   PTT press comes last, as a jump. With PTT pressed or TX idle (refused), "on air" is undone;
+3. with PTT not pressed, step 2 goes straight to 3, and the **hook on the end call** (`0x01E46D8C`, the
+   only one step 3 makes) plays the content in the roger's place: the same setup and teardown as the
+   BEEP roger (`0x01E43AFE(1)`, `0x01E3FF3E(4)`, `0x01E39DEA(1)`; `0x01E39E2C(10)`, `TOM(0, 0)`,
+   `0x01E43AFE(0)`, `0x01E39DEA(0)`), tone 2 off (reg 0x70 = 0xE000), and the stock end with the roger
+   zeroed around the call (the end does not save the settings).
+
+Power-on and the settings that arrive by cable or by the factory reset zero `b[0x14BE6]`: nothing
+transmits on its own. Before the content, the hook waits for the keys to be released (the OK that armed
+it may still be held).
+
+**Watchdog.** 4096 ms (power-on, `0x01E53BF4`: index 12 of the `0x01E5F1B4` table), cleared by the
+interface on every pass (`0x01E4B41A`), by `janela()`, by the long waits and by the roger itself
+(`0x01E44634`). While the content plays the interface does not run: our code calls `0x01E37E76` before
+each Morse character and element and around the APRS packet.
+
+**Stopping midway.** PTT or any key: the `0x01E43D50()` scan (255 = none) followed by
+`0x01E43CF4(60)`, as the loop does. After a key, it waits for the release: the loop did not run while it
+went down and, back, would see it as a new key (EXIT would become A/B on the main screen).
+
+### Morse
+
+Through the tone generator, like the roger: `TOM(f, 0)` on and `TOM(0, 0)` off, in FM (MCW). The unit is
+1200/wpm ms (the word PARIS): dot 1, dash 3, 1 between elements, 3 between letters and 7 between words,
+through `ESPERA_2MS`. The table has the 53 ITU characters from `!` to `Z` (one byte each: a marker and one
+bit per element), generated and checked back by script; the ones with no code (`# % * < >`) become a
+space. A tone known only at run time uses the integer formula Hz × 330382 / 32000 (= × 10.32444, the
+roger's).
+
+### APRS: the packet and the AFSK
+
+**The packet** is APRS's AX.25 UI frame: destination `APZBJ8` (APZ = experimental software), the source
+with its SSID, the path, control `0x03`, PID `0xF0`, the information field and the FCS (X.25 CRC-16:
+reflected polynomial 0x8408, starts at 0xFFFF, inverted, low byte first). The field is the message
+`:ADDRESSEE:text{id` (the addressee in 9 columns, the number from 1 to 99 for the other side to
+acknowledge) or, with no addressee, the status `>text`.
+
+**The AFSK.** The chip's FSK modem only does fixed pairs (FFSK 1200/1800 and 1200/2400; reg 0x72 is the bit
+rate; on the UV-K5 1200/1800 was measured with an SDR), and APRS is Bell 202, **1200/2200 Hz**. So the AFSK
+comes from the tone generator: on each 0 bit the frequency of tone 1 (reg 0x71) switches between 1200 and
+2200 Hz (NRZI), with bit stuffing after five 1s, 40 opening flags (270 ms) and 3 closing ones. Each bit's
+time (833.3 µs) comes from the clock: `b[0x14810]` counts milliseconds, 2 at a time on the TIMER1 tick,
+and the TIMER1 counter (`0x1E0504`, from 0 to the PRD at `0x1E0508`) is the fraction of the tick, the
+`0x01E4F888` formula. The target moves 833, 833 and 834 µs (2500 every 3 bits, with no accumulated
+error) and wraps around 32 bits together with the clock.
+
+**Checked on the PC** (`tests/teste_mensagem.py`, with zig): `mensagem.c` compiles with the chip and the
+clock mocked (the clock crosses the 32-bit wrap in the middle of the packet); the frame matches an
+independent builder; the tone switches become phase-continuous audio, and an independent demodulator
+(correlation at 1200 and 2200 Hz, clock from the transitions, NRZI, destuffing, FCS) finds the right
+frame, with every switch less than 10 µs off the 833.3 µs grid; the HDLC decoder finds only the good
+frames in both polarities, with noise between them, one with a wrong bit and one aborted; and the Morse
+comes back the same at 12 and 20 wpm. The audio is left at `firmware/build/aprs.wav`.
+
+### APRS: receiving
+
+We did not find the received audio on any of the processor's ADCs (the slow ADC at `0x1E3100` only reads
+the battery), so receiving uses the chip's modem in raw capture, like the stock TONE1200 roger and TA1JS
+on the UV-K5: reg 0x58 = 0x3FC3 (FFSK 1200/1800), 0x72 = 0x3065 (1200 bps), 0x70 = 0x00E0, a 4-byte sync =
+four NRZI flags (0x5A = 0x5B = 0xFEFE), no chip CRC (0x5C = 0xAA30), a 2048-byte frame (0x5D = 0xFFE0),
+almost full at 4 words (0x5E = 0x0204), sync, almost-full and end interrupts (0x3F = 0x3002), and
+0x59 = 0x4008 / 0x1008 to clear and start. The loop checks the interrupt request (reg 0x0C bit 0) every
+2 ms, clears and reads 0x02, and on each almost-full reads 4 words from 0x5F (the RX FIFO holds 8, 107 ms).
+The bits go to `hdlc_bit`, the word's low byte first and each byte's top bit first (the chip's TX order
+that TA1JS used with aprs.fi decoding). On sync, the decoder starts already "inside" a flag, with the line
+level of the polarity the chip saw (reg 0x0B bit 7). A frame with a good FCS, or 2.5 s with nothing after
+the sync, rearms the capture.
+
+The loop belongs to the item's set, with the menu open: the signal loop does not run, so dual watch is
+disarmed first (`0x01E3FDE4`, which goes back to the side in focus), the watchdog is cleared here,
+registers 0x3F, 0x70 and 0x72 are read first and restored at the end, and any key leaves. The screen
+(`tela_aprs`, `telas.c`) shows the 2 newest frames on two lines each, a message to my callsign in amber
+(without the `{id`), and how many have arrived.
+
+**What only the radio can prove:** whether the chip's FFSK 1200/1800 demodulator tells the 2200 Hz space
+from the mark (on the UV-K5 there are reports both ways: TA1JS decoded a TH-D75; another project found no
+frame with a good FCS); whether switching reg 0x71 mid-tone is phase continuous; the AFSK deviation with the
+roger's gain; and how long one chip write takes.
+
+### The stack
+
+The content runs in the roger's slot, in the signal loop, and the RX loop in the item's set; both within
+stock (620 and 740 B). The PTT-press hook sets "on air" before the start and calls the start and the stock
+PTT press as jumps (its frame already popped), and `pilha.py` now treats a `goto` from our code to
+another routine as in the stock graph (a tail call: the jumping routine's frame does not add up). V2.9T
+gives the same numbers with the new `pilha.py`.

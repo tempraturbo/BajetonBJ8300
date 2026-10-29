@@ -252,12 +252,23 @@ static void texto_menu(unsigned x, unsigned y, const char *s, unsigned largura_m
         x += letra_media(x, y, (u8)*s++, cor, linha_janela) + 1;
 }
 
-/* O texto do editor de nome num cartao de borda verde, em 2x se couber (no medio, senao), com o
- * cursor ambar no fim - o editor so acrescenta e apaga no fim - e quantos caracteres de quantos. */
+/* Quantas letras do comeco de s cabem nos 140 px do cartao, no tamanho e. */
+static unsigned cabem(const char *s, unsigned e)
+{
+    unsigned k = 0, l = 0;
+
+    while (s[k] && (l += avanco(fonte_b_letra[indice((u8)s[k])], e)) <= 141)
+        k++;
+    return k;
+}
+
+/* O texto do editor num cartao de borda verde, em 2x se couber (no medio, senao), com o cursor ambar
+ * no fim e quantos caracteres de quantos. As mensagens do Morse e do APRS (v65) vao a 37: o que nao
+ * cabe numa linha do medio sai em duas, no medio ou, se nem assim couber, no pequeno. */
 SEPARADA static void editor_cena(void)
 {
-    unsigned n = DIGITADOS, i, e, w, y = TOPO_EDITOR;
-    char s[24];
+    unsigned n = DIGITADOS, i, e, w, k, y = TOPO_EDITOR;
+    char s[38];
 
     for (i = 0; i < n && i < sizeof s - 1; i++)
         s[i] = RAM(u8, DIGITOS + i);
@@ -265,9 +276,20 @@ SEPARADA static void editor_cena(void)
     pinta(3, y, 157, y + 34, COR_VERDE);
     pinta(4, y + 1, 156, y + 33, COR_CARTAO);
     e = largura(s, 2) + 14 <= 144 ? 2 : MEDIA;
-    w = largura(s, e) + (s[0] ? e ? 2 : 1 : 0);
-    texto(10, e ? y + 10 : y + 12, s, e, COR_BRANCO);
-    pinta(10 + w, e ? y + 25 : y + 23, 10 + w + (e ? 10 : 6), e ? y + 27 : y + 25, COR_TEXTO_AMBAR);
+    k = cabem(s, MEDIA);
+    if (!s[k]) {
+        w = largura(s, e) + (s[0] ? e ? 2 : 1 : 0);
+        texto(10, e ? y + 10 : y + 12, s, e, COR_BRANCO);
+        pinta(10 + w, e ? y + 25 : y + 23, 10 + w + (e ? 10 : 6), e ? y + 27 : y + 25, COR_TEXTO_AMBAR);
+    } else {
+        e = s[k + cabem(s + k, MEDIA)] ? 1 : MEDIA;
+        k = cabem(s, e);
+        texto(10, y + 18, s + k, e, COR_BRANCO);
+        w = largura(s + k, e) + (e ? 2 : 1);
+        s[k] = 0;
+        texto(10, y + 4, s, e, COR_BRANCO);
+        pinta(10 + w, y + 28, 10 + w + (e ? 5 : 6), y + 30, COR_TEXTO_AMBAR);
+    }
     numero(junta(numero(s, n, 1), "/"), EDITOR_MAX, 1);
     texto(156 - largura(s, 1), y + 38, s, 1, COR_CINZA);
 }
@@ -995,6 +1017,38 @@ static void esp_limite(unsigned x0, unsigned x1, unsigned y)
 {
     for (x0 &= ~3u; x0 < x1; x0 += 4)
         pinta(x0, y, x0 + 2, y + 1, COR_TEXTO_AMBAR);
+}
+
+/* ---------- APRS RX (v65) ----------
+ * A tela do laco de recepcao do APRS (mensagem.c, aprs_rx_grava), a tela inteira: o titulo com
+ * quantos quadros chegaram, e os 2 quadros mais novos em duas linhas cada, o de cima o mais novo. As
+ * linhas com o bit ligado em `ambar` (mensagem para o meu indicativo) saem em ambar. */
+SEPARADA static void aprs_cena(const char (*l)[25], unsigned ambar, unsigned total)
+{
+    char s[12];
+    unsigned i;
+
+    pinta(0, 0, 160, 17, COR_ESTADO);
+    etiqueta(4, 3, "APRS RX", COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 0);
+    numero(s, total, 1);
+    texto(156 - largura(s, 1), 5, s, 1, COR_CINZA);
+    pinta(0, 17, 160, 18, COR_LINHA);
+    for (i = 0; i < 4; i++)
+        texto(4, 26 + (i >> 1) * 42 + (i & 1) * 12, l[i], 1,
+              ambar >> i & 1 ? COR_TEXTO_AMBAR : COR_TEXTO);
+    pinta(4, 63, 156, 64, COR_LINHA);
+    texto(4, 119, "ANY KEY: EXIT", 1, COR_CINZA);
+}
+
+void tela_aprs(const char (*l)[25], unsigned ambar, unsigned total)
+{
+    unsigned y;
+
+    for (y = 0; y < 128; y += 32) {
+        janela_b(0, 160, y, y + 32, COR_FUNDO);
+        aprs_cena(l, ambar, total);
+        ENVIA();
+    }
 }
 
 #ifdef PREVIA

@@ -42,6 +42,8 @@ void JANELA(unsigned x0, unsigned x1, unsigned y0, unsigned y1, unsigned limpar,
 }
 
 /* envia() 0x01E3ADBC: manda o buffer da janela aberta para a tela. */
+void tela_aprs(const char (*l)[25], unsigned ambar, unsigned total);   /* telas.c (v65) */
+
 void ENVIA(void)
 {
     unsigned x0 = memoria[0x14608], y0 = memoria[0x1460A], x1 = memoria[0x1460C], y1 = memoria[0x1460E];
@@ -785,6 +787,45 @@ int main(int argc, char **argv)
         memoria[0x129D4] = 0;
         telas_b(1, 0);
         grava("57d-menu-sinal-sumiu");
+
+        /* v65: as pastas MORSE e APRS, o indicativo, a velocidade, uma mensagem de 37 letras no editor (em
+         * duas linhas) e a tela do APRS RX, com uma mensagem para o meu indicativo em ambar */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        menu_em(NOS_GRUPOS, grupo("APRS"));
+        telas_b(1, 0);
+        grava("59-menu-grupos-aprs");
+        menu_no("APRS", "APRS CALLSIGN");
+        LINHA(0, 0, "PY2ABC");
+        telas_b(1, 0);
+        grava("59b-menu-aprs-callsign");
+        menu_no("MORSE", "MORSE SPEED");
+        LINHA(0, 1, "14 WPM");
+        LINHA(1, 2, "15 WPM");
+        LINHA(2, 1, "16 WPM");
+        telas_b(1, 0);
+        grava("60-menu-morse-speed");
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "MORSE MESSAGE");
+        menu_no("MORSE", "MORSE MESSAGE");
+        memoria[0x14C00] = 7;
+        memoria[0x14BF9] = 1;
+        digitando("CQ CQ DE PY2ABC PY2ABC K 73 GL 5NN TU");
+        memoria[0x14A36] = 37;
+        memoria[0x14A38] = 1;
+        telas_b(1, 0);
+        grava("61-editor-mensagem-37");
+        digitando("CQ CQ DE PY2ABC K 73");
+        telas_b(1, 0);
+        grava("61b-editor-mensagem-20");
+        {
+            static const char rx[4][25] = {"PU2XYZ-9> OLA, RECEBI O", "SEU TESTE{3",
+                                           "PY2RPT-1: >BJ-8300 V2.9T", "TESTE DO APRS"};
+
+            tela_aprs(rx, 3, 7);
+            grava("62-aprs-rx");
+        }
 
         BASE_TELAS();
         memoria[0x1533D] = 17;

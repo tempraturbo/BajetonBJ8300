@@ -543,6 +543,8 @@ variável `JL_TOOLCHAIN` para ela.
 **Opcionais:**
 
 - **Prévia da tela no PC** (abaixo): `pip install ziglang`.
+- **Teste do Morse e do APRS** (o pacote, o AFSK e o decodificador, no PC): `python -I tests/teste_mensagem.py`,
+  com o mesmo zig.
 - **Testes do driver do CHIRP:** `python -I tests/teste_bj8300.py` não precisa de nada;
   `python -I tests/teste_chirp_real.py` precisa do CHIRP
   (`pip install https://codeload.github.com/kk7ds/chirp/tar.gz/refs/heads/master --no-deps`).

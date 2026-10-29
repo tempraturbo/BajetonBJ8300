@@ -5,6 +5,51 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v68 — Oct 29 — LIGHT PWM also at 240 and 580 Hz (to be tested)
+
+`firmware/releases/BJ8300_BANK_v68.anc` (sha256 `5125f62b…`). At 1 kHz the radio held close still picked up
+interference. At the owner's request, LIGHT PWM got 240 Hz and 580 Hz, to compare; the menu shows all five in
+frequency order, and the values already saved stay the same (1 kHz is still the default).
+
+## v67 — Oct 29 — LIGHT PWM at 1 kHz, without the pin strength test ✔️ tested: 1 kHz still with interference
+
+`firmware/releases/BJ8300_BANK_v67.anc` (sha256 `77d092dd…`). The v66 test: LIGHT DRIVE (the backlight
+pin's strength) changed nothing in the light, and was removed; the pin stays as stock. LIGHT PWM at 1 kHz
+caused no interference on the radio held close ("it got better and did not cause interference"), and stays
+as a real setting in the CALIBRATION folder, with 1 kHz as the default: saved at `0x903B` (1 kHz, 5 kHz or
+25 kHz). The rest is v65 (Morse and APRS), still being tested.
+
+## v66 — Oct 29 — v65 and the backlight edge test ✔️ tested: pin strength changed nothing, 1 kHz without interference
+
+`firmware/releases/BJ8300_BANK_v66.anc` (sha256 `44586860…`). v65 with two temporary items in the
+CALIBRATION folder, to find what removes the backlight PWM interference on a radio held close: **LIGHT
+PWM** (25 kHz, 5 kHz or 1 kHz) and **LIGHT DRIVE** (the backlight pin's output strength, the four HD0 and
+HD combinations, showing the one on the pin when opened). Nothing is saved: on power-up it all goes back.
+They only matter with the light below 100%. [Section 23](reverse-engineering.md#23-the-screen-backlight-by-pwm-v60-diagnostic).
+
+## v65 — Oct 29 — the MORSE and APRS folders (replaced by v66 before being flashed)
+
+`firmware/releases/BJ8300_BANK_v65.anc` (sha256 `2e297940…`). The owner asked for Morse and APRS because
+they are standards: the radio can talk to any other, of any brand and firmware. Details in
+[section 24](reverse-engineering.md#24-morse-and-aprs-v65) of the reverse engineering doc.
+
+- **MORSE folder:** MORSE MESSAGE (up to 37 letters), MORSE SEND, MORSE SPEED (5 to 40 wpm) and MORSE
+  TONE (400 to 1200 Hz). Morse goes out in FM through the tone generator, like the roger.
+- **APRS folder:** APRS CALLSIGN, APRS SSID, APRS TO (the addressee; empty sends a status), APRS MESSAGE,
+  APRS SEND, APRS PATH (WIDE1-1, WIDE1-1,WIDE2-1 or none) and APRS RX. Sending is APRS's AX.25 in Bell 202
+  AFSK (1200/2200 Hz) through the tone generator, each bit timed from TIMER1; receiving uses the chip's FSK
+  modem in raw capture, and the decoding (NRZI, destuffing, FCS) is ours.
+- **Sending through the stock TX:** SEND only arms; a hook on the PTT press keys up like the PTT (the menu
+  closes, as with the PTT in the menu) and another at the end of TX plays the message in the roger's
+  place. PTT or any key stop the Morse midway.
+- **The text editor goes to 37 characters** (the most its RAM holds), shows what does not fit one line on
+  two, and the 0 key got a space on the first press and `- / = + @`.
+- Morse, the packet, the AFSK and the decoder were checked on the PC against independent implementations
+  (`tests/teste_mensagem.py`). Still to be proven on the radio: receiving through the chip's modem (APRS's
+  space is 2200 Hz and the modem is 1200/1800) and the AFSK on a real receiver.
+- `pilha.py` treats our code's jump to another routine like the stock one (V2.9T gives the same numbers
+  with it).
+
 ## V2.9T — Oct 29 — the MIC folder, CALIBRATION, screen brightness and who is receiving in the menu ✅
 
 v64 became **V2.9T**: `firmware/releases/BJ8300_BANK_v2.9T.anc` (sha256 `f782e4a6…`, the same file;

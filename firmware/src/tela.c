@@ -1049,8 +1049,8 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * a quantidade de posicoes da tabela no byte 1 e uma marca por posicao a partir do byte 4. Os dois saem do
  * compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e zero no resto, e o
  * montar so escreve neles se achar exatamente isso. */
-const unsigned char menu_tabela[80 * 28] __attribute__((aligned(4))) = {0xFF};
-const unsigned char menu_textos[512] __attribute__((aligned(4))) = {0xFF};
+const unsigned char menu_tabela[96 * 28] __attribute__((aligned(4))) = {0xFF};
+const unsigned char menu_textos[640] __attribute__((aligned(4))) = {0xFF};
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
  * O mapa do motor de menus esta no telas.c, junto do desenho. O que muda o nivel faz o mesmo que as
@@ -1653,7 +1653,14 @@ u32 b_medidor(u32 estado, u32 nivel, u32 lado)
 #define PB_PD        RAM(u32, 0x001E5054)
 #define PINO_LUZ     0x80u                  /* o PB7 */
 #define MARCA_LUZ    RAM(u8, 0x00015386)
-#define LUZ_PRD      240u                   /* 24 MHz / 4 / 240 = 25 kHz, fora do audio */
+#define LUZ_PRD      240u                   /* a escala dos ciclos: 24 MHz / 4 / 240 = 25 kHz */
+/* A frequencia do PWM (v67, o LIGHT PWM da pasta CALIBRATION): o 0x903B dos ajustes (b[0x14BE7]), livre
+ * pela mesma varredura da v59 (de 0x14BDF a 0x14BEB nenhum acesso de fabrica fora as copias do bloco),
+ * 0 = 1 kHz, o padrao, 1 = 5 kHz, 2 = 25 kHz e, desde a v68, 3 = 240 Hz e 4 = 580 Hz (o PRD a 6 MHz:
+ * 6000, 1200, 240, 25000 e 10345); fora da faixa (o RESET de fabrica) vale 1 kHz. O menu as mostra em
+ * ordem de frequencia (luz_pwm_posicao). O ciclo de cada nivel vai na mesma escala (luz_ciclo). */
+#define LUZ_FREQ     RAM(u8, 0x00014BE7)
+static const u16 luz_prd[5] = {6000, 1200, 240, 25000, 10345};
 /* O BRIGHTNESS (v61): o nivel no 0x9039 dos ajustes (b[0x14BE5], livre como os da v59), de 0 = 100% a
  * 4 = 10%, espacados para o olho; fora da faixa (o RESET de fabrica deixa 163) vale 100%. */
 #define BRILHO       RAM(u8, 0x00014BE5)
@@ -1661,9 +1668,15 @@ static const u8 luz_ciclos[5] = {240, 144, 84, 48, 24};
 #define CH2_T2_PWM   0x2E                   /* o CH2_T2_PWM_OUT do gpio.h do SDK */
 FIRMWARE(CANAL_SAIDA, 0x01E4370A); void CANAL_SAIDA(unsigned pino, unsigned fonte);
 
+static unsigned luz_prd_de(void)
+{
+    return luz_prd[LUZ_FREQ < 5 ? LUZ_FREQ : 0];
+}
+
+/* O ciclo do nivel, na escala do PRD de agora. */
 static unsigned luz_ciclo(void)
 {
-    return luz_ciclos[BRILHO < 5 ? BRILHO : 0];
+    return luz_ciclos[BRILHO < 5 ? BRILHO : 0] * T2_PRD / LUZ_PRD;
 }
 
 /* O pino da luz com o ciclo dado (v62). Cada borda do PWM espalha um pouco de RF, que um receptor
@@ -1673,7 +1686,7 @@ static unsigned luz_ciclo(void)
  * fabrica, so com a UART2 desligada (o CH2 e dela). */
 static void luz_poe(unsigned ciclo)
 {
-    if (ciclo && ciclo < LUZ_PRD && !(UART2_CON0 & 1)) {
+    if (ciclo && ciclo < T2_PRD && !(UART2_CON0 & 1)) {
         T2_PWM = ciclo;
         if (!(PB_PD & PINO_LUZ))
             CANAL_SAIDA(23, CH2_T2_PWM);
@@ -1695,7 +1708,7 @@ void luz_inicia(void)
         return;
     T2_CON = 0;
     T2_CON = 2 << 2 | 1 << 4;
-    T2_PRD = LUZ_PRD;
+    T2_PRD = luz_prd_de();
     T2_PWM = 0;
     T2_CNT = 0;
     T2_CON |= 1;
@@ -1713,11 +1726,38 @@ u32 b_luz(u32 acende)
     return 1;
 }
 
-/* O nivel novo na hora (o set do BRIGHTNESS e os ajustes que mudam por fora do menu, bancos.c). */
+/* O nivel e a frequencia novos na hora (o set do BRIGHTNESS e do LIGHT PWM, e os ajustes que mudam por
+ * fora do menu, bancos.c). */
 void luz_aplica(void)
 {
-    if (T2_CON & 1)
-        luz_poe(MARCA_LUZ ? luz_ciclo() : 0);
+    if (!(T2_CON & 1))
+        return;
+    if (T2_PRD != luz_prd_de()) {
+        T2_PRD = luz_prd_de();
+        T2_CNT = 0;
+    }
+    luz_poe(MARCA_LUZ ? luz_ciclo() : 0);
+}
+
+/* ---------- LIGHT PWM (v67, a pasta CALIBRATION) ----------
+ * A frequencia do PWM da luz (LUZ_FREQ, acima). A energia das bordas que cai num canal de VHF/UHF e
+ * proporcional a ela: no teste da v66, o dono achou 1 kHz melhor, sem interferencia. O teste da forca
+ * do pino (os bits do PB7 em 0x1E5058 e 0x1E505C, o HD0 e o HD do SDK) nao mudou nada na luz, e saiu. */
+#define VALOR_LINHA  RAM(u16, 0x00014BFC)   /* o valor da linha do item, no menu (o VALOR do bancos.c) */
+const char titulo_luz_pwm[] = "LIGHT PWM";
+const char *const luz_pwm_opcoes[5] = {"240 HZ", "580 HZ", "1 KHZ", "5 KHZ", "25 KHZ"};
+static const u8 luz_pwm_valor[5] = {3, 4, 0, 1, 2};      /* posicao no menu -> valor gravado */
+static const u8 luz_pwm_posicao[5] = {2, 3, 4, 0, 1};    /* valor gravado -> posicao no menu */
+
+u16 luz_pwm_le(void)
+{
+    return luz_pwm_posicao[LUZ_FREQ < 5 ? LUZ_FREQ : 0];
+}
+
+void luz_pwm_grava(void)
+{
+    LUZ_FREQ = luz_pwm_valor[VALOR_LINHA < 5 ? VALOR_LINHA : 2];
+    luz_aplica();
 }
 
 /* 0x01E40F1C(estado), a transmissao, refeita: 1 so grava o estado; 2 grava e desenha o lado em

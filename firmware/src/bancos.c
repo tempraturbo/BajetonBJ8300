@@ -234,6 +234,10 @@ void luz_aplica(void);                    /* o nivel do BRIGHTNESS na hora (v61,
  * livre no levantamento. Ficam fora do registro do WATCH porque a tela B le aquele a cada desenho, e
  * 64 B a mais na pilha de quem o le passariam da de fabrica; estes so a tecla A/B e o rodizio leem. */
 #define SETOR_VFC      0x000D3000u
+/* As mensagens do Morse e do APRS (v65, mensagem.c), um setor para cada, tambem livres no
+ * levantamento: a do Morse com a velocidade e o tom, a do APRS com o indicativo e o destinatario. */
+#define SETOR_MORSE    0x000D4000u
+#define SETOR_APRS     0x000D5000u
 
 /* A marca fica em dois u16 em vez de quatro u8: conferir e gravar a marca passa a ser dois acessos
  * de 16 bits (as duas estruturas tem campo u16, entao o alinhamento de 2 e garantido) em vez de um
@@ -242,11 +246,13 @@ void luz_aplica(void);                    /* o nivel do BRIGHTNESS na hora (v61,
 #define MARCA_BANCO  0x314F4342u               /* "BCO1" */
 #define MARCA_WATCH  0x31435457u               /* "WTC1" */
 #define MARCA_VFC    0x31434656u               /* "VFC1" */
+#define MARCA_MORSE  0x3153524Du               /* "MRS1" */
+#define MARCA_APRS   0x31525041u               /* "APR1" */
 /* A marca sai do proprio endereco - o cabecalho tem a sua, os 16 setores de banco tem a outra -
  * em vez de viajar como parametro em cada chamada: um argumento a menos para errar. */
 #define MARCA_DE(endereco)  ((endereco) == SETOR_CAB ? MARCA_CAB : \
                              (endereco) == SETOR_WATCH ? MARCA_WATCH : \
-                             (endereco) == SETOR_VFC ? MARCA_VFC : MARCA_BANCO)
+                             (endereco) == SETOR_VFC ? MARCA_VFC :                              (endereco) == SETOR_MORSE ? MARCA_MORSE :                              (endereco) == SETOR_APRS ? MARCA_APRS : MARCA_BANCO)
 
 struct cabeca {
     u16 marca[2];                          /* "BNK3" */
@@ -355,11 +361,11 @@ static int setor_livre(u32 endereco)
 }
 
 /* ---------- cabecalho e bancos: cada um no seu setor ----------
- * Um unico par de funcoes serve para os dois: le para a pilha, confere marca e soma, e se nao
- * bater devolve zerado com a marca posta (nunca lixo). Gravar e apagar o setor e escrever so os
- * bytes da estrutura - a rotina do firmware fatia em paginas sozinha.
+ * Um unico par de funcoes serve para todos (e para o mensagem.c, desde a v65): le para a pilha,
+ * confere marca e soma, e se nao bater devolve zerado com a marca posta (nunca lixo). Gravar e apagar
+ * o setor e escrever so os bytes da estrutura - a rotina do firmware fatia em paginas sozinha.
  */
-static int le_registro(u32 endereco, void *buf, unsigned tam)
+int le_registro(u32 endereco, void *buf, unsigned tam)
 {
     u8 *p = (u8 *)buf;
     u16 *m = (u16 *)buf;
@@ -374,7 +380,7 @@ static int le_registro(u32 endereco, void *buf, unsigned tam)
     return 0;
 }
 
-static void grava_registro(u32 endereco, void *buf, unsigned tam)
+void grava_registro(u32 endereco, void *buf, unsigned tam)
 {
     u8 *p = (u8 *)buf;
 
@@ -530,10 +536,16 @@ static void revalida_lados(void)
  * salvo (0x01E3AB36) grava o 0 no chip. Fora daqui, so o set do LANGUAGE (0x01E3C9B8) gravava o
  * idioma, e o retorno aos ajustes de fabrica (0x01E4842E) o preserva.
  */
+/* O envio do Morse e do APRS armado ou no ar (v65, mensagem.c): o 0x903A dos ajustes. Zerado na
+ * partida e nos ajustes que chegam pelo cabo ou pelo retorno aos de fabrica, para nada transmitir
+ * sozinho. */
+#define ESTADO_ENVIO   (*(volatile u8 *)0x00014BE6)
+
 void gancho_partida(void)
 {
     FIM_DA_CARGA();
     IDIOMA = 0;
+    ESTADO_ENVIO = 0;
     aplica_mic();                          /* por cima da copia da calibracao e do init do chip (MIC) */
     aplica_cristal();                      /* idem (CRYSTAL FINE) */
     if (watch_vista() == WATCH_SINGLE)     /* no SINGLE a dupla escuta fica desligada (WATCH, abaixo) */
@@ -1418,6 +1430,7 @@ NA_LIVRE_COD void brilho_grava(void)
 
 NA_LIVRE_COD void gancho_ajustes(void)
 {
+    ESTADO_ENVIO = 0;
     aplica_mic();
     aplica_cristal();
     luz_aplica();

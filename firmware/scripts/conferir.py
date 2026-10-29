@@ -50,7 +50,7 @@ def partes(caminho):
 dados, entradas, chave, app = partes(novo)
 dados_velhos, entradas_velhas, _, app_velho = partes(original)
 fonte = ''.join(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', f),
-                     encoding='utf-8').read() for f in ('bancos.c', 'tela.c', 'telas.c'))
+                     encoding='utf-8').read() for f in ('bancos.c', 'tela.c', 'telas.c', 'mensagem.c'))
 declaradas = {int(e, 16): n for n, e in re.findall(r'^FIRMWARE\((\w+), (0x[0-9A-Fa-f]+)\)', fonte, re.M)}
 
 
@@ -370,6 +370,9 @@ for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
         # porta nova, e de dado: o firmware le a tabela, nao executa
         if (binario is app and montar.MENU_NOVO and onde == montar.PONTEIRO_EM + 2
                 and v == montar.S[montar.TABELA_SIMBOLO]):
+            continue
+        # v65: o ponteiro da tecla 0 do editor, tambem de dado (a sequencia de letras dela)
+        if binario is app and any(onde == s_ and v == montar.S[n_] for s_, _, n_, _ in montar.PONTEIROS_LIVRE):
             continue
         if dentro(v & ~1) and excecoes.get(onde) != bytes(binario[o:o + 4]):
             problemas.append(f'{nome_app}: valor {v:#x} em {onde:#x} aponta para dentro da faixa')
@@ -835,6 +838,18 @@ for sitio, antes, depois, oque in montar.EDITOR_REMENDOS:
     if not ok:
         erros.append(f'editor de nome: remendo errado em {sitio:#x}')
 previsto_tela += [(s_, s_ + len(a_) - 1, 'editor de nome: ' + d_) for s_, a_, _, d_ in montar.EDITOR_REMENDOS]
+# v65: o ponteiro da tecla 0 do editor: de fabrica o da sequencia original, remendado o da nossa, que
+# tem de estar no .livre e trazer o espaco primeiro e o 0 no fim.
+for sitio, era, simbolo, oque in montar.PONTEIROS_LIVRE:
+    o = sitio - montar.BASE_APP
+    novo = montar.S[simbolo]
+    ok = (struct.unpack_from('<I', app_velho, o)[0] == era and struct.unpack_from('<I', app, o)[0] == novo
+          and montar.LIVRE <= novo < montar.LIVRE_FIM
+          and app[novo - montar.BASE_APP:].split(b'\0', 1)[0] == b' -/=+@()*#0')
+    print(f'4s. {sitio:#x}: {oque}: ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append(f'ponteiro errado em {sitio:#x}')
+previsto_tela += [(s_, s_ + 3, d_) for s_, _, _, d_ in montar.PONTEIROS_LIVRE]
 
 # 4t. o EXIT dos grupos do menu (v53): no sitio, de fabrica os bytes cobertos e, remendado, um goto para
 # o desvio; o desvio, no .livre, e exatamente o da 4m com "goto feito" no lugar do rts: guarda rets e

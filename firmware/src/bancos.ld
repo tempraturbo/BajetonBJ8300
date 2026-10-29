@@ -38,7 +38,8 @@
  * arquivo .wtg ou .mp3, as vozes sairam e MP3 nao ha nenhum, e nada de fora aponta para a faixa
  * alem do registro dos decodificadores, cujo tipo o montar.py zera nos dois (prova em
  * docs/engenharia-reversa.md, secao 16). O tela.o inteiro (a tela principal B) mora ali. Ele nao
- * pode ter .data nem .bss (nao ha RAM nossa): o conferir.py confere. */
+ * pode ter .data nem .bss (nao ha RAM nossa): o conferir.py confere. Desde a v65 o mensagem.o (o
+ * Morse e o APRS) mora ali tambem, com a mesma regra. */
 MEMORY
 {
     novo (rx) : ORIGIN = 0x01E96124, LENGTH = 3260
@@ -49,12 +50,13 @@ MEMORY
 SECTIONS
 {
     .text : {
-        *(EXCLUDE_FILE(*tela.o) .text*)
-        *(EXCLUDE_FILE(*tela.o) .rodata*)
+        *(EXCLUDE_FILE(*tela.o *mensagem.o) .text*)
+        *(EXCLUDE_FILE(*tela.o *mensagem.o) .rodata*)
     } > novo
 
     .livre : {
         *tela.o(.text* .rodata*)
+        *mensagem.o(.text* .rodata*)
         *(.livre.*)
         *(.carimbo)     /* v47: o CRC16 do .text, por ultimo, para nada mudar de lugar com ele */
     } > livre

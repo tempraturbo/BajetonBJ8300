@@ -309,9 +309,9 @@ PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 # devolve a tabela e, se o menu foi fechado de dentro de um grupo, poe o grupo em [+6], que a entrada
 # le logo depois (0x01E4CBCA). Na chamada, r1..r3 estao mortos (escritos antes de lidos depois dela)
 # e o r4 (0, lido em 0x01E4CBC6) a chamada preserva.
-MENU_VAGAS = 80
+MENU_VAGAS = 96                                    # v65: 87 com as pastas MORSE e APRS
 TABELA_SIMBOLO = 'menu_tabela'
-TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 512
+TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 640
 R5_R0 = bytes.fromhex('0516')
 
 # v53: os grupos do menu (src/telas.c), um nivel acima dos itens, a pedido do dono. Cada item fica em
@@ -695,6 +695,74 @@ NA_LIVRE += LUZ                            # v60 e v61: a luz por PWM e o BRIGHT
 PRECISA += LUZ
 PRECISA += ESPECTRO_B
 
+# v65: o Morse e o APRS (src/mensagem.c, inteiro no .livre). Duas pastas novas, e o envio pela TX de
+# fabrica: o SEND so arma, a chamada da ida do PTT no laco do sinal (0x01E46540) liga a TX como o PTT,
+# e a chamada do fim da TX no passo 3 (0x01E46D8C, a unica que o passo 3 faz) toca o Morse ou o AFSK
+# no lugar do roger. O editor de texto vai a 37 caracteres: o limite fixo de 15 da insercao
+# (0x01E4A0F0, "if (r2 > 14)", so no caminho do editor, 0x01E4A0CC <- 0x01E4A4CA) vira 36, e as tres
+# copias "%15s" do texto (sprintf para buffers de 27 e 28 bytes) passam pelo texto15. A tecla 0 do
+# editor (ABC) ganha o espaco primeiro e o - / = + @, que nenhuma tecla alcancava (o ponteiro dela na
+# tabela 0x01E60B60).
+ITENS_DEPOIS[ROGER_ITEM] = [
+    dict(nome='MORSE MESSAGE', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='morse_msg_le',
+         set='morse_msg_grava', titulo='titulo_morse_msg', exibe='morse_msg_exibe'),
+    dict(nome='MORSE SEND', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='morse_envia_grava',
+         titulo='titulo_morse_envia', exibe='envia_opcoes', opcoes_cn='envia_opcoes'),
+    dict(nome='MORSE SPEED', molde=ZONE, flags=FLAGS_NUMERO, maximo=36, get='morse_wpm_le',
+         set='morse_wpm_grava', titulo='titulo_morse_wpm', exibe='morse_wpm_exibe'),
+    dict(nome='MORSE TONE', molde=ZONE, flags=FLAGS_NUMERO, maximo=17, get='morse_tom_le',
+         set='morse_tom_grava', titulo='titulo_morse_tom', exibe='morse_tom_exibe'),
+    dict(nome='APRS CALLSIGN', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_ind_le',
+         set='aprs_ind_grava', titulo='titulo_aprs_ind', exibe='aprs_ind_exibe'),
+    dict(nome='APRS SSID', molde=ZONE, flags=FLAGS_NUMERO, maximo=16, get='aprs_ssid_le',
+         set='aprs_ssid_grava', titulo='titulo_aprs_ssid', exibe='aprs_ssid_exibe'),
+    dict(nome='APRS TO', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_dest_le',
+         set='aprs_dest_grava', titulo='titulo_aprs_dest', exibe='aprs_dest_exibe'),
+    dict(nome='APRS MESSAGE', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_msg_le',
+         set='aprs_msg_grava', titulo='titulo_aprs_msg', exibe='aprs_msg_exibe'),
+    dict(nome='APRS SEND', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='aprs_envia_grava',
+         titulo='titulo_aprs_envia', exibe='envia_opcoes', opcoes_cn='envia_opcoes'),
+    dict(nome='APRS PATH', molde=TDR_ITEM, flags=0, maximo=3, get='aprs_caminho_le',
+         set='aprs_caminho_grava', titulo='titulo_aprs_caminho', exibe='aprs_caminho_opcoes',
+         opcoes_cn='aprs_caminho_opcoes'),
+    dict(nome='APRS RX', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='aprs_rx_grava',
+         titulo='titulo_aprs_rx', exibe='aprs_rx_opcoes', opcoes_cn='aprs_rx_opcoes'),
+]
+# v67: a frequencia do PWM da luz (tela.c), na pasta CALIBRATION (a DISPLAY esta cheia); o 0x903B
+ITENS_DEPOIS[ROGER_ITEM] += [
+    dict(nome='LIGHT PWM', molde=TDR_ITEM, flags=0, maximo=5, get='luz_pwm_le', set='luz_pwm_grava',
+         titulo='titulo_luz_pwm', exibe='luz_pwm_opcoes', opcoes_cn='luz_pwm_opcoes'),
+]
+GRUPOS['CALIBRATION'] = ('CRYSTAL FINE', 'LIGHT PWM')
+LUZ_PWM = ('luz_pwm_le', 'luz_pwm_grava', 'titulo_luz_pwm', 'luz_pwm_opcoes')
+NA_LIVRE += LUZ_PWM
+PRECISA += LUZ_PWM
+GRUPOS['MORSE'] = ('MORSE MESSAGE', 'MORSE SEND', 'MORSE SPEED', 'MORSE TONE')
+GRUPOS['APRS'] = ('APRS CALLSIGN', 'APRS MESSAGE', 'APRS PATH', 'APRS RX', 'APRS SEND', 'APRS SSID', 'APRS TO')
+MENU_MARCAS.update({('MORSE', 'MORSE SEND'): MARCA_SEM_VALOR, ('APRS', 'APRS SEND'): MARCA_SEM_VALOR,
+                    ('APRS', 'APRS RX'): MARCA_SEM_VALOR})
+CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o envio armado liga a TX'),
+                   (0x01E46D8C, 0x01E44604, 'gancho_fim_tx', 'Morse e APRS: o conteudo no lugar do roger'),
+                   (0x01E46CCE, 0x01E19DCC, 'texto15', 'editor: a copia do texto na piscada, ate 24'),
+                   (0x01E476BE, 0x01E19DCC, 'texto15', 'editor: a outra copia da piscada, ate 24'),
+                   (0x01E48FBA, 0x01E19DCC, 'texto15', 'editor: a copia para o TEXTO, ate 24'))
+EDITOR_REMENDOS += ((0x01E4A0F0, bytes.fromhex('02fc041c'), bytes.fromhex('02fc0448'),
+                     'o limite fixo da insercao vai de 15 a 37 letras'),)
+# (onde, o ponteiro de fabrica, o simbolo novo, o que e)
+PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com o espaco primeiro e - / = + @'),)
+MENSAGEM = ('texto15', 'gancho_ida_ptt', 'gancho_fim_tx', 'tecla_zero', 'acao_le', 'envia_opcoes',
+            'morse_msg_le', 'morse_msg_grava', 'morse_msg_exibe', 'titulo_morse_msg', 'morse_envia_grava',
+            'titulo_morse_envia', 'morse_wpm_le', 'morse_wpm_grava', 'morse_wpm_exibe', 'titulo_morse_wpm',
+            'morse_tom_le', 'morse_tom_grava', 'morse_tom_exibe', 'titulo_morse_tom',
+            'aprs_ind_le', 'aprs_ind_grava', 'aprs_ind_exibe', 'titulo_aprs_ind',
+            'aprs_ssid_le', 'aprs_ssid_grava', 'aprs_ssid_exibe', 'titulo_aprs_ssid',
+            'aprs_dest_le', 'aprs_dest_grava', 'aprs_dest_exibe', 'titulo_aprs_dest',
+            'aprs_msg_le', 'aprs_msg_grava', 'aprs_msg_exibe', 'titulo_aprs_msg',
+            'aprs_envia_grava', 'titulo_aprs_envia', 'aprs_caminho_le', 'aprs_caminho_grava',
+            'aprs_caminho_opcoes', 'titulo_aprs_caminho', 'aprs_rx_grava', 'aprs_rx_opcoes', 'titulo_aprs_rx')
+NA_LIVRE += MENSAGEM
+PRECISA += MENSAGEM
+
 # Realce do bloco do VFO em evidencia na tela principal. O gancho entra no ENVIO do pedaco para o
 # LCD (envia(), 0x01E3ADBC) e nao no preenchimento da janela, porque o fundo do texto nao vem de
 # janela(): as rotinas de texto enchem a celula de cada caractere com uma cor propria, preta fixa.
@@ -991,6 +1059,7 @@ def main():
         escritas += [(e, 4, f'espectro B: {d}') for e, _, _, d in ESPECTRO_B_FUNCOES]
     escritas += [(s, len(a), f'vozes: {d}') for s, a, _, d in VOZES_REMENDOS]
     escritas += [(s, len(a), f'editor de nome: {d}') for s, a, _, d in EDITOR_REMENDOS]
+    escritas += [(s, 4, d) for s, _, _, d in PONTEIROS_LIVRE]
     escritas += [(ROGER_DESVIO_EM, 4, 'roger: valores 3 e 4 no caminho do BEEP'),
                  (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
                  (SCRAMBLE_EM, len(SCRAMBLE_ANTES), 'scramble: frequencia pelo valor')]
@@ -1098,6 +1167,12 @@ def main():
                 raise SystemExit(f'{sitio:#x} nao e o esperado: {bytes(app[o:o + len(antes)]).hex()}')
             app[o:o + len(antes)] = depois
             print(f'  {rotulo} {sitio:#x}: {oque} ({antes.hex()} -> {depois.hex()})')
+    for sitio, era, simbolo, oque in PONTEIROS_LIVRE:      # v65: a tecla 0 do editor
+        o = sitio - BASE_APP
+        if struct.unpack_from('<I', app, o)[0] != era:
+            raise SystemExit(f'{sitio:#x} nao e o ponteiro esperado ({era:#x})')
+        struct.pack_into('<I', app, o, S[simbolo])
+        print(f'  {sitio:#x}: ponteiro {era:#x} -> {simbolo} {S[simbolo]:#x} ({oque})')
 
     # 3c. roger BEEP 2 e 3: os valores 3 e 4 entram no caminho do BEEP, e o laco dos tons e nosso
     o = ROGER_DESVIO_EM - BASE_APP

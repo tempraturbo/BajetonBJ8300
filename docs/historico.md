@@ -5,6 +5,51 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v68 — 29/10 — o LIGHT PWM também em 240 e 580 Hz (a testar)
+
+`firmware/releases/BJ8300_BANK_v68.anc` (sha256 `5125f62b…`). A 1 kHz o rádio encostado ainda pegou
+interferência. A pedido do dono, o LIGHT PWM ganhou 240 Hz e 580 Hz, para comparar; o menu mostra as cinco
+em ordem de frequência, e os valores já gravados continuam os mesmos (1 kHz segue o padrão).
+
+## v67 — 29/10 — o LIGHT PWM em 1 kHz, sem o teste da força do pino ✔️ testada: 1 kHz ainda com interferência
+
+`firmware/releases/BJ8300_BANK_v67.anc` (sha256 `77d092dd…`). O teste da v66: o LIGHT DRIVE (a força do
+pino da luz) não mudou nada na luz, e saiu; o pino fica como o de fábrica. O LIGHT PWM a 1 kHz não deu
+interferência no rádio encostado ("ficou melhor e não gerou interferência"), e fica como ajuste de verdade,
+na pasta CALIBRATION, com 1 kHz de padrão: gravado no `0x903B` (1 kHz, 5 kHz ou 25 kHz). O resto é a v65
+(Morse e APRS), ainda em teste.
+
+## v66 — 29/10 — a v65 e o teste das bordas da luz ✔️ testada: a força do pino não mudou nada, 1 kHz sem interferência
+
+`firmware/releases/BJ8300_BANK_v66.anc` (sha256 `44586860…`). A v65 com dois itens provisórios na pasta
+CALIBRATION, para achar o que tira a interferência do PWM da luz num rádio encostado: o **LIGHT PWM**
+(25 kHz, 5 kHz ou 1 kHz) e o **LIGHT DRIVE** (a força de saída do pino da luz, as quatro combinações do
+HD0 e do HD, mostrando ao abrir a que está no pino). Nada é gravado: ao religar, volta tudo. Só valem com
+a luz abaixo de 100%. [Seção 23](engenharia-reversa.md#23-a-luz-da-tela-por-pwm-v60-diagnóstico).
+
+## v65 — 29/10 — as pastas MORSE e APRS (substituída pela v66, sem ser gravada)
+
+`firmware/releases/BJ8300_BANK_v65.anc` (sha256 `2e297940…`). O dono pediu Morse e APRS por serem padrões:
+o rádio passa a conversar com qualquer outro, de qualquer marca e firmware. Detalhes na
+[seção 24](engenharia-reversa.md#24-morse-e-aprs-v65) da engenharia reversa.
+
+- **Pasta MORSE:** MORSE MESSAGE (até 37 letras), MORSE SEND, MORSE SPEED (5 a 40 wpm) e MORSE TONE
+  (400 a 1200 Hz). O Morse sai em FM pelo gerador de tom, como o roger.
+- **Pasta APRS:** APRS CALLSIGN, APRS SSID, APRS TO (o destinatário; vazio manda status), APRS MESSAGE,
+  APRS SEND, APRS PATH (WIDE1-1, WIDE1-1,WIDE2-1 ou nenhum) e APRS RX. O envio é o AX.25 do APRS em AFSK
+  Bell 202 (1200/2200 Hz) pelo gerador de tom, com o tempo de cada bit tirado do TIMER1; a recepção usa o
+  modem FSK do chip em captura crua, e a decodificação (NRZI, destuffing, FCS) é nossa.
+- **O envio pela TX de fábrica:** o SEND só arma; um gancho na ida do PTT liga a TX como o PTT (o menu
+  fecha, como com o PTT no menu) e outro no fim da TX toca a mensagem no lugar do roger. O PTT ou qualquer
+  tecla param o Morse no meio.
+- **O editor de texto vai a 37 caracteres** (o maior que cabe na RAM dele), mostra o que não cabe numa
+  linha em duas, e a tecla 0 ganhou o espaço no primeiro toque e o `- / = + @`.
+- O Morse, o pacote, o AFSK e o decodificador foram conferidos no PC contra implementações independentes
+  (`tests/teste_mensagem.py`). No rádio falta provar: a recepção pelo modem do chip (o espaço do APRS é
+  2200 Hz e o modem é 1200/1800) e o AFSK num receptor de verdade.
+- O `pilha.py` trata o salto do nosso código para outra rotina como o de fábrica (a V2.9T dá os mesmos
+  números com ele).
+
 ## V2.9T — 29/10 — a pasta MIC, a CALIBRATION, o brilho da tela e quem recebe no menu ✅
 
 A v64 virou a **V2.9T**: `firmware/releases/BJ8300_BANK_v2.9T.anc` (sha256 `f782e4a6…`, o mesmo

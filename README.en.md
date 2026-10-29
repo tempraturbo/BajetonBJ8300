@@ -544,6 +544,8 @@ checks the sha256 of the compiler's five files; to use another copy of the compi
 **Optional:**
 
 - **Screen preview on the PC** (below): `pip install ziglang`.
+- **Morse and APRS test** (the packet, the AFSK and the decoder, on the PC): `python -I tests/teste_mensagem.py`,
+  with the same zig.
 - **CHIRP driver tests:** `python -I tests/teste_bj8300.py` needs nothing;
   `python -I tests/teste_chirp_real.py` needs CHIRP
   (`pip install https://codeload.github.com/kk7ds/chirp/tar.gz/refs/heads/master --no-deps`).
