@@ -5,6 +5,25 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Repository — Oct 29 — it builds on its own
+
+- **Building without installing the compiler.** The owner asked that a layperson be able to build with
+  everything at hand. The five executables of the JieLi 2.5.3 toolchain the build uses (37 MB of the
+  install's 155 MB) went into `tools/jl-toolchain-2.5.3`, with `SHA256SUMS` and their origin in
+  `LEIA-ME.md`; building with just them gives the same firmware, byte for byte. `build.sh` and
+  `desmonta.sh` use them (or the folder in the `JL_TOOLCHAIN` variable), and the build checks their
+  sha256 and Python before compiling. `compilar.bat`, at the root, builds with a double-click and says
+  what is missing if Git or Python is not installed. A copy with only the repository's files, with no
+  build folder and nothing in `C:\tools`, built v63 identically.
+- **The stack in the build.** The scripts that measure the stack lived in old sessions' scratch
+  folders; now they are `firmware/scripts/pilha_fabrica.py` and `pilha.py`, and the build runs them at
+  the end (step 6: the three roots and the menus' worst get/set/exibe) and stops if any goes past
+  stock. The stock disassembly (`build/app.dis`) is generated the first time.
+- **This round's analysis scripts** went into `firmware/scripts`: `contexto.py` (who calls an address,
+  with the arguments), `fluxo.py` (the paths inside a routine) and `escritas.py` (who reads or writes a
+  RAM address, to be validated first on a known one).
+- The README explains building step by step, for someone who has never built anything.
+
 ## V2.8T — Oct 27 — the menu in folders, with the 3rd item's card whole ✅
 
 v58 became **V2.8T**: `firmware/releases/BJ8300_BANK_v2.8T.anc` (sha256 `11efdc26…`). Tested on the radio: "it worked

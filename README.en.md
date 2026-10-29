@@ -471,19 +471,52 @@ preview.png` (24-bit 160×138 BMP → RGB565, the same the CPS11 produces, check
 
 ## Building
 
-Needs the JieLi toolchain (clang for `pi32v2`) and Python 3:
+Anyone can build the firmware on Windows with just what is in the repository: the JieLi compiler
+(clang for `pi32v2`) comes with it, in [`tools/jl-toolchain-2.5.3`](tools/jl-toolchain-2.5.3/LEIA-ME.md),
+and only two free programs are missing.
+
+**1. Install, once:**
+
+| Program | Where | Detail |
+|---|---|---|
+| **Git for Windows** | <https://git-scm.com/download/win> | the installer with its default options will do; it brings the `bash` that runs the build |
+| **Python 3.8 or newer** | <https://www.python.org/downloads/> | on the installer's first screen, tick **"Add python.exe to PATH"** |
+
+**2. Get the repository:** `git clone https://github.com/tempraturbo/BajetonBJ8300.git`, or, on GitHub,
+**Code → Download ZIP** (and unzip it).
+
+**3. Build:** double-click **`compilar.bat`**, at the repository root. Or, in Git Bash, inside the
+repository folder:
 
 ```sh
 sh firmware/build.sh
 ```
 
-It compiles `firmware/src/bancos.c` and `firmware/src/tela.c`, builds the `.anc` from the original and **checks** the
-result: CRCs of all 12 entries, code and menu table present and identical in all 6 flash images,
-menu items, every hook and patch, texts, and that no byte changed outside the expected ranges —
-nowhere near the protected areas. The output ends in `RESULTADO: tudo certo`, and the build is
-reproducible: the same source gives the same `.anc`, byte for byte.
+It takes about two minutes. At the end you see `RESULTADO: tudo certo`, the four stack lines with `ok`
+and the finished file, **`firmware/build/BJ8300_BANK.anc`**: that is what you flash on the radio
+([how to flash](#-how-to-flash-the-firmware-step-by-step)). If Git or Python is missing, `compilar.bat`
+says which and where to get it.
 
-The toolchain path is in `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.3/...`).
+The build compiles `firmware/src/bancos.c` and `firmware/src/tela.c`, builds the `.anc` from the original
+and **checks** the result: CRCs of all 12 entries, code and menu table present and identical in all 6
+flash images, menu items, every hook and patch, texts, and that no byte changed outside the expected
+ranges — nowhere near the protected areas. Then it measures the **stack**
+(`firmware/scripts/pilha.py`): the new code runs on its caller's stack, and its deepest path must not
+go past what the stock firmware already uses there. The build is reproducible: the same source gives
+the same `.anc`, byte for byte, so you can compare the sha256 with the release's. Before building it
+checks the sha256 of the compiler's five files; to use another copy of the compiler, point the
+`JL_TOOLCHAIN` variable at it.
+
+**Optional:**
+
+- **Screen preview on the PC** (below): `pip install ziglang`.
+- **CHIRP driver tests:** `python -I tests/teste_bj8300.py` needs nothing;
+  `python -I tests/teste_chirp_real.py` needs CHIRP
+  (`pip install https://codeload.github.com/kk7ds/chirp/tar.gz/refs/heads/master --no-deps`).
+- **Studying the stock firmware:** the build leaves the whole disassembly at `firmware/build/app.dis`,
+  and the scripts in `firmware/scripts` work on it: `desmonta.sh` (one stretch), `contexto.py` (who calls
+  an address, with the arguments), `fluxo.py` (the paths inside a routine) and `escritas.py` (who
+  reads or writes a RAM address).
 
 **Space budget:** the new code lives in three places, all at the same address in the 6 images:
 
@@ -507,16 +540,18 @@ compiler.
 ## Repository layout
 
 ```
+compilar.bat    double-click build (Git for Windows and Python 3)
 firmware/
   src/          bancos.c (banks, menus, spectrum, cable), tela.c (main screen B) and bancos.ld
   fonte/        screen B's 5x7 font and icons, as text
   previa/       screen B preview on the PC
-  scripts/      build (.anc), checks, disassembler, analysis
+  scripts/      build (.anc), checks, stack, disassembler, analysis
   original/     BJ8300_V0.12.anc — stock firmware
   releases/     .anc files ready to flash
   build.sh      compiles, builds and checks
 chirp/          CHIRP driver (bj8300_v2.8TEMPRA.py)
 tools/
+  jl-toolchain-2.5.3/  the JieLi compiler (the 5 executables the build uses)
   anc-bootloader/  BinTe ANC Bootloader flasher (BinTalk V1.1)
   ch340-driver/    USB cable driver
   cabo/            PowerShell tools that talk to the radio

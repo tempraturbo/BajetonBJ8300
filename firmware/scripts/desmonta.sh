@@ -9,7 +9,7 @@
 # e reaproveitado enquanto o app.bin nao mudar.
 set -e
 cd "$(dirname "$0")/.."
-B="C:/tools/jl-toolchain-2.5.3/C\$/JL/pi32/bin"
+B="${JL_TOOLCHAIN:-../tools/jl-toolchain-2.5.3}"     # o compilador do repositorio (relativo a firmware/)
 APP=build/app.bin
 ELF=build/app.elf
 

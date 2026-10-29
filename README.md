@@ -470,19 +470,52 @@ a byte).
 
 ## Compilar
 
-Precisa da toolchain da JieLi (clang para `pi32v2`) e de Python 3:
+Qualquer pessoa compila o firmware no Windows só com o que está no repositório: o compilador da JieLi
+(clang para `pi32v2`) vem junto, em [`tools/jl-toolchain-2.5.3`](tools/jl-toolchain-2.5.3/LEIA-ME.md),
+e faltam só dois programas gratuitos.
+
+**1. Instale, uma vez só:**
+
+| Programa | Onde | Detalhe |
+|---|---|---|
+| **Git para Windows** | <https://git-scm.com/download/win> | o instalador com as opções padrão serve; ele traz o `bash` que roda o build |
+| **Python 3.8 ou mais novo** | <https://www.python.org/downloads/> | na primeira tela do instalador, marque **"Add python.exe to PATH"** |
+
+**2. Baixe o repositório:** `git clone https://github.com/tempraturbo/BajetonBJ8300.git`, ou, no
+GitHub, **Code → Download ZIP** (e descompacte).
+
+**3. Compile:** dois cliques em **`compilar.bat`**, na raiz do repositório. Ou, no Git Bash, dentro da
+pasta do repositório:
 
 ```sh
 sh firmware/build.sh
 ```
 
-Ele compila `firmware/src/bancos.c` e `firmware/src/tela.c`, monta o `.anc` a partir do original e **confere** o
-resultado: CRCs das 12 entradas, código e tabela de menus presentes e iguais nas 6 imagens de
-flash, itens de menu, todos os ganchos e remendos, textos, e que nenhum byte foi alterado fora dos
-trechos previstos — nem perto das áreas protegidas. A saída termina em `RESULTADO: tudo certo`, e
-o build é reprodutível: o mesmo fonte dá o mesmo `.anc`, byte a byte.
+Leva uns dois minutos. No fim aparecem `RESULTADO: tudo certo`, as quatro linhas da pilha com `ok` e o
+arquivo pronto, **`firmware/build/BJ8300_BANK.anc`**: é ele que se grava no rádio
+([como gravar](#-como-gravar-o-firmware-passo-a-passo)). Se faltar o Git ou o Python, o
+`compilar.bat` diz qual e onde baixar.
 
-O caminho da toolchain está em `firmware/build.sh` (`C:/tools/jl-toolchain-2.5.3/...`).
+O build compila `firmware/src/bancos.c` e `firmware/src/tela.c`, monta o `.anc` a partir do original e
+**confere** o resultado: CRCs das 12 entradas, código e tabela de menus presentes e iguais nas 6
+imagens de flash, itens de menu, todos os ganchos e remendos, textos, e que nenhum byte foi alterado
+fora dos trechos previstos — nem perto das áreas protegidas. Depois mede a **pilha**
+(`firmware/scripts/pilha.py`): o código novo roda na pilha de quem o chama, e o caminho mais fundo
+dele não pode passar do que o firmware de fábrica já usa ali. O build é reprodutível: o mesmo fonte
+dá o mesmo `.anc`, byte a byte, então dá para comparar o sha256 com o do release. Antes de compilar
+ele confere o sha256 dos cinco arquivos do compilador; para usar outra cópia do compilador, aponte a
+variável `JL_TOOLCHAIN` para ela.
+
+**Opcionais:**
+
+- **Prévia da tela no PC** (abaixo): `pip install ziglang`.
+- **Testes do driver do CHIRP:** `python -I tests/teste_bj8300.py` não precisa de nada;
+  `python -I tests/teste_chirp_real.py` precisa do CHIRP
+  (`pip install https://codeload.github.com/kk7ds/chirp/tar.gz/refs/heads/master --no-deps`).
+- **Estudar o firmware de fábrica:** o build deixa o desmontado inteiro em `firmware/build/app.dis`, e
+  os scripts de `firmware/scripts` trabalham sobre ele: `desmonta.sh` (um trecho), `contexto.py` (quem
+  chama um endereço, com os argumentos), `fluxo.py` (os caminhos dentro de uma rotina) e
+  `escritas.py` (quem lê ou grava um endereço de RAM).
 
 **Orçamento de espaço:** o código novo mora em três lugares, todos no mesmo endereço nas 6 imagens:
 
@@ -506,16 +539,18 @@ de C.
 ## Estrutura do repositório
 
 ```
+compilar.bat    compila com dois cliques (Git para Windows e Python 3)
 firmware/
   src/          bancos.c (bancos, menus, espectro, cabo), tela.c (a tela principal B) e bancos.ld
   fonte/        a fonte 5x7 da tela B e os ícones, em texto
   previa/       prévia da tela B no PC
-  scripts/      montagem (.anc), conferência, desassemblador, análise
+  scripts/      montagem (.anc), conferência, pilha, desassemblador, análise
   original/     BJ8300_V0.12.anc — firmware de fábrica
   releases/     .anc prontos para gravar
   build.sh      compila, monta e confere
 chirp/          driver do CHIRP (bj8300_v2.8TEMPRA.py)
 tools/
+  jl-toolchain-2.5.3/  o compilador da JieLi (os 5 executáveis que o build usa)
   anc-bootloader/  gravador BinTe ANC Bootloader (BinTalk V1.1)
   ch340-driver/    driver do cabo USB
   cabo/            ferramentas PowerShell que falam com o rádio

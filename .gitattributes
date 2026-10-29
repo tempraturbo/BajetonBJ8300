@@ -1,0 +1,8 @@
+# o compilar.bat precisa de CRLF para o cmd; os executaveis sao binarios
+*.bat text eol=crlf
+*.exe binary
+*.dll binary
+*.sys binary
+# o bash do Git para no CR de um script em CRLF, e o Git para Windows (autocrlf) poria CRLF no clone
+*.sh text eol=lf
+SHA256SUMS text eol=lf

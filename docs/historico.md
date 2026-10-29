@@ -5,6 +5,25 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Repositório — 29/10 — compila sozinho
+
+- **Compilar sem instalar o compilador.** O dono pediu que uma pessoa leiga consiga compilar com tudo
+  à mão. Os cinco executáveis da toolchain JieLi 2.5.3 que o build usa (37 MB dos 155 MB da
+  instalação) foram para `tools/jl-toolchain-2.5.3`, com o `SHA256SUMS` e a origem no `LEIA-ME.md`;
+  compilar com só eles dá o mesmo firmware, byte a byte. O `build.sh` e o `desmonta.sh` os usam (ou a
+  pasta da variável `JL_TOOLCHAIN`), e o build confere o sha256 deles e o Python antes de compilar. O
+  `compilar.bat`, na raiz, compila com dois cliques e diz o que falta se o Git ou o Python não
+  estiverem instalados. Uma cópia só com os arquivos do repositório, sem a pasta de build e sem nada
+  em `C:\tools`, compilou a v63 igual.
+- **A pilha no build.** Os scripts que medem a pilha moravam no rascunho de sessões antigas; agora são
+  o `firmware/scripts/pilha_fabrica.py` e o `pilha.py`, e o build os roda no fim (a etapa 6: as três
+  raízes e o pior get/set/exibe dos menus) e para se algum passar do de fábrica. O desmontado de
+  fábrica (`build/app.dis`) é gerado na primeira vez.
+- **Os scripts de análise** desta rodada entraram em `firmware/scripts`: `contexto.py` (quem chama um
+  endereço, com os argumentos), `fluxo.py` (os caminhos dentro de uma rotina) e `escritas.py` (quem lê
+  ou grava um endereço de RAM, a validar antes num endereço conhecido).
+- O README explica a compilação passo a passo, para quem nunca compilou nada.
+
 ## V2.8T — 27/10 — o menu em pastas, com o cartão do 3º item inteiro ✅
 
 A v58 virou a **V2.8T**: `firmware/releases/BJ8300_BANK_v2.8T.anc` (sha256 `11efdc26…`). Testada no rádio: "deu certo
