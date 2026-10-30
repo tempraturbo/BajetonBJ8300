@@ -1037,7 +1037,8 @@ mode 0.
 **The TDR rule**, the owner's: in SINGLE dual watch is off, and only the frequency shown receives.
 WATCH set to SINGLE clears TDR, the TDR item's setter (item 7, `tdr_grava` instead of
 `0x01E3957C`) keeps it at 0, and power-up clears it again. In DUAL and TRIPLE, on listens to all of
-them, and off only to the one in focus.
+them, and off only to the one in focus. On the top bar, the watch when on shows as **DR** in DUAL and **TR**
+in TRIPLE (up to v82, DW in both).
 
 **Only A in SINGLE (v78)**, at the owner's request: SINGLE always shows and listens to A, and the A/B key
 does not go to B or C. Up to v77 it swapped the sides in SINGLE too, and the screen then showed B.
@@ -2085,6 +2086,13 @@ LOW, MID and HIGH, green, yellow and red. Both levels go into the `nr` byte of `
 7:4), which sits on the deepest stack path and could not grow, and the tag is a separate routine: inlined
 twice, it took the bar's frame from 44 to 52 B. Without room before the voltage, it is left out. The roots
 stay at 740, 620 and 696 B.
+
+**The MORSE and APRS folder names (v83).** Their items lost the prefix the folder already gives: CALLSIGN,
+DECODE, MESSAGE, PATH, RX, SEND, SSID and TO in APRS, and MESSAGE, SEND, SPEED and TONE in MORSE. MESSAGE and
+SEND exist in both, and `montar.py`, which found each item by the text the radio shows and refused two equal
+ones, now finds them by the internal key (`nome='APRS MESSAGE'`), with the text in a `texto` field that it
+checks against the firmware title (`rotulo`); the preview draws the text, and `conferir.py` checks each
+position's marks and texts by the key.
 
 **The menu order (v82).** The NOISE GATE and NR options go in the order of how much they cut: NOISE GATE as
 OFF, LOW (32), DEFAULT (64), MID (76) and HIGH (88), and NR as OFF, LOW, MID, DEFAULT and HIGH (the stock

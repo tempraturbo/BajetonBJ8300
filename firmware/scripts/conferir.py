@@ -498,8 +498,12 @@ if montar.MENU_NOVO:
         if filhos != sorted(filhos) or not 1 <= n <= montar.ITENS_POR_GRUPO:
             problemas.append(f'{nome}: {n} itens, ou fora de ordem: {filhos}')
         marcas = [txt[4 + p + i] for i in range(n)]       # v55: SEM_VALOR e VARIOS, por posicao
-        if marcas != [montar.MENU_MARCAS.get((nome, f), 0) for f in filhos] or any(txt[4 + g:5 + g]):
+        # as marcas e os textos pela chave de cada posicao (v83: o texto da MORSE e da APRS nao e a chave)
+        chaves = sorted(montar.GRUPOS.get(nome, ()))
+        if marcas != [montar.MENU_MARCAS.get((nome, k), 0) for k in chaves] or any(txt[4 + g:5 + g]):
             problemas.append(f'{nome}: marcas {marcas} erradas')
+        if filhos != [montar.rotulo(k) for k in chaves]:
+            problemas.append(f'{nome}: os textos {filhos} nao sao os do montar')
         print(f'3b. {g + 1:2d} {nome:9s} ' + ', '.join(f + ('*' * bool(m)) for f, m in zip(filhos, marcas)))
         vistos += [bytes(tab[(p + i) * T:(p + i + 1) * T]) for i in range(n)]
         p += n

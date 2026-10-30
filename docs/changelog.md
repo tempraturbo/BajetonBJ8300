@@ -5,6 +5,14 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v83 — Oct 29 — DR and TR on the bar, and the MORSE and APRS folders without the prefix (to be tested)
+
+`firmware/releases/BJ8300_BANK_v83.anc` (sha256 `46d66db6…`). At the owner's request: the watch when on shows on
+the top bar as **DR** in DUAL and **TR** in TRIPLE (it was DW in both), and the MORSE and APRS folder items lost
+the prefix the folder already gives (MESSAGE, SEND, SPEED, TONE; CALLSIGN, DECODE, MESSAGE, PATH, RX, SEND,
+SSID, TO).
+[Section 25](reverse-engineering.md#nr-with-levels-in-the-mic-folder-v80).
+
 ## CHIRP driver — Oct 29 — Noise reduction and Noise gate in order, and Mid
 
 - **Noise reduction** and **Noise gate** go in the order of how much they cut, as in the radio's menu

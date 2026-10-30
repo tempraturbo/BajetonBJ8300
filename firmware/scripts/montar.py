@@ -728,31 +728,31 @@ PRECISA += ESPECTRO_B
 # editor (ABC) ganha o espaco primeiro e o - / = + @, que nenhuma tecla alcancava (o ponteiro dela na
 # tabela 0x01E60B60).
 ITENS_DEPOIS[ROGER_ITEM] = [
-    dict(nome='MORSE MESSAGE', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='morse_msg_le',
+    dict(nome='MORSE MESSAGE', texto='MESSAGE', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='morse_msg_le',
          set='morse_msg_grava', titulo='titulo_morse_msg', exibe='morse_msg_exibe'),
-    dict(nome='MORSE SEND', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='morse_envia_grava',
+    dict(nome='MORSE SEND', texto='SEND', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='morse_envia_grava',
          titulo='titulo_morse_envia', exibe='envia_opcoes', opcoes_cn='envia_opcoes'),
-    dict(nome='MORSE SPEED', molde=ZONE, flags=FLAGS_NUMERO, maximo=36, get='morse_wpm_le',
+    dict(nome='MORSE SPEED', texto='SPEED', molde=ZONE, flags=FLAGS_NUMERO, maximo=36, get='morse_wpm_le',
          set='morse_wpm_grava', titulo='titulo_morse_wpm', exibe='morse_wpm_exibe'),
-    dict(nome='MORSE TONE', molde=ZONE, flags=FLAGS_NUMERO, maximo=17, get='morse_tom_le',
+    dict(nome='MORSE TONE', texto='TONE', molde=ZONE, flags=FLAGS_NUMERO, maximo=17, get='morse_tom_le',
          set='morse_tom_grava', titulo='titulo_morse_tom', exibe='morse_tom_exibe'),
-    dict(nome='APRS CALLSIGN', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_ind_le',
+    dict(nome='APRS CALLSIGN', texto='CALLSIGN', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_ind_le',
          set='aprs_ind_grava', titulo='titulo_aprs_ind', exibe='aprs_ind_exibe'),
-    dict(nome='APRS SSID', molde=ZONE, flags=FLAGS_NUMERO, maximo=16, get='aprs_ssid_le',
+    dict(nome='APRS SSID', texto='SSID', molde=ZONE, flags=FLAGS_NUMERO, maximo=16, get='aprs_ssid_le',
          set='aprs_ssid_grava', titulo='titulo_aprs_ssid', exibe='aprs_ssid_exibe'),
-    dict(nome='APRS TO', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_dest_le',
+    dict(nome='APRS TO', texto='TO', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_dest_le',
          set='aprs_dest_grava', titulo='titulo_aprs_dest', exibe='aprs_dest_exibe'),
-    dict(nome='APRS MESSAGE', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_msg_le',
+    dict(nome='APRS MESSAGE', texto='MESSAGE', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_msg_le',
          set='aprs_msg_grava', titulo='titulo_aprs_msg', exibe='aprs_msg_exibe'),
-    dict(nome='APRS SEND', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='aprs_envia_grava',
+    dict(nome='APRS SEND', texto='SEND', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='aprs_envia_grava',
          titulo='titulo_aprs_envia', exibe='envia_opcoes', opcoes_cn='envia_opcoes'),
-    dict(nome='APRS PATH', molde=TDR_ITEM, flags=0, maximo=3, get='aprs_caminho_le',
+    dict(nome='APRS PATH', texto='PATH', molde=TDR_ITEM, flags=0, maximo=3, get='aprs_caminho_le',
          set='aprs_caminho_grava', titulo='titulo_aprs_caminho', exibe='aprs_caminho_opcoes',
          opcoes_cn='aprs_caminho_opcoes'),
-    dict(nome='APRS RX', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='aprs_rx_grava',
+    dict(nome='APRS RX', texto='RX', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='aprs_rx_grava',
          titulo='titulo_aprs_rx', exibe='aprs_rx_opcoes', opcoes_cn='aprs_rx_opcoes'),
     # v76: os formatos decodificados (Mic-E, comprimida, tempo...) ou a info como veio; o 0x903F
-    dict(nome='APRS DECODE', molde=TDR_ITEM, flags=0, maximo=2, get='aprs_decode_le', set='aprs_decode_grava',
+    dict(nome='APRS DECODE', texto='DECODE', molde=TDR_ITEM, flags=0, maximo=2, get='aprs_decode_le', set='aprs_decode_grava',
          titulo='titulo_aprs_decode', exibe='aprs_decode_opcoes', opcoes_cn='aprs_decode_opcoes'),
 ]
 # v67: a frequencia do PWM da luz (tela.c), na pasta CALIBRATION (a DISPLAY esta cheia); o 0x903B
@@ -770,7 +770,8 @@ LUZ_PWM = ('luz_pwm_le', 'luz_pwm_grava', 'titulo_luz_pwm', 'luz_pwm_opcoes')
 NA_LIVRE += LUZ_PWM
 PRECISA += LUZ_PWM
 GRUPOS['MORSE'] = ('MORSE MESSAGE', 'MORSE SEND', 'MORSE SPEED', 'MORSE TONE')
-GRUPOS['APRS'] = ('APRS CALLSIGN', 'APRS DECODE', 'APRS MESSAGE', 'APRS PATH', 'APRS RX', 'APRS SEND', 'APRS SSID', 'APRS TO')
+GRUPOS['APRS'] = ('APRS CALLSIGN', 'APRS DECODE', 'APRS MESSAGE', 'APRS PATH', 'APRS RX', 'APRS SEND', 'APRS SSID',
+                  'APRS TO')
 MENU_MARCAS.update({('MORSE', 'MORSE SEND'): MARCA_SEM_VALOR, ('APRS', 'APRS SEND'): MARCA_SEM_VALOR,
                     ('APRS', 'APRS RX'): MARCA_SEM_VALOR})
 CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o envio armado liga a TX'),
@@ -983,6 +984,15 @@ def texto_em(endereco, app, codigo, tela):
     raise SystemExit(f'nome de item fora do app, do .text e do .livre: {endereco:#x}')
 
 
+def rotulo(nome):
+    """O que o radio mostra de um item do menu: o texto de um item nosso que tem um (v83: os da MORSE e da APRS,
+    sem o prefixo da pasta, que as duas pastas repetem: MESSAGE e SEND); senao, o proprio nome."""
+    for quem in ordem_da_copia():
+        if isinstance(quem, dict) and quem['nome'] == nome:
+            return quem.get('texto', nome)
+    return nome
+
+
 def monta_menu(app, codigo, tela):
     """A tabela do menu (v53: os grupos, e depois os itens de cada grupo, na ordem dos grupos) e o
     menu_textos (a quantidade de grupos e de posicoes da tabela, uma marca por posicao - v55 -, as
@@ -991,8 +1001,11 @@ def monta_menu(app, codigo, tela):
     RESET de fabrica: com o get nulo, a preparacao do item zera valor e cursor, 0x01E485C8), com a
     quantidade de itens no maximo e os nomes deles nas opcoes."""
     itens = {}
-    for item in itens_da_copia(app):
-        nome = texto_em(struct.unpack_from('<I', item, CAMPO['nome'])[0], app, codigo, tela)
+    for quem, item in zip(ordem_da_copia(), itens_da_copia(app)):
+        texto = texto_em(struct.unpack_from('<I', item, CAMPO['nome'])[0], app, codigo, tela)
+        nome = quem['nome'] if isinstance(quem, dict) else texto
+        if isinstance(quem, dict) and texto != rotulo(nome):
+            raise SystemExit(f'o item {nome} mostra {texto!r}, e o montar espera {rotulo(nome)!r}')
         if nome in itens:
             raise SystemExit(f'dois itens de menu chamados {nome}')
         itens[nome] = item

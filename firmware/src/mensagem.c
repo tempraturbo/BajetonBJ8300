@@ -1334,10 +1334,10 @@ void gancho_fim_tx(void)
 }
 
 /* ---------- MORSE ---------- */
-const char titulo_morse_msg[] = "MORSE MESSAGE";
-const char titulo_morse_envia[] = "MORSE SEND";
-const char titulo_morse_wpm[] = "MORSE SPEED";
-const char titulo_morse_tom[] = "MORSE TONE";
+const char titulo_morse_msg[] = "MESSAGE";      /* sem o MORSE da pasta (v83) */
+const char titulo_morse_envia[] = "SEND";
+const char titulo_morse_wpm[] = "SPEED";
+const char titulo_morse_tom[] = "TONE";
 const char *const envia_opcoes[1] = {"OK TO SEND"};
 
 u16 morse_msg_le(void)
@@ -1436,13 +1436,13 @@ void morse_envia_grava(void)
 }
 
 /* ---------- APRS ---------- */
-const char titulo_aprs_ind[] = "APRS CALLSIGN";
-const char titulo_aprs_ssid[] = "APRS SSID";
-const char titulo_aprs_dest[] = "APRS TO";
-const char titulo_aprs_msg[] = "APRS MESSAGE";
-const char titulo_aprs_envia[] = "APRS SEND";
-const char titulo_aprs_caminho[] = "APRS PATH";
-const char titulo_aprs_rx[] = "APRS RX";
+const char titulo_aprs_ind[] = "CALLSIGN";    /* sem o APRS da pasta (v83) */
+const char titulo_aprs_ssid[] = "SSID";
+const char titulo_aprs_dest[] = "TO";
+const char titulo_aprs_msg[] = "MESSAGE";
+const char titulo_aprs_envia[] = "SEND";
+const char titulo_aprs_caminho[] = "PATH";
+const char titulo_aprs_rx[] = "RX";
 const char *const aprs_caminho_opcoes[3] = {"WIDE1-1", "WIDE1-1,WIDE2-1", "NONE"};
 const char *const aprs_rx_opcoes[1] = {"OK TO LISTEN"};
 
@@ -1713,7 +1713,7 @@ typedef char confere_ack[__builtin_offsetof(struct registro_rx, para) == ACK_PAR
  * ON). Vale para os quadros que chegam depois de mudar: o historico guarda o texto pronto. */
 #define DECODE_APRS  RAM(u8, 0x00014BEB)
 #define DECODE_OFF   0xB1
-const char titulo_aprs_decode[] = "APRS DECODE";
+const char titulo_aprs_decode[] = "DECODE";
 const char *const aprs_decode_opcoes[2] = {"ON", "OFF"};
 
 u16 aprs_decode_le(void)

@@ -807,7 +807,7 @@ SEPARADA static void barra_estado(const struct estado *e)
         if (e->vox)
             x = etiqueta(x, 2, "VOX", COR_CHIP_DW, COR_TEXTO, 0);
         if (e->dw)
-            x = etiqueta(x, 2, "DW", COR_CHIP_DW, COR_TEXTO, 0);
+            x = etiqueta(x, 2, e->vista >= VISTA_TRIPLE ? "TR" : "DR", COR_CHIP_DW, COR_TEXTO, 0);   /* v83 */
         if (e->mo)
             x = etiqueta(x, 2, "MO", COR_CHIP_DW, COR_TEXTO, 0);
         x = etiqueta_nivel(x, "NR", e->nr & 15);

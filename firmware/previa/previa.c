@@ -822,11 +822,11 @@ int main(int argc, char **argv)
         menu_em(NOS_GRUPOS, grupo("APRS"));
         telas_b(1, 0);
         grava("59-menu-grupos-aprs");
-        menu_no("APRS", "APRS CALLSIGN");
+        menu_no("APRS", "CALLSIGN");     /* o texto exibido (v83) */
         LINHA(0, 0, "PY2ABC");
         telas_b(1, 0);
         grava("59b-menu-aprs-callsign");
-        menu_no("MORSE", "MORSE SPEED");
+        menu_no("MORSE", "SPEED");
         LINHA(0, 1, "14 WPM");
         LINHA(1, 2, "15 WPM");
         LINHA(2, 1, "16 WPM");
@@ -834,8 +834,8 @@ int main(int argc, char **argv)
         grava("60-menu-morse-speed");
         BASE_TELAS();
         memoria[0x1533D] = 1;
-        strcpy((char *)&memoria[0x15494], "MORSE MESSAGE");
-        menu_no("MORSE", "MORSE MESSAGE");
+        strcpy((char *)&memoria[0x15494], "MESSAGE");
+        menu_no("MORSE", "MESSAGE");
         memoria[0x14C00] = 7;
         memoria[0x14BF9] = 1;
         digitando("CQ CQ DE PY2ABC PY2ABC K 73 GL 5NN TU");

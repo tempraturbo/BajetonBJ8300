@@ -1021,7 +1021,8 @@ troca de fábrica. No rodízio, a C em VFO entra com os 32 B dela no VFO corrent
 **A regra do TDR**, do dono: no SINGLE a dupla escuta fica desligada, e só a frequência mostrada
 recebe. O WATCH em SINGLE zera o TDR, o set do item TDR (o 7, `tdr_grava` no lugar de
 `0x01E3957C`) o mantém em 0, e a partida o zera de novo. No DUAL e no TRIPLE, ligada escuta todas,
-e desligada só a que está em evidência.
+e desligada só a que está em evidência. Na barra de cima, a escuta ligada aparece como **DR** no DUAL e
+**TR** no TRIPLE (até a v82, DW nos dois).
 
 **Só o A no SINGLE (v78)**, a pedido do dono: o SINGLE mostra e escuta sempre o A, e a tecla A/B não leva
 ao B nem à C. Até a v77 ela trocava os lados também no SINGLE, e a tela passava a mostrar o B.
@@ -2051,6 +2052,13 @@ em LOW, MID e HIGH, verde, amarela e vermelha. Os dois níveis vão no byte `nr`
 (bits 3:0 e 7:4), que está no caminho mais fundo da pilha e não podia crescer, e a etiqueta é uma rotina
 separada: embutida duas vezes, levava o quadro da barra de 44 a 52 B. Sem lugar antes da tensão, ela não
 entra. As raízes continuam em 740, 620 e 696 B.
+
+**Os nomes das pastas MORSE e APRS (v83).** Os itens delas perderam o prefixo, que a pasta já diz: CALLSIGN,
+DECODE, MESSAGE, PATH, RX, SEND, SSID e TO na APRS, e MESSAGE, SEND, SPEED e TONE na MORSE. MESSAGE e SEND
+existem nas duas, e o `montar.py`, que achava cada item pelo texto que o rádio mostra e recusava dois iguais,
+passou a achá-los pela chave interna (`nome='APRS MESSAGE'`), com o texto num campo `texto` que ele confere
+contra o título do firmware (`rotulo`); a prévia desenha o texto, e o `conferir.py` confere as marcas e os
+textos de cada posição pela chave.
 
 **A ordem no menu (v82).** As opções da NOISE GATE e da NR vão em ordem de quanto cortam: a NOISE GATE em
 OFF, LOW (32), DEFAULT (64), MID (76) e HIGH (88), e a NR em OFF, LOW, MID, DEFAULT e HIGH (o DEFAULT de

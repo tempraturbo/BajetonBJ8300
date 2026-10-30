@@ -5,6 +5,13 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v83 — 29/10 — DR e TR na barra, e as pastas MORSE e APRS sem o prefixo (a testar)
+
+`firmware/releases/BJ8300_BANK_v83.anc` (sha256 `46d66db6…`). A pedido do dono: a escuta ligada aparece na barra
+de cima como **DR** no DUAL e **TR** no TRIPLE (era DW nos dois), e os itens das pastas MORSE e APRS perderam o
+prefixo, que a pasta já diz (MESSAGE, SEND, SPEED, TONE; CALLSIGN, DECODE, MESSAGE, PATH, RX, SEND, SSID, TO).
+[Seção 25](engenharia-reversa.md#a-nr-com-níveis-na-pasta-mic-v80).
+
 ## Driver do CHIRP — 29/10 — a Noise reduction e a Noise gate em ordem, e o Mid
 
 - A **Noise reduction** e a **Noise gate** vão na ordem de quanto cortam, como no menu do rádio (firmware
