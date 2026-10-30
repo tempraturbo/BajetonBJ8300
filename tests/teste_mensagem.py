@@ -126,17 +126,17 @@ def audio_do_log(log):
     return amostras
 
 
-def demodula(amostras):
+def demodula(amostras, taxa=TAXA):
     """Correlacao numa janela de um bit em 1200 e 2200 Hz; o relogio sai das transicoes."""
-    n = round(TAXA / 1200)
+    n = round(taxa / 1200)
     def energia(i0, f):
-        re = sum(amostras[i] * math.cos(2 * math.pi * f * i / TAXA) for i in range(i0, i0 + n))
-        im = sum(amostras[i] * math.sin(2 * math.pi * f * i / TAXA) for i in range(i0, i0 + n))
+        re = sum(amostras[i] * math.cos(2 * math.pi * f * i / taxa) for i in range(i0, i0 + n))
+        im = sum(amostras[i] * math.sin(2 * math.pi * f * i / taxa) for i in range(i0, i0 + n))
         return re * re + im * im
-    passo = 4
+    passo = 4 if taxa > 20000 else 1
     tons = [energia(i, 2200) > energia(i, 1200) for i in range(0, len(amostras) - n, passo)]
     trocas = [i * passo + n / 2 for i in range(1, len(tons)) if tons[i] != tons[i - 1]]
-    bit = TAXA / 1200
+    bit = taxa / 1200
     fases = sorted((t % bit) for t in trocas)
     fase = fases[len(fases) // 2]
     linha = []
@@ -197,6 +197,25 @@ for origem, caminho, info in CASOS[:2]:
         bit = 1e6 / 1200
         erro = max(abs(d - round(d / bit) * bit) for d in tempos)
         confere('2. AFSK: cada troca de tom cai a menos de 10 us da grade de 833,3 us', erro < 10, True)
+
+# ---------- 2b. o AFSK pelo DAC (v86): as amostras de 16 kHz no lugar das do microfone ----------
+DAC_TAXA = 16000
+for origem, caminho, info in CASOS[:2]:
+    amostras = [int(v) for l in roda('dac', origem, caminho, info).splitlines() if l.startswith('A ')
+                for v in l.split()[1:]]
+    achados = hdlc_ref(demodula([a / 8000 for a in amostras], DAC_TAXA))
+    confere(f'2b. DAC {origem}: o demodulador acha o quadro', achados, [quadro_ref(origem, caminho, info)[:-2]])
+    tom = [i for i, a in enumerate(amostras) if a]
+    trecho = amostras[tom[0]:tom[-1] + 1]
+    salto = max(abs(b - a) for a, b in zip(trecho, trecho[1:]))
+    confere('2b. DAC: a fase continua (nenhum salto maior que o do 2200 Hz)', salto <= 6912, True)
+    confere('2b. DAC: 0,1 s mudo antes do primeiro bit', tom[0] in range(1600, 1605), True)
+    if caminho == 2:
+        with wave.open(os.path.join(SAIDA, 'aprs_dac.wav'), 'wb') as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(DAC_TAXA)
+            w.writeframes(b''.join(struct.pack('<h', a) for a in amostras + [0] * (DAC_TAXA // 4)))
 
 
 # ---------- 3. o decodificador HDLC do C ----------

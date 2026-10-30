@@ -5,6 +5,39 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v88 — 30/10 — o APRS sai pelo microfone (testada)
+
+`firmware/releases/BJ8300_BANK_v88.anc` (sha256 `0e15392f…`). O envio do APRS (a mensagem e o ack) sai como de um
+TNC de placa de som: o JieLi gera o AFSK em amostras de 16 kHz no lugar das do microfone, e elas vão pelo DAC
+à entrada de microfone do BK4819, com o ADC do microfone do chip religado durante o pacote (o passo 3 da TX o
+desliga). Testada: o APRSdroid, ouvindo um Baofeng ao lado, leu de primeira, mesmo com o volume do Baofeng
+quase no mínimo. [Seção 24](engenharia-reversa.md#o-envio-pelo-microfone-v86-a-v88).
+
+## v87 — 30/10 — diagnóstico do envio pelo microfone (não lançada)
+
+O PTT de voz saía como um tom de 1 kHz pelo DAC, e o SEND terminava com bipes que diziam se os blocos do
+microfone tinham chegado. Mostrou que o DAC chega ao microfone do BK4819 e que os blocos chegam durante o
+envio: faltava o ADC do microfone do chip, que o passo 3 da TX desliga.
+
+## v86 — 30/10 — o APRS pelo DAC, a primeira tentativa (não lançada)
+
+O AFSK gerado no JieLi no lugar das amostras do microfone. No ar, só portadora muda.
+
+## v85 — 30/10 — a DE-EMPHASIS na pasta AUDIO, e o envio do APRS de volta ao da v83 (a testar)
+
+`firmware/releases/BJ8300_BANK_v85.anc` (sha256 `14199f1f…`). AUDIO > **DE-EMPHASIS**: ON (a de fábrica) e OFF, a
+de-ênfase do áudio de RX em FM, guardada no byte do EXPANDER. As variantes T1 a T6 do envio da v84 saíram:
+nenhuma foi decodificada. Correção na seção 22: no `0x43`, o `0x3028` é o largo e o `0x4008` o estreito (o
+texto os trazia trocados; o rádio está certo). [Seção 25](engenharia-reversa.md#a-de-emphasis-v85),
+[seção 24](engenharia-reversa.md#o-aprsdroid-o-direwolf-e-o-envio-v84-experimental).
+
+## v84 — 30/10 — variantes do envio do APRS e o RX FILTER (experimental, não lançada)
+
+Cada envio de mensagem usava uma variante (T1 a T6: o ganho do tom, os passa-baixas do TX e a pré-ênfase no
+próprio envio), com a etiqueta no fim do texto, e a pasta AUDIO tinha o RX FILTER (DEFAULT, DE-EMPH e
+NO 3K LPF, no `0x2B`). Nenhuma variante foi lida pelo APRSdroid; o RX FILTER mostrou a de-ênfase de fábrica
+ligada e virou a DE-EMPHASIS da v85. [Seção 24](engenharia-reversa.md#o-aprsdroid-o-direwolf-e-o-envio-v84-experimental).
+
 ## v83 — 29/10 — DR e TR na barra, e as pastas MORSE e APRS sem o prefixo (a testar)
 
 `firmware/releases/BJ8300_BANK_v83.anc` (sha256 `46d66db6…`). A pedido do dono: a escuta ligada aparece na barra

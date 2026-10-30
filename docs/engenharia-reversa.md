@@ -1222,7 +1222,8 @@ com 12 e 20 B, e as três raízes voltaram aos 740, 620 e 696 B de fábrica.
 
 **O chip de rádio é um BK4819.** Os 16 valores que a partida escreve no registrador `0x09`
 (`0x01E566C0..0x01E56766`, de `0x006F` a `0xF09F`) são, um a um, os da inicialização do BK4819 no
-UV-K5, e o `0x43` da largura de banda (`0x01E4416E`: `0x4008` no largo, `0x3028` no estreito) bate
+UV-K5, e o `0x43` da largura de banda (`0x01E4416E`: `0x3028` no largo, `0x4008` no estreito; a escolha é o
+bit 6 do byte 15 do canal, o `narrow` do CHIRP, que a decodificação `0x01E3900C` põe em `b[0x15E2A]`) bate
 com o desenho dos bits dele. Toda escrita no chip passa por `0x01E39D82(reg, valor)`: são 154 pontos,
 contando os `goto` de cauda (só os `call` dão 138). A leitura é `0x01E407C0(reg)`, que manda o
 registrador com o bit 7 ligado.
@@ -1548,8 +1549,8 @@ refletido, começa em 0xFFFF, sai invertido, byte baixo primeiro). O campo é a 
 sem destinatário, o status `>texto`.
 
 **O AFSK.** O modem FSK do chip só faz pares fixos (FFSK 1200/1800 e 1200/2400; o reg 0x72 é a taxa de
-bits; no UV-K5 mediram 1200/1800 no SDR), e o APRS é o Bell 202, **1200/2200 Hz**. Então o AFSK sai pelo
-gerador de tom: a cada bit 0 a frequência do tom 1 (reg 0x71) troca entre 1200 e 2200 Hz (NRZI), com bit
+bits; no UV-K5 mediram 1200/1800 no SDR), e o APRS é o Bell 202, **1200/2200 Hz**. Então o AFSK saía pelo
+gerador de tom (até a v85; desde a v88, pelo microfone: [abaixo](#o-envio-pelo-microfone-v86-a-v88)): a cada bit 0 a frequência do tom 1 (reg 0x71) troca entre 1200 e 2200 Hz (NRZI), com bit
 stuffing depois de cinco 1s, 40 flags de abertura (270 ms) e 3 de fecho. Antes das flags, desde a v69,
 vão 0,5 s de portadora sem modulação, para o receptor (economia de bateria, squelch lento) abrir antes
 do pacote. O tempo de cada bit (833,3 µs) sai
@@ -1942,6 +1943,64 @@ modo "AFSK via microfone"). Se um decodificador em software pega a maior parte d
 o modem do chip, e vale procurar o áudio recebido numa entrada do JieLi para demodular em software; se
 nem ele pega, os sinais chegam fracos, e nenhum firmware os recupera.
 
+### O APRSdroid, o Direwolf e o envio (v84, experimental)
+
+**A recepção.** Com o APRSdroid (o APK do site, no protocolo "AFSK via Speaker/Mic") ouvindo o alto-falante,
+o dono contou: todo o tráfego do canal pelo de um Baofeng ao lado, e uns 5% pelo do Bajeton, também com as
+antenas dos dois trocadas. Mas o Direwolf (`atest`) decodificou, sem correção, um pacote gravado do
+alto-falante do Bajeton com a antena trocada: o sinal chega bom, e o que derruba o APRSdroid ali é o caminho
+acústico (o alto-falante, o volume e a posição do celular). O limite do APRS RX do rádio continua sendo o
+modem do chip, que não tem o par 1200/2200 Hz.
+
+**Uma armadilha da comparação.** A primeira medida punha o 2200 Hz do pacote 5 dB acima do 1200 Hz no
+alto-falante do Bajeton e 2 a 4 dB abaixo no do Baofeng, o que parecia um receptor sem de-ênfase. Eram
+estações diferentes, e o equilíbrio entre os dois tons é de cada transmissor; no rádio, a de-ênfase de
+fábrica está ligada ([seção 25](#a-de-emphasis-v85)).
+
+**O envio.** O Direwolf lê o `firmware/build/aprs.wav` (o quadro do `mensagem.c`, gerado no PC): a
+codificação está certa. No ar, nenhum pacote nosso, ouvido pelo Baofeng ao lado, foi decodificado pelo
+APRSdroid, que decodificava as outras estações pelo mesmo caminho. Numa gravação, as frequências dos tons e
+os 1200 bps conferem, mas o bit sozinho de 2200 Hz de cada flag do preâmbulo só chega a uns 1700 a 1800 Hz no
+discriminador (nas outras estações chega aos 2200), e cerca de metade nem passa do meio do caminho: o
+decodificador o lê como marca. A v84, experimental e não lançada, usava uma variante a cada envio, com " T1" a
+" T6" no fim do texto: T1 como antes (o ganho do tom 1 no `0x70` em 96 de 127, o do roger); T2 e T3 o tom mais
+fraco (64 e 40); T4 o passa-baixa 2 do TX (bits 8:6 do `0x43`, 0 de fábrica) em 6, o do largo nos firmwares
+da comunidade do UV-K5; T5 o 64, o 6 e o passa-baixa 1 do TX desligado (bit 1 do `0x2B`); e T6 o ganho trocado
+junto com o tom, 52 no 1200 Hz e 96 no 2200 Hz (+5,3 dB, a pré-ênfase de 750 µs). Em muitos envios, o
+APRSdroid não leu nenhuma, e elas saíram na v85: o envio voltou ao da v83.
+
+### O envio pelo microfone (v86 a v88)
+
+Desde a v88 o APRS sai como de um TNC de placa de som. O microfone entra no ADC do JieLi, e cada bloco de
+256 amostras a 16 kHz vai ao DAC (`0x01E41BA0` → `0x01E321F8`, ou, com a NR, pela tarefa `aec`,
+`0x01E41BE8`) e dali à entrada de microfone do BK4819. A abertura do microfone (`0x01E41CBA`) entrega à
+interrupção de áudio o endereço de `0x01E41C06`, que leva cada bloco ao DAC ou à NR, num `r0 = imm32` em
+`0x01E41CEC`; o valor (os 4 últimos bytes, em `0x01E41CEE`) passou a ser o do `gancho_mic`. Fora do envio
+ele segue para o `0x01E41C06`; durante o envio (o `ESTADO_MSG` em `'D'`), põe o AFSK no lugar das amostras e
+chama direto o `0x01E41BA0`, sem a NR (é ele que duplica o bloco em L/R quando a saída é estéreo).
+
+**O AFSK** (`dac_prepara` e `dac_bloco`, no `mensagem.c`): o quadro vira bits de linha (NRZI e bit
+stuffing, como no `afsk_manda`: um bit de referência no espaço, as flags paradas na marca e o último bit
+inteiro), e cada amostra anda a fase de um acumulador de 32 bits pelo passo de 1200 ou 2200 Hz a 16 kHz,
+num seno de 64 pontos a −12 dB do fundo de escala; cada bit tem 13, 13 e 14 amostras (40 a cada 3 bits),
+e a fase é contínua por construção. O estado (o acumulador, o bit em curso e até 1280 bits de linha) mora
+na memória de vídeo (`0x10190`), como o registro do APRS RX (v76): enquanto o conteúdo toca, a interface
+não roda. O envio espera o último bit com um prazo (se os blocos não vierem, a TX termina sozinha) e mais
+120 ms mudos, para o DAC esvaziar. No PC, o `teste_mensagem.py` (2b) demodula as amostras, confere a fase e
+grava o `firmware/build/aprs_dac.wav`, que o Direwolf decodifica.
+
+**O que os testes mostraram.** Na v86 o SEND dava só portadora muda. A v87, de diagnóstico, trocava a voz do
+PTT por um tom de 1 kHz pelo mesmo gancho e, depois do envio, tocava pelo gerador de tom um bipe agudo se os
+blocos do microfone tinham chegado durante ele, ou dois graves se não: o Baofeng ouviu o tom no PTT (o DAC
+chega ao microfone do BK4819) e um bipe agudo no SEND (os blocos chegavam). A causa: na passagem ao passo 3
+da TX (o PTT solto, `0x01E47996..0x01E479AC`), a máquina de fábrica põe o passo em 3 e desliga o bit 2 do
+`0x30`, o ADC do microfone do chip, e o conteúdo toca justamente no passo 3. A v88 religa o bit durante o
+pacote e devolve o `0x30` depois. Com ela, o APRSdroid ouvindo um Baofeng ao lado leu o pacote de primeira,
+mesmo com o volume do Baofeng quase no mínimo.
+
+O nível do pacote no ar segue o caminho da voz (o MIC GAIN e o AGC do microfone). O Morse continua pelo
+gerador de tom, e o `afsk_manda` fica no código, conferido no PC, como referência.
+
 ### A pilha
 
 O conteúdo roda no slot do roger, no laço do sinal, e o laço do RX no set do item; os dois dentro do de
@@ -2075,3 +2134,21 @@ primeiros bytes do bloco `0x9000` de `0x01E607B1` e os 39 seguintes de `0x01E603
 nossos itens voltam ao padrão de hoje pela marca de cada um, e o `gancho_ajustes`, logo depois dos ajustes de
 fábrica, desarma o envio e reaplica o áudio, o cristal e a luz. O reset liga o TDR (o 1 da tabela), e com o
 WATCH em SINGLE o `gancho_ajustes` o zera desde a v82 (o mesmo vale para um upload do CHIRP).
+
+### A DE-EMPHASIS (v85)
+
+A pasta AUDIO ganhou a **DE-EMPHASIS**, a de-ênfase do áudio de RX em FM: ON, a de fábrica, e OFF. O `0x2B`
+tem os filtros do áudio de RX; pela documentação da comunidade do UV-K5, os bits desligam (10 o passa-alta de
+300 Hz, 9 o passa-baixa de 3 kHz e 8 a de-ênfase). A fábrica só o grava na troca de AM e FM (`0x01E4404E`: 0
+em FM, em `0x01E440BE`, e `0x0500` em AM, em `0x01E44090`) e na do espectro (`0x01E4B0A0`: as mesmas, o FM em
+salto de cauda em `0x01E4B0FC`); a partida não o toca. As duas escritas do FM passam pelo `gancho_2b_fm`, que
+põe o valor do item, e o `aplica_audio` também o põe quando o rádio está em FM (o bit 0 do `0x31`
+desligado); o AM fica com o `0x0500` de fábrica.
+
+Conferido no rádio na v84, onde o item era um teste (RX FILTER, com três opções): com o bit 8 o áudio fica
+bem mais agudo, ou seja, a de-ênfase vem ligada de fábrica e o bit a desliga; o bit 9 não muda nada que se
+ouça e saiu (o corte em 3 kHz que as gravações mostram está em outro estágio).
+
+O item mora nos bits 3:2 do byte do EXPANDER (`0x9034`, 1 = OFF), com o nível do expansor nos bits 1:0: a
+marca passa a ser só o nibble alto, `0xC`. O `0xC0` a `0xC3` de antes vale ON, e o 208 (`0xD0`) do RESET
+continua sem marca (EXPANDER OFF e DE-EMPHASIS ON).

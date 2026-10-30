@@ -5,6 +5,40 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v88 — Oct 30 — APRS goes out through the microphone (tested)
+
+`firmware/releases/BJ8300_BANK_v88.anc` (sha256 `0e15392f…`). APRS sending (the message and the ack) goes out like
+it would from a sound-card TNC: the JieLi makes the AFSK as 16 kHz samples in place of the microphone's, and
+they go through the DAC to the BK4819's microphone input, with the chip's microphone ADC turned back on during
+the packet (TX step 3 turns it off). Tested: APRSdroid, listening to a Baofeng next to it, read it at the
+first try, even with the Baofeng's volume nearly at minimum.
+[Section 24](reverse-engineering.md#transmitting-through-the-microphone-v86-to-v88).
+
+## v87 — Oct 30 — diagnostic for sending through the microphone (not released)
+
+The voice PTT went out as a 1 kHz tone through the DAC, and SEND ended with beeps that said whether the
+microphone blocks had arrived. It showed that the DAC reaches the BK4819's microphone and that the blocks do
+arrive during the send: what was missing was the chip's microphone ADC, which TX step 3 turns off.
+
+## v86 — Oct 30 — APRS through the DAC, first attempt (not released)
+
+The AFSK made in the JieLi in place of the microphone samples. On air, only a silent carrier.
+
+## v85 — Oct 30 — DE-EMPHASIS in the AUDIO folder, and APRS sending back to v83's (to be tested)
+
+`firmware/releases/BJ8300_BANK_v85.anc` (sha256 `14199f1f…`). AUDIO > **DE-EMPHASIS**: ON (the stock one) and OFF,
+the FM RX audio de-emphasis, kept in the EXPANDER byte. v84's sending variants T1 to T6 were removed: none was
+decoded. A fix in section 22: in `0x43`, `0x3028` is wide and `0x4008` narrow (the text had them swapped; the
+radio is right). [Section 25](reverse-engineering.md#the-de-emphasis-v85),
+[section 24](reverse-engineering.md#aprsdroid-direwolf-and-the-transmission-v84-experimental).
+
+## v84 — Oct 30 — APRS sending variants and RX FILTER (experimental, not released)
+
+Each message send used one variant (T1 to T6: the tone gain, the TX low-passes and pre-emphasis in the send
+itself), tagged at the end of the text, and the AUDIO folder had RX FILTER (DEFAULT, DE-EMPH and NO 3K LPF, in
+`0x2B`). APRSdroid read none of the variants; RX FILTER showed the stock de-emphasis on and became v85's
+DE-EMPHASIS. [Section 24](reverse-engineering.md#aprsdroid-direwolf-and-the-transmission-v84-experimental).
+
 ## v83 — Oct 29 — DR and TR on the bar, and the MORSE and APRS folders without the prefix (to be tested)
 
 `firmware/releases/BJ8300_BANK_v83.anc` (sha256 `46d66db6…`). At the owner's request: the watch when on shows on

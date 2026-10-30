@@ -320,7 +320,7 @@ R5_R0 = bytes.fromhex('0516')
 # EXIT editando fechava o menu inteiro, como nos menus rapidos (0x01E4D53C: "if (conta == 1)" vai a
 # saida); o desvio_menu_um (MENU_DESVIOS) o faz voltar a lista do grupo.
 GRUPOS = {
-    'AUDIO': ('EXPANDER', 'NOISE GATE', 'SQL', 'STE'),
+    'AUDIO': ('EXPANDER', 'NOISE GATE', 'DE-EMPHASIS', 'SQL', 'STE'),
     'BANKS': ('BANK', 'CHANNEL', 'NAME'),
     'CALIBRATION': ('CRYSTAL FINE',),
     'CHANNEL': ('BCL', 'ENCRYPT', 'RX MODULATION', 'SCRAMBLE', 'STEP', 'TXP', 'W/N'),
@@ -462,7 +462,11 @@ ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, ma
                                opcoes_cn='expansor_opcoes'),
                           dict(nome='NOISE GATE', molde=TDR_ITEM, flags=0, maximo=5, get='porta_menu_le',
                                set='porta_grava', titulo='titulo_porta', exibe='porta_opcoes',
-                               opcoes_cn='porta_opcoes')]}
+                               opcoes_cn='porta_opcoes'),
+                          # v85: a de-enfase do RX (o bit 8 do reg 0x2B em FM)
+                          dict(nome='DE-EMPHASIS', molde=TDR_ITEM, flags=0, maximo=2, get='deenfase_le',
+                               set='deenfase_grava', titulo='titulo_deenfase', exibe='deenfase_opcoes',
+                               opcoes_cn='deenfase_opcoes')]}
 
 # ---- revisao dos textos em ingles do menu (ver notas/textos-revisao.md) ----
 # As cadeias vem coladas na flash, sem folga: trocar no lugar so pode ter tamanho igual ou menor
@@ -558,6 +562,12 @@ CHAMADAS_LIVRE += ((0x01E3C33A, 0x01E3AC52, 'gancho_menu_fecha', 'saida do menu:
 # o piso e a forca no bloco dela ([r4+120], [r4+124]) e chama 0x01E245F8 com r0 = r4 em 0x01E42078; o gancho
 # troca os dois nos niveis LOW, MID e HIGH e segue, com r0..r3 como vieram.
 CHAMADAS_LIVRE += ((0x01E42078, 0x01E245F8, 'gancho_nr_inicia', 'NR do microfone: o piso e a forca do nivel'),)
+# v85: a DE-EMPHASIS. A fabrica so grava o reg 0x2B na troca de AM e FM (0x01E4404E: "r0 = 43; r1 = 0;
+# call" em 0x01E440BE no FM) e na do espectro (0x01E4B0A0: o mesmo em salto de cauda, 0x01E4B0FC, depois de
+# desempilhar); o AM grava 0x0500 por outros caminhos (0x01E44090, 0x01E4B0D0), que ficam. As duas escritas
+# do FM passam pelo gancho_2b_fm, que poe o valor do item.
+REG_W = 0x01E39D82
+CHAMADAS_LIVRE += ((0x01E440BE, REG_W, 'gancho_2b_fm', 'DE-EMPHASIS: o 0x2B do FM'),)
 # v49: o MIC GAIN vale na hora quando os ajustes mudam por fora do menu. O retorno aos ajustes de
 # fabrica (0x01E4842E) os grava com uma chamada (0x01E4845A; 0x01E3AB36 nao le registrador de
 # entrada), e o 'W' do bloco 0x9000 pelo cabo termina num goto para a mesma gravacao (0x01E43A50,
@@ -565,7 +575,8 @@ CHAMADAS_LIVRE += ((0x01E42078, 0x01E245F8, 'gancho_nr_inicia', 'NR do microfone
 # pelo gancho_ajustes, que poe o ganho do nivel novo e grava.
 AJUSTES_ERA = 0x01E3AB36
 CHAMADAS_LIVRE += ((0x01E4845A, AJUSTES_ERA, 'gancho_ajustes', 'ajustes de fabrica: o MIC GAIN na hora'),)
-GOTOS_LIVRE = ((0x01E43A50, AJUSTES_ERA, 'gancho_ajustes', 'ajustes pelo cabo: o MIC GAIN na hora'),)
+GOTOS_LIVRE = ((0x01E43A50, AJUSTES_ERA, 'gancho_ajustes', 'ajustes pelo cabo: o MIC GAIN na hora'),
+               (0x01E4B0FC, REG_W, 'gancho_2b_fm', 'DE-EMPHASIS: o 0x2B do FM no espectro'))
 # v50: o TX-A/B/C (bancos.c). O inicio da TX desarma a dupla escuta no lado em evidencia (0x01E3FDE4,
 # que nao recebe argumento, chamada em 0x01E410EA) e so depois le a frequencia de TX decodificada
 # (b[0x15341]); as duas destrocas do PTT, 0x01E40E52(0) na TX recusada (0x01E411AE) e no fim da TX
@@ -711,7 +722,8 @@ MIC_CAL = ('compressor_le', 'compressor_grava', 'compressor_opcoes', 'titulo_com
            'titulo_cristal',
            'expansor_le', 'expansor_grava', 'expansor_opcoes', 'titulo_expansor',   # v79, a pasta AUDIO
            'porta_le', 'porta_menu_le', 'porta_grava', 'porta_opcoes', 'titulo_porta',
-           'nr_le', 'nr_menu_le', 'nr_grava', 'nr_opcoes', 'gancho_nr_inicia')                                  # v80, a NR com niveis
+           'nr_le', 'nr_menu_le', 'nr_grava', 'nr_opcoes', 'gancho_nr_inicia',
+           'deenfase_le', 'deenfase_grava', 'deenfase_opcoes', 'titulo_deenfase', 'gancho_2b_fm')   # v85                                  # v80, a NR com niveis
 NA_LIVRE += MIC_CAL
 PRECISA += MIC_CAL
 LUZ = ('luz_inicia', 'luz_aplica', 'brilho_le', 'brilho_grava', 'brilho_opcoes', 'titulo_brilho')
@@ -785,8 +797,13 @@ CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o e
 EDITOR_REMENDOS += ((0x01E4A0F0, bytes.fromhex('02fc041c'), bytes.fromhex('02fc0448'),
                      'o limite fixo da insercao vai de 15 a 37 letras'),)
 # (onde, o ponteiro de fabrica, o simbolo novo, o que e)
-PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com o espaco primeiro e - / = + @'),)
-MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'tecla_zero', 'acao_le', 'envia_opcoes',
+PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com o espaco primeiro e - / = + @'),
+                   # v86 (experimental): o APRS pelo DAC. A abertura do microfone (0x01E41CBA) entrega a
+                   # interrupcao de audio o 0x01E41C06, que leva cada bloco ao DAC ou a NR, num "r0 = imm32"
+                   # em 0x01E41CEC (o valor nos 4 ultimos bytes, 0x01E41CEE); o gancho_mic poe o AFSK no lugar
+                   # das amostras durante o envio e, fora dele, segue para o 0x01E41C06.
+                   (0x01E41CEE, 0x01E41C06, 'gancho_mic', 'APRS pelo DAC: o bloco do microfone pelo gancho'))
+MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'gancho_mic', 'tecla_zero', 'acao_le', 'envia_opcoes',
             'morse_msg_le', 'morse_msg_grava', 'morse_msg_exibe', 'titulo_morse_msg', 'morse_envia_grava',
             'titulo_morse_envia', 'morse_wpm_le', 'morse_wpm_grava', 'morse_wpm_exibe', 'titulo_morse_wpm',
             'morse_tom_le', 'morse_tom_grava', 'morse_tom_exibe', 'titulo_morse_tom',

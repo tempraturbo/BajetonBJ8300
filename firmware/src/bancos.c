@@ -1372,9 +1372,14 @@ DADO_NA_LIVRE static const u8 porta_ordem[5] = {0, 2, 1, 3, 4};
 /* O nivel e o limiar: quanto maior, mais corta (v80: o HIGH em 160 deixava o radio mudo; v81: MID 76, HIGH 88) */
 DADO_NA_LIVRE static const u8 porta_nivel[5] = {0, 64, 32, 76, 88};    /* 0: o bit 8 desligado */
 
+/* A DE-EMPHASIS (v85) mora no mesmo byte do expansor, nos bits 3:2 (os 1:0 sao o expansor): a marca
+ * passa a ser so o nibble alto. O 0xC0 a 0xC3 de antes vale ON; o 208 do RESET (0xD0) continua sem a
+ * marca. */
+#define MARCADO_EXP    ((EXPANSOR & 0xF0) == MARCA_EXPANSOR)
+
 NA_LIVRE_COD u16 expansor_le(void)
 {
-    return (EXPANSOR & 0xFC) == MARCA_EXPANSOR ? EXPANSOR & 3 : 0;
+    return MARCADO_EXP ? EXPANSOR & 3 : 0;
 }
 
 NA_LIVRE_COD u16 porta_le(void)                     /* o codigo, para a barra de cima e o 0x28 */
@@ -1387,9 +1392,26 @@ NA_LIVRE_COD u16 porta_menu_le(void)                /* a posicao no menu */
     return porta_ordem[porta_le()];
 }
 
+/* ---------- DE-EMPHASIS: a de-enfase do RX (v85, a pasta AUDIO) ----------
+ * O reg 0x2B tem os filtros do audio de RX, e a fabrica so o grava na troca de AM e FM (0x01E4404E: 0 em
+ * FM, 0x0500 em AM) e na do espectro (0x01E4B0A0, igual); a partida nao o toca. Pela documentacao da
+ * comunidade do UV-K5, os bits desligam: 10 o passa-alta de 300 Hz, 9 o passa-baixa de 3 kHz e 8 a
+ * de-enfase; o 0 de FM liga os tres. Conferido no radio (v84): com o bit 8 o audio fica bem mais agudo, a
+ * de-enfase de fabrica desligada; o bit 9 nao muda nada que se ouca (o corte em 3 kHz que a gravacao mostra
+ * fica). ON e o de fabrica; OFF deixa o audio de FM sem a de-enfase. */
+DADO_NA_LIVRE const char titulo_deenfase[] = "DE-EMPHASIS";
+DADO_NA_LIVRE const char *const deenfase_opcoes[2] = {"ON", "OFF"};
+
+NA_LIVRE_COD u16 deenfase_le(void)                  /* 0 ON (o de fabrica), 1 OFF */
+{
+    return MARCADO_EXP && (EXPANSOR >> 2 & 3) == 1;
+}
+
+#define REG_2B_FM()    (deenfase_le() ? 0x0100u : 0u)     /* o bit 8 desliga a de-enfase */
+
 /* O ganho, o compressor (razao 1,33:1, 2:1 ou 4:1 nos bits 15:14 do 0x29, o resto como a partida
  * deixa; desligado, o 0xAA00 dela, ou a razao 0 se o expansor liga o bit 3), o expansor e a porta de
- * ruido (o 0x28; os dois de fabrica dao o 0x0B40 da partida) e o AGC. */
+ * ruido (o 0x28; os dois de fabrica dao o 0x0B40 da partida), o AGC e, em FM, a DE-EMPHASIS (o 0x2B). */
 NA_LIVRE_COD void aplica_audio(void)
 {
     unsigned c = compressor_le(), e = expansor_le(), p = porta_nivel[porta_le()], r = LE_REG(0x31);
@@ -1399,6 +1421,8 @@ NA_LIVRE_COD void aplica_audio(void)
     ESCREVE_REG(0x28, e << 14 | (e ? 0x2A00 : 0x0A00) | (p ? 0x100 | p : 0));
     ESCREVE_REG(0x31, c || e ? r | 8 : r & ~8u);
     ESCREVE_REG(0x19, agc_le() ? 0x9041 : 0x1041);
+    if (!(r & 1))                          /* em FM (o bit 0 do 0x31 e o AM): a DE-EMPHASIS ja (v85) */
+        ESCREVE_REG(0x2B, REG_2B_FM());
 }
 
 NA_LIVRE_COD void mic_grava(void)
@@ -1423,8 +1447,23 @@ NA_LIVRE_COD void agc_grava(void)
 
 NA_LIVRE_COD void expansor_grava(void)
 {
-    EXPANSOR = MARCA_EXPANSOR | (VALOR < 4 ? VALOR : 0);
+    EXPANSOR = MARCA_EXPANSOR | deenfase_le() << 2 | (VALOR < 4 ? VALOR : 0);
     aplica_audio();
+}
+
+NA_LIVRE_COD void deenfase_grava(void)
+{
+    EXPANSOR = MARCA_EXPANSOR | (VALOR == 1) << 2 | expansor_le();
+    aplica_audio();
+}
+
+/* No lugar da escrita de fabrica do 0x2B em FM (o 0 de 0x01E440BE, na troca de AM e FM, e o de 0x01E4B0FC,
+ * em salto de cauda, na troca do espectro): o da DE-EMPHASIS. Em AM a fabrica grava 0x0500 por outro
+ * caminho, e ele fica. */
+NA_LIVRE_COD void gancho_2b_fm(unsigned reg, unsigned valor)
+{
+    (void)valor;
+    ESCREVE_REG(reg, REG_2B_FM());
 }
 
 NA_LIVRE_COD void porta_grava(void)
@@ -1487,7 +1526,6 @@ NA_LIVRE_COD unsigned gancho_nr_inicia(u8 *attr, unsigned r1, unsigned r2, unsig
     }
     return NR_INICIA(attr, r1, r2, r3);
 }
-
 /* ---------- CRYSTAL FINE: o ajuste fino do cristal (v59, a pasta CALIBRATION) ----------
  * Toda sintonia passa por 0x01E440CE(freq em 10 Hz), que soma a correcao da calibracao de fabrica e
  * grava os regs 0x38/0x39 do chip (so o espectro os escreve direto, 0x01E4AF1E). A correcao sai dos

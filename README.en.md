@@ -65,7 +65,7 @@ alphabetical order, in a window that shows what is inside each one before you op
 
 | Folder | Items |
 |---|---|
-| 1 AUDIO | EXPANDER, NOISE GATE, SQL, STE |
+| 1 AUDIO | DE-EMPHASIS, EXPANDER, NOISE GATE, SQL, STE |
 | 2 BANKS | BANK, CHANNEL, NAME |
 | 3 CALIBRATION | CRYSTAL FINE |
 | 4 CHANNEL | BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N |

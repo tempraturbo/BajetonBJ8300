@@ -244,6 +244,100 @@ void afsk_manda(const u8 *q, unsigned n, unsigned flags)
     afsk_bit(&a, 1);                       /* o ultimo bit inteiro no ar antes de desligar o tom */
 }
 
+/* ---------- AFSK pelo DAC (v86, experimental) ----------
+ * Pelo gerador de tom do chip (afsk_manda), o APRSdroid nao leu nenhum pacote nosso, com o ganho, os
+ * passa-baixas do TX e a pre-enfase variados (v84): o bit sozinho de 2200 Hz nao chegava aos 2200 Hz. Aqui
+ * o AFSK sai como de um TNC de placa de som: amostras a 16 kHz no lugar das do microfone, que o JieLi manda
+ * ao DAC e dali a entrada de microfone do BK4819. A fase e continua (um acumulador de 32 bits: o passo de
+ * 1200 e 2200 Hz a 16 kHz) e cada bit tem 13, 13 e 14 amostras (40 a cada 3 bits, sem acumular erro).
+ * dac_prepara poe o quadro em bits de linha (NRZI e bit stuffing, como o afsk_manda: um bit de referencia
+ * no espaco, as flags paradas na marca, o ultimo bit inteiro); dac_bloco enche um bloco de amostras. */
+#define INC_MARCA    322122547u            /* 2^32 x 1200 / 16000: o passo da fase por amostra */
+#define INC_ESPACO   590558003u            /* 2^32 x 2200 / 16000 */
+#define DAC_LINHA    160                   /* 1280 bits de linha: 40 flags e o maior quadro com stuffing */
+
+struct afsk_dac {
+    u32 fase;
+    u16 bit, bits;                         /* o bit de linha em curso e quantos ha */
+    u16 silencio;                          /* amostras mudas antes do primeiro bit */
+    u8 amostra, terco;                     /* a amostra dentro do bit; qual dos 3 bits (13, 13, 14 amostras) */
+    u8 linha[DAC_LINHA];                   /* o tom de cada bit, o bit 0 primeiro: 1 espaco, 0 marca */
+};
+
+/* Um seno de 64 pontos, a -12 dB do fundo de escala. */
+static const short seno64[64] = {
+    0, 784, 1561, 2322, 3061, 3771, 4445, 5075, 5657, 6184, 6652, 7055, 7391, 7656, 7846, 7961,
+    8000, 7961, 7846, 7656, 7391, 7055, 6652, 6184, 5657, 5075, 4445, 3771, 3061, 2322, 1561, 784,
+    0, -784, -1561, -2322, -3061, -3771, -4445, -5075, -5657, -6184, -6652, -7055, -7391, -7656, -7846, -7961,
+    -8000, -7961, -7846, -7656, -7391, -7055, -6652, -6184, -5657, -5075, -4445, -3771, -3061, -2322, -1561, -784};
+
+static void linha_poe(struct afsk_dac *d, unsigned tom)
+{
+    unsigned k = d->bits;
+
+    if (k >= DAC_LINHA * 8)
+        return;
+    if (tom)
+        d->linha[k >> 3] |= 1u << (k & 7);
+    else
+        d->linha[k >> 3] &= ~(1u << (k & 7));
+    d->bits = k + 1;
+}
+
+void dac_prepara(struct afsk_dac *d, const u8 *q, unsigned n, unsigned flags, unsigned silencio)
+{
+    unsigned i, k, v, b, tom = 1, uns = 0, dentro;
+
+    d->fase = 0;
+    d->bit = d->bits = 0;
+    d->amostra = d->terco = 0;
+    d->silencio = silencio;
+    linha_poe(d, tom);                     /* a referencia, no espaco: o primeiro bit 0 troca para a marca */
+    for (i = 0; i < flags + n + 3; i++) {
+        dentro = i >= flags && i < flags + n;
+        v = dentro ? q[i - flags] : 0x7E;
+        for (k = 0; k < 8; k++, v >>= 1) {     /* o bit baixo primeiro */
+            b = v & 1;
+            tom ^= !b;
+            linha_poe(d, tom);
+            if (!dentro)
+                continue;
+            if (!b)
+                uns = 0;
+            else if (++uns == 5) {         /* cinco 1s: um 0 de enchimento */
+                tom ^= 1;
+                linha_poe(d, tom);
+                uns = 0;
+            }
+        }
+    }
+    linha_poe(d, tom);                     /* o ultimo bit inteiro antes de calar */
+}
+
+void dac_bloco(struct afsk_dac *d, short *b, unsigned n)
+{
+    unsigned i;
+
+    for (i = 0; i < n; i++) {
+        if (d->silencio) {
+            d->silencio--;
+            b[i] = 0;
+            continue;
+        }
+        if (d->bit >= d->bits) {
+            b[i] = 0;
+            continue;
+        }
+        d->fase += d->linha[d->bit >> 3] >> (d->bit & 7) & 1 ? INC_ESPACO : INC_MARCA;
+        b[i] = seno64[d->fase >> 26];
+        if (++d->amostra >= 13u + (d->terco == 2)) {
+            d->amostra = 0;
+            d->terco = d->terco == 2 ? 0 : d->terco + 1;
+            d->bit++;
+        }
+    }
+}
+
 /* ---------- HDLC na recepcao ----------
  * Recebe os bits de linha (o tom de cada bit: 1 marca, 0 espaco, ou o contrario - o NRZI nao liga
  * para a polaridade), desfaz o NRZI e o stuffing, acha as flags e devolve o tamanho do quadro quando
@@ -1273,42 +1367,77 @@ static unsigned quadro_aprs(u8 *q, u32 ack)
     return ax_quadro(q, origem, n, digis, (char *)q + CAB(digis), p - q - CAB(digis));
 }
 
+/* O AFSK pelo DAC (v86, experimental). O estado mora na memoria de video (0x10190), como o registro do
+ * APRS RX (v76): enquanto o conteudo toca, a interface nao roda e ninguem desenha. O ESTADO_MSG em 'D'
+ * liga o gancho do microfone; o laco espera o ultimo bit, com um prazo (se os blocos do microfone nao
+ * vierem, a TX nao trava), e mais 120 ms mudos para o DAC esvaziar. */
+#define AFSK_DAC     'D'
+#define DAC_ESTADO   ((volatile struct afsk_dac *)0x00010190)
+
+FIRMWARE(MIC_BLOCO, 0x01E41C06);   void MIC_BLOCO(unsigned, short *, unsigned);
+FIRMWARE(MIC_DAC, 0x01E41BA0);     unsigned MIC_DAC(short *, unsigned);
+
+/* No lugar do 0x01E41C06 na abertura do microfone (o ponteiro que 0x01E41CEC entrega a interrupcao de
+ * audio): com o envio em curso, o bloco vira AFSK e vai direto ao DAC (0x01E41BA0, que o duplica em L/R
+ * se a saida e estereo), sem passar pela NR; senao, segue como de fabrica. */
+void gancho_mic(unsigned r0, short *b, unsigned bytes)
+{
+    if (ESTADO_MSG != AFSK_DAC) {
+        MIC_BLOCO(r0, b, bytes);
+        return;
+    }
+    dac_bloco((struct afsk_dac *)DAC_ESTADO, b, bytes / 2);
+    MIC_DAC(b, bytes);
+}
+
+static void afsk_dac_manda(const u8 *q, unsigned n)
+{
+    volatile struct afsk_dac *d = DAC_ESTADO;
+    u32 t0 = TIQUE_MS, prazo;
+
+    dac_prepara((struct afsk_dac *)d, q, n, 40, 8000);     /* 0,5 s mudo (v69) e 40 flags (270 ms) */
+    prazo = 500 + d->bits * 5u / 6 + 1000;                  /* ms: o mudo, os bits de 833 us e a folga */
+    ESTADO_MSG = AFSK_DAC;
+    while ((d->silencio || d->bit < d->bits) && TIQUE_MS - t0 < prazo)
+        WDT();
+    ESPERA_2MS(60);
+    ESTADO_MSG = 0;
+}
+
 /* A mensagem ou o status (ack 0), ou o ack cuja origem esta em ack. */
 static void manda_aprs(u32 ack)
 {
     u8 q[CAB(2) + 1 + 9 + 1 + MAX_MSG + 3 + 2];
     unsigned n = quadro_aprs(q, ack);
 
-    if (!n)
-        return;
-    WDT();
-    afsk_manda(q, n, 40);                  /* 40 flags: 270 ms para o outro lado abrir o squelch */
-    WDT();
+    if (n)
+        afsk_dac_manda(q, n);
 }
 
-/* No lugar do roger, no fim da TX que o gancho_ida_ptt ligou: o mesmo preparo e o mesmo desligar do
- * roger BEEP (0x01E44622..0x01E44634 e 0x01E44656..0x01E4466A), o tom 2 desligado (reg 0x70: so o
- * tom 1, com o ganho do roger), e o fim de fabrica com o roger zerado - que nao grava nada. O OK que
- * armou o envio ainda pode estar apertado (a TX comeca umas voltas depois): o conteudo espera as teclas
- * soltarem, senao o Morse o veria como pedido de parar. */
+/* No lugar do roger, no fim da TX que o gancho_ida_ptt ligou, e o fim de fabrica com o roger zerado - que
+ * nao grava nada. O Morse usa o gerador de tom: o mesmo preparo e o mesmo desligar do roger BEEP
+ * (0x01E44622..0x01E44634 e 0x01E44656..0x01E4466A), com o tom 2 desligado (reg 0x70: so o tom 1, com o
+ * ganho do roger), e espera as teclas soltarem (o OK que armou o envio ainda pode estar apertado, e o Morse
+ * o veria como pedido de parar). O APRS (v86) sai pelo microfone, como a voz: o chip com o ADC do microfone
+ * religado (v88; o passo 3 o desliga), e o gancho do microfone poe o mudo e o AFSK no lugar das amostras. */
 void gancho_fim_tx(void)
 {
-    unsigned e = ESTADO_MSG, r, s31, s51;
+    unsigned e = ESTADO_MSG, r, s31, s51, morse = e == NO_AR(ARMADO_MORSE);
 
     if (!(e & 0x20) || !ARMADO(e & ~0x20)) {
         FIM_TX();
         return;
     }
     ESTADO_MSG = 0;
-    AUDIO_TX(4);                           /* o microfone cortado ja, antes das esperas (v74): a portadora
+    if (morse) {
+        AUDIO_TX(4);                       /* o microfone cortado ja, antes das esperas (v74): a portadora
                                             * muda levava o som do ambiente ao ar */
-    espera_soltar();
-    if (e != NO_AR(ARMADO_MORSE))          /* v69: 0,5 s de portadora muda antes do pacote, para o */
-        ESPERA_2MS(250);                   /* receptor (economia de bateria, squelch lento) abrir */
-    GERADOR(1);
-    AF(1);
+        espera_soltar();
+        GERADOR(1);
+        AF(1);
+        REG_W(0x70, 0xE000);
+    }
     WDT();
-    REG_W(0x70, 0xE000);
     /* sem o scramble e o subtom durante o conteudo (v75): o scramble (bit 1 do 0x31, secao 13) espelha o
      * audio, e o subtom (bit 15 do 0x51, que a fabrica liga com o nivel, 0x01E441BE) soma um tom grave
      * ao AFSK; os dois voltam antes do fim de fabrica */
@@ -1316,17 +1445,27 @@ void gancho_fim_tx(void)
     s51 = REG_R(0x51);
     REG_W(0x31, s31 & ~2u);
     REG_W(0x51, s51 & ~0x8000u);
-    if (e == NO_AR(ARMADO_MORSE))
+    if (morse) {
         toca_morse();
-    else                                   /* a mensagem, ou o ack do registro que o RX marcou */
+    } else {                               /* a mensagem, ou o ack do registro que o RX marcou */
+        /* o ADC do microfone do chip religado durante o pacote: a passagem ao passo 3 (o PTT solto,
+         * 0x01E479A0..0x01E479AC) desliga o bit 2 do 0x30, e sem ele o DAC chega ao chip e nao vai ao ar
+         * (v87: o PTT segurado leva o tom do DAC, o envio nao) */
+        unsigned s30 = REG_R(0x30);
+
+        REG_W(0x30, s30 | 4u);
         manda_aprs(e == NO_AR(ARMADO_ACK) ? HIST_SETOR(ACK_REGISTRO >> 5 & 1) + (ACK_REGISTRO & 31) * REG_HIST
                                             + ACK_PARA : 0);
+        REG_W(0x30, s30);
+    }
     REG_W(0x51, s51);
     REG_W(0x31, s31);
-    PEDE_AMPLI(10);
-    TOM(0, 0);
-    GERADOR(0);
-    AF(0);
+    if (morse) {
+        PEDE_AMPLI(10);
+        TOM(0, 0);
+        GERADOR(0);
+        AF(0);
+    }
     r = ROGER;
     ROGER = 0;
     FIM_TX();

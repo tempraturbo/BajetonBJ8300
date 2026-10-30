@@ -65,7 +65,7 @@ em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes 
 
 | Pasta | Itens |
 |---|---|
-| 1 AUDIO | EXPANDER, NOISE GATE, SQL, STE |
+| 1 AUDIO | DE-EMPHASIS, EXPANDER, NOISE GATE, SQL, STE |
 | 2 BANKS | BANK, CHANNEL, NAME |
 | 3 CALIBRATION | CRYSTAL FINE |
 | 4 CHANNEL | BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N |

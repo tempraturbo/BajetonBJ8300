@@ -226,6 +226,8 @@ static void GERADOR(unsigned x) { (void)x; }
 static void AUDIO_TX(unsigned x) { (void)x; }
 static void AF(unsigned x) { (void)x; }
 static void PEDE_AMPLI(unsigned x) { (void)x; }
+static void MIC_BLOCO(unsigned r0, short *b, unsigned n) { (void)r0; (void)b; (void)n; }   /* v86 */
+static unsigned MIC_DAC(short *b, unsigned n) { (void)b; return n; }
 static void LIMPA(unsigned x) { (void)x; }
 static void SAI_DO_EDITOR(void) {}
 

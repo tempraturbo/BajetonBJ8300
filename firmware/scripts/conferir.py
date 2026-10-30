@@ -843,13 +843,14 @@ for sitio, antes, depois, oque in montar.EDITOR_REMENDOS:
         erros.append(f'editor de nome: remendo errado em {sitio:#x}')
 previsto_tela += [(s_, s_ + len(a_) - 1, 'editor de nome: ' + d_) for s_, a_, _, d_ in montar.EDITOR_REMENDOS]
 # v65: o ponteiro da tecla 0 do editor: de fabrica o da sequencia original, remendado o da nossa, que
-# tem de estar no .livre e trazer o espaco primeiro e o 0 no fim.
+# tem de estar no .livre e trazer o espaco primeiro e o 0 no fim. v86: o do bloco do microfone, o
+# gancho_mic, tambem no .livre.
 for sitio, era, simbolo, oque in montar.PONTEIROS_LIVRE:
     o = sitio - montar.BASE_APP
     novo = montar.S[simbolo]
     ok = (struct.unpack_from('<I', app_velho, o)[0] == era and struct.unpack_from('<I', app, o)[0] == novo
           and montar.LIVRE <= novo < montar.LIVRE_FIM
-          and app[novo - montar.BASE_APP:].split(b'\0', 1)[0] == b' -/=+@()*#0')
+          and (simbolo != 'tecla_zero' or app[novo - montar.BASE_APP:].split(b'\0', 1)[0] == b' -/=+@()*#0'))
     print(f'4s. {sitio:#x}: {oque}: ' + ('ok' if ok else 'FALHOU'))
     if not ok:
         erros.append(f'ponteiro errado em {sitio:#x}')
