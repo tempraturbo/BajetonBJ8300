@@ -31,6 +31,12 @@ nenhuma foi decodificada. Correção na seção 22: no `0x43`, o `0x3028` é o l
 texto os trazia trocados; o rádio está certo). [Seção 25](engenharia-reversa.md#a-de-emphasis-v85),
 [seção 24](engenharia-reversa.md#o-aprsdroid-o-direwolf-e-o-envio-v84-experimental).
 
+## Driver do CHIRP — 30/10 — a De-emphasis
+
+- **De-emphasis** (On, Off), depois da Noise gate, nos bits 3:2 do `0x9034` (firmware v85). O Expander e ela
+  gravam cada um o seu campo sem mexer no outro, e a marca do byte passou a ser o nibble alto.
+- O `teste_chirp_real` ganhou a `10zo` e a `10zp`, e a `10p` conta a De-emphasis.
+
 ## v84 — 30/10 — variantes do envio do APRS e o RX FILTER (experimental, não lançada)
 
 Cada envio de mensagem usava uma variante (T1 a T6: o ganho do tom, os passa-baixas do TX e a pré-ênfase no

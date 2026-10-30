@@ -167,7 +167,7 @@ drawing code that goes into the radio.
 | 📊 **Spectrum with 320 and 640 points** and a **10 kHz step** | On top of the stock 160 points, to see a wider band at once |
 | 📈 **Peak hold on the spectrum** | The bar rises at once and, when the signal goes away, comes down gradually |
 | 🎯 **A spectrum that shows more** | The column being measured in white, the running frequency at the top, the peak frequency of every sweep in green, with the dBm |
-| 🔌 **Dedicated CHIRP driver** | Reads and writes the banks (**Banks** tab), their names, the new roger and scramble, WATCH, VFO C, MIC GAIN, the compressor, the AGC, CRYSTAL FINE, BRIGHTNESS, LIGHT PWM, MODEM GAIN, EXPANDER, NOISE GATE and the NOISE REDUCTION levels, in a single cable session; listed under **Bajeton**. It refuses to write to a radio with the stock firmware ([how to use](#-how-to-use-chirp-with-this-firmware)) |
+| 🔌 **Dedicated CHIRP driver** | Reads and writes the banks (**Banks** tab), their names, the new roger and scramble, WATCH, VFO C, MIC GAIN, the compressor, the AGC, CRYSTAL FINE, BRIGHTNESS, LIGHT PWM, MODEM GAIN, EXPANDER, NOISE GATE, DE-EMPHASIS and the NOISE REDUCTION levels, in a single cable session; listed under **Bajeton**. It refuses to write to a radio with the stock firmware ([how to use](#-how-to-use-chirp-with-this-firmware)) |
 | 🧰 **Extended cable command** | Reads the whole data chip (24-bit address) and writes only to the banks area. It is what the CHIRP driver uses |
 
 ### 🖥️ The new screen, screen by screen

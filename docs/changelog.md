@@ -32,6 +32,12 @@ decoded. A fix in section 22: in `0x43`, `0x3028` is wide and `0x4008` narrow (t
 radio is right). [Section 25](reverse-engineering.md#the-de-emphasis-v85),
 [section 24](reverse-engineering.md#aprsdroid-direwolf-and-the-transmission-v84-experimental).
 
+## CHIRP driver — Oct 30 — De-emphasis
+
+- **De-emphasis** (On, Off), after Noise gate, in bits 3:2 of `0x9034` (firmware v85). The Expander and it each
+  write their own field without touching the other, and the byte's mark became the high nibble.
+- `teste_chirp_real` gained `10zo` and `10zp`, and `10p` counts De-emphasis.
+
 ## v84 — Oct 30 — APRS sending variants and RX FILTER (experimental, not released)
 
 Each message send used one variant (T1 to T6: the tone gain, the TX low-passes and pre-emphasis in the send

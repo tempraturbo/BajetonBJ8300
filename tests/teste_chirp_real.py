@@ -458,9 +458,9 @@ def main():
     spec = aj['spec']
     mic = {s.get_name(): s for s in aj.walk()}['settings_unknown_9033']
     i = spec.keys().index('settings_unknown_9032')
-    confere('10p. Mic Gain no Specific, depois do Noise reduction, do Expander e do Noise gate, em HIGH com o '
-            'byte em 0', (spec.keys()[i + 1:i + 4], mic.get_shortname(), str(mic.value)),
-            (['expander', 'noise_gate', 'settings_unknown_9033'], 'Mic Gain', 'HIGH'))
+    confere('10p. Mic Gain no Specific, depois do Noise reduction, do Expander, do Noise gate e da De-emphasis, '
+            'em HIGH com o byte em 0', (spec.keys()[i + 1:i + 5], mic.get_shortname(), str(mic.value)),
+            (['expander', 'noise_gate', 'deemphasis', 'settings_unknown_9033'], 'Mic Gain', 'HIGH'))
     mic.value.set_value('LOW')
     aj.apply_to(r._memobj)
     confere('10q. LOW grava 2 em 0x9033', r._mmap[0x9033], bytes([2]))
@@ -582,6 +582,26 @@ def main():
         r._mmap[0x9031] = bytes([v])
         confere('10zk. o %#x no 0x9031 (o 1 da base, o Off da v79, fora da faixa) le Default' % v,
                 str(ajuste_de(r, 'noise_gate').value), 'Default')
+
+    # 10zo. DE-EMPHASIS (firmware v85): nos bits 3:2 do byte do Expander (1 = Off), com a marca so no nibble
+    # alto; o 208 do reset e o 0xC0..0xC3 de antes leem On, e cada um grava o seu campo sem mexer no outro
+    r = bj.BJ8300(imagem())
+    for v, esperado in ((208, ('Off', 'On')), (0xC2, ('Mid', 'On')), (0xC4, ('Off', 'Off')), (0xC7, ('High', 'Off')),
+                        (0xC9, ('Low', 'On')), (0xD4, ('Off', 'On'))):
+        r._mmap[0x9034] = bytes([v])
+        confere('10zo. o %#x no 0x9034 le Expander %s e De-emphasis %s' % ((v,) + esperado),
+                (str(ajuste_de(r, 'expander').value), str(ajuste_de(r, 'deemphasis').value)), esperado)
+    for v, mexe, valor, novo in ((208, 'deemphasis', 'Off', 0xC4), (0xC2, 'deemphasis', 'Off', 0xC6),
+                                 (0xC6, 'deemphasis', 'On', 0xC2), (0xC4, 'expander', 'High', 0xC7),
+                                 (0xC7, 'expander', 'Off', 0xC4)):
+        r._mmap[0x9034] = bytes([v])
+        aj = r.get_settings()
+        s = {x.get_name(): x for x in aj.walk()}
+        s[mexe].value.set_value(valor)
+        for x in aj.apply_to(r._memobj):
+            if x.has_apply_callback() and x.get_name() in ('expander', 'deemphasis'):
+                x.run_apply_callback()
+        confere('10zp. %s %s sobre o %#x grava %#x' % (mexe, valor, v, novo), r._mmap[0x9034], bytes([novo]))
 
     # 10zl. NOISE REDUCTION com niveis (firmware v80): o proprio 0x9032, 0 Off, 1 Default (o On de fabrica),
     # 2 Low, 3 Mid, 4 High; acima de 4 (o reset deixa 200), Default

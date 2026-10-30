@@ -2151,4 +2151,5 @@ ouça e saiu (o corte em 3 kHz que as gravações mostram está em outro estági
 
 O item mora nos bits 3:2 do byte do EXPANDER (`0x9034`, 1 = OFF), com o nível do expansor nos bits 1:0: a
 marca passa a ser só o nibble alto, `0xC`. O `0xC0` a `0xC3` de antes vale ON, e o 208 (`0xD0`) do RESET
-continua sem marca (EXPANDER OFF e DE-EMPHASIS ON).
+continua sem marca (EXPANDER OFF e DE-EMPHASIS ON). O driver do CHIRP ganhou a De-emphasis, e o Expander e
+ela gravam cada um o seu campo sem mexer no outro.

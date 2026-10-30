@@ -2186,4 +2186,5 @@ no audible difference and was removed (the 3 kHz cut the recordings show is in a
 
 The item lives in bits 3:2 of the EXPANDER byte (`0x9034`, 1 = OFF), with the expander level in bits 1:0: the
 mark becomes the high nibble alone, `0xC`. The earlier `0xC0` to `0xC3` read ON, and the RESET's 208 (`0xD0`)
-still has no mark (EXPANDER OFF and DE-EMPHASIS ON).
+still has no mark (EXPANDER OFF and DE-EMPHASIS ON). The CHIRP driver gained De-emphasis, and the Expander and
+it each write their own field without touching the other.

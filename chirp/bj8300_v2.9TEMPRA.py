@@ -702,6 +702,10 @@ MODEM_GAIN_OPTIONS = ['Off', 'Low', 'Mid', 'High']               # Mid as the ra
 # them (or v79's 0xE0 noise gate), counts as the stock behaviour: expander Off, noise gate Default.
 EXPANDER_ADDR, EXPANDER_MARK = 0x9034, 0xC0
 EXPANDER_OPTIONS = ['Off', 'Low', 'Mid', 'High']
+# AUDIO > DE-EMPHASIS (firmware v85): the RX de-emphasis, On (the stock one) or Off, in bits 3:2 of the
+# expander byte (1 = Off); with it, the mark is the high nibble alone (0xC0 to 0xCF), and the expander level
+# stays in bits 1:0. The factory reset's 208 (0xD0) still has no mark: expander Off, de-emphasis On.
+DEEMPHASIS_OPTIONS = ['On', 'Off']
 NOISE_GATE_ADDR, NOISE_GATE_MARK = 0x9031, 0xE8
 # MIC > NOISE REDUCTION (firmware v80): the microphone noise reduction, with levels, in the stock byte 0x9032
 # (0 Off, 1 Default = the stock On, 2 Low, 3 Mid, 4 High); above 4, as the factory reset leaves it (200), the
@@ -775,6 +779,13 @@ class _LightPwmSetting(MemSetting):
 
 def _modem_gain_index(raw):
     return raw & 3 if raw & 0xFC == 0xA0 else 3
+
+
+def _expander_fields(raw):
+    """The expander level and whether the de-emphasis is off, from the 0x9034 byte (firmware v85)."""
+    if raw & 0xF0 != EXPANDER_MARK:
+        return 0, False
+    return raw & 3, raw >> 2 & 3 == 1
 
 
 def _marked_index(raw, mark, count, stock):
@@ -1023,7 +1034,8 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         # EXPANDER and NOISE GATE (firmware v79), the radio's AUDIO folder, right after it
         _put(parent, self._expander_setting(), after='settings_unknown_9032')
         _put(parent, self._noise_gate_setting(), after='expander')
-        _put(parent, _mic_gain_setting(self._memobj.settings.unknown_9033), after='noise_gate')
+        _put(parent, self._deemphasis_setting(), after='noise_gate')        # DE-EMPHASIS (firmware v85)
+        _put(parent, _mic_gain_setting(self._memobj.settings.unknown_9033), after='deemphasis')
         # COMPRESSOR, MIC AGC and CRYSTAL FINE (firmware v59) right after it, in the same block
         _put(parent, _compressor_setting(self._memobj.settings.unknown_9035), after='settings_unknown_9033')
         _put(parent, _mic_agc_setting(self._memobj.settings.unknown_9036), after='settings_unknown_9035')
@@ -1266,7 +1278,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             self._mmap[MODEM_GAIN_ADDR] = bytes([0xA0 | MODEM_GAIN_OPTIONS.index(str(setting.value))])
 
     def _marked_setting(self, name, label, addr, mark, options, stock, doc, codes=None):
-        """A list kept in the radio as mark + a code (the expander and the noise gate); codes[position] is
+        """A list kept in the radio as mark + a code (the noise gate); codes[position] is
         the code of each list position, the position itself when not given."""
         codes = codes or list(range(len(options)))
         rs = RadioSetting(name, label, RadioSettingValueList(
@@ -1279,14 +1291,39 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         rs.set_apply_callback(apply)
         return rs
 
+    def _expander_byte_setting(self, name, label, options, index, store, doc):
+        """A list kept in a field of the 0x9034 byte, which the expander and the de-emphasis share: index
+        reads the field from (level, de-emphasis off), store makes the new byte from the list position and
+        those two as they are now in the image."""
+        rs = RadioSetting(name, label, RadioSettingValueList(
+            options, current_index=index(*_expander_fields(self._mmap[EXPANDER_ADDR][0]))))
+        rs.set_doc(doc)
+
+        def apply(setting):
+            if setting.value.changed():
+                fields = _expander_fields(self._mmap[EXPANDER_ADDR][0])
+                self._mmap[EXPANDER_ADDR] = bytes([store(options.index(str(setting.value)), *fields)])
+        rs.set_apply_callback(apply)
+        return rs
+
     def _expander_setting(self):
-        return self._marked_setting(
-            'expander', 'Expander', EXPANDER_ADDR, EXPANDER_MARK, EXPANDER_OPTIONS, 0,
+        return self._expander_byte_setting(
+            'expander', 'Expander', EXPANDER_OPTIONS, lambda level, off: level,
+            lambda i, level, off: EXPANDER_MARK | off << 2 | i,
             "The radio chip's RX audio expander, as the radio's AUDIO > EXPANDER item, the twin of the "
             'compressor: below its reference level each dB less becomes 2, 3 or 4 (Low, Mid, High). It undoes '
             'the compression of a station transmitting with a compander, and quiets the hiss in the pauses; '
             'with a plain station, weak voices get weaker. Off is the stock behaviour. Needs firmware v79 or '
             'later.')
+
+    def _deemphasis_setting(self):
+        return self._expander_byte_setting(
+            'deemphasis', 'De-emphasis', DEEMPHASIS_OPTIONS, lambda level, off: int(off),
+            lambda i, level, off: EXPANDER_MARK | i << 2 | level,
+            "The radio chip's FM RX de-emphasis, as the radio's AUDIO > DE-EMPHASIS item: the filter every FM "
+            'receiver uses to take the treble back to the level it had before the transmitter boosted it, '
+            'which also quiets the hiss. On is the stock behaviour; Off makes the audio much brighter. AM '
+            '(the airband) keeps its own filters. Needs firmware v85 or later.')
 
     def _noise_gate_setting(self):
         return self._marked_setting(
