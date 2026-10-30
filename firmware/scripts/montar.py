@@ -432,8 +432,8 @@ MDF_B_ITEM = 43
 NR_ITEM = 48
 # v80: a NOISE REDUCTION e a supressao de ruido do microfone, com niveis (bancos.c): OFF, DEFAULT, LOW, MID e
 # HIGH, no mesmo byte do item de fabrica
-ITENS_MUDADOS[NR_ITEM] = dict(maximo=5, get='nr_le', set='nr_grava', exibe='niveis_opcoes',
-                              opcoes_cn='niveis_opcoes')
+ITENS_MUDADOS[NR_ITEM] = dict(maximo=5, get='nr_menu_le', set='nr_grava', exibe='nr_opcoes',
+                              opcoes_cn='nr_opcoes')
 ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, maximo=3,
                                   get='mdf_c_le', set='mdf_c_grava', titulo='titulo_mdf_c')],
                 NR_ITEM: [dict(nome='MIC GAIN', molde=TDR_ITEM, flags=0, maximo=3, get='mic_le',
@@ -460,9 +460,9 @@ ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, ma
                           dict(nome='EXPANDER', molde=TDR_ITEM, flags=0, maximo=4, get='expansor_le',
                                set='expansor_grava', titulo='titulo_expansor', exibe='expansor_opcoes',
                                opcoes_cn='expansor_opcoes'),
-                          dict(nome='NOISE GATE', molde=TDR_ITEM, flags=0, maximo=5, get='porta_le',
-                               set='porta_grava', titulo='titulo_porta', exibe='niveis_opcoes',
-                               opcoes_cn='niveis_opcoes')]}
+                          dict(nome='NOISE GATE', molde=TDR_ITEM, flags=0, maximo=5, get='porta_menu_le',
+                               set='porta_grava', titulo='titulo_porta', exibe='porta_opcoes',
+                               opcoes_cn='porta_opcoes')]}
 
 # ---- revisao dos textos em ingles do menu (ver notas/textos-revisao.md) ----
 # As cadeias vem coladas na flash, sem folga: trocar no lugar so pode ter tamanho igual ou menor
@@ -710,8 +710,8 @@ MIC_CAL = ('compressor_le', 'compressor_grava', 'compressor_opcoes', 'titulo_com
            'agc_grava', 'agc_opcoes', 'titulo_agc', 'cristal_le', 'cristal_grava', 'cristal_exibe',
            'titulo_cristal',
            'expansor_le', 'expansor_grava', 'expansor_opcoes', 'titulo_expansor',   # v79, a pasta AUDIO
-           'porta_le', 'porta_grava', 'niveis_opcoes', 'titulo_porta',
-           'nr_le', 'nr_grava', 'gancho_nr_inicia')                                  # v80, a NR com niveis
+           'porta_le', 'porta_menu_le', 'porta_grava', 'porta_opcoes', 'titulo_porta',
+           'nr_le', 'nr_menu_le', 'nr_grava', 'nr_opcoes', 'gancho_nr_inicia')                                  # v80, a NR com niveis
 NA_LIVRE += MIC_CAL
 PRECISA += MIC_CAL
 LUZ = ('luz_inicia', 'luz_aplica', 'brilho_le', 'brilho_grava', 'brilho_opcoes', 'titulo_brilho')

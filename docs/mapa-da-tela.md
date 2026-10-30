@@ -300,7 +300,7 @@ Levantado em 2026-10-25 no desmontado de fábrica, para a tela B (seção 12). B
 | frequência de RX | u32 em +0 | em 10 Hz; `%03d.%05d` com /100000 |
 | tipo de tom | `b[+4]` | 0 nenhum, 1 CT, outro DCS |
 | frequência de TX | u32 em +5 | a que a linha grande mostra transmitindo (`0x01E40FE6`) |
-| deslocamento | `b[+10]` | 1 "+", 2 "−" |
+| deslocamento | `b[+10]` | 1 "+", 2 "−". A decodificação o tira comparando o TX com o RX: num canal sem TX (o CHIRP grava `0xFFFFFFFF`, que a conversão de BCD dá como 166666665, 1666,66665 MHz) sai "+". Desde a v81, TX acima de 999,99999 MHz vale "sem TX", sem o "+", e aparece um **NO TX** vermelho: no SINGLE no lugar da linha de TX, no DUAL, no TRIPLE e no resumo do menu nas etiquetas, depois do AM (v82) |
 | largura | `b[+11]` | diferente de 0: "N" |
 | AM | `b[+12]` | 1 = AM, de 18 a 999,99999 MHz; de 108 a 135,99999 MHz sempre AM (`0x01E3B438..0x01E3B47E`) |
 | SC | `b[+13]` | diferente de 0 e fora de AM: "SC" (significado sem prova) |
@@ -556,7 +556,7 @@ caminho mais fundo da pilha.
 3x, em 2x quando não cabe, com os dois últimos dígitos da frequência em 2x; as etiquetas abaixo,
 desenhadas pela cena, como no DUAL (chamadas de dentro do cartão, os quadros se somavam e a pilha
 passava 28 B da de fábrica); o medidor em y 88 com 12 px de altura; e, com deslocamento, a
-frequência de transmissão embaixo (`TX 147.12000`). O outro lado não aparece, e o medidor dele nem
+frequência de transmissão embaixo (`TX 147.12000`; num canal sem TX, **NO TX** em vermelho, v82). O outro lado não aparece, e o medidor dele nem
 é desenhado.
 
 **TRIPLE.** Cada lado tem uma letra: A, B e C, com o lado B mostrando a C na vista 3. A posição sai
@@ -595,7 +595,7 @@ a janela aberta e se estão recebendo, e o desenho da faixa é embutido nas duas
 o fim do caminho mais fundo da tela no TRIPLE, e um quadro a mais passava da pilha de fábrica.
 
 **Na prévia**, as cenas 33 a 35 são o SINGLE (canal recebendo, VFO com deslocamento e
-transmitindo) e as 36 a 39 o TRIPLE (o A recebendo, a C recebendo, o B em evidência com o A
+transmitindo; a 33b, um canal de aviação em AM sem TX, v81) e as 36 a 39 o TRIPLE (o A recebendo, a C recebendo, o B em evidência com o A
 recebendo e a C em evidência); a 38c é a C em VFO, a 39c a TX na C com o A em evidência antes do PTT
 (v51) e a 11b o menu TX-A/B/C com a C em evidência (v50).
 

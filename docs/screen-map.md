@@ -303,7 +303,7 @@ Mapped on 2026-10-25 in the stock disassembly, for screen B (section 12). Global
 | RX frequency | u32 at +0 | in 10 Hz; `%03d.%05d` with /100000 |
 | tone type | `b[+4]` | 0 none, 1 CT, other DCS |
 | TX frequency | u32 at +5 | the one the big line shows while transmitting (`0x01E40FE6`) |
-| shift | `b[+10]` | 1 "+", 2 "−" |
+| shift | `b[+10]` | 1 "+", 2 "−". Decoding takes it by comparing TX with RX: on a channel without TX (CHIRP writes `0xFFFFFFFF`, which the BCD conversion turns into 166666665, 1666.66665 MHz) it comes out "+". Since v81, TX above 999.99999 MHz counts as "no TX", without the "+", and a red **NO TX** shows: in SINGLE in place of the TX line, in DUAL, TRIPLE and the menu summary on the chip row, after AM (v82) |
 | bandwidth | `b[+11]` | non-zero: "N" |
 | AM | `b[+12]` | 1 = AM, from 18 to 999.99999 MHz; 108 to 135.99999 MHz is always AM (`0x01E3B438..0x01E3B47E`) |
 | SC | `b[+13]` | non-zero and not AM: "SC" (meaning unproven) |
@@ -561,7 +561,7 @@ because it sits on the deepest stack path.
 MDF) at 3x, at 2x when it does not fit, with the frequency's last two digits at 2x; the chips
 below, drawn by the scene, as in DUAL (called from inside the card, the frames added up and the
 stack went 28 B past stock); the meter at y 88, 12 px tall; and, with an offset, the transmit
-frequency at the bottom (`TX 147.12000`). The other side does not show, and its meter is not even
+frequency at the bottom (`TX 147.12000`; on a channel without TX, a red **NO TX**, v82). The other side does not show, and its meter is not even
 drawn.
 
 **TRIPLE.** Each side has a letter: A, B and C, with side B showing C in view 3. The position comes
@@ -600,7 +600,7 @@ window and whether they are receiving, and the strip drawing is inlined into bot
 the end of the deepest path of the screen in TRIPLE, and one more frame went past the stock stack.
 
 **In the preview**, scenes 33 to 35 are SINGLE (channel receiving, VFO with an offset, and
-transmitting) and 36 to 39 are TRIPLE (A receiving, C receiving, B in focus with A receiving, and C
+transmitting; 33b, an airband AM channel without TX, v81) and 36 to 39 are TRIPLE (A receiving, C receiving, B in focus with A receiving, and C
 in focus); 38c is C on a VFO, 39c TX on C with A in focus before PTT (v51) and 11b the TX-A/B/C
 menu with C in focus (v50).
 

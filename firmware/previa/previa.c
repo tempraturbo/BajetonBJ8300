@@ -345,6 +345,17 @@ int main(int argc, char **argv)
     grava("33-single-canal-recebendo");
     memoria[0x14BDE] = 1;
     memoria[0x14BDD] = 0;
+    /* v81: um canal de aviacao em AM, sem TX (o CHIRP grava 0xFFFFFFFF, que a decodificacao da como
+     * 166666665): NO TX em vermelho, sem o "+" e sem a linha de TX */
+    limpa();
+    lado(0, 11810000, 166666665, "AVIACAO AM", 200, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    tela_b();
+    grava("33b-single-am-sem-tx");
+    previa_vista = 0;                  /* o mesmo no DUAL: NO TX nas etiquetas (v82) */
+    tela_b();
+    grava("33c-dual-am-sem-tx");
+    previa_vista = 1;
 
     limpa();
     lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
@@ -526,8 +537,9 @@ int main(int argc, char **argv)
         strcpy((char *)&memoria[0x15494], "NOISE REDUCTION");
         menu_no("MIC", "NOISE REDUCTION");   /* v80: a NR e do microfone */
         LINHA(0, 1, "OFF");
-        LINHA(1, 2, "DEFAULT");
-        LINHA(2, 1, "LOW");
+        LINHA(1, 1, "LOW");
+        LINHA(2, 1, "MID");
+        LINHA(3, 2, "DEFAULT");
         memoria[0x14C10] = 1;
         memoria[0x14BF9] = 1;
         telas_b(1, 0);

@@ -1364,17 +1364,27 @@ NA_LIVRE_COD u16 agc_le(void)
 DADO_NA_LIVRE const char titulo_expansor[] = "EXPANDER";
 DADO_NA_LIVRE const char *const expansor_opcoes[4] = {"OFF", "LOW", "MID", "HIGH"};
 DADO_NA_LIVRE const char titulo_porta[] = "NOISE GATE";
-DADO_NA_LIVRE const char *const niveis_opcoes[5] = {"OFF", "DEFAULT", "LOW", "MID", "HIGH"};
-DADO_NA_LIVRE static const u8 porta_nivel[5] = {0, 64, 32, 96, 160};   /* 0: o bit 8 desligado */
+/* No menu, em ordem de quanto cortam (v82); o codigo gravado continua 0 OFF, 1 DEFAULT, 2 LOW, 3 MID e
+ * 4 HIGH. A porta: LOW (32) < DEFAULT (64) < MID (76) < HIGH (88) - a posicao troca o DEFAULT e o LOW, nos
+ * dois sentidos. */
+DADO_NA_LIVRE const char *const porta_opcoes[5] = {"OFF", "LOW", "DEFAULT", "MID", "HIGH"};
+DADO_NA_LIVRE static const u8 porta_ordem[5] = {0, 2, 1, 3, 4};
+/* O nivel e o limiar: quanto maior, mais corta (v80: o HIGH em 160 deixava o radio mudo; v81: MID 76, HIGH 88) */
+DADO_NA_LIVRE static const u8 porta_nivel[5] = {0, 64, 32, 76, 88};    /* 0: o bit 8 desligado */
 
 NA_LIVRE_COD u16 expansor_le(void)
 {
     return (EXPANSOR & 0xFC) == MARCA_EXPANSOR ? EXPANSOR & 3 : 0;
 }
 
-NA_LIVRE_COD u16 porta_le(void)
+NA_LIVRE_COD u16 porta_le(void)                     /* o codigo, para a barra de cima e o 0x28 */
 {
     return (PORTA & 0xF8) == MARCA_PORTA && (PORTA & 7) < 5 ? PORTA & 7 : NIVEL_DEFAULT;
+}
+
+NA_LIVRE_COD u16 porta_menu_le(void)                /* a posicao no menu */
+{
+    return porta_ordem[porta_le()];
 }
 
 /* O ganho, o compressor (razao 1,33:1, 2:1 ou 4:1 nos bits 15:14 do 0x29, o resto como a partida
@@ -1419,7 +1429,7 @@ NA_LIVRE_COD void expansor_grava(void)
 
 NA_LIVRE_COD void porta_grava(void)
 {
-    PORTA = MARCA_PORTA | (VALOR < 5 ? VALOR : NIVEL_DEFAULT);
+    PORTA = MARCA_PORTA | (VALOR < 5 ? porta_ordem[VALOR] : NIVEL_DEFAULT);
     aplica_audio();
 }
 
@@ -1436,6 +1446,10 @@ NA_LIVRE_COD void porta_grava(void)
  * LOW e MID cortam menos que o DEFAULT, e HIGH mais. */
 FIRMWARE(NR_INICIA, 0x01E245F8);    unsigned NR_INICIA(u8 *, unsigned, unsigned, unsigned);
 #define REDUCAO_RUIDO  (*(volatile u8 *)0x00014BDE)
+/* No menu, em ordem de quanto cortam (v82): LOW < MID < DEFAULT < HIGH, pela tabela do piso e da forca */
+DADO_NA_LIVRE const char *const nr_opcoes[5] = {"OFF", "LOW", "MID", "DEFAULT", "HIGH"};
+DADO_NA_LIVRE static const u8 nr_codigo[5] = {0, 2, 3, 1, 4};      /* a posicao no menu -> o codigo */
+DADO_NA_LIVRE static const u8 nr_posicao[5] = {0, 3, 1, 2, 4};     /* o codigo -> a posicao no menu */
 DADO_NA_LIVRE static const u32 nr_piso[3] = {0x3DCCCCCD, 0x3D4CCCCD, 0x3C23D70A};    /* 0,1 0,05 0,01 */
 DADO_NA_LIVRE static const u32 nr_forca[3] = {0x3F99999A, 0x3FC00000, 0x40200000};   /* 1,2 1,5 2,5 */
 
@@ -1446,14 +1460,19 @@ __attribute__((always_inline)) static inline unsigned nr_nivel(void)
     return b < 5 ? b : NIVEL_DEFAULT;
 }
 
-NA_LIVRE_COD u16 nr_le(void)
+NA_LIVRE_COD u16 nr_le(void)                        /* o codigo, para a barra de cima */
 {
     return nr_nivel();
 }
 
+NA_LIVRE_COD u16 nr_menu_le(void)                   /* a posicao no menu */
+{
+    return nr_posicao[nr_nivel()];
+}
+
 NA_LIVRE_COD void nr_grava(void)
 {
-    REDUCAO_RUIDO = VALOR < 5 ? VALOR : NIVEL_DEFAULT;
+    REDUCAO_RUIDO = VALOR < 5 ? nr_codigo[VALOR] : NIVEL_DEFAULT;
 }
 
 /* No lugar da chamada de 0x01E245F8(attr) em 0x01E42078; os outros registradores passam como vieram.
@@ -1570,6 +1589,9 @@ NA_LIVRE_COD void brilho_grava(void)
 NA_LIVRE_COD void gancho_ajustes(void)
 {
     ESTADO_ENVIO = 0;
+    if (watch_vista() == WATCH_SINGLE)     /* o RESET (VFO e ALL) poe o TDR de fabrica, 1 (a tabela de
+                                            * 0x01E607B1), e o CHIRP pode liga-lo: no SINGLE fica em 0 (v82) */
+        TDR = 0;
     aplica_audio();
     aplica_cristal();
     luz_aplica();

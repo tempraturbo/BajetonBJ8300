@@ -1734,7 +1734,7 @@ void aprs_decode_grava(void)
 #define GANHO_MODEM  RAM(u8, 0x00014BE9)
 #define GANHO_MARCA  0xA0
 const char titulo_modem_ganho[] = "MODEM GAIN";
-const char *const modem_ganho_opcoes[4] = {"OFF", "LOW", "MEDIUM", "HIGH"};
+const char *const modem_ganho_opcoes[4] = {"OFF", "LOW", "MID", "HIGH"};   /* MID como os outros (v82) */
 
 static unsigned ganho_modem(void)
 {

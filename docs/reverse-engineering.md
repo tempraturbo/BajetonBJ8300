@@ -1734,7 +1734,7 @@ The chip's FSK modem input gain is bits 9:8 of `0x58`: 4 levels, with no public 
 documentation only names it). The stock firmware uses 3 (the roger TONE1200's `0x3FC3`); 0 (v70's mode 4)
 heard nothing. With 2200 Hz outside what the modem expects, too strong a signal can saturate the input.
 
-In v73 it becomes an item of the CALIBRATION folder, **MODEM GAIN**: OFF, LOW, MEDIUM and HIGH (0 to 3),
+In v73 it becomes an item of the CALIBRATION folder, **MODEM GAIN**: OFF, LOW, MEDIUM (MID since v82) and HIGH (0 to 3),
 stored in settings byte `0x903D` (`b[0x14BE9]`, free per the v59 scan) as `0xA0` + the gain. Any other value
 means HIGH, the stock one: that is the case of a radio that never changed the item, and of the stock RESET,
 which puts in the byte whatever follows the `0x01E603C3` table (198 today). APRS RX starts with the chosen
@@ -1997,8 +1997,9 @@ quiets the hiss in the pauses; with a plain station, a weak voice gets weaker. I
 **NOISE GATE** is the RX audio noise gate: per the official Beken table cited in issue 739 of the UV-K5 v3
 firmware, bit 8 of the same `0x28` turns it on and bits 7:0 are the level; 11:9 are the DC filter (`101` on
 RX), and 13:12 are not described. Power-up writes `0x0B40` (`0x01E565F2`): the expander off and the gate on
-at level 64. DEFAULT is that; OFF clears bit 8; LOW, MID and HIGH use levels 32, 96 and 160 (since v80;
-on v79 they were LOW and HIGH, 32 and 128; which one cuts more, only the ear tells).
+at level 64. DEFAULT is that; OFF clears bit 8; LOW, MID and HIGH use levels 32, 76 and 88. The level is the threshold: the higher, the more it cuts. On
+v80 HIGH, at 160, left the radio silent, and on v81 MID and HIGH went down from 96 and 160 to 76 and 88 (on
+v79 there were only LOW and HIGH, 32 and 128).
 
 **On the radio.** The default is today's: without touching the items, `0x28`, `0x29` and `0x31` stay as the
 stock power-up leaves them. Only power-up writes `0x28` and `0x29` (`0x01E565F2`, `0x01E565FC`), and the
@@ -2084,3 +2085,19 @@ LOW, MID and HIGH, green, yellow and red. Both levels go into the `nr` byte of `
 7:4), which sits on the deepest stack path and could not grow, and the tag is a separate routine: inlined
 twice, it took the bar's frame from 44 to 52 B. Without room before the voltage, it is left out. The roots
 stay at 740, 620 and 696 B.
+
+**The menu order (v82).** The NOISE GATE and NR options go in the order of how much they cut: NOISE GATE as
+OFF, LOW (32), DEFAULT (64), MID (76) and HIGH (88), and NR as OFF, LOW, MID, DEFAULT and HIGH (the stock
+DEFAULT cuts more than MID). The stored code does not change (0 OFF, 1 DEFAULT, 2 LOW, 3 MID, 4 HIGH; for NR,
+1 is still the stock On): the menu getter and setter (`porta_menu_le`, `nr_menu_le`) map position to code
+through a table, and the top bar and `0x28` use the code. In MODEM GAIN and on the APRS screen, MEDIUM and MED
+became MID, as in the other items.
+
+**RESET (v82).** SYSTEM > RESET has VFO and ALL. Both apply the factory settings (`0x01E4842E`: the first 32
+bytes of the `0x9000` block from `0x01E607B1` and the next 39 from `0x01E603C3`), and VFO also the VFOs
+(`0x01E3A5C0`); ALL also erases the 32 KB block at address 0 (flash command `0x52` at `0x01E4324C`, the
+channels) and writes the default channels (`0x01E48336`). Neither reaches the sectors from `0xC1000` up: the
+banks, WATCH, C's VFO, Morse, APRS and the history stay. Our items' bytes go back to today's defaults through
+each one's mark, and `gancho_ajustes`, right after the factory settings, disarms sending and reapplies the
+audio, the crystal and the backlight. The reset turns TDR on (the table's 1), and with WATCH in SINGLE
+`gancho_ajustes` clears it since v82 (the same goes for a CHIRP upload).

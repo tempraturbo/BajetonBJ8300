@@ -161,7 +161,11 @@ static void le_lado(struct lado *l, unsigned i, unsigned tx)
     l->exibicao = EXIBICAO(i);
     l->potencia = POTENCIA(i);
     l->tom = tom ? tom == 1 ? 1 : 2 : 0;
-    l->desloc = RAM(u8, r + 10);
+    /* o canal sem TX (v81): o CHIRP grava 0xFFFFFFFF na frequencia de TX, que a decodificacao BCD de
+     * fabrica da como 166666665 (1666,66665 MHz, maior que o RX: o "+"); acima de 999,99999 MHz, o fim da
+     * faixa dos canais, nao ha deslocamento, e aparece NO TX em vermelho (o 3): no SINGLE no lugar da linha de
+     * TX, no DUAL e no TRIPLE nas etiquetas, depois do AM (v82) */
+    l->desloc = le32(r + 5) > 99999999u ? 3 : RAM(u8, r + 10);
     l->estreito = RAM(u8, r + 11) != 0;
     l->am = rx - 10800000u <= 2799999u || (rx - 1800000u <= 98199999u && RAM(u8, r + 12) == 1);
     l->sc = RAM(u8, r + 13) != 0;
@@ -422,7 +426,7 @@ static unsigned info(unsigned x, unsigned y, const char *s)
 
 /* As etiquetas da linha de informacoes, da esquerda para a direita, enquanto couberem. A da potencia
  * vem primeiro, na cor do nivel: H vermelho, M ambar, L verde. */
-SEPARADA static void informacoes(const struct lado *l, unsigned y)
+SEPARADA static void informacoes(const struct lado *l, unsigned y, unsigned no_tx)
 {
     static const char *const potencias[3] = {"H", "M", "L"};
     static const u16 fundos[3] = {COR_CHIP_VERMELHO, COR_CHIP_AMBAR, COR_CHIP_RX};
@@ -437,6 +441,8 @@ SEPARADA static void informacoes(const struct lado *l, unsigned y)
         x = info(x, y, "N");
     if (l->desloc == 1 || l->desloc == 2)
         x = info(x, y, l->desloc == 1 ? "+" : "-");
+    else if (l->desloc == 3 && no_tx && x + largura("NO TX", 1) + 6 <= 152)   /* fora do SINGLE (v82) */
+        x = etiqueta(x, y, "NO TX", COR_CHIP_VERMELHO, COR_SEG_VERMELHO, 0);
     if (l->tom)
         x = info(x, y, l->tom == 1 ? "CT" : "DCS");
     if (l->rt == 1 || l->rt == 2)
@@ -576,6 +582,8 @@ SEPARADA static void cartao_unico(const struct estado *e, unsigned i)
     if (!e->tx && (l->desloc == 1 || l->desloc == 2)) {
         frequencia(junta(s, "TX "), le32(VFO(i) + 5), 5);
         texto(10, y + 92, s, 1, COR_CINZA);
+    } else if (!e->tx && l->desloc == 3) {             /* o canal sem TX: no lugar da frequencia (v82) */
+        texto(10, y + 92, "NO TX", 1, COR_SEG_VERMELHO);
     }
 }
 
@@ -861,19 +869,19 @@ static void cena(const struct estado *e)
     if (e->vista == VISTA_SINGLE) {
         if (y0 < TOPO_UNICO + ALTURA_UNICO && y1 > TOPO_UNICO) {
             cartao_unico(e, i);
-            informacoes(&e->lado[i], TOPO_UNICO + 52);
+            informacoes(&e->lado[i], TOPO_UNICO + 52, 0);
         }
     } else if (e->vista >= VISTA_TRIPLE) {  /* as faixas conferem a janela sozinhas */
         if (y0 < TOPO_CARTAO_V(e, i) + ALTURA_CARTAO && y1 > TOPO_CARTAO_V(e, i)) {
             cartao(e, i);
-            informacoes(&e->lado[i], TOPO_CARTAO_V(e, i) + 38);
+            informacoes(&e->lado[i], TOPO_CARTAO_V(e, i) + 38, 1);
         }
         faixa_lado(e, !i);
         faixa_terceira(e);
     } else {
         if (y0 < TOPO_CARTAO(i) + ALTURA_CARTAO && y1 > TOPO_CARTAO(i)) {
             cartao(e, i);
-            informacoes(&e->lado[i], TOPO_CARTAO(i) + 38);
+            informacoes(&e->lado[i], TOPO_CARTAO(i) + 38, 1);
         }
         if (y0 < TOPO_COMPACTO(!i) + ALTURA_COMPACTO && y1 > TOPO_COMPACTO(!i))
             compacto(e, !i);

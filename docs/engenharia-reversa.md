@@ -1704,7 +1704,7 @@ O ganho de entrada do modem FSK do chip são os bits 9:8 do `0x58`: 4 níveis, s
 documentação do UV-K5 só lhe dá o nome). A fábrica usa o 3 (o `0x3FC3` do roger TONE1200); o 0 (o modo 4 da
 v70) não ouvia nada. Com o 2200 Hz fora do que o modem espera, um sinal forte demais pode saturar a entrada.
 
-Na v73 ele vira um item da pasta CALIBRATION, **MODEM GAIN**: OFF, LOW, MEDIUM e HIGH (0 a 3), gravado no
+Na v73 ele vira um item da pasta CALIBRATION, **MODEM GAIN**: OFF, LOW, MEDIUM (MID desde a v82) e HIGH (0 a 3), gravado no
 `0x903D` dos ajustes (`b[0x14BE9]`, livre pela varredura da v59) como `0xA0` + o ganho. Qualquer outro
 valor vale HIGH, o de fábrica: é o caso do rádio que nunca mudou o item, e do RESET de fábrica, que põe no
 byte o que vier depois da tabela `0x01E603C3` (hoje 198). O APRS RX entra com o ganho escolhido, e o `#` o
@@ -1962,7 +1962,8 @@ o compressor, e só com ele o compressor fica na razão 0 (desligado). Ligado, o
 firmware do UV-K5 v3, o bit 8 do mesmo `0x28` a liga e os bits 7:0 são o nível; os 11:9 são o filtro de
 DC (`101` no RX), e os 13:12 não têm descrição. A partida grava `0x0B40` (`0x01E565F2`): o expansor
 desligado e a porta ligada no nível 64. DEFAULT é isso; OFF desliga o bit 8; LOW, MID e HIGH usam os
-níveis 32, 96 e 160 (desde a v80; na v79 eram LOW e HIGH, 32 e 128; qual corta mais, só o ouvido diz).
+níveis 32, 76 e 88. O nível é o limiar: quanto maior, mais corta. Na v80 o HIGH, em 160, deixou o rádio
+mudo, e na v81 o MID e o HIGH baixaram de 96 e 160 para 76 e 88 (na v79 eram só LOW e HIGH, 32 e 128).
 
 **No rádio.** O padrão é o de hoje: sem mexer nos itens, o `0x28`, o `0x29` e o `0x31` ficam como a partida
 de fábrica os deixa. Só a partida escreve no `0x28` e no `0x29` (`0x01E565F2`, `0x01E565FC`), e o
@@ -2050,3 +2051,19 @@ em LOW, MID e HIGH, verde, amarela e vermelha. Os dois níveis vão no byte `nr`
 (bits 3:0 e 7:4), que está no caminho mais fundo da pilha e não podia crescer, e a etiqueta é uma rotina
 separada: embutida duas vezes, levava o quadro da barra de 44 a 52 B. Sem lugar antes da tensão, ela não
 entra. As raízes continuam em 740, 620 e 696 B.
+
+**A ordem no menu (v82).** As opções da NOISE GATE e da NR vão em ordem de quanto cortam: a NOISE GATE em
+OFF, LOW (32), DEFAULT (64), MID (76) e HIGH (88), e a NR em OFF, LOW, MID, DEFAULT e HIGH (o DEFAULT de
+fábrica corta mais que o MID). O código gravado não muda (0 OFF, 1 DEFAULT, 2 LOW, 3 MID, 4 HIGH; na NR, o
+1 continua sendo o ligado de fábrica): o get e o set do menu (`porta_menu_le`, `nr_menu_le`) passam da posição
+ao código por uma tabela, e a barra de cima e o `0x28` usam o código. No MODEM GAIN e na tela do APRS, o MEDIUM
+e o MED viraram MID, como nos outros itens.
+
+**O RESET (v82).** SYSTEM > RESET tem VFO e ALL. Os dois põem os ajustes de fábrica (`0x01E4842E`: os 32
+primeiros bytes do bloco `0x9000` de `0x01E607B1` e os 39 seguintes de `0x01E603C3`), e o VFO também os VFOs
+(`0x01E3A5C0`); o ALL, além disso, apaga o bloco de 32 KB do endereço 0 (o comando `0x52` da flash em
+`0x01E4324C`, os canais) e grava os canais padrão (`0x01E48336`). Nenhum dos dois chega aos setores do
+`0xC1000` em diante: os bancos, o WATCH, o VFO da C, o Morse, o APRS e o histórico ficam. Os bytes dos
+nossos itens voltam ao padrão de hoje pela marca de cada um, e o `gancho_ajustes`, logo depois dos ajustes de
+fábrica, desarma o envio e reaplica o áudio, o cristal e a luz. O reset liga o TDR (o 1 da tabela), e com o
+WATCH em SINGLE o `gancho_ajustes` o zera desde a v82 (o mesmo vale para um upload do CHIRP).

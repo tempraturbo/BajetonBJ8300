@@ -5,6 +5,25 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v82 — 29/10 — o NO TX no lugar certo, os níveis em ordem, o MID e o TDR depois do RESET (a testar)
+
+`firmware/releases/BJ8300_BANK_v82.anc` (sha256 `f124825e…`). A pedido do dono: o **NO TX** do canal sem TX vai
+no lugar da linha de TX no SINGLE e fica nas etiquetas, depois do AM, no DUAL, no TRIPLE e no resumo do menu;
+as opções da NOISE GATE (OFF, LOW, DEFAULT, MID, HIGH) e da NR (OFF, LOW, MID, DEFAULT, HIGH) vão em ordem de
+quanto cortam, com os mesmos códigos gravados; e o ganho médio do modem aparece como MID, no menu e na tela do
+APRS. Mapeado o RESET de fábrica (VFO e ALL): nenhum dos dois toca nos nossos setores, os itens novos voltam
+ao padrão de hoje, e com o WATCH em SINGLE o TDR, que o reset liga, volta a 0.
+[Seção 25](engenharia-reversa.md#a-nr-com-níveis-na-pasta-mic-v80).
+
+## v81 — 29/10 — o canal sem TX com NO TX, e a NOISE GATE mais suave no MID e no HIGH (a testar)
+
+`firmware/releases/BJ8300_BANK_v81.anc` (sha256 `70ae32af…`). Nos canais de aviação em AM gravados sem TX, a
+tela principal mostrava "+" e, no SINGLE, "TX 1666.66665": o CHIRP grava `0xFFFFFFFF` na frequência de TX, e
+a conversão de BCD de fábrica dá 1666,66665 MHz. Agora o TX acima de 999,99999 MHz vale "sem TX": some o
+"+" e a linha de TX, e aparece um **NO TX** vermelho nas etiquetas. A NOISE GATE em HIGH (160) deixava o
+rádio mudo: o MID e o HIGH baixaram para 76 e 88. O item VERSION mostra V3.0T desde a v76.
+[Mapa da tela](mapa-da-tela.md).
+
 ## Driver do CHIRP — 29/10 — o Modem gain, o Expander, a Noise gate e os níveis da NR
 
 - No **BJ8300_v2.9TEMPRA Specific**, depois do Light PWM, o **Modem gain** (o `0x903D`, fora do struct de

@@ -71,7 +71,7 @@ SEPARADA static void resumo(const struct estado *e, unsigned y)
         texto_canal(s, l->canal);
         etiqueta(152, y + 4, s, COR_CHIP_CANAL, COR_TEXTO, 1);
     }
-    informacoes(l, y + 20);
+    informacoes(l, y + 20, 1);           /* com o NO TX, como no DUAL (v82) */
 }
 
 /* Texto no tamanho medio se couber na largura, senao em 1x (centrado na altura do medio). */
@@ -1071,7 +1071,7 @@ SEPARADA static void aprs_linhas(u32 a, unsigned y, unsigned n)
 SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
 {
     static const char *const ROTULOS[2] = {" BAD ", " FIX "};
-    static const char *const GANHOS[4] = {"OFF", "LOW", "MED", "HIGH"};   /* o MODEM GAIN (v73) */
+    static const char *const GANHOS[4] = {"OFF", "LOW", "MID", "HIGH"};   /* o MODEM GAIN (v73; MID desde a v82) */
     char s[18];                            /* "SYNC 65535/65535" e o 0 (v74) */
     unsigned i = LADO_B != 0, x;
 
