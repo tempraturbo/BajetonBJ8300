@@ -5,6 +5,14 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 29 — Noise reduction and Noise gate in order, and Mid
+
+- **Noise reduction** and **Noise gate** go in the order of how much they cut, as in the radio's menu
+  (firmware v82): Off, Low, Mid, Default, High and Off, Low, Default, Mid, High. They store the code, not the
+  position.
+- **Modem gain** shows Mid, not Medium.
+- `teste_chirp_real` gained `10zn`, and `10c4` to `10c6` now use the list names.
+
 ## v82 — Oct 29 — NO TX in the right place, the levels in order, MID and TDR after RESET (to be tested)
 
 `firmware/releases/BJ8300_BANK_v82.anc` (sha256 `f124825e…`). At the owner's request: a channel without TX shows

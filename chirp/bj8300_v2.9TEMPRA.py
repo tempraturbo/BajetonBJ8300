@@ -694,7 +694,7 @@ LIGHT_PWM_VALUES = [3, 4, 0, 1, 2]                       # list position -> valu
 # uses, at 0x903D (past the base class settings struct, so read and written as a raw byte). The radio stores
 # 0xA0 + the gain (0 Off to 3 High); any other value, as a radio that never changed it, counts as High.
 MODEM_GAIN_ADDR = 0x903D
-MODEM_GAIN_OPTIONS = ['Off', 'Low', 'Medium', 'High']
+MODEM_GAIN_OPTIONS = ['Off', 'Low', 'Mid', 'High']               # Mid as the radio shows it (v82)
 # AUDIO > EXPANDER and NOISE GATE (firmware v79, the noise gate with five options since v80): raw bytes like
 # the modem gain, 0xC0 + the expander level at 0x9034 and 0xE8 + the noise gate option at 0x9031 (the base
 # class calls 0x9031 noise reduction and 0x9034 FM interrupt, but neither means anything on the BJ8300: its
@@ -704,9 +704,13 @@ EXPANDER_ADDR, EXPANDER_MARK = 0x9034, 0xC0
 EXPANDER_OPTIONS = ['Off', 'Low', 'Mid', 'High']
 NOISE_GATE_ADDR, NOISE_GATE_MARK = 0x9031, 0xE8
 # MIC > NOISE REDUCTION (firmware v80): the microphone noise reduction, with levels, in the stock byte 0x9032
-# (0 Off, 1 Default = the stock On, then Low, Mid and High); above 4, as the factory reset leaves it (200),
-# the radio counts it as on, Default.
-LEVEL_OPTIONS = ['Off', 'Default', 'Low', 'Mid', 'High']
+# (0 Off, 1 Default = the stock On, 2 Low, 3 Mid, 4 High); above 4, as the factory reset leaves it (200), the
+# radio counts it as on, Default. Both lists go in the order of how much they cut, as in the radio's menu
+# (firmware v82), and store the code, not the list position.
+NOISE_GATE_OPTIONS = ['Off', 'Low', 'Default', 'Mid', 'High']        # levels 0, 32, 64, 76, 88
+NOISE_GATE_CODES = [0, 2, 1, 3, 4]
+NR_OPTIONS = ['Off', 'Low', 'Mid', 'Default', 'High']
+NR_CODES = [0, 2, 3, 1, 4]
 
 
 def _compressor_setting(level):
@@ -808,12 +812,19 @@ def _same_as_memsetting(old, path):
     return rs
 
 
+class _NoiseReductionSetting(MemSetting):
+    """NOISE REDUCTION in the order of how much it cuts: it stores the code, not the list position."""
+
+    def apply_to_memobj(self, memobj):
+        memobj.settings.unknown_9032 = NR_CODES[int(self.value)]
+
+
 def _noise_reduction_setting(old, nr):
-    rs = MemSetting('settings.unknown_9032', old.get_shortname(), RadioSettingValueList(
-        LEVEL_OPTIONS, current_index=int(nr) if int(nr) < 5 else 1))
+    rs = _NoiseReductionSetting('settings.unknown_9032', old.get_shortname(), RadioSettingValueList(
+        NR_OPTIONS, current_index=NR_CODES.index(int(nr) if int(nr) < 5 else 1)))
     rs.set_doc("The microphone noise reduction, done by the radio's processor while transmitting, as the "
-               "radio's MIC > NOISE REDUCTION item. Default is the stock On; Low and Mid cut less noise "
-               'than it, High more. Levels need firmware v80 or later (before it, any level counts as On).')
+               "radio's MIC > NOISE REDUCTION item, in the order of how much it cuts: Low and Mid cut less "
+               'noise than Default (the stock On), High more. Levels need firmware v80 or later (before it, any level counts as On).')
     return rs
 
 
@@ -1254,15 +1265,17 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         if setting.value.changed():
             self._mmap[MODEM_GAIN_ADDR] = bytes([0xA0 | MODEM_GAIN_OPTIONS.index(str(setting.value))])
 
-    def _marked_setting(self, name, label, addr, mark, options, stock, doc):
-        """A list kept in the radio as mark + the option's position (the expander and the noise gate)."""
+    def _marked_setting(self, name, label, addr, mark, options, stock, doc, codes=None):
+        """A list kept in the radio as mark + a code (the expander and the noise gate); codes[position] is
+        the code of each list position, the position itself when not given."""
+        codes = codes or list(range(len(options)))
         rs = RadioSetting(name, label, RadioSettingValueList(
-            options, current_index=_marked_index(self._mmap[addr][0], mark, len(options), stock)))
+            options, current_index=codes.index(_marked_index(self._mmap[addr][0], mark, len(options), stock))))
         rs.set_doc(doc)
 
         def apply(setting):
             if setting.value.changed():
-                self._mmap[addr] = bytes([mark | options.index(str(setting.value))])
+                self._mmap[addr] = bytes([mark | codes[options.index(str(setting.value))]])
         rs.set_apply_callback(apply)
         return rs
 
@@ -1277,10 +1290,11 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
 
     def _noise_gate_setting(self):
         return self._marked_setting(
-            'noise_gate', 'Noise gate', NOISE_GATE_ADDR, NOISE_GATE_MARK, LEVEL_OPTIONS, 1,
+            'noise_gate', 'Noise gate', NOISE_GATE_ADDR, NOISE_GATE_MARK, NOISE_GATE_OPTIONS, 1,
             "The radio chip's RX audio noise gate, as the radio's AUDIO > NOISE GATE item: it mutes the "
             'audio below a level. Default is the stock one (on, level 64); Off turns it off; Low, Mid and '
-            'High use levels 32, 96 and 160. Needs firmware v80 or later.')
+            'High use levels 32, 76 and 88 (the higher, the more it cuts), in that order with Default '
+            '(64) between Low and Mid. Needs firmware v80 or later.', codes=NOISE_GATE_CODES)
 
     def _mdf_c_setting(self, store):
         rs = RadioSetting('watch_mdf_c', 'Memory Display Format C (MDF-C)', RadioSettingValueList(

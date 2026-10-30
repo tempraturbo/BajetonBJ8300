@@ -380,18 +380,18 @@ def main():
     r._mmap[0x9032] = 1
     nr = {s.get_name(): s for s in r.get_settings().walk()}
     confere('10c4. Noise reduction lido de 0x9032 (o byte do radio), so ele',
-            (bool(nr['settings_unknown_9032'].value), nr['settings_unknown_9032'].get_shortname(),
+            (str(nr['settings_unknown_9032'].value), nr['settings_unknown_9032'].get_shortname(),
              'settings_noise_reduction' in nr),
-            (True, 'Noise reduction', False))
+            ('Default', 'Noise reduction', False))
     ajustes = r.get_settings()
-    {s.get_name(): s for s in ajustes.walk()}['settings_unknown_9032'].value.set_value(False)
+    {s.get_name(): s for s in ajustes.walk()}['settings_unknown_9032'].value.set_value('Off')
     ajustes.apply_to(r._memobj)
     confere('10c5. e gravado em 0x9032, sem mexer em 0x9031', bytes(r._mmap[0x9031:0x9033]), b'\x00\x00')
     r._mmap[0x9031] = 1
     ajustes = r.get_settings()
-    {s.get_name(): s for s in ajustes.walk()}['settings_unknown_9032'].value.set_value(True)
+    {s.get_name(): s for s in ajustes.walk()}['settings_unknown_9032'].value.set_value('Default')
     ajustes.apply_to(r._memobj)
-    confere('10c6. ligar grava 1 em 0x9032 e deixa 0x9031 como estava', bytes(r._mmap[0x9031:0x9033]), b'\x01\x01')
+    confere('10c6. ligar (Default, o On de fabrica) grava 1 em 0x9032 e deixa 0x9031 como estava', bytes(r._mmap[0x9031:0x9033]), b'\x01\x01')
     confere('10c3. os 3 MDF so no bloco do lado, no mesmo lugar e com o mesmo nome',
             ([abc[b].keys()[1] for b in ('achannel', 'bchannel', 'cchannel')],
              [abc[b].values()[1].get_shortname() for b in ('achannel', 'bchannel', 'cchannel')],
@@ -554,7 +554,7 @@ def main():
     confere('10zf. Low grava 0xA1 em 0x903D, sem mexer no 0x903C', (r._mmap[0x903D], r._mmap[0x903C]),
             (bytes([0xA1]), bytes([0])))
     r._mmap[0x903D] = bytes([0xA2])
-    confere('10zg. o 0xA2 do radio le Medium', str(ajuste_de(r, 'modem_gain').value), 'Medium')
+    confere('10zg. o 0xA2 do radio le Mid', str(ajuste_de(r, 'modem_gain').value), 'Mid')
 
     # 10zh. EXPANDER e NOISE GATE (firmware v79; a porta com cinco opcoes desde a v80): 0xC0 + o nivel em
     # 0x9034 e 0xE8 + a opcao (Off, Default, Low, Mid, High) em 0x9031; sem a marca (o reset deixa 208 e 0),
@@ -593,6 +593,11 @@ def main():
     {x.get_name(): x for x in aj.walk()}['settings_unknown_9032'].value.set_value('Mid')
     aj.apply_to(r._memobj)
     confere('10zm. Mid grava 3 no 0x9032', r._mmap[0x9032], bytes([3]))
+    # 10zn. as duas listas na ordem de quanto cortam, como no menu do radio (firmware v82)
+    confere('10zn. a ordem da Noise reduction e da Noise gate',
+            ([str(x) for x in ajuste_de(r, 'settings_unknown_9032').value.get_options()],
+             [str(x) for x in ajuste_de(r, 'noise_gate').value.get_options()]),
+            (['Off', 'Low', 'Mid', 'Default', 'High'], ['Off', 'Low', 'Default', 'Mid', 'High']))
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')
