@@ -1039,6 +1039,8 @@ SEPARADA static void aprs_linhas(u32 a, unsigned y, unsigned n)
     if (!a)
         return;
     LE_FLASH(a, s, 2);
+    if ((u8)s[0] != 0x5A)                  /* sem o "usado": gravado pela metade (v75), fica em branco */
+        return;
     cor = s[1] ? COR_TEXTO_AMBAR : COR_TEXTO;
     for (a += 2; n--; y += 12) {
         LE_FLASH(a, s, 25);
@@ -1102,15 +1104,17 @@ SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
         aprs_linhas(a1, 68, 2);
     }
     if (NA_JANELA(102, 128)) {
-        pinta(0, 102, 160, 103, COR_LINHA);    /* os contadores e as teclas no fundo da barra de cima (v74) */
-        pinta(0, 103, 160, 128, COR_ESTADO);
+        /* os contadores e as teclas num fundo proprio (v75): o da barra de cima, na v74, saiu quase preto */
+        pinta(0, 102, 160, 103, COR_LINHA);
+        pinta(0, 103, 160, 128, COR_SEG_FUNDO);
         numero(junta(numero(junta(s, "SYNC "), num[3], 1), "/"), num[4], 1);   /* marca/espaco (v71) */
-        x = texto(4, 107, s, 1, COR_CINZA);
+        x = texto(4, 107, s, 1, COR_TEXTO);
         for (i = 0; i < 2; i++) {
             numero(junta(s, ROTULOS[i]), num[5 + i], 1);
-            x = texto(x, 107, s, 1, COR_CINZA);
+            x = texto(x, 107, s, 1, COR_TEXTO);
         }
-        texto(4, 118, aberto ? "#:GAIN OK:BACK HOLD EXIT:CLR" : "#:GAIN OK:OPEN HOLD EXIT:CLR", 1, COR_CINZA);
+        texto(156 - largura("*:OFF", 1), 107, "*:OFF", 1, COR_TEXTO);   /* a tela apagada (v75) */
+        texto(4, 118, aberto ? "#:GAIN OK:BACK HOLD EXIT:CLR" : "#:GAIN OK:OPEN HOLD EXIT:CLR", 1, COR_TEXTO);
     }
 }
 

@@ -55,7 +55,6 @@ FIRMWARE(ENVIA, 0x01E3ADBC);   void ENVIA(void);
 #define TDR              RAM(u8, 0x00014B70)             /* dupla escuta (DW) */
 #define MONITOR          RAM(u8, 0x00015370)             /* MO */
 #define DTMF_ST          RAM(u8, 0x00014B75)             /* nota musical */
-#define REDUCAO_RUIDO    RAM(u8, 0x00014BDE)             /* ondas: item NOISE REDUCTION */
 #define BLUETOOTH        RAM(u8, 0x00014B89)
 #define TRAVA            RAM(u8, 0x00014B87)
 #define TENSAO_BRUTA     RAM(u8, 0x000149BC)             /* x 444 / 1000 = decimos de volt */
@@ -139,7 +138,7 @@ struct estado {
     char digitos[7];       /* o que se esta digitando no lado em evidencia, "" se nada (ate 6) */
     u8 vista;              /* WATCH (v42): 0 DUAL, 1 SINGLE - no byte que sobrou dos digitos, para a
                             * estrutura nao crescer (ela esta no caminho mais fundo da pilha) */
-    u8 vox, dw, mo, dtmf, nr, bt, trava;
+    u8 vox, dw, mo, dtmf, nr, bt, trava;   /* nr (v80): o nivel da NR nos bits 3:0, o da NOISE GATE nos 7:4 */
     u8 tensao;             /* decimos de volt */
     u8 bateria;            /* 0..3 = 1..4 tracos, 4 = so o contorno vermelho, 255 = sem pilha */
 };
@@ -182,6 +181,8 @@ u32 watch_le_tudo(void);            /* modo | mdf_c << 8 | canal_c << 16 */
 #define VISTA_TRIPLE 2
 #define VISTA_TRIPLE_C 3                /* TRIPLE com a C no lado B, em evidencia */
 unsigned watch_tela(void);          /* bancos.c: o modo (3 = TRIPLE com a C no lado B) | MDF-C << 8 */
+u16 nr_le(void);                    /* bancos.c (v80): a NOISE REDUCTION e a NOISE GATE, 0 OFF, 1 DEFAULT, */
+u16 porta_le(void);                 /* 2 LOW, 3 MID e 4 HIGH */
 u32 terceira(void);                 /* bancos.c: canal | exibicao << 16 da que esta fora dos dois lados */
 u32 freq_terceira(u32 t);           /* bancos.c: a frequencia do VFO dela, em dezenas de Hz (v49) */
 #define TERCEIRA_VFO   (1u << 24)   /* em terceira(): ela esta em VFO (v49) */
@@ -202,7 +203,7 @@ static void le_estado(struct estado *e)
     e->dw = TDR != 0;
     e->mo = MONITOR != 0;
     e->dtmf = DTMF_ST != 0;
-    e->nr = REDUCAO_RUIDO != 0;
+    e->nr = nr_le() | porta_le() << 4;
     e->bt = BLUETOOTH == 1;
     e->trava = TRAVA != 0;
     e->tensao = TENSAO_BRUTA * 444u / 1000;
@@ -760,6 +761,17 @@ SEPARADA static void diag_rx(unsigned x)
 }
 #endif
 
+/* A NR e a NOISE GATE na barra (v80): fora em OFF; no DEFAULT, como as outras; em LOW, MID e HIGH, verde,
+ * amarela e vermelha. Sem lugar antes da tensao, nao entra. Separada: embutida duas vezes, levava o quadro
+ * da barra de 44 a 52 B, e a barra esta no caminho mais fundo da interface. */
+SEPARADA static unsigned etiqueta_nivel(unsigned x, const char *s, unsigned nivel)
+{
+    static const u16 fundos[4] = {COR_CHIP_DW, COR_CHIP_RX, COR_CHIP_AMBAR, COR_CHIP_VERMELHO};
+    static const u16 cores[4] = {COR_TEXTO, COR_SEG_VERDE, COR_SEG_AMARELO, COR_SEG_VERMELHO};
+
+    return nivel && nivel < 5 && x < 96 ? etiqueta(x, 2, s, fundos[nivel - 1], cores[nivel - 1], 0) : x;
+}
+
 SEPARADA static void barra_estado(const struct estado *e)
 {
     char s[8], *p;
@@ -790,8 +802,8 @@ SEPARADA static void barra_estado(const struct estado *e)
             x = etiqueta(x, 2, "DW", COR_CHIP_DW, COR_TEXTO, 0);
         if (e->mo)
             x = etiqueta(x, 2, "MO", COR_CHIP_DW, COR_TEXTO, 0);
-        if (e->nr)
-            x = etiqueta(x, 2, "NR", COR_CHIP_DW, COR_TEXTO, 0);
+        x = etiqueta_nivel(x, "NR", e->nr & 15);
+        x = etiqueta_nivel(x, "NG", e->nr >> 4);
         if (e->dtmf)
             x = texto(x + 1, 4, ICONE_NOTA, 1, COR_VERDE) + 1;
         if (e->bt)

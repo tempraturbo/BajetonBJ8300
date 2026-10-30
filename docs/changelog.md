@@ -5,6 +5,67 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v80 — Oct 29 — NR with levels in the MIC folder, NOISE GATE with five options and coloured tags (to be tested)
+
+`firmware/releases/BJ8300_BANK_v80.anc` (sha256 `812bd533…`). At the owner's request: NOISE REDUCTION, which is
+the microphone's, moves to the MIC folder with OFF, DEFAULT (the stock On), LOW, MID and HIGH, which change
+how much it cuts; NOISE GATE gains MID (OFF, DEFAULT, LOW, MID and HIGH); and both show on the top bar as NR
+and NG, in the usual colour at DEFAULT and green, yellow and red at LOW, MID and HIGH. The defaults stay the
+stock ones.
+[Section 25](reverse-engineering.md#nr-with-levels-in-the-mic-folder-v80).
+
+## v79 — Oct 29 — the AUDIO folder with EXPANDER and NOISE GATE (to be tested)
+
+`firmware/releases/BJ8300_BANK_v79.anc` (sha256 `557f2752…`). At the owner's request, the AUDIO folder gains
+EXPANDER (the RX audio expander, OFF, LOW, MID and HIGH, like COMPRESSOR) and NOISE GATE (the RX audio noise
+gate: DEFAULT, today's, OFF, LOW and HIGH). Without touching them, the radio stays as it always was. And
+the documentation corrects itself: what it called NR on the chip is the AM
+configuration, and the real NOISE REDUCTION is the microphone noise reduction, on TX, done by the processor.
+Received audio does not go through it.
+[Section 25](reverse-engineering.md#25-the-audio-folder-expander-and-noise-gate-and-what-nr-is-v79).
+
+## v78 — Oct 29 — only A in SINGLE, and the v77 modes removed (to be tested)
+
+`firmware/releases/BJ8300_BANK_v78.anc` (sha256 `68bf2d45…`). At the owner's request, WATCH in SINGLE always
+stays on A: the A/B key no longer goes to B or C, and WATCH set to SINGLE with B or C in focus goes back to
+A when the menu closes. The ten v77 modem modes decoded no more than the usual one and were removed. Four
+on-air recordings made with a phone did not decode even with a software demodulator: the next step is to
+measure the signal without the acoustic path.
+[Section 18](reverse-engineering.md#18-dual-watch-and-triple-v42-to-v51) and
+[section 24](reverse-engineering.md#24-morse-and-aprs-v65).
+
+## v77 — Oct 29 — the modem modes on the 0 key, to test on air (experimental)
+
+`firmware/releases/BJ8300_BANK_v77.anc` (sha256 `33d4bf71…`). On v75, MODEM GAIN at MEDIUM was the best, and
+even so most of the packets heard never become a frame: the chip's modem only knows fixed tone pairs on
+receive, and none is APRS's 1200/2200. The APRS RX 0 key cycles through 10 modem modes, the previous one (M1)
+and nine never-tested combinations of register 0x58 (undocumented bits, the NOAA SAME band and the unnamed
+one, and the undocumented RX modes), with an `M1` to `M10` tag on the top bar next to the gain. The point
+is to find on air whether any of them decodes more than M1.
+[Section 24](reverse-engineering.md#24-morse-and-aprs-v65).
+
+## v76 — Oct 29 — Mic-E, compressed positions, weather and objects decoded, and V3.0T (to be tested)
+
+`firmware/releases/BJ8300_BANK_v76.anc` (sha256 `1fe18080…`). At the owner's request, the APRS formats that
+arrived unreadable are decoded: Mic-E (used by Kenwood and Yaesu radios, including the one arriving through
+an igate), compressed positions, course and speed in km/h, digipeaters' PHG, altitude in metres, weather
+stations (temperature, humidity, pressure and wind) and objects and items. The APRS DECODE item shows the
+info as it came, to check it. To fit the stack, the record being built moved to video memory, as the stock
+firmware does when rewriting a channel. The VERSION item shows V3.0T.
+[Section 24](reverse-engineering.md#24-morse-and-aprs-v65).
+
+## v75 — Oct 29 — automatic ack, a ring history without copies, the screen off on *, and repeating arrows (to be tested)
+
+`firmware/releases/BJ8300_BANK_v75.anc` (sha256 `ba8efe26…`). The audit's second phase and the owner's requests
+for the RX screen. A message to me with a number is acknowledged by itself: the screen closes and the radio
+sends the ack. SEND repeats the same number, the callsign and addressee go in uppercase and only with what
+AX.25 accepts, and scramble and the subtone are off during the packet. The history became a two-sector ring
+(the last 31 to 62 stay, without erasing everything at once), without the 30 s copies, with the sector
+erased outside the bits and the record safe against power loss. The loop no longer waits for a key release;
+`*` turns the screen off and keeps receiving; a held arrow repeats and the history wraps around; the footer
+got a background you can see. The whole loop runs on the PC (`tests/teste_rx.py`).
+[Section 24](reverse-engineering.md#24-morse-and-aprs-v65).
+
 ## v74 — Oct 29 — APRS RX without losing the next frame, the whole text on OK, and the audit (to be tested)
 
 `firmware/releases/BJ8300_BANK_v74.anc` (sha256 `84b1d6e2…`). On the radio, v73 showed more syncs than frames,

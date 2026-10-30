@@ -73,6 +73,17 @@ u32 watch_le_tudo(void)
     return previa_vista | previa_mdf_c << 8 | previa_canal_c << 16;
 }
 
+/* v80: a NOISE REDUCTION e a NOISE GATE como o bancos.c as le (0 OFF, 1 DEFAULT, 2 LOW, 3 MID, 4 HIGH) */
+u16 nr_le(void)
+{
+    return memoria[0x14BDE] < 5 ? memoria[0x14BDE] : 1;
+}
+
+u16 porta_le(void)
+{
+    return (memoria[0x14BDD] & 0xF8) == 0xE8 && (memoria[0x14BDD] & 7) < 5 ? memoria[0x14BDD] & 7 : 1;
+}
+
 /* o modo para a tela (3 = TRIPLE com a C no lado B) | MDF-C << 8, e a terceira: canal | MDF << 16 */
 static u32 previa_alvo;                /* v51: bit 31 e o canal da terceira no cartao do lado B (TX-A/B/C) */
 unsigned watch_tela(void)
@@ -327,10 +338,13 @@ int main(int argc, char **argv)
     lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
     lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
     memoria[0x14DC4 + 4] = 1;          /* CT */
-    memoria[0x14BDE] = 1;              /* NR */
+    memoria[0x14BDE] = 4;              /* NR em HIGH: vermelha (v80) */
+    memoria[0x14BDD] = 0xE8 | 3;       /* NOISE GATE em MID: amarela */
     tela_b();
     tela_b_medidor(0, 7, 0);
     grava("33-single-canal-recebendo");
+    memoria[0x14BDE] = 1;
+    memoria[0x14BDD] = 0;
 
     limpa();
     lado(0, 44105000, 44105000, "PIGAO 3", 102, 1, 0);
@@ -510,9 +524,10 @@ int main(int argc, char **argv)
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "NOISE REDUCTION");
-        menu_no("AUDIO", "NOISE REDUCTION");
+        menu_no("MIC", "NOISE REDUCTION");   /* v80: a NR e do microfone */
         LINHA(0, 1, "OFF");
-        LINHA(1, 2, "ON");
+        LINHA(1, 2, "DEFAULT");
+        LINHA(2, 1, "LOW");
         memoria[0x14C10] = 1;
         memoria[0x14BF9] = 1;
         telas_b(1, 0);

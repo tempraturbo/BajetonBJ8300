@@ -65,7 +65,7 @@ em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes 
 
 | Pasta | Itens |
 |---|---|
-| 1 AUDIO | NOISE REDUCTION, SQL, STE |
+| 1 AUDIO | EXPANDER, NOISE GATE, SQL, STE |
 | 2 BANKS | BANK, CHANNEL, NAME |
 | 3 CALIBRATION | CRYSTAL FINE |
 | 4 CHANNEL | BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N |
@@ -73,7 +73,7 @@ em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes 
 | 6 DTMF | DTMF CODE, DTMFST, PTT-LT, S-CODE |
 | 7 KEYS | AUTOLOCK, BEEP PROMPT, PF2, PF2 LONG PRESS, PF3 |
 | 8 MEMORY | CH-NAME, DELCH, MEMCH |
-| 9 MIC | COMPRESSOR, MIC AGC, MIC GAIN |
+| 9 MIC | COMPRESSOR, MIC AGC, MIC GAIN, NOISE REDUCTION |
 | 10 REPEATER | OFFSET, RP-STE, RPT-RL, SFT-D, TONE |
 | 11 SCAN | SC-REV, SCAN ADD |
 | 12 SYSTEM | AL-MOD, BLUETOOTH, RESET, SAVE, VERSION |
@@ -116,8 +116,8 @@ firmware do BJ-8300 fazia isso.
 | <img src="docs/imagens/tela-triple-tx-c.png" alt="TRIPLE transmitindo na C" width="360"> | <img src="docs/imagens/tela-menu-txabc.png" alt="Menu TX-A/B/C com a C em evidência" width="360"> |
 | **Transmitindo na C** com o `TX-A/B/C` em C: ela fica em evidência enquanto o PTT está apertado, como o A e o B, e volta ao soltar | **O item `TX-A/B/C`** (pasta WATCH) aberto, com a C em evidência no resumo de cima |
 
-- **O menu `WATCH`** escolhe quantas frequências a tela principal mostra: **SINGLE** (um lado só,
-  em tela cheia), **DUAL** (o A/B de sempre) ou **TRIPLE**.
+- **O menu `WATCH`** escolhe quantas frequências a tela principal mostra: **SINGLE** (só o lado A,
+  em tela cheia: a tecla A/B não troca), **DUAL** (o A/B de sempre) ou **TRIPLE**.
 - **A escuta (`TTR`, o antigo TDR)** passa pelas três, A → B → C → A, com o mesmo tempo em cada
   uma. Desligada, só a que está em evidência recebe.
 - **A tecla A/B** vai de A para B, de B para C e de C para A. Com a C em evidência, tudo vale para
@@ -151,7 +151,7 @@ desenho que vai para o rádio.
 | Recurso | Como fica no rádio |
 |---|---|
 | 📁 **Menu em pastas** | Os itens do menu ficam em 15 pastas por assunto, em ordem alfabética, numa janela âmbar que mostra os itens de cada pasta, e dentro dela o valor do item do cursor, com rolagem quando a lista não cabe. OK no item já abre a edição, e gravar ou cancelar volta para a pasta. O menu do rádio (FM/AM/SSB) usa a mesma janela ([veja acima](#-menu-novo-tudo-em-pastas)) |
-| 🔺 **WATCH: SINGLE, DUAL e TRIPLE** | Item novo do menu. **SINGLE** mostra só o lado em evidência, em tela cheia: a frequência em tamanho grande, um medidor largo e, com deslocamento, a frequência de transmissão embaixo (a escuta fica desligada). **DUAL** é o A/B de sempre. **TRIPLE** põe um terceiro lado, a C, e a escuta passa pelas três ([veja acima](#-triple-o-bj-8300-escutando-três-frequências)) |
+| 🔺 **WATCH: SINGLE, DUAL e TRIPLE** | Item novo do menu. **SINGLE** mostra só o lado A, em tela cheia (a tecla A/B não troca): a frequência em tamanho grande, um medidor largo e, com deslocamento, a frequência de transmissão embaixo (a escuta fica desligada). **DUAL** é o A/B de sempre. **TRIPLE** põe um terceiro lado, a C, e a escuta passa pelas três ([veja acima](#-triple-o-bj-8300-escutando-três-frequências)) |
 | 📡 **O lado C** | Um lado completo, em VFO ou em canal, com as mesmas opções do A e do B. A tecla A/B passa por A → B → C → A, e com a C em evidência ela transmite e muda como os outros, canal incluído. Menu novo: `MDF-C` (como a faixa dela aparece: nome, frequência ou canal) |
 | 📤 **TX-A/B/C** | O `TX-A/B` de fábrica (em que lado o PTT transmite com a escuta ligada) vira `TX-A/B/C`: OFF, A, B e C. No TRIPLE, em C, a C fica em evidência enquanto o PTT está apertado, como o A e o B ficam, mesmo estando fora dos dois lados, e ao soltar tudo volta como estava, sem gravar nada |
 | 🎙️ **Pasta MIC** | **MIC GAIN** com três níveis: **HIGH** (31, um degrau acima do 30 que a calibração de fábrica tinha no rádio de teste), **MID** (25) e **LOW** (19); até a V2.0T o ganho vinha só da calibração, sem ajuste. **COMPRESSOR** do áudio de TX (OFF, LOW, MID e HIGH: 1,33:1, 2:1 e 4:1), que o chip tem e a fábrica deixava desligado. **MIC AGC** (ON, o de fábrica, ou OFF). Valem na hora, sem desligar o rádio, mudados pelo menu, pelo CHIRP ou pelo retorno aos ajustes de fábrica ([veja acima](#-o-que-a-v29t-trouxe-ao-menu)) |
@@ -177,9 +177,9 @@ etiquetas coloridas e uma fonte própria:
 | Tela | O que mudou |
 |---|---|
 | **Principal** (os dois lados) | O lado em evidência fica num **cartão de borda verde**, com o nome, o canal, a **frequência grande** (os dois últimos dígitos pequenos) e um **medidor de 20 segmentos** (verde, amarelo e vermelho). O outro lado fica compacto, numa faixa fina. Etiquetas coloridas: potência (**H** vermelho, **M** âmbar, **L** verde), FM/AM, tom (CT/DCS), banda estreita, deslocamento, scramble e zona |
-| **Principal em SINGLE** | Só o lado em evidência, da barra ao pé da tela: a frequência ainda maior, as etiquetas, um medidor largo e, com deslocamento, a frequência de transmissão embaixo |
+| **Principal em SINGLE** | Só o lado A, da barra ao pé da tela: a frequência ainda maior, as etiquetas, um medidor largo e, com deslocamento, a frequência de transmissão embaixo |
 | **Principal em TRIPLE** | O lado em evidência no cartão e os outros dois em faixas, na ordem A, B, C, cada uma com a letra, o texto e o canal (ou `VFO`). A faixa que está recebendo fica em âmbar ([veja acima](#-triple-o-bj-8300-escutando-três-frequências)) |
-| **Barra de cima** | Mostra **só o que está ligado**: RX e TX numa etiqueta com bolinha (verde no RX, vermelha no TX), dupla escuta (DW), VOX, MO, redução de ruído (NR), DTMF ST, Bluetooth e cadeado; a **tensão em volts** e a bateria, que fica com contorno vermelho e pisca quando está fraca. Com o menu aberto, recebendo, quem recebe numa caixa âmbar no lugar dos ícones |
+| **Barra de cima** | Mostra **só o que está ligado**: RX e TX numa etiqueta com bolinha (verde no RX, vermelha no TX), dupla escuta (DW), VOX, MO, a redução de ruído do microfone (NR) e a porta de ruído do RX (NG), na cor de sempre no DEFAULT e verde, amarela e vermelha no LOW, MID e HIGH, DTMF ST, Bluetooth e cadeado; a **tensão em volts** e a bateria, que fica com contorno vermelho e pisca quando está fraca. Com o menu aberto, recebendo, quem recebe numa caixa âmbar no lugar dos ícones |
 | **Transmitindo** | A linha grande passa para a frequência de transmissão, e o medidor fica **vermelho, cheio pela potência** |
 | **Digitando** | A frequência entra no lugar dela, sobre a máscara `---.---`; o canal, na etiqueta do canal |
 | **DTMF** (tecla `#`) | Uma caixa âmbar no lugar do cartão do lado em uso, com os dígitos |
@@ -544,7 +544,8 @@ variável `JL_TOOLCHAIN` para ela.
 
 - **Prévia da tela no PC** (abaixo): `pip install ziglang`.
 - **Teste do Morse e do APRS** (o pacote, o AFSK e o decodificador, no PC): `python -I tests/teste_mensagem.py`,
-  com o mesmo zig.
+  com o mesmo zig; e o laço do APRS RX inteiro, com o modem, a flash e as teclas imitados:
+  `python -I tests/teste_rx.py`.
 - **Testes do driver do CHIRP:** `python -I tests/teste_bj8300.py` não precisa de nada;
   `python -I tests/teste_chirp_real.py` precisa do CHIRP
   (`pip install https://codeload.github.com/kk7ds/chirp/tar.gz/refs/heads/master --no-deps`).

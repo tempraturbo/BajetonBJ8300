@@ -325,9 +325,15 @@ for wpm, texto in ((20, 'CQ CQ de PY2ABC/8300 k'), (12, 'Ola, 73! (teste) 1+1=2 
             {700})
 
 # ---------- 5. o quadro em texto legivel (a tela do APRS RX) ----------
+def texto_e_id(origem, caminho, info, meu, destino='APZBJ8', bruto=False):
+    q = quadro_ref(origem, caminho, info)[:-2]
+    q = endereco(destino, comando=True) + q[7:]           # o destino (o Mic-E leva a latitude nele)
+    t, i = roda('texto', q.hex(), meu, *(['bruto'] if bruto else [])).rstrip('\n').split('\n')
+    return int(t[2]), t[4:], i[2:]
+
+
 def texto(origem, caminho, info, meu):
-    linha = roda('texto', quadro_ref(origem, caminho, info)[:-2].hex(), meu).rstrip('\n')
-    return int(linha[2]), linha[4:]
+    return texto_e_id(origem, caminho, info, meu)[:2]
 
 
 for origem, info, meu, esperado in (
@@ -345,10 +351,10 @@ for origem, info, meu, esperado in (
         ('PY2IGT-10', '}PU2XYZ-9>APRS,TCPIP,PY2IGT-10*::PY2ABC-7 :Oi pela internet{5', 'PY2ABC-7',
          (1, 'PU2XYZ-9> Oi pela internet')),
         ('PY2IGT-10', '}sem seta nenhuma aqui', '', (0, 'PY2IGT-10: }sem seta nenhuma aqui')),
-        ('PY2IGT-10', '}PU2XYZ-9>APRS sem dois pontos', '', (0, 'PU2XYZ-9: ')),
+        ('PY2IGT-10', '}PU2XYZ-9>APRS sem dois pontos', '', (0, 'PU2XYZ-9:')),
         # v74: ate 120 caracteres, e as letras acentuadas (UTF-8) sem o acento
         ('PU2XYZ-9', ':PY2ABC-7 :' + 'Mensagem comprida de teste, ' * 4 + '{9', 'PY2ABC-7',
-         (1, ('PU2XYZ-9> ' + 'Mensagem comprida de teste, ' * 4)[:120])),
+         (1, ('PU2XYZ-9> ' + 'Mensagem comprida de teste, ' * 4)[:104])),
         ('PU2XYZ-9', '>Estação móvel em São José, ÁÉÍÓÚ çãõ'.encode().decode('latin-1'), '',   # em UTF-8
          (0, 'PU2XYZ-9: >Estacao movel em Sao Jose, AEIOU cao')),
         # v74: so "ack" e o id e confirmacao; a tabela alternativa nao usa os nomes; hemisferio conferido;
@@ -360,6 +366,128 @@ for origem, info, meu, esperado in (
         ('PU2XYZ-9', '>25°C, 1º lugar, 2ª'.encode().decode('latin-1'), '', (0, 'PU2XYZ-9: >25oC, 1o lugar, 2a')),
         ('PU2XYZ-9', ':PY5\x01ZZ   :oi', '', (0, 'PU2XYZ-9>PY5.ZZ: oi'))):
     confere(f'5. texto de {info[:22]!r}', texto(origem, 1, info, meu), esperado)
+
+# ---------- os formatos decodificados (v76), contra codificadores daqui, escritos pela especificacao ----------
+def minutos(valor):
+    """Graus e centesimos de minuto de um valor positivo em graus, truncados como no radio."""
+    g = int(valor)
+    return g, int(round((valor - g) * 6000, 6))
+
+
+def coord_txt(lat, lon):
+    g, c = minutos(abs(lat))
+    h, d = minutos(abs(lon))
+    return (f'{g:02d} {c // 100:02d}.{c % 100:02d}{"N" if lat >= 0 else "S"} '
+            f'{h:03d} {d // 100:02d}.{d % 100:02d}{"E" if lon >= 0 else "W"}')
+
+
+def mic_e(lat, lon, nos, rumo, simbolo='>', tabela='/', mensagem=6, alt=None, tipo=''):
+    """O destino e a info de um Mic-E (APRS 1.0.1, cap. 10)."""
+    g, c = minutos(abs(lat))
+    alg = f'{g:02d}{c:04d}'
+    dest = ''
+    for k, a in enumerate(alg):
+        bit = k < 3 and mensagem >> (2 - k) & 1
+        alto = bit or (k == 3 and lat >= 0) or (k == 5 and lon < 0)
+        dest += chr(ord('P' if alto else '0') + int(a))
+    gl, cl = minutos(abs(lon))
+    if gl < 10:
+        d, ofs = gl + 90, True
+    elif gl < 100:
+        d, ofs = gl, False
+    elif gl < 110:
+        d, ofs = gl - 20, True
+    else:
+        d, ofs = gl - 100, True
+    if ofs:
+        dest = dest[:4] + chr(ord(dest[4]) + ord('P') - ord('0')) + dest[5]
+    m = cl // 100
+    info = '`' + chr(d + 28) + chr(m + 28 if m >= 10 else m + 88) + chr(cl % 100 + 28)
+    info += chr(nos // 10 + 28) + chr(nos % 10 * 10 + rumo // 100 + 28) + chr(rumo % 100 + 28)
+    info += simbolo + tabela + tipo
+    if alt is not None:
+        v = alt + 10000
+        info += chr(v // 8281 + 33) + chr(v // 91 % 91 + 33) + chr(v % 91 + 33) + '}'
+    return dest, info
+
+
+def comprimida(lat, lon, rumo=None, nos=None, tabela='/', simbolo='>'):
+    """A posicao comprimida (APRS 1.0.1, cap. 9)."""
+    def b91(v):
+        return ''.join(chr(v // 91 ** k % 91 + 33) for k in (3, 2, 1, 0))
+    y = round(380926 * (90 - lat))
+    x = round(190463 * (180 + lon))
+    cs = '  '
+    if rumo is not None:
+        cs = chr(rumo // 4 + 33) + chr(round(math.log(nos + 1) / math.log(1.08)) + 33)
+    return tabela + b91(y) + b91(x) + simbolo + cs + '!', y, x
+
+
+def comprimida_txt(y, x):
+    """O que o radio mostra de y e x, com as contas da especificacao."""
+    lat = 90 - y / 380926
+    lon = x / 190463 - 180
+    def f(v, div, casas, pos, neg):
+        n = abs(round(v * div))
+        g, c = n // div, n % div * 6000 // div
+        return f'{g:0{casas}d} {c // 100:02d}.{c % 100:02d}{pos if v >= 0 else neg}'
+    return f(lat, 380926, 2, 'N', 'S') + ' ' + f(lon, 190463, 3, 'E', 'W')
+
+
+for nome, dest, info, esperado in (
+        ('Mic-E', *mic_e(-23.3012, -46.5932, 60, 120, alt=760, tipo=']'),
+         (0, f'PU2XYZ-9: {coord_txt(-23.3012, -46.5932)} CAR 111KM/H 120DEG ALT 760M EN ROUTE')),
+        ('Mic-E com longitude de 1 algarismo e N/E', *mic_e(51.4775, 5.1208, 0, 0, mensagem=7),
+         (0, f'PU2XYZ-9: {coord_txt(51.4775, 5.1208)} CAR OFF DUTY')),
+        ('Mic-E com longitude acima de 100', *mic_e(-33.8688, 151.2093, 12, 359, simbolo='k', mensagem=0),
+         (0, f'PU2XYZ-9: {coord_txt(-33.8688, 151.2093)} TRUCK 22KM/H 359DEG EMERGENCY')),
+        ('Mic-E com comentario', mic_e(-22.7612, -47.1166, 5, 90)[0], mic_e(-22.7612, -47.1166, 5, 90)[1] + 'Ola',
+         (0, f'PU2XYZ-9: {coord_txt(-22.7612, -47.1166)} CAR 9KM/H 90DEG EN ROUTE Ola'))):
+    confere(f'6. {nome}', texto_e_id('PU2XYZ-9', 1, info, '', destino=dest)[:2], esperado)
+
+cp, y, x = comprimida(-23.5, -46.6, rumo=88, nos=36)
+v = 1000
+for _ in range(round(math.log(37) / math.log(1.08))):
+    v = v * 108 // 100
+confere('6. posicao comprimida, com rumo e velocidade', texto('PU2XYZ-9', 1, '!' + cp + 'comprimida', ''),
+        (0, f'PU2XYZ-9: {comprimida_txt(y, x)} CAR {((v - 1000 + 500) // 1000 * 1852 + 500) // 1000}KM/H 88DEG comprimida'))
+cp, y, x = comprimida(48.8566, 2.3522, simbolo='-')
+confere('6. posicao comprimida parada, N e E', texto('PU2XYZ-9', 1, '=' + cp, ''),
+        (0, f'PU2XYZ-9: {comprimida_txt(y, x)} HOME'))
+
+for nome, info, esperado in (
+        ('rumo e velocidade', '!2318.07S/04635.59W>093/025/A=001234 Tracker',
+         'PU2XYZ-9: 23 18.07S 046 35.59W CAR 46KM/H 93DEG ALT 376M Tracker'),
+        ('PHG do digipeater', '!2318.07S/04635.59W#PHG5360/Digi',
+         'PU2XYZ-9: 23 18.07S 046 35.59W DIGI 25W 24M 6DBI /Digi'),     # 5^2 W, 10 x 2^3 pes, 6 dB
+        ('DAO e CR no fim', '!2318.07S/04635.59W-casa !wAB! fim\r', 'PU2XYZ-9: 23 18.07S 046 35.59W HOME casa  fim'),
+        ('estacao de tempo', '@092345z2318.07S/04635.59W_220/004g005t077r000p000P000h50b10132',
+         'PU2XYZ-9: 23 18.07S 046 35.59W WX 25C 50% 1013HPA 6KM/H 220DEG'),
+        ('tempo sem posicao', '_10090556c220s004g005t-05r000h00b09850', 'PU2XYZ-9: WX -21C 100% 985HPA 6KM/H 220DEG'),
+        ('objeto', ';FEIRA    *092345z2300.00S/04600.00W>sabado', 'PU2XYZ-9: OBJ FEIRA 23 00.00S 046 00.00W CAR sabado'),
+        ('item', ')ARCO!2300.00S/04600.00W-portao', 'PU2XYZ-9: ITEM ARCO 23 00.00S 046 00.00W HOME portao'),
+        ('altitude negativa', '!2300.00S/04600.00Ws/A=-00033 mar', 'PU2XYZ-9: 23 00.00S 046 00.00W BOAT ALT -10M mar')):
+    confere(f'6. {nome}', texto('PU2XYZ-9', 1, info, ''), (0, esperado))
+
+dest, info = mic_e(-23.3012, -46.5932, 60, 120)
+confere('6. Mic-E de terceiros (o destino em texto, de um igate)',
+        texto('PY2IGT-10', 1, f'}}PU2XYZ-9>{dest},TCPIP,PY2IGT-10*:{info}', ''),
+        (0, f'PU2XYZ-9: {coord_txt(-23.3012, -46.5932)} CAR 111KM/H 120DEG EN ROUTE'))
+confere('6. com o APRS DECODE em OFF, a info como veio',
+        texto_e_id('PU2XYZ-9', 1, '!2318.07S/04635.59W>093/025', '', bruto=True)[:2],
+        (0, 'PU2XYZ-9: !2318.07S/04635.59W>093/025'))
+confere('6. e a mensagem para mim continua com o numero para o ack',
+        texto_e_id('PU2XYZ-9', 1, ':PY2ABC-7 :oi{4', 'PY2ABC-7', bruto=True), (1, 'PU2XYZ-9> oi', '4'))
+
+# o numero da mensagem para o ack (v75): so na mensagem para mim, ate 5, sem o "}" da resposta embutida,
+# mesmo quando o texto passa do limite da tela
+for info, meu, esperado in ((':PY2ABC-7 :Ola tudo bem?{12', 'PY2ABC-7', '12'),
+                            (':PY2ABC-7 :sem numero', 'PY2ABC-7', ''),
+                            (':PY5ZZZ   :para outro{7', 'PY2ABC-7', ''),
+                            (':PY2ABC-7 :resposta{AB}CD', 'PY2ABC-7', 'AB'),
+                            (':PY2ABC-7 :ack12', 'PY2ABC-7', ''),
+                            (':PY2ABC-7 :' + 'x' * 66 + '{99999', 'PY2ABC-7', '99999')):
+    confere(f'5. numero para o ack de {info[:24]!r}', texto_e_id('PU2XYZ-9', 1, info, meu)[2], esperado)
 
 print()
 print('tudo certo' if not falhas else f'FALHARAM {len(falhas)}: {", ".join(falhas)}')

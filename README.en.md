@@ -65,7 +65,7 @@ alphabetical order, in a window that shows what is inside each one before you op
 
 | Folder | Items |
 |---|---|
-| 1 AUDIO | NOISE REDUCTION, SQL, STE |
+| 1 AUDIO | EXPANDER, NOISE GATE, SQL, STE |
 | 2 BANKS | BANK, CHANNEL, NAME |
 | 3 CALIBRATION | CRYSTAL FINE |
 | 4 CHANNEL | BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N |
@@ -73,7 +73,7 @@ alphabetical order, in a window that shows what is inside each one before you op
 | 6 DTMF | DTMF CODE, DTMFST, PTT-LT, S-CODE |
 | 7 KEYS | AUTOLOCK, BEEP PROMPT, PF2, PF2 LONG PRESS, PF3 |
 | 8 MEMORY | CH-NAME, DELCH, MEMCH |
-| 9 MIC | COMPRESSOR, MIC AGC, MIC GAIN |
+| 9 MIC | COMPRESSOR, MIC AGC, MIC GAIN, NOISE REDUCTION |
 | 10 REPEATER | OFFSET, RP-STE, RPT-RL, SFT-D, TONE |
 | 11 SCAN | SC-REV, SCAN ADD |
 | 12 SYSTEM | AL-MOD, BLUETOOTH, RESET, SAVE, VERSION |
@@ -117,8 +117,8 @@ this before.
 | <img src="docs/imagens/tela-triple-tx-c.png" alt="TRIPLE transmitting on C" width="360"> | <img src="docs/imagens/tela-menu-txabc.png" alt="TX-A/B/C menu with C in focus" width="360"> |
 | **Transmitting on C** with `TX-A/B/C` on C: it comes into focus while PTT is pressed, as A and B do, and goes back on release | **The `TX-A/B/C` item** (WATCH folder) open, with C in focus in the summary at the top |
 
-- **The `WATCH` menu** picks how many frequencies the main screen shows: **SINGLE** (one side only,
-  full screen), **DUAL** (the usual A/B) or **TRIPLE**.
+- **The `WATCH` menu** picks how many frequencies the main screen shows: **SINGLE** (side A only,
+  full screen: the A/B key does not switch), **DUAL** (the usual A/B) or **TRIPLE**.
 - **The watch (`TTR`, formerly TDR)** goes through all three, A → B → C → A, with the same time on
   each. When it is off, only the one in focus receives.
 - **The A/B key** goes from A to B, from B to C and from C to A. With C in focus, everything applies
@@ -152,7 +152,7 @@ drawing code that goes into the radio.
 | Feature | What it looks like on the radio |
 |---|---|
 | 📁 **A menu in folders** | The menu items sit in 15 folders by topic, in alphabetical order, in an amber window that shows each folder's items and, inside it, the value of the item under the cursor, scrolling when the list does not fit. OK on an item opens it for editing straight away, and saving or cancelling goes back to the folder. The radio menu (FM/AM/SSB) uses the same window ([see above](#-a-new-menu-everything-in-folders)) |
-| 🔺 **WATCH: SINGLE, DUAL and TRIPLE** | A new menu item. **SINGLE** shows only the side in focus, full screen: the frequency in large type, a wide meter and, with an offset, the transmit frequency below (the watch stays off). **DUAL** is the usual A/B. **TRIPLE** adds a third side, C, and the watch goes through all three ([see above](#-triple-the-bj-8300-listening-to-three-frequencies)) |
+| 🔺 **WATCH: SINGLE, DUAL and TRIPLE** | A new menu item. **SINGLE** shows only side A, full screen (the A/B key does not switch): the frequency in large type, a wide meter and, with an offset, the transmit frequency below (the watch stays off). **DUAL** is the usual A/B. **TRIPLE** adds a third side, C, and the watch goes through all three ([see above](#-triple-the-bj-8300-listening-to-three-frequencies)) |
 | 📡 **Side C** | A full side, on a VFO or a channel, with the same options as A and B. The A/B key goes A → B → C → A, and with C in focus it transmits and changes like the others, channel included. New menu: `MDF-C` (how its strip shows: name, frequency or channel) |
 | 📤 **TX-A/B/C** | The stock `TX-A/B` (the side PTT transmits on with the watch on) becomes `TX-A/B/C`: OFF, A, B and C. In TRIPLE, on C, C comes into focus while PTT is pressed, as A and B do, even when it is on neither side, and on release everything goes back as it was, writing nothing |
 | 🎙️ **MIC folder** | **MIC GAIN** with three levels: **HIGH** (31, one step above the 30 the factory calibration had on the test radio), **MID** (25) and **LOW** (19); up to V2.0T the gain came only from the calibration, with no setting. The TX audio **COMPRESSOR** (OFF, LOW, MID and HIGH: 1.33:1, 2:1 and 4:1), which the chip has and the factory left off. **MIC AGC** (ON, the stock setting, or OFF). They take effect at once, without turning the radio off, whether changed in the menu, in CHIRP or by the reset to factory settings ([see above](#-what-v29t-brought-to-the-menu)) |
@@ -178,9 +178,9 @@ tags and a font of its own:
 | Screen | What changed |
 |---|---|
 | **Main** (both sides) | The highlighted side sits in a **green-bordered card**, with the name, the channel, the **big frequency** (the last two digits small) and a **20-segment meter** (green, yellow and red). The other side is compact, in a thin strip. Coloured tags: power (**H** red, **M** amber, **L** green), FM/AM, tone (CT/DCS), narrow band, offset, scramble and zone |
-| **Main in SINGLE** | Only the side in focus, from the bar to the bottom of the screen: an even bigger frequency, the tags, a wide meter and, with an offset, the transmit frequency below |
+| **Main in SINGLE** | Only side A, from the bar to the bottom of the screen: an even bigger frequency, the tags, a wide meter and, with an offset, the transmit frequency below |
 | **Main in TRIPLE** | The side in focus in the card and the other two in strips, in A, B, C order, each with its letter, text and channel (or `VFO`). The strip that is receiving turns amber ([see above](#-triple-the-bj-8300-listening-to-three-frequencies)) |
-| **Top bar** | Shows **only what is on**: RX and TX in a tag with a dot (green on RX, red on TX), dual watch (DW), VOX, MO, noise reduction (NR), DTMF ST, Bluetooth and the lock; the **voltage in volts** and the battery, which gets a red outline and blinks when low. With the menu open, while receiving, who is receiving in an amber box in place of the icons |
+| **Top bar** | Shows **only what is on**: RX and TX in a tag with a dot (green on RX, red on TX), dual watch (DW), VOX, MO, the microphone noise reduction (NR) and the RX noise gate (NG), in the usual colour at DEFAULT and green, yellow and red at LOW, MID and HIGH, DTMF ST, Bluetooth and the lock; the **voltage in volts** and the battery, which gets a red outline and blinks when low. With the menu open, while receiving, who is receiving in an amber box in place of the icons |
 | **Transmitting** | The big line switches to the transmit frequency, and the meter turns **red, filled by the power** |
 | **Typing** | The frequency is typed in its place, over the `---.---` mask; the channel, in the channel tag |
 | **DTMF** (`#` key) | An amber box in place of the card of the side in use, with the digits |
@@ -545,7 +545,8 @@ checks the sha256 of the compiler's five files; to use another copy of the compi
 
 - **Screen preview on the PC** (below): `pip install ziglang`.
 - **Morse and APRS test** (the packet, the AFSK and the decoder, on the PC): `python -I tests/teste_mensagem.py`,
-  with the same zig.
+  with the same zig; and the whole APRS RX loop, with the modem, the flash and the keys imitated:
+  `python -I tests/teste_rx.py`.
 - **CHIRP driver tests:** `python -I tests/teste_bj8300.py` needs nothing;
   `python -I tests/teste_chirp_real.py` needs CHIRP
   (`pip install https://codeload.github.com/kk7ds/chirp/tar.gz/refs/heads/master --no-deps`).

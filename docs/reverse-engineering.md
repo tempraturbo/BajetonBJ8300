@@ -76,7 +76,7 @@ by looking for where content starts mirroring address 0:
 | **`0xD3000–0xD3FFF`** | **C's VFOs** (v49: C's and the saved B's; [section 18](#18-dual-watch-and-triple-v42-to-v51)) |
 | **`0xD4000–0xD4FFF`** | **the Morse message**, speed and tone (v65; [section 24](#24-morse-and-aprs-v65)) |
 | **`0xD5000–0xD5FFF`** | **APRS**: callsign, SSID, addressee, message and path (v65) |
-| **`0xD6000–0xD7FFF`** | **the APRS RX history**: up to 63 received packets (v70; `0xD7000` since v74) |
+| **`0xD6000–0xD7FFF`** | **the APRS RX history**: up to 62 packets, as a ring, one header per sector (v70; `0xD7000` since v74; the ring since v75) |
 | `0xFA000` | 4 KB used by the firmware |
 | free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -189,6 +189,7 @@ destination in r0, source in r1, size in r2). Read only. It is what showed the v
 | `0x00014BDF` | MIC GAIN: 0 HIGH, 1 MID, 2 LOW (v49; `0x9033` of the settings, section 19) |
 | `0x0000706C` | microphone gain put into register `0x7D` on every TX (copy of `0xF210`; since v49, of MIC GAIN) |
 | `0x00014BE1` / `0x00014BE2` | COMPRESSOR (0 OFF, 1 to 3 = 1.33:1, 2:1 and 4:1) and MIC AGC (0 ON, 1 OFF): `0x9035` and `0x9036` of the settings (v59, section 22) |
+| `0x00014BDD` / `0x00014BE0` | NOISE GATE (`0xE8` + 0 OFF, 1 DEFAULT, 2 LOW, 3 MID, 4 HIGH; v80) and EXPANDER (`0xC0` + 0 OFF to 3 HIGH); without the mark, DEFAULT and OFF: `0x9031` and `0x9034` of the settings (v79, section 25) |
 | `0x00014BE3` | CRYSTAL FINE, signed 16 bits, in 10 Hz at 435.5 MHz: `0x9037` of the settings (v59, section 22) |
 | `0x00007076`..`0x00007079` | the calibration's crystal correction (copy of `0xF21A`; since v59, with CRYSTAL FINE added; section 22) |
 | `0x00014B7F` | TX-A/B (`0x9013` of the settings): 0 OFF, 1 A, 2 B; since v50, 3 = C (section 18) |
@@ -1038,6 +1039,27 @@ WATCH set to SINGLE clears TDR, the TDR item's setter (item 7, `tdr_grava` inste
 `0x01E3957C`) keeps it at 0, and power-up clears it again. In DUAL and TRIPLE, on listens to all of
 them, and off only to the one in focus.
 
+**Only A in SINGLE (v78)**, at the owner's request: SINGLE always shows and listens to A, and the A/B key
+does not go to B or C. Up to v77 it swapped the sides in SINGLE too, and the screen then showed B.
+
+- **The A/B key** (`gancho_ab`): in SINGLE, with A in focus, it does nothing; with B or C (WATCH set to
+  SINGLE away from A), it goes back to A through the usual B → A and C → A paths.
+- **WATCH set to SINGLE** with B or C in focus goes back to A when the menu closes. The item's setter
+  runs with the menu open, and no stock caller of the side swap (`0x01E40E52`: the A/B key, PTT, the
+  end of TX and a refused TX) runs like that. The menu exit (`0x01E3C29C`), which all 11 paths that close
+  the menu go through (keys, PTT, the signal loop and power-up), clears the screen mode
+  (`0x01E3C322..`) and calls the digit cleanup (`0x01E3AC52`) at `0x01E3C33A`, before redrawing. That
+  call goes through `gancho_menu_fecha`: it clears the digits and, in SINGLE away from A, returns B to
+  side B if C was on it and does the stock swap, which redraws (the exit redraws again).
+- **The stack.** The interface and the signal loop, which close the menu, are already at the stock
+  limit (740 and 620 B). The swap called from inside a routine went over by 36 B (the WATCH record on the
+  stack) and, with only `rets`, by 4. So the decision is in C (`menu_fecha_decide`), and the hook, in
+  assembly, pops `rets` and jumps to the swap: the path is the stock swap's, and the three roots stay at
+  740, 620 and 696 B. The compiler does not emit a tail jump for a conditional call.
+
+A radio that was already in SINGLE with B in focus powers up on B: the first A/B press, or opening and
+closing the menu, takes it to A.
+
 **TX-A/B/C (v50).** The stock TX-A/B (item 44, `b[0x14B7F]`: 0 OFF, 1 A, 2 B) picks the PTT side and
 only works with the watch on. PTT press (`0x01E43E8A`) tests TDR (`0x01E43F86`), reads the byte
 (`0x01E43F92`) and, if the side (value − 1) is not in focus, swaps the sides (`0x01E40E52(0)`,
@@ -1226,7 +1248,8 @@ with bit 7 set.
 **The TX compressor** comes configured and off. Boot puts `0xAA00` in `0x29` (`0x01E56602`: 2:1 ratio
 in bits 15:14, 0 dB point 84) and `0x0B40` in `0x28` (`0x01E565F8`: the RX expander, with ratio 0,
 off), but nothing sets bit 3 of `0x31`, which turns both on. The writes to `0x31` read it, change bit
-0 (NR: `0x01E44078`, `0x01E440A2`, `0x01E4B0B8`, `0x01E4B0DE`) or bit 1 (scramble: `0x01E4090E`,
+0 (AM, not NR as it said up to v78: `0x01E44078`, `0x01E440A2`, `0x01E4B0B8`, `0x01E4B0DE`,
+[section 25](#25-the-audio-folder-expander-and-noise-gate-and-what-nr-is-v79)) or bit 1 (scramble: `0x01E4090E`,
 `0x01E4092A`, `0x01E4094A`) and write it back; the spectrum saves and restores the whole `0x31`, with
 ten more (`0x01E3FEE4`, the list at `0x01E5FF7B`: `0x13`, `0x30`, `0x31`, `0x37`, `0x3D`, `0x40`,
 `0x43`, `0x47`, `0x48`, `0x7D`, `0x7E`). The bit we set stays. **The microphone AGC** is bit 15 of
@@ -1780,7 +1803,7 @@ safety. Into v74 went:
 - The footer buffer went from 16 to 18 B ("SYNC 65535/65535" and the 0), and the PC test deletes its temp
   folder (1.4 MB every run).
 
-**The next phase** (audit findings that change behaviour, to decide later):
+**The next phase** (audit findings that change behaviour; done in v75, below):
 
 - **automatic ack** for a message addressed to me (the sender repeats until it gets one), and the same id
   when resending the same message (today each SEND changes the id, and the other side sees it as new);
@@ -1798,6 +1821,159 @@ safety. Into v74 went:
   letter by letter);
 - PC tests for the RX loop, the history and the screen, which today only run on the radio.
 
+### v75: the audit's second phase, the ack and the keys
+
+Everything the audit left for the next phase went into v75, together with the owner's requests for the RX
+screen.
+
+**Automatic ack.** A message to me with a number (`{id`) arms the ack: the text in `aprs_texto` returns the
+number (up to 5, without the `}` of an embedded reply, and found even when the text runs past the screen
+limit), the history record keeps the source in 9 columns and the number, settings byte `0x903E`
+(`b[0x14BEA]`, free per the v59 scan) keeps which record it is, and the send state goes to `'K'`. The loop
+leaves the screen by itself, because the firmware never transmits with the menu open: the signal loop's
+next round (`gancho_ida_ptt`) starts TX, which closes the menu, and `gancho_fim_tx` sends
+`:SOURCE   :ackNUMBER`, with my callsign and the menu's path, after the 0.5 s of silent carrier. Every copy
+of the message is acknowledged, since the previous ack may not have arrived. SEND no longer changes the
+number: it only moves when the addressee or the text change (`aprs_guarda_texto`), and sending the same
+message again repeats it.
+
+**Sending.** The callsign and the addressee are saved in uppercase (the editor has an abc mode) and only
+with letters, digits and, in the addressee, the SSID's `-`. During the content, scramble (bit 1 of `0x31`)
+and the subtone (bit 15 of `0x51`, which the stock firmware turns on with the level at `0x01E441BE` and off
+with 0) are off, and come back before the stock end: scramble uses the same `0x71` as the tone.
+
+**The ring history** ("HST3"). Each sector (`0xD6000` and `0xD7000`) has its own header, the marker and a
+generation, a byte that moves on with every new sector, and 31 records of 128 B. When the receiving sector
+fills up, the other one (the oldest) is erased and starts over with the next generation: the last 31 to 62
+always stay. The sector that needs erasing is erased with capture stopped, outside the bits
+(`hist_prepara`), and only as a last resort, if a burst does not allow it, inside the write. The record keeps
+the text (up to 104 characters), the colour, the ack's source and number and the arrival time
+(`TIQUE_MS`), and the "used" byte is written last: a power loss in the middle leaves an occupied slot
+without "used", which the screen skips. A copy of the same text from the same station (with the same
+number) arriving within 30 s, the one heard direct and through digipeaters, does not go in again.
+`0xD7000` is only used erased or ours; with something else in either sector, nothing is written. v74's
+"HST2" and v70 to v73's "HST1" are erased on the first entry.
+
+**The loop no longer stops.** Keys are read without waiting for release (a held key only counts again once
+released), held EXIT is timed inside the loop (a short press counts on release) and the redraw after a key
+goes through the strips, between modem reads. The loop's stack is at 736 B at the call point: to fit, the
+frame buffer went from 160 to 136 B, the four registers restored on exit fit in two variables and the copy
+comparison reads 12 bytes at a time.
+
+**The screen.** `*` turns the backlight off (`0x01E394D6(0)`, which v60's detour serves through the PWM)
+and the loop keeps receiving; the next key only turns it back on. A held arrow repeats (after 0.8 s, every
+0.15 s), and the history wraps around at both ends. The footer got its own background, the meter's unlit
+segments one (the top bar's came out almost black on the LCD), with white text and `*:OFF`.
+
+**The loop test on the PC** (`tests/teste_rx.py`). `mensagem.c` compiles whole with `TESTE_RX`, and
+`tests/teste_rx.h` imitates the BK4819 modem as mapped (it only syncs on the `0x5A` pattern, hands raw bits
+through an 8-word FIFO with a notice at 4 and counts the words that did not fit), the flash, the keys, the
+backlight and the screen, which spends 15 ms per strip. It checks frames separated by a single flag (the v71
+to v73 bug), both polarities, copies, the ack and its frame, the ring and the sector switch, the old history
+conversion, the foreign sector left untouched, the FIFO without overflow and the keys. Noise before a packet
+sometimes gives a sync by chance, which opens a 13.6 s capture: that happens on the radio too, and it does
+no harm.
+
+### v76: the APRS formats decoded, and V3.0T
+
+`aprs_texto` now decodes the formats that used to arrive unreadable, at the owner's request, always in
+local units (km/h, metres, degrees Celsius, course in degrees):
+
+- **Mic-E** (`` ` `` and `'`), used by Kenwood and Yaesu radios and many trackers: the latitude, the
+  hemispheres, the longitude's 100° offset and the message come in the 6 destination characters; the
+  longitude, speed, course and symbol, in the next 8 bytes; then the radio type and the `xxx}` altitude in
+  base 91. A standard message shows by name (EN ROUTE, IN SERVICE, OFF DUTY, EMERGENCY...), and a custom one
+  (A-K) is left out. Mic-E arriving through an igate is decoded from the inner header's text destination.
+- **Compressed position** (`/YYYYXXXX$csT`, base 91): latitude and longitude, and the course and speed in
+  `cs` (course in 4-degree steps, speed 1.08^s − 1 knots). With bits 4:3 of `T` at 2, `cs` is the
+  altitude, which is left out.
+- **After the symbol** of a plain position: course and speed (`ddd/sss`), and a digipeater's PHG
+  (`PHGphgd`: p² W, 10 × 2^h feet in metres, g dB).
+- **In the comment:** the `/A=feet` altitude in metres, and the extra precision `!wXY!` (DAO) is dropped.
+- **Weather:** a station with the `_` symbol and the positionless report (`_MMDDHHMM`): temperature,
+  humidity, pressure and wind.
+- **Object** (`;`) and **item** (`)`): "OBJ NAME" or "ITEM NAME" and their position.
+
+The compressed position maths fits in 32 bits: the whole degrees come from `y / 380926` (or `x / 190463`),
+and the remainder times 6000 is below 2^32. `decimal`, which was recursive, became `numero`, without
+recursion.
+
+**APRS DECODE** (the APRS folder, which now has 8 items): OFF shows the info as it came, to check it, and
+applies to frames arriving after the change. In settings byte `0x903F` (`b[0x14BEB]`, free per the v59
+scan): OFF only with `0xB1`; the stock RESET leaves 229, which means ON.
+
+**The stack.** Decoding, done inside `guarda` on top of the 128 B record, took the loop to 848 B, out of
+740. The record being built moved to video memory (`0x10190`, the screen's 160×32 strip), which the stock
+firmware already borrows as scratch when rewriting a channel: `guarda` runs between one strip and the next,
+and the screen is redrawn whole after a new frame. It is at 720 B.
+
+**The version** shown by the VERSION item is now V3.0T (the `V0.12` text at `0x01E5FD10`, in `montar.py`).
+
+### The modem modes on the 0 key (v77, experimental)
+
+**What v75 showed.** With the gains compared on air, MEDIUM was the best and the others worse; even with
+it, SYNC and BAD exceed 70% of the packets, and most of what is heard on another radio never becomes a
+frame. That is the modem's limit: on receive, 0x58 only picks between fixed pairs, and no register sets the
+tone (0x72 is the bit rate). On transmit the tone generator gets around it (0x71 switches between 1200 and
+2200 Hz on every bit); on receive there is no shortcut.
+
+**The 0x58 fields**, from the comments of the BK4819 driver in the UV-K5 firmware (OneOfEleven's, in
+`BK4819_enable_mdc1200_rx`): 15:13 the TX mode (1 = FFSK 1200/1800, 3 = 1200/2400, 5 = NOAA SAME); 12:10 the
+RX mode (7 = FFSK 1200/1800, 4 = FFSK 1200/2400, 0 = direct FSK and NOAA SAME; 1-3 and 5-6 undocumented);
+9:8 the gain; 7:6 undocumented; 5:4 the preamble type; 3:1 the RX band (1 = 1200/1800, 2 = NOAA SAME, 4 =
+FSK 2400 and 1200/2400; 3 and 5-7 undocumented); 0 the modem on. By them, v70's "wide band" (`0x3FC9`) is
+band 4, the 1200/2400 one, and v70's mode 3 (`0x33C9`) was 1200/2400 with its own band: the matched pair,
+which heard nothing.
+
+**v77** puts on the APRS RX 0 key what has not been tested yet, each changing a single thing from the
+previous mode (1), with the gain chosen on `#`. On the top bar, next to the gain, the `M1` to `M10` tag;
+switching zeroes the counters, and each entry starts on M1.
+
+| Mode | 0x58 without the gain | What changes from M1 |
+|---|---|---|
+| M1 | `0x3CC3` | nothing: the previous one (RX 7, band 1, bits 7:6 = 3) |
+| M2 | `0x3C03` | bits 7:6 at 0, like OneOfEleven's MDC1200 receiver |
+| M3 | `0x3CC5` | band 2 (the NOAA SAME one) |
+| M4 | `0x3CC7` | band 3 (undocumented) |
+| M5 | `0x20C5` | the NOAA SAME path: RX 0 with band 2 |
+| M6 to M10 | `0x24C3`, `0x28C3`, `0x2CC3`, `0x34C3`, `0x38C3` | RX mode 1, 2, 3, 5 and 6 (undocumented) |
+
+It is an experiment: there is nothing to prove in the disassembly (the stock firmware only uses `0x3FC3`, in
+the TONE1200 roger), and only the air shows what each mode does. An undocumented value in 0x58 only touches
+the modem; leaving writes 0 to it, as before. Code 13 is the 0 key: in the key table (`0x01E60369`) the last
+column of the matrix is `*` (9), 0 (13) and `#` (17), and the long code of 13 is 33, the action of holding
+0 (the voltage box). Up to v76 it left the screen, like the other keys without a function.
+
+**The stack.** Computing the next mode inside the loop took its frame from 256 to 268 B (the item's stack
+to 732 B, out of 740), even with the 0x58 write in a separate routine: it is the loop's register
+allocation. The maths and the write together in a routine that takes the key (`modem_58`) bring it back
+to 720 B.
+
+**Checked on the PC:** `teste_rx.py` presses 0 eleven times and `#` once, and checks each value written to
+0x58 against the register built field by field.
+
+### The v77 result and the on-air recordings (v78)
+
+**The v77 modes**, tested on air with the gain at MEDIUM: none decoded more than M1, and they were removed
+in v78 (the 0 key leaves the screen again, like the other keys without a function). The register stays at
+the previous `0x3CC3`, with the gain from `#`.
+
+**Four recordings** of packets on the channel, made by the owner with a phone near the speaker (HE-AAC at
+48 kb/s, 0.9 to 1.2 s of signal each), went through a demodulator written for them (a 700 to 2800 Hz
+filter, correlation at 1200 and 2200 Hz over a one-bit window, 13 twist compensations from −12 to +12 dB,
+a PLL clock, NRZI, destuffing and FCS), checked first on our TX's WAV (`firmware/build/aprs.wav`), where it
+finds the frame and the callsigns. In all four, no frame with a good FCS; 3 to 7 flags in a row show up,
+and what follows does not form a callsign. The power between 1000 and 2400 Hz is only ~10 dB above that
+between 2800 and 3800 Hz (19 dB in the clean WAV), with no clipping: a lot of hiss. Through the acoustic
+path there is no telling what already arrives bad over the air from what the speaker, the microphone and
+the phone's compression spoil.
+
+**The next step** is to measure the signal without the acoustic path: the radio's audio by cable (the
+earphone output) into an audio input, or an APRS decoder on the phone listening to the speaker (APRSdroid
+has an "AFSK via microphone" mode). If a software decoder gets most of what is heard, the limit is the
+chip's modem, and it is worth looking for the received audio on a JieLi input to demodulate in software;
+if not even it does, the signals arrive weak, and no firmware will recover them.
+
 ### The stack
 
 The content runs in the roger's slot, in the signal loop, and the RX loop in the item's set; both within
@@ -1805,3 +1981,98 @@ stock (620 and 740 B). The PTT-press hook sets "on air" before the start and cal
 PTT press as jumps (its frame already popped), and `pilha.py` now treats a `goto` from our code to
 another routine as in the stock graph (a tail call: the jumping routine's frame does not add up). V2.9T
 gives the same numbers with the new `pilha.py`.
+
+## 25. The AUDIO folder: EXPANDER and NOISE GATE, and what NR is (v79)
+
+**EXPANDER** is the BK4819's RX audio expander, the twin of the MIC folder's compressor: below the 0 dB
+point, each dB less becomes 2, 3 or 4 (LOW, MID and HIGH: 1:2, 1:3 and 1:4 in bits 15:14 of `0x28`, per the
+UV-K5 community documentation). It undoes the compression of a station transmitting with a compander and
+quiets the hiss in the pauses; with a plain station, a weak voice gets weaker. It is enabled by the same bit
+3 of `0x31` as the compressor, and with it alone the compressor stays at ratio 0 (off). When on, bits 13:9 of
+`0x28` go to `10101`, the UV-K5 recipe's (`0x6B38`, the 0 dB point at 86); when off, they stay as stock.
+
+**NOISE GATE** is the RX audio noise gate: per the official Beken table cited in issue 739 of the UV-K5 v3
+firmware, bit 8 of the same `0x28` turns it on and bits 7:0 are the level; 11:9 are the DC filter (`101` on
+RX), and 13:12 are not described. Power-up writes `0x0B40` (`0x01E565F2`): the expander off and the gate on
+at level 64. DEFAULT is that; OFF clears bit 8; LOW, MID and HIGH use levels 32, 96 and 160 (since v80;
+on v79 they were LOW and HIGH, 32 and 128; which one cuts more, only the ear tells).
+
+**On the radio.** The default is today's: without touching the items, `0x28`, `0x29` and `0x31` stay as the
+stock power-up leaves them. Only power-up writes `0x28` and `0x29` (`0x01E565F2`, `0x01E565FC`), and the
+spectrum does not save them. `aplica_audio` (formerly `aplica_mic`) applies everything at power-up, in the
+items' setters and in settings arriving by cable. The levels live in two settings bytes that nothing in the
+stock firmware reads or writes (the v59 scan): EXPANDER at `0x9034` (`b[0x14BE0]`), as `0xC0` + the level,
+and NOISE GATE at `0x9031` (`b[0x14BDD]`), as `0xE8` + the option (0 OFF, 1 DEFAULT, 2 LOW, 3 MID, 4 HIGH; v79's `0xE0`,
+in another order, counts as DEFAULT). Without the mark the stock behaviour
+holds, OFF and DEFAULT: RESET leaves 208 and 0. Both join the AUDIO group, alphabetically before NOISE
+REDUCTION, and the menu table goes to 92 of 96 slots. The stack does not change.
+
+**APRS.** The chip's decoder probably takes the audio before these blocks (on v71, turning off de-emphasis
+changed nothing), and the APRS screen does not touch `0x28`.
+
+### What bit 0 of `0x31` is, and what NR is
+
+**Up to v78 this document called bit 0 of `0x31` NR. It is AM.** The four writes (`0x01E44078`,
+`0x01E440A2`, `0x01E4B0B8`, `0x01E4B0DE`) belong to the two routines that put the receiver in AM or FM:
+`0x01E4404E` (through the entry `0x01E440C4`: r0 = 1 is AM) and the spectrum's (`0x01E4B0A0`, right after
+its AM/FM switch, `0x01E4B04C`). In AM: bit 0 of `0x31` set, `0x42` = `0x6F5C`, `0x2A` = `0x7434` and
+`0x2B` = `0x0500` (no 300 Hz high-pass and no RX de-emphasis); in FM, bit 0 clear, `0x6B5A`, `0x7400` and
+`0`. Power-up writes `0x6600` to `0x2A`. The signal loop sets AM when reception starts
+(`0x01E47B74..0x01E47BC6`) in the airband (108 to 136 MHz) or, from 18 to 1000 MHz, with RX MODULATION
+(`b[0x15E2F]`, getter `0x01E3D10C`) at 1, and FM otherwise and when tuning again (`0x01E466B6`).
+
+**NOISE REDUCTION is the microphone noise reduction, on TX, and it runs on the JieLi.** The item writes bit
+0 of `b[0x14BDE]` (`0x9032`; getter `0x01E3D0E0`), which has two readers: the bar icon (`0x01E3B154`) and
+the PTT path (`0x01E478F8`, right after the microphone gain, `0x01E477D8`), which builds the microphone path
+with `0x01E42080(0, NR, 4, 17)`. Proven in the disassembly:
+
+- the microphone goes into the JieLi ADC (MIC channel, opened at `0x01E33C2A` by `0x01E41CBA`) at 16 kHz, in
+  blocks of 256 16-bit samples every 16 ms, handed by the audio interrupt (`0x01E32488` → `0x01E34180`) to
+  `0x01E41C06`;
+- with NR at 0, each block goes straight to the DAC (`0x01E41BA0` → `0x01E321F8`); at 1, to the SDK's `aec`
+  task (`0x01E24522`), whose output goes to the DAC (`0x01E41BE8`). From the DAC to the BK4819's microphone
+  input is wiring (assumption);
+- the suppression (`0x01E23168`, running in `0x01E240BE`) is per frequency bin, with a 512 FFT and a 256 hop:
+  each bin's gain comes from the noise estimate with the floor at 0.02 (−34 dB), strength 1.8 and output gain
+  2.5, constants from the initialisation (`0x01E245F8`). The ~32 KB of weights at `0x01E1C02C..` are its own;
+- the item only passes 0 or 1. There is an eight-level table (`0x01E41D26`), but level 1 is always the one
+  used, and nothing was found reading its two fields that looked like the strength;
+- the path is torn down at the end of TX (`0x01E445AC`) and is only built with the licence byte
+  `b[0x146A0]`, checked at power-up against the chip's identifier.
+
+**Received audio does not go through the JieLi.** In the stock firmware the JieLi ADC only reads the
+microphone (on TX) and the line input of its internal FM radio (`0x01E571E4` → `0x01E33EFC`); closing the
+squelch (`0x01E47E8E..`) only touches the BK4819 and the amplifier. A software APRS demodulator would need
+the BK4819's audio on a JieLi input, and if the board wires it to one, the firmware never reads it.
+### NR with levels, in the MIC folder (v80)
+
+Since NOISE REDUCTION belongs to the microphone, it moved to the MIC folder, with OFF, DEFAULT, LOW, MID and
+HIGH in the stock item's own byte (`b[0x14BDE]`, `0x9032`; item 48 with our getter, setter and options, like
+ROGER and SCRAMBLE): 0 OFF, 1 DEFAULT, 2 LOW, 3 MID and 4 HIGH. DEFAULT is the stock On. The PTT path passes
+the byte to the microphone path setup, which treats it as "on" if not 0 and as an index into the preset
+table at `0x01E41D06`, which skips anything above 7 (`0x01E41D08`) and whose fields nothing reads. Above 4
+(RESET leaves 200), the byte counts as DEFAULT, as the stock firmware treats it (on; the stock menu, which
+only looked at bit 0, showed OFF).
+
+The levels change the two core constants that decide how much to cut. The suppression's initialisation
+(`0x01E41E4E`) writes into its block `[attr+120]` = 0.02 (`0x3CA3D70A`, the floor of each bin's gain,
+−34 dB), `[attr+124]` = 1.8 (`0x3FE66666`, the strength), `[attr+128]` = 2.5 and `[attr+132]` = 0.3, and
+calls `0x01E245F8` with `r0` = `attr` at `0x01E42078`; from there the floor and the strength go to the core
+(`0x01E23168`, called at `0x01E248AE` with both in `r2:r3`). The call goes through `gancho_nr_inicia`,
+which at LOW, MID and HIGH swaps the two and carries on with a tail jump, `r0..r3` as they came:
+
+| Level | Floor | Strength |
+|---|---|---|
+| DEFAULT | 0.02 (−34 dB, stock) | 1.8 |
+| LOW | 0.1 (−20 dB) | 1.2 |
+| MID | 0.05 (−26 dB) | 1.5 |
+| HIGH | 0.01 (−40 dB) | 2.5 |
+
+LOW and MID cut less than DEFAULT, and HIGH more. The values were picked by ear: the gain formula
+(`g = s² / (strength + (1 − strength)·s²)`, limited by the floor) shows the direction, not the on-air result.
+
+**On the top bar**, NR and NOISE GATE get tags: hidden at OFF; at DEFAULT, in the colour of the others; at
+LOW, MID and HIGH, green, yellow and red. Both levels go into the `nr` byte of `struct estado` (bits 3:0 and
+7:4), which sits on the deepest stack path and could not grow, and the tag is a separate routine: inlined
+twice, it took the bar's frame from 44 to 52 B. Without room before the voltage, it is left out. The roots
+stay at 740, 620 and 696 B.

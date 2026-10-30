@@ -5,7 +5,8 @@
  *   hdlc <arquivo> <max>                passa os bits de linha do arquivo ('0'/'1') pelo decodificador,
  *                                       com um buffer de max bytes, e imprime cada quadro achado ("Q ...")
  *                                       e, no fim, os FCS errados e os consertados ("C ruins consertados")
- *   texto <quadro em hexa> <meu>        o quadro (sem o FCS) em texto legivel ("T para_mim texto") */
+ *   texto <quadro em hexa> <meu> [bruto] o quadro (sem o FCS) em texto legivel ("T para_mim texto") e o
+ *                                       numero da mensagem para o ack ("I id", vazio se nao ha) */
 #include <stdlib.h>
 #include <string.h>
 #include "../firmware/src/mensagem.c"
@@ -47,16 +48,16 @@ int main(int argc, char **argv)
                     hexa(q, n);
         fclose(f);
         printf("C %u %u\n", h.ruins, h.consertados);
-    } else if (argc == 4 && !strcmp(argv[1], "texto")) {
-        char s[TEXTO_MAX + 1];
+    } else if ((argc == 4 || argc == 5) && !strcmp(argv[1], "texto")) {
+        char s[TEXTO_MAX + 1], id[6];
         unsigned k, para_mim;
 
         for (n = 0; argv[2][2 * n] && argv[2][2 * n + 1]; n++) {
             sscanf(argv[2] + 2 * n, "%2x", &k);
             q[n] = k;
         }
-        para_mim = aprs_texto(s, q, n, argv[3], strlen(argv[3]));
-        printf("T %u %s\n", para_mim, s);
+        para_mim = aprs_texto(s, q, n, argv[3], strlen(argv[3]) | (argc == 5 ? TEXTO_BRUTO : 0), id);
+        printf("T %u %s\nI %s\n", para_mim, s, id);
     } else {
         return 2;
     }

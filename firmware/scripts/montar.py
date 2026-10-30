@@ -212,7 +212,7 @@ PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho
            'roger_le', 'roger_grava', 'roger_opcoes', 'gancho_roger_tons',
            'watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
            'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'menu_tabela', 'gancho_troca_dw',
-           'gancho_volta_dw', 'gancho_ab', 'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic',
+           'gancho_volta_dw', 'gancho_ab', 'gancho_menu_fecha', 'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic',
            'gancho_ajustes', 'gancho_tx_abc', 'gancho_tx_desarma', 'gancho_tx_volta', 'titulo_txabc', 'txabc_opcoes',
            'scramble_le', 'scramble_grava', 'scramble_freqs', 'scramble_valor', 'scramble_posicao',
            'scramble_opcoes', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
@@ -320,7 +320,7 @@ R5_R0 = bytes.fromhex('0516')
 # EXIT editando fechava o menu inteiro, como nos menus rapidos (0x01E4D53C: "if (conta == 1)" vai a
 # saida); o desvio_menu_um (MENU_DESVIOS) o faz voltar a lista do grupo.
 GRUPOS = {
-    'AUDIO': ('NOISE REDUCTION', 'SQL', 'STE'),
+    'AUDIO': ('EXPANDER', 'NOISE GATE', 'SQL', 'STE'),
     'BANKS': ('BANK', 'CHANNEL', 'NAME'),
     'CALIBRATION': ('CRYSTAL FINE',),
     'CHANNEL': ('BCL', 'ENCRYPT', 'RX MODULATION', 'SCRAMBLE', 'STEP', 'TXP', 'W/N'),
@@ -328,7 +328,7 @@ GRUPOS = {
     'DTMF': ('DTMF CODE', 'DTMFST', 'PTT-LT', 'S-CODE'),
     'KEYS': ('AUTOLOCK', 'BEEP PROMPT', 'PF2', 'PF2 LONG PRESS', 'PF3'),
     'MEMORY': ('CH-NAME', 'DELCH', 'MEMCH'),
-    'MIC': ('COMPRESSOR', 'MIC AGC', 'MIC GAIN'),
+    'MIC': ('COMPRESSOR', 'MIC AGC', 'MIC GAIN', 'NOISE REDUCTION'),   # a NR e do microfone (v80)
     'REPEATER': ('OFFSET', 'RP-STE', 'RPT-RL', 'SFT-D', 'TONE'),
     'SCAN': ('SC-REV', 'SCAN ADD'),
     'SYSTEM': ('AL-MOD', 'BLUETOOTH', 'RESET', 'SAVE', 'VERSION'),
@@ -336,7 +336,7 @@ GRUPOS = {
     'TX': ('ROGER', 'TOT', 'VOX', 'VOX DELAY'),
     'WATCH': ('TTR', 'TX-A/B/C', 'WATCH'),
 }
-ITENS_POR_GRUPO = 7       # o maior grupo; a janela de pasta mostra 6 linhas e rola o resto (telas.c, pasta_cena)
+ITENS_POR_GRUPO = 8       # o maior grupo (o APRS, v76); a janela de pasta mostra 6 linhas e rola o resto (telas.c, pasta_cena)
 # v55: as marcas de cada item (grupo, nome), no menu_textos: SEM_VALOR nao mostra o "L" do valor na
 # janela de pasta (acoes, e a lista dos canais do banco); VARIOS continua editando depois do OK, para
 # marcar varios seguidos, e o EXIT sai (b_menu_marca, tela.c).
@@ -430,6 +430,10 @@ MDF_B_ITEM = 43
 # v49: o MIC GAIN (o ganho do microfone, tres niveis: bancos.c) logo depois do NOISE REDUCTION, perto do
 # fim, para renumerar so os ultimos itens; uma lista no molde do TDR, como o WATCH.
 NR_ITEM = 48
+# v80: a NOISE REDUCTION e a supressao de ruido do microfone, com niveis (bancos.c): OFF, DEFAULT, LOW, MID e
+# HIGH, no mesmo byte do item de fabrica
+ITENS_MUDADOS[NR_ITEM] = dict(maximo=5, get='nr_le', set='nr_grava', exibe='niveis_opcoes',
+                              opcoes_cn='niveis_opcoes')
 ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, maximo=3,
                                   get='mdf_c_le', set='mdf_c_grava', titulo='titulo_mdf_c')],
                 NR_ITEM: [dict(nome='MIC GAIN', molde=TDR_ITEM, flags=0, maximo=3, get='mic_le',
@@ -450,7 +454,15 @@ ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, ma
                           # v61: a intensidade da luz, uma lista como o MIC GAIN
                           dict(nome='BRIGHTNESS', molde=TDR_ITEM, flags=0, maximo=5, get='brilho_le',
                                set='brilho_grava', titulo='titulo_brilho', exibe='brilho_opcoes',
-                               opcoes_cn='brilho_opcoes')]}
+                               opcoes_cn='brilho_opcoes'),
+                          # v79: o expansor do RX e a porta de ruido (a pasta AUDIO), listas como o
+                          # COMPRESSOR
+                          dict(nome='EXPANDER', molde=TDR_ITEM, flags=0, maximo=4, get='expansor_le',
+                               set='expansor_grava', titulo='titulo_expansor', exibe='expansor_opcoes',
+                               opcoes_cn='expansor_opcoes'),
+                          dict(nome='NOISE GATE', molde=TDR_ITEM, flags=0, maximo=5, get='porta_le',
+                               set='porta_grava', titulo='titulo_porta', exibe='niveis_opcoes',
+                               opcoes_cn='niveis_opcoes')]}
 
 # ---- revisao dos textos em ingles do menu (ver notas/textos-revisao.md) ----
 # As cadeias vem coladas na flash, sem folga: trocar no lugar so pode ter tamanho igual ou menor
@@ -484,7 +496,7 @@ TEXTOS = [
     (0x01E5A60F, 'All', 'ALL'),
     (0x01E5AA81, 'RX Modulation', 'RX MODULATION'),
     # versao do firmware, que o item VERSION mostra (o hardware V01T32 fica como esta)
-    (0x01E5FD10, 'V0.12', 'V2.9T'),
+    (0x01E5FD10, 'V0.12', 'V3.0T'),
     # o nome chines do item e 语音加密 (criptografia de voz): VOICEPRI engana
     (0x01E5A82F, 'VOICEPRI', 'ENCRYPT'),
     # a dupla escuta virou tripla com o TRIPLE (v42): TDR -> TTR, pedido do dono (v48). A cadeia e
@@ -537,6 +549,15 @@ LUZ_EM = 0x01E46578
 LUZ_ERA = 0x01E394D6
 # As chamadas trocadas por ganchos do .livre, cada uma com o rotulo que o montar e o conferir mostram.
 CHAMADAS_LIVRE = TRIPLE_CHAMADAS + ((LUZ_EM, LUZ_ERA, 'gancho_luz', 'luz acesa no espectro'),)
+# v78: no SINGLE so o A. A saida do menu (0x01E3C29C, a dos 11 caminhos que o fecham) zera o modo de tela
+# (0x01E3C322..0x01E3C336) e chama a limpeza dos digitos (0x01E3AC52, que escreve r0 antes de ler) em
+# 0x01E3C33A, antes do redesenho (0x01E3C33E, que poe o proprio r0); a chamada passa pelo gancho, que no
+# SINGLE com o B ou a C em evidencia volta ao A pela tecla A/B e depois limpa os digitos.
+CHAMADAS_LIVRE += ((0x01E3C33A, 0x01E3AC52, 'gancho_menu_fecha', 'saida do menu: no SINGLE volta ao A'),)
+# v80: os niveis da NOISE REDUCTION (a do microfone, no JieLi). A inicializacao da supressao (0x01E41E4E) grava
+# o piso e a forca no bloco dela ([r4+120], [r4+124]) e chama 0x01E245F8 com r0 = r4 em 0x01E42078; o gancho
+# troca os dois nos niveis LOW, MID e HIGH e segue, com r0..r3 como vieram.
+CHAMADAS_LIVRE += ((0x01E42078, 0x01E245F8, 'gancho_nr_inicia', 'NR do microfone: o piso e a forca do nivel'),)
 # v49: o MIC GAIN vale na hora quando os ajustes mudam por fora do menu. O retorno aos ajustes de
 # fabrica (0x01E4842E) os grava com uma chamada (0x01E4845A; 0x01E3AB36 nao le registrador de
 # entrada), e o 'W' do bloco 0x9000 pelo cabo termina num goto para a mesma gravacao (0x01E43A50,
@@ -682,12 +703,15 @@ PRECISA += MENU_SIMBOLOS
 # v44: o WATCH e o TRIPLE do bancos.c tambem moram no .livre (a area do fim da imagem nao os cabia)
 NA_LIVRE += ('watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
              'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'gancho_troca_dw', 'gancho_volta_dw', 'gancho_ab',
-             'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic', 'gancho_ajustes',
+             'gancho_menu_fecha', 'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic', 'gancho_ajustes',
              'gancho_tx_abc', 'gancho_tx_desarma', 'gancho_tx_volta', 'titulo_txabc', 'txabc_opcoes')
 # v59: a pasta MIC e a CALIBRATION, no .livre como o MIC GAIN
 MIC_CAL = ('compressor_le', 'compressor_grava', 'compressor_opcoes', 'titulo_compressor', 'agc_le',
            'agc_grava', 'agc_opcoes', 'titulo_agc', 'cristal_le', 'cristal_grava', 'cristal_exibe',
-           'titulo_cristal')
+           'titulo_cristal',
+           'expansor_le', 'expansor_grava', 'expansor_opcoes', 'titulo_expansor',   # v79, a pasta AUDIO
+           'porta_le', 'porta_grava', 'niveis_opcoes', 'titulo_porta',
+           'nr_le', 'nr_grava', 'gancho_nr_inicia')                                  # v80, a NR com niveis
 NA_LIVRE += MIC_CAL
 PRECISA += MIC_CAL
 LUZ = ('luz_inicia', 'luz_aplica', 'brilho_le', 'brilho_grava', 'brilho_opcoes', 'titulo_brilho')
@@ -727,6 +751,9 @@ ITENS_DEPOIS[ROGER_ITEM] = [
          opcoes_cn='aprs_caminho_opcoes'),
     dict(nome='APRS RX', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='aprs_rx_grava',
          titulo='titulo_aprs_rx', exibe='aprs_rx_opcoes', opcoes_cn='aprs_rx_opcoes'),
+    # v76: os formatos decodificados (Mic-E, comprimida, tempo...) ou a info como veio; o 0x903F
+    dict(nome='APRS DECODE', molde=TDR_ITEM, flags=0, maximo=2, get='aprs_decode_le', set='aprs_decode_grava',
+         titulo='titulo_aprs_decode', exibe='aprs_decode_opcoes', opcoes_cn='aprs_decode_opcoes'),
 ]
 # v67: a frequencia do PWM da luz (tela.c), na pasta CALIBRATION (a DISPLAY esta cheia); o 0x903B
 ITENS_DEPOIS[ROGER_ITEM] += [
@@ -743,7 +770,7 @@ LUZ_PWM = ('luz_pwm_le', 'luz_pwm_grava', 'titulo_luz_pwm', 'luz_pwm_opcoes')
 NA_LIVRE += LUZ_PWM
 PRECISA += LUZ_PWM
 GRUPOS['MORSE'] = ('MORSE MESSAGE', 'MORSE SEND', 'MORSE SPEED', 'MORSE TONE')
-GRUPOS['APRS'] = ('APRS CALLSIGN', 'APRS MESSAGE', 'APRS PATH', 'APRS RX', 'APRS SEND', 'APRS SSID', 'APRS TO')
+GRUPOS['APRS'] = ('APRS CALLSIGN', 'APRS DECODE', 'APRS MESSAGE', 'APRS PATH', 'APRS RX', 'APRS SEND', 'APRS SSID', 'APRS TO')
 MENU_MARCAS.update({('MORSE', 'MORSE SEND'): MARCA_SEM_VALOR, ('APRS', 'APRS SEND'): MARCA_SEM_VALOR,
                     ('APRS', 'APRS RX'): MARCA_SEM_VALOR})
 CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o envio armado liga a TX'),
@@ -768,7 +795,8 @@ MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'tecl
             'aprs_msg_le', 'aprs_msg_grava', 'aprs_msg_exibe', 'titulo_aprs_msg',
             'aprs_envia_grava', 'titulo_aprs_envia', 'aprs_caminho_le', 'aprs_caminho_grava',
             'aprs_caminho_opcoes', 'titulo_aprs_caminho', 'aprs_rx_grava', 'aprs_rx_opcoes', 'titulo_aprs_rx',
-            'modem_ganho_le', 'modem_ganho_grava', 'titulo_modem_ganho', 'modem_ganho_opcoes')
+            'modem_ganho_le', 'modem_ganho_grava', 'titulo_modem_ganho', 'modem_ganho_opcoes',
+            'aprs_decode_le', 'aprs_decode_grava', 'titulo_aprs_decode', 'aprs_decode_opcoes')
 NA_LIVRE += MENSAGEM
 PRECISA += MENSAGEM
 

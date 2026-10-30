@@ -10,15 +10,18 @@
  *
  * Nada aqui tem .data nem .bss (nao ha RAM nossa): o pacote e montado na pilha e mandado bit a bit.
  * Compila tambem no PC (TESTE_PC), onde tests/teste_mensagem.py troca o chip e o relogio por imitacoes
- * e confere o pacote, o AFSK e o decodificador.
+ * e confere o pacote, o AFSK e o decodificador; e, inteiro, com o laco do APRS RX (TESTE_RX, v75), onde
+ * tests/teste_rx.py imita o modem do BK4819, a flash e as teclas.
  */
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
 typedef int s32;
 
-#ifdef TESTE_PC
+#if defined(TESTE_PC)
 #include "teste_mensagem.h"           /* REG_W, TOM, agora_us e companhia, imitados */
+#elif defined(TESTE_RX)
+#include "teste_rx.h"                 /* o laco do APRS RX no PC: o chip, a flash, as teclas e o relogio (v75) */
 #else
 #define RAM(tipo, endereco)       (*(volatile tipo *)(endereco))
 #define FIRMWARE(nome, endereco)  __asm__(".set " #nome ", " #endereco)
@@ -395,12 +398,24 @@ unsigned hdlc_bit(struct hdlc *h, unsigned linha)
     return 0;
 }
 
+/* Um numero com pelo menos `largura` algarismos (zeros a esquerda). Sem recursao (v76): ela pesava na
+ * pilha do guarda, que monta o texto. */
+static char *numero(char *p, unsigned v, unsigned largura)
+{
+    unsigned m = 1;
+
+    while (--largura)
+        m *= 10;
+    while (v / m >= 10)
+        m *= 10;
+    for (; m; m /= 10)
+        *p++ = '0' + v / m % 10;
+    return p;
+}
+
 static char *decimal(char *p, unsigned v)
 {
-    if (v >= 10)
-        p = decimal(p, v / 10);
-    *p++ = '0' + v % 10;
-    return p;
+    return numero(p, v, 1);
 }
 
 /* Um indicativo do quadro (7 bytes) em texto, "PY2ABC-7"; devolve o fim. */
@@ -428,27 +443,9 @@ static char *copia(char *s, const char *t)
     return s;
 }
 
-/* "DDMM.mm" + a letra, de uma posicao sem compressao, em "DD MM.mmL"; devolve o fim, ou 0 se nao for
- * uma posicao. graus: 2 na latitude, 3 na longitude. */
-static char *aprs_coordenada(char *s, const u8 *p, unsigned graus)
-{
-    unsigned k;
-
-    for (k = 0; k < graus + 5; k++)
-        if (k == graus + 2 ? p[k] != '.' : (p[k] < '0' || p[k] > '9') && p[k] != ' ')
-            return 0;
-    k = p[graus + 5];                      /* o hemisferio (v74) */
-    if (graus == 2 ? k != 'N' && k != 'S' : k != 'E' && k != 'W')
-        return 0;
-    for (k = 0; k < graus + 6; k++) {
-        if (k == graus)
-            *s++ = ' ';
-        *s++ = p[k];
-    }
-    return s;
-}
-
-#define TEXTO_MAX  120                  /* o quadro em texto, na tela e no historico (v74) */
+#define TEXTO_MAX  104                  /* o quadro em texto, na tela e no historico (v74: 120; v75: o
+                                         * registro de 128 B guarda tambem o ack e a hora) */
+#define TEXTO_BRUTO 0x100               /* no n_meu do aprs_texto: a info como veio, sem decodificar (v76) */
 
 /* O caractere como a tela o mostra: o que nao e ASCII visivel vira ponto (um 0 cortaria o texto, e um
  * byte de 0x80 em diante e icone na fonte do radio). */
@@ -462,24 +459,358 @@ static unsigned alfanumerico(unsigned c)
     return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
+static unsigned algarismo(unsigned c)
+{
+    return c >= '0' && c <= '9';
+}
+
 /* As letras de U+00C0 a U+00FF (os bytes 0xC3 0x80..0xBF do UTF-8) sem o acento: a fonte do radio nao as
  * tem, e cada byte virava um ponto (v74). */
 static const char SEM_ACENTO[65] = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYPsaaaaaaaceeeeiiiidnooooo/ouuuuypy";
+
+/* ---------- a posicao e o que vem com ela (v76) ----------
+ * Tudo em unidades daqui: velocidade em km/h (de nos, ou de milhas por hora no tempo), altitude em metros
+ * (de pes), temperatura em graus Celsius, rumo em graus. */
+
+/* "DD MM.mmH" (graus com 2 ou 3 casas), de graus e centesimos de minuto. */
+static char *coordenada(char *p, unsigned graus, unsigned cmin, unsigned casas, unsigned letra)
+{
+    p = numero(p, graus, casas);
+    *p++ = ' ';
+    p = numero(p, cmin / 100, 2);
+    *p++ = '.';
+    p = numero(p, cmin % 100, 2);
+    *p++ = letra;
+    return p;
+}
+
+/* "DDMM.mm" + a letra, de uma posicao sem compressao, em "DD MM.mmL"; devolve o fim, ou 0 se nao for
+ * uma posicao. graus: 2 na latitude, 3 na longitude. Copiada como veio: os espacos da posicao
+ * imprecisa de proposito ficam. */
+static char *aprs_coordenada(char *s, const u8 *p, unsigned graus)
+{
+    unsigned k;
+
+    for (k = 0; k < graus + 5; k++)
+        if (k == graus + 2 ? p[k] != '.' : !algarismo(p[k]) && p[k] != ' ')
+            return 0;
+    k = p[graus + 5];                      /* o hemisferio (v74) */
+    if (graus == 2 ? k != 'N' && k != 'S' : k != 'E' && k != 'W')
+        return 0;
+    for (k = 0; k < graus + 6; k++) {
+        if (k == graus)
+            *s++ = ' ';
+        *s++ = p[k];
+    }
+    return s;
+}
+
+/* " NOME" do simbolo, se e da lista da tabela primaria; senao, o caractere dele. */
+static char *simbolo(char *p, unsigned tabela, unsigned codigo)
+{
+    const char *t = tabela == '/' ? SIMBOLOS : "";
+
+    while (*t && *t != (char)codigo)
+        while (*t++)
+            ;
+    *p++ = ' ';
+    if (*t)
+        return copia(p, t + 1);
+    *p++ = visivel(codigo);
+    return p;
+}
+
+/* " 45KM/H 120DEG", de nos e graus; nada com os dois em 0 (parado, ou sem o dado). */
+static char *movimento(char *p, unsigned rumo, unsigned nos)
+{
+    if (!rumo && !nos)
+        return p;
+    *p++ = ' ';
+    p = numero(p, (nos * 1852 + 500) / 1000, 1);
+    p = copia(p, "KM/H ");
+    p = numero(p, rumo, 1);
+    return copia(p, "DEG");
+}
+
+static char *altitude(char *p, int metros)
+{
+    p = copia(p, "ALT ");
+    if (metros < 0) {
+        *p++ = '-';
+        metros = -metros;
+    }
+    p = numero(p, metros, 1);
+    *p++ = 'M';
+    return p;
+}
+
+#define SEM_DADO  (-9999)
+
+/* n algarismos (e espacos ou pontos de "sem dado") em x: o valor, ou SEM_DADO sem dado ou fora do formato.
+ * Um '-' na frente vale (a temperatura). */
+static int campo(const u8 *x, unsigned n)
+{
+    int v = 0, sinal = 1;
+
+    if (*x == '-' && n > 1) {
+        sinal = -1;
+        x++;
+        n--;
+    }
+    while (n--) {
+        if (!algarismo(*x))
+            return SEM_DADO;
+        v = v * 10 + *x++ - '0';
+    }
+    return v * sinal;
+}
+
+/* O tempo (v76): de x ate fim, os campos que valem a tela - o vento (o "ddd/sss" que vem depois do simbolo
+ * _ numa posicao, ou o c e o s do relatorio sem posicao), a temperatura (t, em F), a umidade (h, 00 = 100%)
+ * e a pressao (b, em decimos de hPa); a chuva, a rajada e o resto passam sem mostrar. O "WX" fica com quem
+ * chama (na posicao, o nome do simbolo _ ja o diz). Devolve o fim do texto, e em *px onde os campos acabam. */
+static char *tempo(char *p, const u8 **px, const u8 *fim)
+{
+    static const char LARGURA[] = "c3s3g3t3r3p3P3h2b5L3l3#3";
+    const u8 *x = *px;
+    const char *l;
+    int vento = SEM_DADO, rumo = SEM_DADO, v;
+
+    if (x + 7 <= fim && x[3] == '/') {     /* o vento depois do simbolo: rumo/velocidade em mph */
+        rumo = campo(x, 3);
+        vento = campo(x + 4, 3);
+        x += 7;
+    }
+    while (x < fim) {
+        for (l = LARGURA; *l && *l != *x; l += 2)
+            ;
+        if (!*l || x + 1 + (l[1] - '0') > fim)
+            break;
+        v = campo(x + 1, l[1] - '0');
+        if (*x == 'c')
+            rumo = v;
+        else if (*x == 's' && vento == SEM_DADO)
+            vento = v;
+        else if (*x == 't' && v != SEM_DADO) {   /* F em C, arredondado */
+            v = (v - 32) * 50 / 9;
+            p = copia(p, " ");
+            if (v < 0) {
+                *p++ = '-';
+                v = -v;
+            }
+            p = numero(p, (v + 5) / 10, 1);
+            *p++ = 'C';
+        } else if (*x == 'h' && v >= 0) {
+            *p++ = ' ';
+            p = numero(p, v ? v : 100, 1);
+            *p++ = '%';
+        } else if (*x == 'b' && v > 0) {
+            *p++ = ' ';
+            p = numero(p, (v + 5) / 10, 1);
+            p = copia(p, "HPA");
+        }
+        x += 1 + l[1] - '0';
+    }
+    if (vento >= 0) {                      /* mph em km/h (SEM_DADO e negativo) */
+        *p++ = ' ';
+        p = numero(p, (vento * 1609 + 500) / 1000, 1);
+        p = copia(p, "KM/H");
+        if (rumo >= 0) {
+            *p++ = ' ';
+            p = numero(p, rumo, 1);
+            p = copia(p, "DEG");
+        }
+    }
+    *px = x;
+    return p;
+}
+
+static unsigned base91(const u8 *x, unsigned n)
+{
+    unsigned v = 0;
+
+    while (n--)
+        v = v * 91 + *x++ - 33;
+    return v;
+}
+
+/* Graus e centesimos de minuto de num / div (num < 91^4, entao num % div * 6000 cabe em 32 bits). */
+static char *fracao(char *p, unsigned num, unsigned div, unsigned casas, unsigned letra)
+{
+    return coordenada(p, num / div, num % div * 6000 / div, casas, letra);
+}
+
+/* Posicao comprimida (v76): "/YYYYXXXX$csT", a tabela, a latitude e a longitude em base 91 (4 cada), o
+ * simbolo, o rumo e a velocidade em c e s (o rumo de 4 em 4 graus, a velocidade 1,08^s - 1 nos) e o tipo
+ * em T (com os bits 4:3 em 2, c e s sao a altitude, que fica de fora). Devolve 0 se x nao e uma. */
+static char *comprimida(char *p, const u8 *x, const u8 *fim)
+{
+    unsigned k, y, v;
+
+    if (x + 13 > fim || !(x[0] == '/' || x[0] == '\\' || (x[0] >= 'A' && x[0] <= 'Z') ||
+                          (x[0] >= 'a' && x[0] <= 'j')))
+        return 0;
+    for (k = 1; k <= 8; k++)
+        if (x[k] < '!' || x[k] > '{')
+            return 0;
+    y = base91(x + 1, 4);                  /* a latitude e 90 - y / 380926; a longitude, x / 190463 - 180 */
+    p = y <= 34283340 ? fracao(p, 34283340 - y, 380926, 2, 'N') : fracao(p, y - 34283340, 380926, 2, 'S');
+    *p++ = ' ';
+    y = base91(x + 5, 4);
+    p = y >= 34283340 ? fracao(p, y - 34283340, 190463, 3, 'E') : fracao(p, 34283340 - y, 190463, 3, 'W');
+    p = simbolo(p, x[0], x[9]);
+    if (x[10] >= '!' && x[10] <= 'z' && ((x[12] - 33) >> 3 & 3) != 2) {
+        for (v = 1000, k = x[11] - 33; k-- && k < 90; )
+            v = v * 108 / 100;
+        p = movimento(p, (x[10] - 33) * 4, (v - 1000 + 500) / 1000);
+    }
+    return p;
+}
+
+/* As mensagens do Mic-E, pelos tres bits do destino (o A primeiro). */
+static const char *const MIC_E[8] = {"EMERGENCY", "PRIORITY", "SPECIAL", "COMMITTED", "RETURNING",
+                                     "IN SERVICE", "EN ROUTE", "OFF DUTY"};
+
+/* Mic-E (v76), o formato dos radios Kenwood e Yaesu e de muitos rastreadores: a latitude, a mensagem e os
+ * hemisferios vem nos 6 caracteres do destino (d: 0-9, A-J, P-Y valem algarismos, e K, L e Z espaco; nos
+ * tres primeiros, A-K e P-Z sao bits 1 da mensagem; no 4o, P-Z e norte; no 5o, P-Z soma 100 a longitude; no
+ * 6o, P-Z e oeste); a longitude, a velocidade, o rumo e o simbolo, nos 8 bytes depois do ` ou do ' (cada
+ * um + 28; x aponta o primeiro); depois, o tipo do radio (> ] ` ') e a altitude "xxx}" (metros + 10000,
+ * base 91), se ha.
+ * Devolve 0 se o destino nao e de Mic-E; senao o fim do texto, e em *px onde o comentario comeca. */
+static char *mic_e(char *p, const u8 *d, unsigned desloc, const u8 **px, const u8 *fim)
+{
+    const u8 *x = *px;
+    unsigned k, c, lat = 0, bits = 0, proprio = 0, g, m, vel, rumo;
+
+    if (x + 8 > fim)
+        return 0;
+    for (k = 0; k < 6; k++) {
+        c = d[k] >> desloc;
+        if (algarismo(c))
+            g = c - '0';
+        else if (c >= 'A' && c <= 'J')
+            g = c - 'A';
+        else if (c >= 'P' && c <= 'Y')
+            g = c - 'P';
+        else if (c == 'K' || c == 'L' || c == 'Z')
+            g = 0;
+        else
+            return 0;
+        lat = lat * 10 + g;
+        if (k < 3) {
+            bits = bits << 1 | (c >= 'A' && c != 'L');
+            proprio |= c >= 'A' && c <= 'K';   /* A-K: as mensagens proprias, sem nome */
+        }
+    }
+    for (k = 0; k < 6; k++)
+        if (x[k] < 28 || x[k] > 127)
+            return 0;
+    g = x[0] - 28 + ((d[4] >> desloc) >= 'P' ? 100 : 0);
+    g -= g >= 180 && g <= 189 ? 80 : g >= 190 && g <= 199 ? 190 : 0;
+    m = x[1] - 28;
+    m -= m >= 60 ? 60 : 0;
+    if (g > 179 || m > 59 || x[2] - 28 > 99)
+        return 0;
+    p = coordenada(p, lat / 10000, lat % 10000, 2, (d[3] >> desloc) >= 'P' ? 'N' : 'S');
+    *p++ = ' ';
+    p = coordenada(p, g, m * 100 + x[2] - 28, 3, (d[5] >> desloc) >= 'P' ? 'W' : 'E');
+    p = simbolo(p, x[7], x[6]);
+    vel = (x[3] - 28) * 10 + (x[4] - 28) / 10;
+    rumo = (x[4] - 28) % 10 * 100 + x[5] - 28;
+    p = movimento(p, rumo >= 400 ? rumo - 400 : rumo, vel >= 800 ? vel - 800 : vel);
+    x += 8;
+    if (x < fim && (*x == '>' || *x == ']' || *x == '`' || *x == '\''))
+        x++;
+    if (x + 4 <= fim && x[3] == '}' && x[0] >= '!' && x[1] >= '!' && x[2] >= '!') {
+        *p++ = ' ';
+        p = altitude(p, (int)base91(x, 3) - 10000);
+        x += 4;
+    }
+    if (!proprio) {
+        *p++ = ' ';
+        p = copia(p, MIC_E[bits]);
+    }
+    *px = x;
+    return p;
+}
+
+/* O que pode vir logo depois do simbolo de uma posicao: "ddd/sss" (rumo e velocidade em nos) ou
+ * "PHGphgd" (a potencia p^2 W, a altura 10 x 2^h pes e o ganho g dB do digipeater). Devolve o fim do
+ * texto, e em *px depois da extensao, se havia uma. */
+static char *extensao(char *p, const u8 **px, const u8 *fim)
+{
+    const u8 *x = *px;
+    int r, v;
+
+    if (x + 7 > fim)
+        return p;
+    if (x[3] == '/' && (r = campo(x, 3)) >= 0 && (v = campo(x + 4, 3)) >= 0) {   /* SEM_DADO e negativo */
+        p = movimento(p, r, v);
+        *px = x + 7;
+    } else if (x[0] == 'P' && x[1] == 'H' && x[2] == 'G' && algarismo(x[3]) && algarismo(x[4]) &&
+               algarismo(x[5])) {
+        *p++ = ' ';
+        p = numero(p, (x[3] - '0') * (x[3] - '0'), 1);
+        p = copia(p, "W ");
+        p = numero(p, ((10u << (x[4] - '0')) * 3048 + 5000) / 10000, 1);
+        p = copia(p, "M ");
+        p = numero(p, x[5] - '0', 1);
+        p = copia(p, "DBI");
+        *px = x + 7;
+    }
+    return p;
+}
+
+/* Uma posicao em x (sem compressao ou comprimida), com o que vem depois dela: o rumo e a velocidade, o
+ * PHG, o tempo (o simbolo _). Devolve 0 se x nao e uma posicao; senao o fim do texto, e em *px onde o
+ * comentario comeca. */
+static char *posicao(char *p, const u8 **px, const u8 *fim)
+{
+    const u8 *x = *px;
+    char *f;
+
+    if (x + 19 <= fim && (f = aprs_coordenada(p, x, 2))) {
+        *f++ = ' ';
+        if (!(f = aprs_coordenada(f, x + 9, 3)))
+            return 0;
+        p = simbolo(f, x[8], x[18]);
+        x += 19;
+        p = x[-11] == '/' && x[-1] == '_' ? tempo(p, &x, fim) : extensao(p, &x, fim);
+    } else if ((f = comprimida(p, x, fim))) {
+        p = f;
+        x += 13;
+        if (x[-13] == '/' && x[-4] == '_')
+            p = tempo(p, &x, fim);
+    } else {
+        return 0;
+    }
+    *px = x;
+    return p;
+}
 
 /* O quadro em texto legivel, ate TEXTO_MAX caracteres (48 ate a v73: o que cabia em duas linhas; a tela
  * abre o resto no OK), terminado em 0:
  *  - mensagem para o meu indicativo: "ORIGEM> texto" (sem o "{id", que e so da confirmacao), e devolve 1;
  *  - mensagem para outro: "ORIGEM>DESTINO: texto"; a confirmacao: "ORIGEM>DESTINO: ACK id";
- *  - posicao sem compressao (! = / @): "ORIGEM: 23 18.07S 046 35.59W DIGI comentario";
+ *  - posicao (! = / @, sem compressao ou comprimida, v76): "ORIGEM: 23 18.07S 046 35.59W CAR 45KM/H 120DEG
+ *    comentario", com o PHG, a altitude em metros e o tempo decodificados (v76);
+ *  - Mic-E (` '), objeto (;) e item ()) (v76): a posicao como acima, o objeto e o item com "OBJ NOME"
+ *    ou "ITEM NOME" antes;
+ *  - tempo sem posicao (_, v76): "ORIGEM: WX 25C 50% 1013HPA 6KM/H 220DEG";
  *  - o resto: "ORIGEM: info", como veio.
  * Num quadro de terceiros (v71: "}" no comeco da info, o que um igate traz da internet), ORIGEM e a
- * estacao de dentro, e a info e a dela. */
-unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned n_meu)
+ * estacao de dentro, e a info e a dela. Na mensagem para mim, id recebe o numero dela (ate 5, sem o "}"
+ * da resposta embutida), que o ack devolve (v75); nas outras, fica vazio. Com TEXTO_BRUTO no n_meu (o
+ * APRS DECODE em OFF, v76), so a mensagem e decodificada: o resto vai como veio. No comentario, a altitude
+ * "/A=pes" vira metros e o "!wXY!" da precisao extra (DAO) sai (v76). */
+unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned n_meu, char *id)
 {
     char *p = s, *f;
-    const u8 *x;
-    unsigned i = 7, k, para_mim = 0;
+    const u8 *x, *fim = q + n, *d = q;     /* d: o destino (do Mic-E), em bytes de endereco ou em texto */
+    unsigned i = 7, k, para_mim = 0, bruto = n_meu & TEXTO_BRUTO;
 
+    n_meu &= 0xFF;
     while (i + 7 <= n && !(q[i + 6] & 1))  /* o fim dos enderecos: o bit 0 do ultimo */
         i += 7;
     i += 7 + 2;                            /* controle e PID */
@@ -487,9 +818,11 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
         ;
     if (i < n && q[i] == '}' && k < n && q[k] == '>') {
         /* de terceiros (v71), o que um igate traz da internet, "}ORIGEM>DESTINO,CAMINHO:info": a
-         * estacao e a de dentro, e o resto segue pela info dela */
+         * estacao e a de dentro, e o resto segue pela info dela (o destino de dentro, o do Mic-E, vem em
+         * texto) */
         while (++i < k)
             *p++ = visivel(q[i]);
+        d = q + k + 1;
         while (k < n && q[k] != ':')
             k++;
         i = k + 1;
@@ -518,29 +851,61 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
         *p++ = ':';
         *p++ = ' ';
         x = q + i + 1;
-        if (i < n && (q[i] == '/' || q[i] == '@'))
-            x += 7;                        /* com a hora: DDHHMMz */
-        if (i < n && (q[i] == '!' || q[i] == '=' || q[i] == '/' || q[i] == '@') && x + 19 <= q + n
-            && (f = aprs_coordenada(p, x, 2))) {
-            *f++ = ' ';
-            if ((f = aprs_coordenada(f, x + 9, 3))) {
-                const char *t = x[8] == '/' ? SIMBOLOS : "";   /* a lista e da tabela primaria (v74) */
-                p = f;
-                while (*t && *t != x[18])  /* o simbolo pelo nome, se e da lista */
-                    while (*t++)
-                        ;
-                *p++ = ' ';
-                if (*t)
-                    p = copia(p, t + 1);
-                else
-                    *p++ = visivel(x[18]);
-                *p++ = ' ';
-                i = x + 19 - q;
+        f = 0;
+        if (i < n && !bruto) {
+            k = q[i];
+            if (k == '`' || k == '\'') {
+                f = mic_e(p, d, d == q, &x, fim);
+            } else if (k == '_' && x + 8 <= fim) {
+                x += 8;                    /* sem posicao: MMDDHHMM e os campos (o vento em c e s) */
+                f = tempo(copia(p, "WX"), &x, fim);
+            } else if (k == ';' && x + 17 <= fim) {
+                f = copia(p, "OBJ ");      /* ;NOME_____*DDHHMMz e a posicao */
+                for (k = 0; k < 9; k++)
+                    *f++ = visivel(x[k]);
+                while (f[-1] == ' ')
+                    f--;
+                *f++ = ' ';
+                x += 17;
+                f = posicao(f, &x, fim);
+            } else if (k == ')') {         /* )NOME!posicao, o nome de 3 a 9 */
+                for (k = 0; k < 9 && x + k < fim && x[k] != '!' && x[k] != '_'; k++)
+                    ;
+                if (x + k < fim && k >= 3 && (x[k] == '!' || x[k] == '_')) {
+                    f = copia(p, "ITEM ");
+                    while (*x != '!' && *x != '_')
+                        *f++ = visivel(*x++);
+                    x++;
+                    *f++ = ' ';
+                    f = posicao(f, &x, fim);
+                }
+            } else if (k == '!' || k == '=' || k == '/' || k == '@') {
+                if (k == '/' || k == '@')
+                    x += 7;                /* com a hora: DDHHMMz */
+                f = posicao(p, &x, fim);
             }
+        }
+        if (f) {
+            p = f;
+            i = x - q;
+            *p++ = ' ';
         }
     }
     for (; i < n && p < s + TEXTO_MAX && !(para_mim && q[i] == '{'); i++) {
         k = q[i];
+        if (!bruto && k == '/' && i + 9 <= n && q[i + 1] == 'A' && q[i + 2] == '=' &&
+            (int)(k = campo(q + i + 3, 6)) != SEM_DADO) {
+            if (p[-1] != ' ')
+                *p++ = ' ';
+            p = altitude(p, (int)k * 3048 / 10000);   /* "/A=pes" em metros */
+            i += 8;
+            continue;
+        }
+        k = q[i];
+        if (!bruto && k == '!' && i + 4 < n && q[i + 4] == '!' && q[i + 1] >= 'A' && q[i + 1] <= 'z') {
+            i += 4;                        /* o DAO "!wXY!": a precisao extra da posicao, sem texto */
+            continue;
+        }
         if ((k == 0xC2 || k == 0xC3) && i + 1 < n && q[i + 1] >= 0x80 && q[i + 1] < 0xC0) {
             i++;
             if (k == 0xC3)
@@ -548,9 +913,19 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
             else                           /* U+00B0 e U+00BA (graus, ordinal) e U+00AA (v74) */
                 k = q[i] == 0xB0 || q[i] == 0xBA ? 'o' : q[i] == 0xAA ? 'a' : '.';
         }
-        *p++ = visivel(k);
+        if (k >= ' ' || bruto)             /* o CR e o LF do fim saem (v76) */
+            *p++ = visivel(k);
     }
+    while (p > s && p[-1] == ' ')
+        p--;
     *p = 0;
+    while (para_mim && i < n && q[i] != '{')   /* o texto pode ter parado no limite antes do numero */
+        i++;
+    k = 0;
+    if (para_mim && i < n)
+        while (++i < n && k < 5 && alfanumerico(q[i]))
+            id[k++] = q[i];
+    id[k] = 0;
     return para_mim;
 }
 
@@ -564,7 +939,7 @@ int le_registro(u32, void *, unsigned);          /* bancos.c: marca e soma confe
 void grava_registro(u32, void *, unsigned);      /* bancos.c: so em setor apagado ou ja nosso */
 
 #define VALOR          RAM(u16, 0x00014BFC)      /* o valor da linha do item, no menu */
-#define TEXTO          ((char *)0x000129B0)       /* 28 B: o texto que o exibe devolve */
+#define TEXTO          ((char *)&RAM(u8, 0x000129B0))   /* 28 B: o texto que o exibe devolve */
 
 /* O editor de texto do firmware, o do CH-NAME: tamanho, maximo, cursor (a posicao de insercao),
  * modo (1 ABC) e a marca 0xAA (a primeira tecla troca o texto todo; o EXIT apaga a ultima letra e o
@@ -579,7 +954,7 @@ void grava_registro(u32, void *, unsigned);      /* bancos.c: so em setor apagad
 #define EDITOR_CURSOR  RAM(u8, 0x00014A37)
 #define EDITOR_MODO    RAM(u8, 0x00014A38)
 #define EDITOR_MARCA   RAM(u8, 0x00014A39)
-#define EDITOR_TEXTO   ((volatile char *)0x00014A3A)
+#define EDITOR_TEXTO   (&RAM(char, 0x00014A3A))
 #define EDITOR_PINYIN  RAM(u8, 0x00012A74)
 #define MODO_ABC       1
 #define MAX_MSG        37
@@ -703,7 +1078,19 @@ static char *resumo(const char *t, unsigned n)
 #define ESTADO_MSG     RAM(u8, 0x00014BE6)
 #define ARMADO_MORSE   'M'
 #define ARMADO_APRS    'A'
-#define NO_AR(e)       ((e) | 0x20)      /* 'm', 'a': a TX comecou, o conteudo vai no fim dela */
+#define ARMADO_ACK     'K'               /* v75: o ack de uma mensagem para mim, armado pelo APRS RX */
+#define NO_AR(e)       ((e) | 0x20)      /* 'm', 'a', 'k': a TX comecou, o conteudo vai no fim dela */
+#define ARMADO(e)      ((e) == ARMADO_MORSE || (e) == ARMADO_APRS || (e) == ARMADO_ACK)
+/* O registro do historico do APRS RX com a origem e o numero do ack (o setor * 32 + o lugar), no 0x903E
+ * dos ajustes (b[0x14BEA], livre pela varredura da v59; so vale com o ESTADO_MSG em 'K'). */
+#define ACK_REGISTRO   RAM(u8, 0x00014BEA)
+#define HIST_SETOR(s)  (0x000D6000u + (s) * 0x1000u)   /* o historico do APRS RX: dois setores */
+#define REG_HIST       128u              /* um registro (struct registro_rx, no APRS RX) */
+#define ACK_PARA       (2 + TEXTO_MAX + 1)               /* a origem (9) e o numero (6) dentro dele */
+
+FIRMWARE(LE_FLASH, 0x01E390AC);     void LE_FLASH(u32, void *, u32);
+FIRMWARE(APAGA_SETOR, 0x01E3A126);  void APAGA_SETOR(u32);
+FIRMWARE(GRAVA_FLASH, 0x01E3A25A);  void GRAVA_FLASH(u32, const void *, u32);
 
 FIRMWARE(IDA_PTT, 0x01E43E8A);     void IDA_PTT(void);
 FIRMWARE(ACORDA, 0x01E39EE4);      void ACORDA(void);         /* sai da economia de bateria */
@@ -743,19 +1130,6 @@ static void espera_soltar(void)
 }
 
 #define TECLA_EXIT   5                     /* o codigo cru da varredura (a tabela 0x01E60369) */
-
-/* O EXIT continua apertado por ~0,6 s? (a tela do APRS RX, v71). Separada: dentro do laco do RX, os
- * registros dela pesariam na pilha dele. */
-__attribute__((noinline)) static unsigned segurou_exit(void)
-{
-    unsigned i;
-
-    for (i = 0; i < 300 && tecla() == TECLA_EXIT; i++) {
-        WDT();
-        ESPERA_2MS(1);
-    }
-    return i == 300;
-}
 
 /* O EXIT segurado no editor de texto sai sem salvar (v72). No uso normal a fabrica manda o toque curto
  * de uma tecla so quando ela e solta (o laco do sinal, 0x01E46372: apertar nao manda nada; segurar 1 s
@@ -822,10 +1196,10 @@ void gancho_ida_ptt(void)
 {
     unsigned e = ESTADO_MSG;
 
-    if (e == NO_AR(ARMADO_MORSE) || e == NO_AR(ARMADO_APRS)) {
+    if (ARMADO(e & ~0x20) && (e & 0x20)) {
         if (!PTT_SOLTO() || !TX_ESTADO)    /* o PTT tomou a TX (ela e de voz), ou ela foi recusada */
             ESTADO_MSG = 0;
-    } else if ((e == ARMADO_MORSE || e == ARMADO_APRS) && !BIPE) {
+    } else if (ARMADO(e) && !BIPE) {
         ESTADO_MSG = 0;
         if (!TX_ESTADO && !ALARME && PTT_SOLTO()) {
             ESTADO_MSG = NO_AR(e);
@@ -846,11 +1220,13 @@ static void toca_morse(void)
 }
 
 /* O quadro do APRS: a mensagem ":DESTINO  :texto{id" (destinatario em 9 colunas, como o APRS pede)
- * ou, sem destinatario, o status ">texto". O campo de informacao e montado no proprio quadro, no
- * lugar onde o ax_quadro o poria. O id da mensagem anda no SEND (aprs_envia_grava). */
+ * ou, sem destinatario, o status ">texto"; com ack (v75), ":ORIGEM   :ackNUMERO", da origem e do numero
+ * que o RX guardou no registro do historico em ack. O campo de informacao e montado no proprio quadro,
+ * no lugar onde o ax_quadro o poria. O id da mensagem anda quando o texto ou o destino mudam
+ * (aprs_guarda_texto). */
 #define CAB(digis)  (16 + 7 * (digis))
 
-static unsigned quadro_aprs(u8 *q)
+static unsigned quadro_aprs(u8 *q, u32 ack)
 {
     struct aprs a;
     char origem[10];
@@ -858,7 +1234,7 @@ static unsigned quadro_aprs(u8 *q)
     u8 *p;
 
     le_aprs(&a);
-    if (!a.tam_ind || !a.tam_msg)
+    if (!a.tam_ind || (!ack && !a.tam_msg))
         return 0;
     for (i = 0; i < a.tam_ind && i < 6; i++)
         origem[i] = a.ind[i];
@@ -869,6 +1245,17 @@ static unsigned quadro_aprs(u8 *q)
     }
     digis = a.caminho == 1 ? 2 : a.caminho == 2 ? 0 : 1;
     p = q + CAB(digis);
+    if (ack) {
+        *p++ = ':';
+        LE_FLASH(ack, p, 9);
+        p += 9;
+        p = (u8 *)copia((char *)p, ":ack");
+        LE_FLASH(ack + 9, p, 6);
+        p[5] = 0;
+        while (*p)
+            p++;
+        return ax_quadro(q, origem, n, digis, (char *)q + CAB(digis), p - q - CAB(digis));
+    }
     if (a.tam_dest) {
         *p++ = ':';
         for (i = 0; i < 9; i++)
@@ -886,10 +1273,11 @@ static unsigned quadro_aprs(u8 *q)
     return ax_quadro(q, origem, n, digis, (char *)q + CAB(digis), p - q - CAB(digis));
 }
 
-static void toca_aprs(void)
+/* A mensagem ou o status (ack 0), ou o ack cuja origem esta em ack. */
+static void manda_aprs(u32 ack)
 {
     u8 q[CAB(2) + 1 + 9 + 1 + MAX_MSG + 3 + 2];
-    unsigned n = quadro_aprs(q);
+    unsigned n = quadro_aprs(q, ack);
 
     if (!n)
         return;
@@ -905,9 +1293,9 @@ static void toca_aprs(void)
  * soltarem, senao o Morse o veria como pedido de parar. */
 void gancho_fim_tx(void)
 {
-    unsigned e = ESTADO_MSG, r;
+    unsigned e = ESTADO_MSG, r, s31, s51;
 
-    if (e != NO_AR(ARMADO_MORSE) && e != NO_AR(ARMADO_APRS)) {
+    if (!(e & 0x20) || !ARMADO(e & ~0x20)) {
         FIM_TX();
         return;
     }
@@ -915,16 +1303,26 @@ void gancho_fim_tx(void)
     AUDIO_TX(4);                           /* o microfone cortado ja, antes das esperas (v74): a portadora
                                             * muda levava o som do ambiente ao ar */
     espera_soltar();
-    if (e == NO_AR(ARMADO_APRS))           /* v69: 0,5 s de portadora muda antes do pacote, para o */
+    if (e != NO_AR(ARMADO_MORSE))          /* v69: 0,5 s de portadora muda antes do pacote, para o */
         ESPERA_2MS(250);                   /* receptor (economia de bateria, squelch lento) abrir */
     GERADOR(1);
     AF(1);
     WDT();
     REG_W(0x70, 0xE000);
+    /* sem o scramble e o subtom durante o conteudo (v75): o scramble (bit 1 do 0x31, secao 13) espelha o
+     * audio, e o subtom (bit 15 do 0x51, que a fabrica liga com o nivel, 0x01E441BE) soma um tom grave
+     * ao AFSK; os dois voltam antes do fim de fabrica */
+    s31 = REG_R(0x31);
+    s51 = REG_R(0x51);
+    REG_W(0x31, s31 & ~2u);
+    REG_W(0x51, s51 & ~0x8000u);
     if (e == NO_AR(ARMADO_MORSE))
         toca_morse();
-    else
-        toca_aprs();
+    else                                   /* a mensagem, ou o ack do registro que o RX marcou */
+        manda_aprs(e == NO_AR(ARMADO_ACK) ? HIST_SETOR(ACK_REGISTRO >> 5 & 1) + (ACK_REGISTRO & 31) * REG_HIST
+                                            + ACK_PARA : 0);
+    REG_W(0x51, s51);
+    REG_W(0x31, s31);
     PEDE_AMPLI(10);
     TOM(0, 0);
     GERADOR(0);
@@ -1069,16 +1467,40 @@ static void aprs_texto_le(unsigned qual)
     editor_abre(t, *tam, max);
 }
 
+/* Uma conta do texto, para saber se ele mudou. */
+static unsigned resumo_texto(const char *t, unsigned n)
+{
+    unsigned h = n;
+
+    while (n--)
+        h = h * 31 + (u8)*t++;
+    return h;
+}
+
+/* O texto do editor no campo. O indicativo e o destinatario vao em maiusculas (o editor tem o modo abc),
+ * e so com o que o AX.25 e o APRS aceitam: letras e numeros, e o '-' do SSID no destinatario (v75; um
+ * espaco ou uma '/' no endereco faziam decodificadores estritos descartarem o quadro). O numero da
+ * mensagem anda quando o destinatario ou o texto mudam: o SEND repete o mesmo. */
 __attribute__((noinline)) static void aprs_guarda_texto(unsigned qual)
 {
     struct aprs a;
-    unsigned max;
+    unsigned max, i, k, n, c, antes;
     u8 *tam;
     char *t;
 
     le_aprs(&a);
     t = aprs_campo(&a, qual, &tam, &max);
-    *tam = editor_texto(t, max);
+    antes = resumo_texto(t, *tam);
+    n = k = editor_texto(t, max);
+    if (qual < 2)
+        for (i = n = 0; i < k; i++) {
+            c = t[i] >= 'a' && t[i] <= 'z' ? t[i] - 32 : t[i];
+            if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || (c == '-' && qual == 1))
+                t[n++] = c;
+        }
+    *tam = n;
+    if (qual && resumo_texto(t, n) != antes)
+        a.id = a.id % 99 + 1;
     grava_aprs(&a);
 }
 
@@ -1200,18 +1622,19 @@ void aprs_caminho_grava(void)
  * inteiro, de 2048 bytes (13,6 s), e o hdlc_bit acha sozinho as flags dos quadros seguintes, de qualquer
  * polaridade: o laco so rearma no fim desse quadro do chip, ou se a FIFO parar por 300 ms.
  *
- * Nenhum bit fica para tras (v74). Da v71 a v73, o quadro bom parava a leitura no meio do bloco de 4
- * palavras: ate 63 bits depois dele iam fora, e um igate ou um digipeater que manda varios quadros na mesma
- * transmissao, separados por uma a tres flags, perdia o comeco do seguinte. Agora o quadro bom vira texto e
- * vai para o historico ali mesmo (guarda), antes de o seguinte ocupar o q, e os bits seguem. A tela, que
- * levava 4 faixas de uma vez depois de cada quadro, vai uma faixa de 32 linhas por volta do laco, entre as
- * leituras do modem (pede): a FIFO nunca espera mais que uma faixa.
+ * Nenhum bit fica para tras (v74). O quadro bom vira texto e vai para o historico ali mesmo (guarda),
+ * antes de o seguinte ocupar o q, e os bits seguem; a tela vai uma faixa de 32 linhas por volta do laco,
+ * entre as leituras do modem (pede). Desde a v75 nada mais para o laco: as teclas sao lidas sem esperar
+ * soltar (a que esta apertada so conta de novo depois de solta), o EXIT segurado e medido no proprio laco,
+ * e o setor do historico que precisa ser apagado e apagado com a captura parada, fora dos bits.
  *
  * O modem e o 0x3CC3 (FFSK 1200/1800, o do roger TONE1200 de fabrica, o melhor na v71) com o ganho de
  * entrada da CALIBRATION > MODEM GAIN nos bits 9:8 (v73, ganho_modem, abaixo); a tecla # troca o ganho so
  * aqui, para comparar, e a proxima entrada volta ao da CALIBRATION. Na v70 a banda larga so dava sync sem
  * quadro e o ganho 0 nao ouvia nada; na v71 o 1200/2400 (0x33C3) decodificou menos que o 1200/1800, e tirar
- * o de-enfase do RX (bit 8 do 0x2B) nao mudou nada.
+ * o de-enfase do RX (bit 8 do 0x2B) nao mudou nada. Na v77, dez valores do 0x58 nunca testados (os bits
+ * 7:6 em 0, as bandas 2 e 3, o caminho do NOAA SAME e os modos de RX 1-3 e 5-6, sem documentacao), na
+ * tecla 0, nao decodificaram mais que este, e sairam na v78 (secao 24).
  *
  * A saida devolve o modem como a fabrica o deixa. O unico uso de fabrica dele e o roger TONE1200
  * (0x01E44676..0x01E44790), que programa 0x58 (0x3FC3, o ganho 3), 0x59, 0x5A..0x5D, 0x3F, 0x70 e 0x72 a
@@ -1221,40 +1644,87 @@ void aprs_caminho_grava(void)
  *
  * O laco e do set do item, com o menu aberto: o laco do sinal nao roda, entao o receptor e acordado da
  * economia de bateria e a dupla escuta desarmada antes (fica no lado em evidencia), e o watchdog e
- * limpo aqui. Os quadros vao para o historico na flash, e a tela os le de la (v74): os setores 0xD6000 e
- * 0xD7000 ("HST2", ate 63 registros de 128 B, o texto inteiro e a cor), gravados sem apagar ate encher;
- * cheio, os dois sao apagados e recomeca. A tela mostra dois por vez, o mais novo em cima, o de cima
- * (o da posicao no alto) num fundo proprio; as setas andam pelo historico, o OK abre o de cima inteiro (e
- * fecha), o # troca o ganho, o EXIT segurado apaga o historico (v71), o EXIT curto fecha o aberto ou sai, e
- * as outras teclas saem. Na barra de baixo, quantos syncs o modem achou em cada polaridade, quantos quadros
- * chegaram com o FCS errado (BAD) e quantos a correcao salvou (FIX), desde a entrada ou a ultima troca de
- * ganho. */
-FIRMWARE(LE_FLASH, 0x01E390AC);     void LE_FLASH(u32, void *, u32);
-FIRMWARE(APAGA_SETOR, 0x01E3A126);  void APAGA_SETOR(u32);
-FIRMWARE(GRAVA_FLASH, 0x01E3A25A);  void GRAVA_FLASH(u32, const void *, u32);
+ * limpo aqui. A tela mostra dois quadros por vez, o mais novo em cima, o de cima (o da posicao no alto)
+ * num fundo proprio; as setas andam pelo historico (v75: segurada, a seta repete, e o historico da a
+ * volta nas duas pontas), o OK abre o de cima inteiro (e fecha), o # troca o ganho, o * apaga a tela
+ * (v75; a tecla seguinte so a acende), o EXIT segurado apaga o historico (v71), o EXIT curto fecha o
+ * aberto ou sai, e as outras teclas saem. A mensagem para mim com numero sai da tela
+ * sozinha, para o ack ir ao ar (v75, guarda). Na barra de baixo, quantos syncs o modem achou em cada
+ * polaridade, quantos quadros chegaram com o FCS errado (BAD) e quantos a correcao salvou (FIX), desde a
+ * entrada ou a ultima troca de ganho. */
+/* A luz da tela (0x01E394D6, acende = 1 ou apaga = 0): com o PWM ligado, o desvio da v60 (b_luz, tela.c) a
+ * atende pelo ciclo; sem ele, a de fabrica. */
+FIRMWARE(LUZ, 0x01E394D6);          void LUZ(unsigned);
 
 /* A tela (telas.c): os registros do historico na flash, o de cima e o de baixo (0 = vazio); aberto, so o de
  * cima, inteiro; os numeros (o ganho, a posicao no historico, quantos ha, syncs na marca e no espaco, BAD,
  * FIX); e as faixas de 32 linhas a desenhar (bit 0 a de cima). */
 void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas);
 
-#define SETOR_HIST   0x000D6000u           /* e o 0xD7000 (v74): o mapa do chip de dados os da livres */
-#define MARCA_HIST   0x32545348u           /* "HST2" (v74) */
-#define MARCA_V70    0x31545348u           /* "HST1", o das v70 a v73, com registros de 64 B */
-#define REG_HIST     128u
-#define HIST_MAX     63
+/* O historico (v75): os setores 0xD6000 e 0xD7000, cada um com um cabecalho ("HST3" e a geracao, um byte
+ * que anda a cada setor novo) e 31 registros de 128 B. Um anel: quando o setor que recebe enche, o outro
+ * (o dos mais velhos) e apagado e recomeca com a geracao seguinte, e os 31 do cheio passam a ser os
+ * velhos. Ficam sempre os ultimos 31 a 62. O estado: hist (quantos ha; -1 se um setor tem outra coisa, e
+ * ai nada e gravado) e anel (o setor que recebe no bit 0, se o outro precisa ser apagado no bit 1, e
+ * quantos velhos ha nele dos bits 2 em diante). Da v70 a v74 o historico era de um bloco so ("HST1",
+ * registros de 64 B; "HST2", de 128 B pelos dois setores seguidos, um cabecalho so): ele e apagado na
+ * primeira entrada. */
+#define MARCA_HIST   0x33545348u           /* "HST3" */
+#define MARCA_V74    0x32545348u           /* "HST2" */
+#define MARCA_V70    0x31545348u           /* "HST1" */
+#define POR_SETOR    31u
 #define USADO        0x5A
+#define ANEL_SUJO    2u                    /* o setor que nao recebe tem cabecalho: precisa ser apagado */
+#define ANEL_VELHOS(a)  ((a) >> 2)
+#define DUPLICADO_MS 30000u                /* a mesma estacao com o mesmo texto: so a primeira entra */
 #define TECLA_OK     2                     /* os codigos crus da varredura (a tabela 0x01E60369) */
 #define TECLA_CIMA   3
 #define TECLA_BAIXO  4
+#define TECLA_ESTRELA 9
 #define TECLA_MODO   17                    /* # */
+#define EXIT_LONGO   100                   /* o EXIT segurado 0,6 s */
+#define ABERTO       1u                    /* os bits de modo, no laco */
+#define PRESO        2u                    /* uma tecla esta apertada: so conta de novo depois de solta */
+#define ESPERA_EXIT  4u                    /* o EXIT apertado: curto ou segurado, so se sabe depois */
+#define ESCURO       8u                    /* a tela apagada pelo * */
+#define REPETE       16u                   /* uma seta apertada: segurada, ela repete */
+#define REPETE_DEPOIS 800u                 /* a seta segurada comeca a repetir em 0,8 s, a cada 0,15 s */
+#define REPETE_CADA  150u
 
+/* O registro: o "usado" e gravado por ultimo, e um registro com o ambar ainda apagado e um lugar vazio;
+ * uma queda de energia no meio deixa um lugar ocupado e sem o "usado", que a tela pula. Na mensagem para
+ * mim com numero, a origem (em 9 colunas, como o ack a quer) e o numero ficam para o ack. */
 struct registro_rx {
     u8 usado, ambar;
-    char texto[REG_HIST - 2];              /* ate TEXTO_MAX e o 0 */
+    char texto[TEXTO_MAX + 1];
+    char para[9], id[6];
+    u8 sobra[2];
+    u32 hora;                              /* TIQUE_MS da chegada, para as copias */
 };
 
+typedef char confere_registro[sizeof(struct registro_rx) == REG_HIST ? 1 : -1];
+typedef char confere_ack[__builtin_offsetof(struct registro_rx, para) == ACK_PARA ? 1 : -1];
+
 #define MODEM_RX     0x3CC3                /* FFSK 1200/1800, sem o ganho (bits 9:8) */
+
+/* APRS DECODE (v76, a pasta APRS): ON mostra os formatos decodificados (Mic-E, posicao comprimida, tempo,
+ * objeto, rumo e velocidade, altitude); OFF, a info como veio, para conferir. No 0x903F dos ajustes
+ * (b[0x14BEB], livre pela varredura da v59): OFF so com 0xB1 (o RESET de fabrica deixa 229 nele, que vale
+ * ON). Vale para os quadros que chegam depois de mudar: o historico guarda o texto pronto. */
+#define DECODE_APRS  RAM(u8, 0x00014BEB)
+#define DECODE_OFF   0xB1
+const char titulo_aprs_decode[] = "APRS DECODE";
+const char *const aprs_decode_opcoes[2] = {"ON", "OFF"};
+
+u16 aprs_decode_le(void)
+{
+    return DECODE_APRS == DECODE_OFF;
+}
+
+void aprs_decode_grava(void)
+{
+    DECODE_APRS = VALOR ? DECODE_OFF : 0xB0;
+}
 
 /* MODEM GAIN (v73, a pasta CALIBRATION): o ganho de entrada do modem FSK do chip, os bits 9:8 do 0x58, que
  * so o APRS RX usa na recepcao (o roger TONE1200 de fabrica so transmite, e a voz nao passa pelo modem).
@@ -1292,74 +1762,186 @@ static void fsk_rx_arma(unsigned pol)
     REG_W(0x59, 0x1000);                   /* liga a recepcao */
 }
 
-/* Apaga o historico (cheio, o EXIT segurado na tela, ou o formato velho): os dois setores e a marca de
- * novo. Devolve quantos ha, 0, ou o -1 de um historico que nao e nosso, sem mexer nele. */
-static int hist_limpa(int n)
+/* Um setor do historico comeca: o cabecalho da geracao g (com o setor ja apagado). Colada em quem chama:
+ * no caminho da gravacao, um quadro a mais passaria da pilha. */
+static inline __attribute__((always_inline)) void setor_novo(unsigned s, unsigned g)
 {
     u32 m = MARCA_HIST;
+    u8 b = g;
 
-    if (n < 0)
-        return n;
-    APAGA_SETOR(SETOR_HIST);
-    APAGA_SETOR(SETOR_HIST + 0x1000);
-    GRAVA_FLASH(SETOR_HIST, &m, 4);
-    return 0;
+    GRAVA_FLASH(HIST_SETOR(s), &m, 4);
+    GRAVA_FLASH(HIST_SETOR(s) + 4, &b, 1);
 }
 
-/* Abre o historico: confere a marca e conta os registros. Apagado, ou com o historico das v70 a v73 (os
- * registros de 64 B nao se leem como os de 128), comeca de novo. Devolve quantos ha, ou -1 se o setor tem
- * outra coisa: ai nada e gravado nele. */
-static int hist_abre(void)
+/* Quantos registros o setor tem: os lugares com o ambar gravado, do primeiro em diante. */
+static unsigned conta_setor(unsigned s)
 {
-    u32 m;
+    unsigned n;
     u8 b;
-    int n;
 
-    LE_FLASH(SETOR_HIST, &m, 4);
-    if (m != MARCA_HIST)
-        return m == 0xFFFFFFFFu || m == MARCA_V70 ? hist_limpa(0) : -1;
-    for (n = 0; n < HIST_MAX; n++) {
-        LE_FLASH(SETOR_HIST + (n + 1) * REG_HIST, &b, 1);
-        if (b != USADO)
+    for (n = 0; n < POR_SETOR; n++) {
+        LE_FLASH(HIST_SETOR(s) + (n + 1) * REG_HIST + 1, &b, 1);
+        if (b == 0xFF)
             break;
     }
     return n;
 }
 
-static int hist_grava(int n, const struct registro_rx *r)
+/* Apaga o historico (o EXIT segurado na tela, ou o formato velho): os dois setores, e o primeiro recomeca. */
+static int hist_limpa(unsigned *anel)
 {
-    if (n >= HIST_MAX)                     /* cheio: recomeca */
-        n = hist_limpa(n);
-    if (n < 0)
-        return n;
-    GRAVA_FLASH(SETOR_HIST + (n + 1) * REG_HIST, r, sizeof *r);
-    return n + 1;
+    APAGA_SETOR(HIST_SETOR(0));
+    APAGA_SETOR(HIST_SETOR(1));
+    setor_novo(0, 0);
+    *anel = 0;
+    return 0;
+}
+
+/* Abre o historico: os dois cabecalhos dizem qual setor recebe (a geracao mais nova) e se ha velhos no
+ * outro. So usa setor apagado ou ja nosso: com outra coisa num deles, devolve -1 e nada e gravado. */
+static int hist_abre(unsigned *anel)
+{
+    u32 m[2];
+    u8 g[2];
+    unsigned s, cur, velhos;
+
+    for (s = 0; s < 2; s++) {
+        LE_FLASH(HIST_SETOR(s), &m[s], 4);
+        LE_FLASH(HIST_SETOR(s) + 4, &g[s], 1);
+    }
+    if (m[0] == MARCA_V74 || (m[0] == MARCA_V70 && (m[1] == 0xFFFFFFFFu || m[1] == MARCA_HIST)))
+        return hist_limpa(anel);           /* o da v70 nao usava o 0xD7000: so com ele livre ou nosso */
+    for (s = 0; s < 2; s++)
+        if (m[s] != MARCA_HIST && m[s] != 0xFFFFFFFFu)
+            return -1;
+    if (m[0] != MARCA_HIST && m[1] != MARCA_HIST) {
+        setor_novo(0, 0);
+        *anel = 0;
+        return 0;
+    }
+    cur = m[0] != MARCA_HIST ? 1 : m[1] != MARCA_HIST ? 0 : (signed char)(g[1] - g[0]) > 0;
+    velhos = m[!cur] == MARCA_HIST ? conta_setor(!cur) : 0;
+    *anel = cur | (m[!cur] == MARCA_HIST ? ANEL_SUJO : 0) | velhos << 2;
+    return velhos + conta_setor(cur);
+}
+
+/* O setor que recebe encheu, e o outro ainda tem os velhos: apaga-o ja, com a captura parada (o laco o
+ * chama fora dos bits), e os velhos saem. */
+static int hist_prepara(int hist, unsigned *anel)
+{
+    APAGA_SETOR(HIST_SETOR((*anel & 1) ^ 1));
+    hist -= ANEL_VELHOS(*anel);
+    *anel &= 1;
+    return hist;
+}
+
+/* Grava o registro no setor que recebe; cheio, o outro recomeca (apagado aqui so se o laco ainda nao o
+ * apagou) e os deste viram os velhos. Devolve o numero do registro para o ack (o setor * 32 + o lugar),
+ * ou 0 se o historico nao e nosso. */
+static unsigned hist_grava(int *hist, unsigned *anel, const struct registro_rx *r)
+{
+    unsigned a = *anel, cur = a & 1, velhos = ANEL_VELHOS(a), n = *hist - velhos;
+    u32 e;
+    u8 g;
+
+    if (*hist < 0)
+        return 0;
+    if (n >= POR_SETOR) {
+        LE_FLASH(HIST_SETOR(cur) + 4, &g, 1);
+        if (a & ANEL_SUJO)
+            APAGA_SETOR(HIST_SETOR(cur ^ 1));
+        cur ^= 1;
+        setor_novo(cur, g + 1);
+        velhos = n;
+        n = 0;
+        a = cur | ANEL_SUJO | velhos << 2;
+    }
+    e = HIST_SETOR(cur) + (n + 1) * REG_HIST;
+    GRAVA_FLASH(e + 1, (const u8 *)r + 1, REG_HIST - 1);
+    GRAVA_FLASH(e, r, 1);                  /* o "usado" por ultimo */
+    *anel = a;
+    *hist = velhos + n + 1;
+    return cur * 32 + n + 1;
 }
 
 /* Onde esta o registro i do historico (0 o mais velho), ou 0 se nao ha. */
-static u32 hist_endereco(int n, int i)
+static u32 hist_endereco(int hist, unsigned anel, int i)
 {
-    return i >= 0 && i < n ? SETOR_HIST + (i + 1) * REG_HIST : 0;
+    unsigned velhos = ANEL_VELHOS(anel);
+
+    if (i < 0 || i >= hist)
+        return 0;
+    if ((unsigned)i < velhos)
+        return HIST_SETOR((anel & 1) ^ 1) + (i + 1) * REG_HIST;
+    return HIST_SETOR(anel & 1) + (i - velhos + 1) * REG_HIST;
 }
 
-/* Um quadro que acabou de chegar, em texto, no historico. Separada: o registro (128 B) so pesa na pilha
- * aqui, fora do caminho da tela; e chamada no meio dos bits, antes de o quadro seguinte ocupar o q. */
-__attribute__((noinline)) static int guarda(int hist, const u8 *q, unsigned n, const char *meu, unsigned n_meu)
+/* O registro da flash em e e o mesmo r (o texto, a origem e o numero), chegado ha menos de 30 s?
+ * Separada: o buffer dela nao soma com o registro do guarda no caminho da gravacao. */
+__attribute__((noinline)) static unsigned registro_igual(u32 e, const struct registro_rx *r)
 {
-    struct registro_rx r;
+    u8 b[12];
+    unsigned k, j;
 
-    r.usado = USADO;
-    r.ambar = aprs_texto(r.texto, q, n, meu, n_meu);
-    return hist_grava(hist, &r);
+    LE_FLASH(e + REG_HIST - 4, b, 4);
+    if (r->hora - (b[0] | b[1] << 8 | b[2] << 16 | (u32)b[3] << 24) > DUPLICADO_MS)
+        return 0;
+    for (k = 0; k < REG_HIST - 4; k += 12) {
+        LE_FLASH(e + k, b, 12);
+        for (j = 0; j < 12 && k + j < REG_HIST - 4; j++)   /* sem a hora */
+            if (b[j] != ((const u8 *)r)[k + j])
+                return 0;
+    }
+    return 1;
+}
+
+/* O registro em montagem, na memoria de video (0x10190, a faixa de 160x32 da tela): o guarda roda entre
+ * uma faixa e outra, e o firmware de fabrica ja a empresta como rascunho ao regravar canal. Na pilha, os
+ * 128 B dele mais a decodificacao dos formatos (v76) passavam do limite do laco (secao 24). A tela e
+ * redesenhada inteira depois de um quadro novo. */
+#define REGISTRO_RASCUNHO  ((struct registro_rx *)&RAM(u8, 0x00010190))
+
+/* Um quadro que acabou de chegar, em texto, no historico. A copia do que ja entrou nos ultimos 30 s (a
+ * mesma estacao ouvida direto e pelos digipeaters) nao entra de novo. A mensagem para mim com numero arma
+ * o ack (v75): o numero do registro em ACK_REGISTRO, e o laco sai da tela para ele ir ao ar - a cada
+ * copia, porque o ack anterior pode nao ter chegado. E chamada no meio dos bits, antes de o quadro
+ * seguinte ocupar o q. */
+__attribute__((noinline)) static void guarda(int *hist, unsigned *anel, const u8 *q, unsigned n,
+                                             const char *meu, unsigned n_meu)
+{
+    struct registro_rx *r = REGISTRO_RASCUNHO;
+    unsigned i, k = 0;
+    u32 e;
+
+    for (i = 0; i < REG_HIST; i++)
+        ((u8 *)r)[i] = 0xFF;
+    r->usado = USADO;
+    r->ambar = aprs_texto(r->texto, q, n, meu, n_meu | (DECODE_APRS == DECODE_OFF ? TEXTO_BRUTO : 0), r->id);
+    for (i = 0; i < 9; i++) {              /* a origem, do comeco do texto ate o "> " */
+        if (r->texto[i] == '>')
+            k = 1;
+        r->para[i] = k || !r->ambar ? ' ' : r->texto[i];
+    }
+    r->hora = TIQUE_MS;
+    for (i = 1, k = 0; i <= 8 && !k && (e = hist_endereco(*hist, *anel, *hist - i)); i++)
+        if (registro_igual(e, r))
+            k = (e - HIST_SETOR(0)) >> 12 << 5 | (e & 0xFFF) >> 7;
+    if (!k)
+        k = hist_grava(hist, anel, r);
+    if (k && r->ambar && r->id[0]) {
+        ACK_REGISTRO = k;
+        ESTADO_MSG = ARMADO_ACK;
+    }
 }
 
 /* Direto na tela, sem rotina no meio: o quadro dela pesaria na pilha do laco. */
 #define RX_MOSTRA(faixas) \
     (num[1] = topo + 1, num[2] = hist < 0 ? 0 : hist, num[5] = h.ruins, num[6] = h.consertados, \
-     tela_aprs(hist_endereco(hist, hist - 1 - topo), hist_endereco(hist, hist - 2 - topo), aberto, num, (faixas)))
+     tela_aprs(hist_endereco(hist, anel, hist - 1 - topo), hist_endereco(hist, anel, hist - 2 - topo), \
+               modo & ABERTO, num, (faixas)))
 
-/* O meu indicativo em texto ("PY2ABC-7"); devolve o tamanho. Separada: o registro sai da pilha antes
- * do laco. */
+/* O meu indicativo em texto ("PY2ABC-7", em maiusculas: o editor tem o modo abc); devolve o tamanho.
+ * Separada: o registro sai da pilha antes do laco. */
 __attribute__((noinline)) static unsigned meu_indicativo(char *meu)
 {
     struct aprs a;
@@ -1367,7 +1949,7 @@ __attribute__((noinline)) static unsigned meu_indicativo(char *meu)
 
     le_aprs(&a);
     for (n = 0; n < a.tam_ind && n < 6; n++)
-        meu[n] = a.ind[n];
+        meu[n] = a.ind[n] >= 'a' && a.ind[n] <= 'z' ? a.ind[n] - 32 : a.ind[n];
     if (a.ssid && a.ssid < 16) {
         meu[n++] = '-';
         n = decimal(meu + n, a.ssid) - meu;
@@ -1377,14 +1959,16 @@ __attribute__((noinline)) static unsigned meu_indicativo(char *meu)
 
 void aprs_rx_grava(void)
 {
-    u8 q[160];                             /* o comeco do quadro: os enderecos e ate ~120 de info */
+    u8 q[136];                             /* o comeco do quadro: os enderecos e ~100 de info, o que a tela
+                                            * mostra (160 na v74; 136 pela pilha do historico, v75) */
     struct hdlc h;
     char meu[10];
     u16 num[7];                            /* ganho, posicao, quantos, syncs na marca e no espaco, BAD, FIX */
     unsigned i, f, n, k, w = 0, n_meu = meu_indicativo(meu), ativo = 0, pol = 0, desde = TIQUE_MS;
-    unsigned pede = 0, aberto = 0;         /* as faixas da tela a redesenhar; o de cima aberto inteiro */
-    unsigned era3f = REG_R(0x3F), era70 = REG_R(0x70), era72 = REG_R(0x72), era5e = REG_R(0x5E);
-    int hist = hist_abre(), topo = 0;
+    unsigned pede = 15, modo = PRESO, anel = 0, desde_tecla = 0;   /* o OK que abriu ainda esta apertado */
+    /* os registradores (de 16 bits) que a saida devolve, dois por variavel: a pilha do laco esta no limite */
+    unsigned era1 = REG_R(0x3F) | REG_R(0x70) << 16, era2 = REG_R(0x72) | REG_R(0x5E) << 16;
+    int hist = hist_abre(&anel), topo = 0;
 
     ACORDA();
     DESARMA_DW();
@@ -1402,98 +1986,148 @@ void aprs_rx_grava(void)
     h.ruins = h.consertados = 0;
     num[3] = num[4] = 0;
     for (;;) {
-        RX_MOSTRA(15);
-        espera_soltar();                   /* a tecla que trouxe aqui (o OK que abriu, a que mudou a tela),
-                                            * depois de a tela ja mostrar o efeito dela (v72) */
-        for (;;) {
-            WDT();
-            if ((k = tecla()) != 255)
-                break;
-            ESPERA_2MS(1);
-            if (!(REG_R(0x0C) & 1)) {
-                /* esperando, a outra polaridade a cada 50 ms; recebendo, a FIFO parou: volta a esperar */
-                if (TIQUE_MS - desde > (ativo ? 300u : 50u)) {
-                    pol ^= !ativo;
-                    ativo = 0;
-                    fsk_rx_arma(pol);
-                    desde = TIQUE_MS;
-                } else if (pede) {         /* uma faixa da tela por volta, entre as leituras do modem */
-                    k = pede & -pede;
-                    pede ^= k;
-                    RX_MOSTRA(k);
-                }
-                continue;
+        WDT();
+        /* as teclas, sem esperar soltar: a apertada so conta de novo depois de solta; o EXIT, so ao soltar
+         * (curto) ou aos 0,6 s (segurado); a seta segurada repete; com a tela apagada, a primeira so a
+         * acende */
+        k = tecla();
+        f = 0;                             /* a acao da tecla */
+        if (k == 255) {
+            if (modo & ESPERA_EXIT)
+                f = TECLA_EXIT;
+            modo &= ~(PRESO | ESPERA_EXIT | REPETE);
+        } else if (!(modo & PRESO)) {
+            modo |= PRESO;
+            desde_tecla = TIQUE_MS;
+            if (modo & ESCURO) {
+                LUZ(1);
+                modo &= ~ESCURO;
+                pede = 15;
+            } else if (k == TECLA_EXIT) {
+                modo |= ESPERA_EXIT;
+            } else {
+                f = k;
+                if (k == TECLA_CIMA || k == TECLA_BAIXO)
+                    modo |= REPETE;
             }
-            REG_W(0x02, 0);
-            f = REG_R(0x02);
-            if (f & 0x0002) {              /* sync: as flags ja passaram, o quadro vem */
-                hdlc_comeca(&h, q, sizeof q);
-                h.dentro = 1;
-                h.linha = pol ^ (REG_R(0x0B) >> 7 & 1);     /* a flag acaba no tom do bit sozinho */
-                ativo = 1;
-                desde = TIQUE_MS;
-                num[3 + pol]++;
-                pede |= 8;
-            }
-            i = h.ruins + h.consertados;
-            if (f & 0x1000) {
-                desde = TIQUE_MS;
-                /* as 4 palavras bit a bit: o byte baixo primeiro, o bit alto de cada byte primeiro (a ordem
-                 * do TX do chip, que o TA1JS usou no UV-K5 com o aprs.fi decodificando, e que o beacon da
-                 * v65 provou) */
-                for (k = 0; k < 64; k++) {
-                    if (!(k & 15))
-                        w = REG_R(0x5F);
-                    if ((n = hdlc_bit(&h, w >> (k & 8 ? 23 - (k & 15) : 7 - (k & 15)) & 1))) {
-                        hist = guarda(hist, q, n, meu, n_meu);
-                        if (aberto && hist > 1)     /* o aberto continua o mesmo (o historico nao recomecou) */
-                            topo++;
-                        else                        /* senao, o novo vai para cima */
-                            topo = aberto = 0;
-                        pede = 15;
-                    }
-                }
-            }
-            if (f & 0x2000) {              /* o quadro do chip acabou: volta a esperar um sync */
+        } else if ((modo & ESPERA_EXIT) && TIQUE_MS - desde_tecla >= 600) {
+            modo &= ~ESPERA_EXIT;
+            f = EXIT_LONGO;
+        } else if ((modo & REPETE) && TIQUE_MS - desde_tecla >= REPETE_DEPOIS) {
+            desde_tecla = TIQUE_MS - REPETE_DEPOIS + REPETE_CADA;
+            f = k;
+        }
+        if (f) {
+            if (f == TECLA_MODO) {
+                num[0] = (num[0] + 1) & 3;
+                REG_W(0x58, MODEM_RX | num[0] << 8);
                 ativo = 0;
                 fsk_rx_arma(pol);
                 desde = TIQUE_MS;
+                num[3] = num[4] = h.ruins = h.consertados = 0;
+            } else if (f == TECLA_CIMA || f == TECLA_BAIXO) {
+                if (hist > 0)              /* em volta: depois do mais velho, o mais novo, e o contrario */
+                    topo = (topo + (f == TECLA_BAIXO ? 1 : hist - 1)) % hist;
+            } else if (f == TECLA_OK) {
+                if ((modo & ABERTO) || hist > 0)
+                    modo ^= ABERTO;
+            } else if (f == TECLA_ESTRELA) {
+                LUZ(0);
+                modo |= ESCURO;
+            } else if (f == EXIT_LONGO) {  /* segurado: apaga o historico e fica */
+                if (hist >= 0)
+                    hist = hist_limpa(&anel);
+                topo = 0;
+                modo &= ~ABERTO;
+            } else if (f == TECLA_EXIT && (modo & ABERTO)) {
+                modo &= ~ABERTO;
+            } else {
+                break;                     /* o EXIT curto e as outras teclas saem */
             }
-            if (i != h.ruins + h.consertados)
-                pede |= 8;
+            pede = 15;
+            continue;
         }
-        if (k == TECLA_MODO) {
-            num[0] = (num[0] + 1) & 3;
-            REG_W(0x58, MODEM_RX | num[0] << 8);
+        ESPERA_2MS(1);
+        if (!(REG_R(0x0C) & 1)) {
+            if (TIQUE_MS - desde > (ativo ? 300u : 50u)) {
+                /* esperando, a outra polaridade a cada 50 ms; recebendo, a FIFO parou: volta a esperar */
+                pol ^= !ativo;
+                ativo = 0;
+                fsk_rx_arma(pol);
+                desde = TIQUE_MS;
+            } else if (!ativo && (anel & ANEL_SUJO) && hist - (int)ANEL_VELHOS(anel) >= (int)POR_SETOR) {
+                hist = hist_prepara(hist, &anel);   /* o setor encheu: o outro se apaga ja, fora dos bits */
+                topo = 0;
+                modo &= ~ABERTO;
+                pede = 15;
+            } else if (pede && !(modo & ESCURO)) {
+                k = pede & -pede;          /* uma faixa da tela por volta, entre as leituras do modem */
+                pede ^= k;
+                RX_MOSTRA(k);
+            }
+            continue;
+        }
+        REG_W(0x02, 0);
+        f = REG_R(0x02);
+        if (f & 0x0002) {                  /* sync: as flags ja passaram, o quadro vem */
+            hdlc_comeca(&h, q, sizeof q);
+            h.dentro = 1;
+            h.linha = pol ^ (REG_R(0x0B) >> 7 & 1);     /* a flag acaba no tom do bit sozinho */
+            ativo = 1;
+            desde = TIQUE_MS;
+            num[3 + pol]++;
+            pede |= 8;
+        }
+        i = h.ruins + h.consertados;
+        if (f & 0x1000) {
+            desde = TIQUE_MS;
+            /* as 4 palavras bit a bit: o byte baixo primeiro, o bit alto de cada byte primeiro (a ordem do
+             * TX do chip, que o TA1JS usou no UV-K5 com o aprs.fi decodificando, e que o beacon da v65
+             * provou) */
+            for (k = 0; k < 64; k++) {
+                if (!(k & 15))
+                    w = REG_R(0x5F);
+                if ((n = hdlc_bit(&h, w >> (k & 8 ? 23 - (k & 15) : 7 - (k & 15)) & 1))) {
+                    int antes = hist;
+
+                    guarda(&hist, &anel, q, n, meu, n_meu);
+                    if (hist == antes)     /* uma copia: nada muda na tela */
+                        continue;
+                    if ((modo & ABERTO) && hist == antes + 1) {
+                        topo++;            /* o aberto continua o mesmo */
+                    } else {               /* senao, o novo vai para cima */
+                        topo = 0;
+                        modo &= ~ABERTO;
+                    }
+                    pede = 15;
+                }
+            }
+        }
+        if (f & 0x2000) {                  /* o quadro do chip acabou: volta a esperar um sync */
             ativo = 0;
             fsk_rx_arma(pol);
             desde = TIQUE_MS;
-            num[3] = num[4] = h.ruins = h.consertados = 0;
-        } else if (k == TECLA_CIMA || k == TECLA_BAIXO) {
-            if (k == TECLA_CIMA ? topo > 0 : topo + 1 < hist)
-                topo += k == TECLA_CIMA ? -1 : 1;
-        } else if (k == TECLA_OK) {
-            aberto = !aberto && hist > 0;
-        } else if (k == TECLA_EXIT && segurou_exit()) {     /* segurado: apaga o historico e fica */
-            hist = hist_limpa(hist);
-            topo = aberto = 0;
-        } else if (k == TECLA_EXIT && aberto) {
-            aberto = 0;
-        } else {
-            break;
         }
+        if (ESTADO_MSG == ARMADO_ACK)      /* uma mensagem para mim: sai, e o ack vai ao ar (v75) */
+            break;
+        if (i != h.ruins + h.consertados)
+            pede |= 8;
     }
     espera_soltar();
+    if (modo & ESCURO)
+        LUZ(1);
     REG_W(0x59, 0);
     REG_W(0x58, 0);                        /* desligado, como o roger de fabrica deixa (0x01E44788) */
-    REG_W(0x5E, era5e);
-    REG_W(0x3F, era3f);
-    REG_W(0x70, era70);
-    REG_W(0x72, era72);
+    REG_W(0x5E, era2 >> 16);
+    REG_W(0x3F, era1 & 0xFFFF);
+    REG_W(0x70, era1 >> 16);
+    REG_W(0x72, era2 & 0xFFFF);
     REG_W(0x02, 0);
 }
 
-/* Arma o envio; a mensagem leva um numero (1 a 99) para o outro lado confirmar ("ack"). */
+/* Arma o envio; a mensagem leva um numero (1 a 99) para o outro lado confirmar ("ack"). O numero so anda
+ * quando o destinatario ou o texto mudam (v75, aprs_guarda_texto): mandar de novo a mesma mensagem e
+ * repeti-la, e o outro lado a confirma sem a mostrar duas vezes. */
 void aprs_envia_grava(void)
 {
     struct aprs a;
@@ -1501,8 +2135,8 @@ void aprs_envia_grava(void)
     le_aprs(&a);
     if (!a.tam_ind || !a.tam_msg)
         return;
-    if (a.tam_dest) {
-        a.id = a.id % 99 + 1;
+    if (a.tam_dest && (!a.id || a.id > 99)) {
+        a.id = 1;
         grava_aprs(&a);
     }
     ESTADO_MSG = ARMADO_APRS;

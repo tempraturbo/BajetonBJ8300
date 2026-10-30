@@ -92,6 +92,7 @@ FIRMWARE(LUZ, 0x01E394D6);          void LUZ(unsigned acende);    /* a luz da te
  * (0x01E40EF4) e do retorno a tela principal que tambem poe o canal no lado (0x01E4BDBE, logo depois
  * de 0x01E40B9E(0, 1)). Nao recebe argumento. */
 FIRMWARE(TELA_INTEIRA, 0x01E3C290); void TELA_INTEIRA(void);
+FIRMWARE(LIMPA_DIGITOS, 0x01E3AC52); void LIMPA_DIGITOS(void);  /* zera 0x14A34..0x14A49; escreve r0 antes de ler */
 FIRMWARE(REGISTRO_TELA, 0x01E39128); void REGISTRO_TELA(void);  /* o registro de tela do lado em evidencia */
 /* Espectro: o que o firmware faz para voltar a varrer quando o sinal achado cai (0x01E4AEFC) -
  * fecha a saida de audio do chip de radio (regs 0x47/0x48), solta o pedido do espectro ao
@@ -135,7 +136,7 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 #define NA_LIVRE_COD   __attribute__((section(".livre.bancos.text")))
 #define DADO_NA_LIVRE  __attribute__((section(".livre.bancos.rodata")))
 unsigned watch_vista(void);
-void aplica_mic(void);                    /* a pasta MIC: ganho (v49), compressor e AGC (v59) */
+void aplica_audio(void);                  /* as pastas MIC (v49, v59) e AUDIO (expansor e porta, v79) */
 void aplica_cristal(void);                /* o CRYSTAL FINE (v59) */
 void luz_inicia(void);                    /* a luz por PWM (v60, tela.c) */
 void luz_aplica(void);                    /* o nivel do BRIGHTNESS na hora (v61, tela.c) */
@@ -546,7 +547,7 @@ void gancho_partida(void)
     FIM_DA_CARGA();
     IDIOMA = 0;
     ESTADO_ENVIO = 0;
-    aplica_mic();                          /* por cima da copia da calibracao e do init do chip (MIC) */
+    aplica_audio();                        /* por cima da copia da calibracao e do init do chip (MIC e AUDIO) */
     aplica_cristal();                      /* idem (CRYSTAL FINE) */
     if (watch_vista() == WATCH_SINGLE)     /* no SINGLE a dupla escuta fica desligada (WATCH, abaixo) */
         TDR = 0;
@@ -1216,14 +1217,17 @@ NA_LIVRE_COD static void c_alcancavel(struct vigia *v)
     v->vfo |= 1;
 }
 
-/* A tecla A/B (0x01E4D44C, no lugar de 0x01E40E52(1)). Fora do TRIPLE, a troca de sempre - e, se a C
- * ficou no lado B (o WATCH saiu do TRIPLE com ela em evidencia), o B volta. */
+/* A tecla A/B (0x01E4D44C, no lugar de 0x01E40E52(1)). No DUAL, a troca de sempre - e, se a C ficou no
+ * lado B (o WATCH saiu do TRIPLE com ela em evidencia), o B volta. No SINGLE so o A (v78, a pedido do
+ * dono): no A a tecla nao faz nada, e no B ou na C (o WATCH posto em SINGLE fora do A) volta ao A. */
 NA_LIVRE_COD void gancho_ab(void)
 {
     struct vigia v;
 
     le_vigia(&v);
     if (LADO_B == 0) {                       /* A -> B */
+        if (v.modo == WATCH_SINGLE)
+            return;
         TROCA_AB(1);
         if (v.c_no_b) {
             volta_b(&v);
@@ -1244,6 +1248,45 @@ NA_LIVRE_COD void gancho_ab(void)
     }
     TROCA_AB(1);                             /* B -> A: fora do TRIPLE */
 }
+
+/* A saida do menu (0x01E3C29C, dos 11 caminhos que fecham o menu: teclas, PTT, laco do sinal e partida),
+ * depois de zerar o modo de tela e antes de redesenhar: no lugar da limpeza dos digitos (0x01E3C33A), que
+ * continua. No SINGLE so o A (v78): o WATCH posto em SINGLE com o B ou a C em evidencia volta ao A ao
+ * fechar o menu, como a tecla A/B faz (C -> A e B -> A) - o set do item roda com o menu aberto, e nenhum
+ * chamador de fabrica da troca de lados (0x01E40E52) roda assim. A troca redesenha, e a saida redesenha
+ * de novo.
+ *
+ * A interface e o laco do sinal, que fecham o menu, ja estao no limite de pilha de fabrica, e a troca
+ * chamada de dentro de uma rotina os passava (36 B com o registro do WATCH na pilha, 4 so com o rets).
+ * Por isso a decisao e em C (menu_fecha_decide), e a troca e um salto de cauda, depois de desempilhar o
+ * rets: o caminho fica o da troca de fabrica. O compilador nao faz o salto numa chamada condicional. */
+__attribute__((used)) NA_LIVRE_COD unsigned menu_fecha_decide(void)
+{
+    struct vigia v;
+
+    LIMPA_DIGITOS();
+    if (LADO_B == 0)
+        return 0;
+    le_vigia(&v);
+    if (v.modo != WATCH_SINGLE)
+        return 0;
+    if (v.c_no_b)                            /* a C no lado B: o B volta antes, como no C -> A da tecla */
+        volta_b(&v);
+    return 1;
+}
+
+__asm__(".section .livre.bancos.text,\"ax\"\n"
+        ".globl gancho_menu_fecha\n"
+        "gancho_menu_fecha:\n\t"
+        "[--sp] = rets\n\t"
+        "call menu_fecha_decide\n\t"
+        "{rets} = [sp++]\n\t"
+        "if (r0 == 0) goto gancho_menu_fecha_fim\n\t"
+        "r0 = 1\n\t"
+        "goto TROCA_AB\n"
+        "gancho_menu_fecha_fim:\n\t"
+        "rts\n\t"
+        ".previous");
 
 /* ---------- MIC GAIN: o ganho do microfone (v49) ----------
  * A cada transmissao (0x01E477D8) o firmware poe nos 6 bits de baixo do registrador 0x7D do chip de
@@ -1271,7 +1314,8 @@ NA_LIVRE_COD u16 mic_le(void)
  * BK4819 do UV-K5, um a um. Ele tem um compressor no audio de TX, que o firmware deixa configurado e
  * desligado: a partida poe 0xAA00 no reg 0x29 (razao 2:1, ponto de 0 dB 84) e 0x0B40 no 0x28 (o
  * expansor do RX, com razao 0: desligado), mas nunca liga o bit 3 do 0x31, que liga os dois. As
- * escritas do 0x31 leem, mudam o bit 0 (NR) ou o 1 (scramble) e gravam, e o espectro o guarda e o
+ * escritas do 0x31 leem, mudam o bit 0 (o AM: 0x01E4404E, que tambem grava 0x2A, 0x2B e 0x42 - ate a v78
+ * chamado aqui de NR, que e outra coisa, v79) ou o 1 (scramble) e gravam, e o espectro o guarda e o
  * devolve inteiro (0x01E3FEE4): o bit 3 posto aqui fica. O AGC do microfone e o bit 15 do reg 0x19 (1
  * desliga), que so a partida escreve, com 0x1041 (0x01E565EE): ligado. Os registradores so voltam ao
  * padrao no reset da partida (reg 0x00, 0x01E5653C, na carga 0x01E56084, que roda uma vez), antes do
@@ -1298,15 +1342,52 @@ NA_LIVRE_COD u16 agc_le(void)
     return MIC_AGC == 1;
 }
 
-/* O ganho, o compressor (razao 1,33:1, 2:1 ou 4:1 nos bits 15:14 do 0x29, o resto como a partida
- * deixa; desligado, o 0xAA00 dela) e o AGC. */
-NA_LIVRE_COD void aplica_mic(void)
+/* ---------- EXPANDER e NOISE GATE: a pasta AUDIO (v79) ----------
+ * O expansor do RX e o gemeo do compressor: abaixo do ponto de 0 dB, cada 1 dB a menos vira 2, 3 ou 4
+ * (1:2, 1:3 e 1:4 nos bits 15:14 do reg 0x28, pela documentacao da comunidade do UV-K5), e liga pelo
+ * mesmo bit 3 do 0x31; so com ele, o compressor fica na razao 0 (desligado). A porta de ruido do audio de
+ * RX e, pela tabela da Beken citada na issue 739 do firmware do UV-K5 v3, o bit 8 do mesmo 0x28 (1 =
+ * ligada), com o nivel nos bits 7:0; os bits 11:9 sao o filtro de DC (101 no RX), e os 13:12 nao tem
+ * descricao. A partida grava 0x0B40: o expansor desligado e a porta ligada no nivel 64, o DEFAULT. Com o
+ * expansor ligado, os bits 13:9 vao a 10101, os da receita do UV-K5 (0x6B38: o ponto de 0 dB em 86);
+ * desligado, ficam os de fabrica. So a partida escreve no 0x28 e no 0x29 (0x01E565F2, 0x01E565FC), e o
+ * espectro nao os guarda. Os niveis ficam no 0x9034 (b[0x14BE0]) e no 0x9031 (b[0x14BDD]) dos ajustes,
+ * que nada de fabrica le nem grava (a varredura da v59; o CHIRP da base chama o 0x9031 de noise reduction,
+ * mas o item de fabrica e o 0x9032): 0xC0 + o expansor e 0xE8 + a porta (v80: OFF, DEFAULT, LOW, MID e
+ * HIGH; a marca 0xE0 da v79, com outra ordem, vale DEFAULT). Sem a marca vale o de fabrica, OFF e DEFAULT
+ * - o RESET deixa 208 e 0. */
+#define EXPANSOR       (*(volatile u8 *)0x00014BE0)
+#define PORTA          (*(volatile u8 *)0x00014BDD)
+#define MARCA_EXPANSOR 0xC0
+#define MARCA_PORTA    0xE8
+#define NIVEL_DEFAULT  1                   /* OFF, DEFAULT, LOW, MID, HIGH: a NOISE GATE e a NR (v80) */
+DADO_NA_LIVRE const char titulo_expansor[] = "EXPANDER";
+DADO_NA_LIVRE const char *const expansor_opcoes[4] = {"OFF", "LOW", "MID", "HIGH"};
+DADO_NA_LIVRE const char titulo_porta[] = "NOISE GATE";
+DADO_NA_LIVRE const char *const niveis_opcoes[5] = {"OFF", "DEFAULT", "LOW", "MID", "HIGH"};
+DADO_NA_LIVRE static const u8 porta_nivel[5] = {0, 64, 32, 96, 160};   /* 0: o bit 8 desligado */
+
+NA_LIVRE_COD u16 expansor_le(void)
 {
-    unsigned c = compressor_le(), r = LE_REG(0x31);
+    return (EXPANSOR & 0xFC) == MARCA_EXPANSOR ? EXPANSOR & 3 : 0;
+}
+
+NA_LIVRE_COD u16 porta_le(void)
+{
+    return (PORTA & 0xF8) == MARCA_PORTA && (PORTA & 7) < 5 ? PORTA & 7 : NIVEL_DEFAULT;
+}
+
+/* O ganho, o compressor (razao 1,33:1, 2:1 ou 4:1 nos bits 15:14 do 0x29, o resto como a partida
+ * deixa; desligado, o 0xAA00 dela, ou a razao 0 se o expansor liga o bit 3), o expansor e a porta de
+ * ruido (o 0x28; os dois de fabrica dao o 0x0B40 da partida) e o AGC. */
+NA_LIVRE_COD void aplica_audio(void)
+{
+    unsigned c = compressor_le(), e = expansor_le(), p = porta_nivel[porta_le()], r = LE_REG(0x31);
 
     MIC_GANHO = mic_ganho[mic_le()];
-    ESCREVE_REG(0x29, (c ? c : 2) << 14 | 0x2A00);
-    ESCREVE_REG(0x31, c ? r | 8 : r & ~8u);
+    ESCREVE_REG(0x29, (c ? c : e ? 0 : 2) << 14 | 0x2A00);
+    ESCREVE_REG(0x28, e << 14 | (e ? 0x2A00 : 0x0A00) | (p ? 0x100 | p : 0));
+    ESCREVE_REG(0x31, c || e ? r | 8 : r & ~8u);
     ESCREVE_REG(0x19, agc_le() ? 0x9041 : 0x1041);
 }
 
@@ -1315,19 +1396,77 @@ NA_LIVRE_COD void mic_grava(void)
     unsigned n = VALOR;
 
     MIC_NIVEL = n < 3 ? n : 0;
-    aplica_mic();                          /* vale ja na proxima transmissao */
+    aplica_audio();                        /* vale ja na proxima transmissao */
 }
 
 NA_LIVRE_COD void compressor_grava(void)
 {
     COMPRESSOR = VALOR < 4 ? VALOR : 0;
-    aplica_mic();
+    aplica_audio();
 }
 
 NA_LIVRE_COD void agc_grava(void)
 {
     MIC_AGC = VALOR == 1;
-    aplica_mic();
+    aplica_audio();
+}
+
+NA_LIVRE_COD void expansor_grava(void)
+{
+    EXPANSOR = MARCA_EXPANSOR | (VALOR < 4 ? VALOR : 0);
+    aplica_audio();
+}
+
+NA_LIVRE_COD void porta_grava(void)
+{
+    PORTA = MARCA_PORTA | (VALOR < 5 ? VALOR : NIVEL_DEFAULT);
+    aplica_audio();
+}
+
+/* ---------- NOISE REDUCTION: a do microfone, com niveis (v80, a pasta MIC) ----------
+ * O item de fabrica (o 48, b[0x14BDE] = o 0x9032 dos ajustes) liga a supressao de ruido do microfone,
+ * que roda no JieLi durante o TX (secao 25): a ida do PTT (0x01E478F8) passa o byte a montagem do caminho
+ * do microfone (0x01E42080), que o usa como "ligada" se nao for 0 e como indice da tabela de oito presets
+ * de 0x01E41D06 (que pula o que passa de 7, e cujos campos nada le). Os niveis ficam no mesmo byte: 0 OFF,
+ * 1 DEFAULT (o 1 de fabrica), 2 LOW, 3 MID e 4 HIGH. Acima de 4 (o RESET deixa 200) vale como a fabrica o
+ * trata: ligada, o DEFAULT. A inicializacao da supressao (0x01E41E4E) grava no bloco dela as constantes
+ * do nucleo - [attr+120] o piso do ganho de cada faixa, 0,02 (-34 dB), e [attr+124] a forca, 1,8 - e
+ * chama 0x01E245F8(attr) em 0x01E42078, que as leva ao nucleo (0x01E23168). A chamada passa pelo
+ * gancho_nr_inicia, que nos niveis LOW, MID e HIGH troca as duas e segue; no DEFAULT ficam as de fabrica.
+ * LOW e MID cortam menos que o DEFAULT, e HIGH mais. */
+FIRMWARE(NR_INICIA, 0x01E245F8);    unsigned NR_INICIA(u8 *, unsigned, unsigned, unsigned);
+#define REDUCAO_RUIDO  (*(volatile u8 *)0x00014BDE)
+DADO_NA_LIVRE static const u32 nr_piso[3] = {0x3DCCCCCD, 0x3D4CCCCD, 0x3C23D70A};    /* 0,1 0,05 0,01 */
+DADO_NA_LIVRE static const u32 nr_forca[3] = {0x3F99999A, 0x3FC00000, 0x40200000};   /* 1,2 1,5 2,5 */
+
+__attribute__((always_inline)) static inline unsigned nr_nivel(void)
+{
+    unsigned b = REDUCAO_RUIDO;
+
+    return b < 5 ? b : NIVEL_DEFAULT;
+}
+
+NA_LIVRE_COD u16 nr_le(void)
+{
+    return nr_nivel();
+}
+
+NA_LIVRE_COD void nr_grava(void)
+{
+    REDUCAO_RUIDO = VALOR < 5 ? VALOR : NIVEL_DEFAULT;
+}
+
+/* No lugar da chamada de 0x01E245F8(attr) em 0x01E42078; os outros registradores passam como vieram.
+ * A chamada de volta e a ultima, em salto de cauda: o caminho e o do TX, no laco do sinal. */
+NA_LIVRE_COD unsigned gancho_nr_inicia(u8 *attr, unsigned r1, unsigned r2, unsigned r3)
+{
+    unsigned n = nr_nivel();
+
+    if (n > NIVEL_DEFAULT) {
+        *(volatile u32 *)(attr + 120) = nr_piso[n - 2];
+        *(volatile u32 *)(attr + 124) = nr_forca[n - 2];
+    }
+    return NR_INICIA(attr, r1, r2, r3);
 }
 
 /* ---------- CRYSTAL FINE: o ajuste fino do cristal (v59, a pasta CALIBRATION) ----------
@@ -1431,7 +1570,7 @@ NA_LIVRE_COD void brilho_grava(void)
 NA_LIVRE_COD void gancho_ajustes(void)
 {
     ESTADO_ENVIO = 0;
-    aplica_mic();
+    aplica_audio();
     aplica_cristal();
     luz_aplica();
     SALVA_AJUSTES();

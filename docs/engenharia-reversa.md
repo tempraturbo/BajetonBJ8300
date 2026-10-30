@@ -76,7 +76,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | **`0xD3000–0xD3FFF`** | **os VFOs da C** (v49: o da C e o do B guardado; [seção 18](#18-a-dupla-escuta-e-o-triple-v42-a-v51)) |
 | **`0xD4000–0xD4FFF`** | **a mensagem do Morse**, a velocidade e o tom (v65; [seção 24](#24-morse-e-aprs-v65)) |
 | **`0xD5000–0xD5FFF`** | **o APRS**: indicativo, SSID, destinatário, mensagem e caminho (v65) |
-| **`0xD6000–0xD7FFF`** | **o histórico do APRS RX**: até 63 pacotes recebidos (v70; o `0xD7000` desde a v74) |
+| **`0xD6000–0xD7FFF`** | **o histórico do APRS RX**: até 62 pacotes, em anel, um cabeçalho por setor (v70; o `0xD7000` desde a v74; o anel desde a v75) |
 | `0xFA000` | 4 KB de uso do firmware |
 | livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -190,6 +190,7 @@ em r0, origem em r1, tamanho em r2). Só leitura. Foi ela que mostrou o caso das
 | `0x00014BDF` | MIC GAIN: 0 HIGH, 1 MID, 2 LOW (v49; o `0x9033` dos ajustes, seção 19) |
 | `0x0000706C` | ganho do microfone posto no registrador `0x7D` a cada TX (cópia do `0xF210`; desde a v49, do MIC GAIN) |
 | `0x00014BE1` / `0x00014BE2` | COMPRESSOR (0 OFF, 1 a 3 = 1,33:1, 2:1 e 4:1) e MIC AGC (0 ON, 1 OFF): o `0x9035` e o `0x9036` dos ajustes (v59, seção 22) |
+| `0x00014BDD` / `0x00014BE0` | NOISE GATE (`0xE8` + 0 OFF, 1 DEFAULT, 2 LOW, 3 MID, 4 HIGH; v80) e EXPANDER (`0xC0` + 0 OFF a 3 HIGH); sem a marca, DEFAULT e OFF: o `0x9031` e o `0x9034` dos ajustes (v79, seção 25) |
 | `0x00014BE3` | CRYSTAL FINE, 16 bits com sinal, em 10 Hz a 435,5 MHz: o `0x9037` dos ajustes (v59, seção 22) |
 | `0x00007076`..`0x00007079` | a correção do cristal da calibração (cópia de `0xF21A`; desde a v59, com o CRYSTAL FINE somado; seção 22) |
 | `0x00014B7F` | TX-A/B (`0x9013` dos ajustes): 0 OFF, 1 A, 2 B; desde a v50, 3 = C (seção 18) |
@@ -1022,6 +1023,27 @@ recebe. O WATCH em SINGLE zera o TDR, o set do item TDR (o 7, `tdr_grava` no lug
 `0x01E3957C`) o mantém em 0, e a partida o zera de novo. No DUAL e no TRIPLE, ligada escuta todas,
 e desligada só a que está em evidência.
 
+**Só o A no SINGLE (v78)**, a pedido do dono: o SINGLE mostra e escuta sempre o A, e a tecla A/B não leva
+ao B nem à C. Até a v77 ela trocava os lados também no SINGLE, e a tela passava a mostrar o B.
+
+- **A tecla A/B** (`gancho_ab`): no SINGLE, com o A em evidência, não faz nada; com o B ou a C (o WATCH
+  posto em SINGLE fora do A), volta ao A pelos caminhos B → A e C → A de sempre.
+- **O WATCH posto em SINGLE** com o B ou a C em evidência volta ao A quando o menu fecha. O set do item
+  roda com o menu aberto, e nenhum chamador de fábrica da troca de lados (`0x01E40E52`: a tecla A/B, o
+  PTT, o fim da TX e a TX recusada) roda assim. A saída do menu (`0x01E3C29C`), por onde passam os 11
+  caminhos que o fecham (teclas, PTT, laço do sinal e partida), zera o modo de tela (`0x01E3C322..`) e
+  chama a limpeza dos dígitos (`0x01E3AC52`) em `0x01E3C33A`, antes de redesenhar. Essa chamada passa pelo
+  `gancho_menu_fecha`: ele limpa os dígitos e, no SINGLE fora do A, devolve o B ao lado B se a C estava
+  nele e faz a troca de fábrica, que redesenha (a saída redesenha de novo).
+- **A pilha.** A interface e o laço do sinal, que fecham o menu, já estão no limite de fábrica (740 e
+  620 B). A troca chamada de dentro de uma rotina os passava em 36 B (o registro do WATCH na pilha) e,
+  só com o `rets`, em 4. Por isso a decisão fica em C (`menu_fecha_decide`), e o gancho, em assembly,
+  desempilha o `rets` e salta para a troca: o caminho fica o da troca de fábrica, e as três raízes
+  ficam em 740, 620 e 696 B. O compilador não faz o salto de cauda numa chamada condicional.
+
+Um rádio que já estava no SINGLE com o B em evidência liga no B: a primeira tecla A/B, ou o menu
+aberto e fechado, o leva ao A.
+
 **O TX-A/B/C (v50).** O TX-A/B de fábrica (item 44, `b[0x14B7F]`: 0 OFF, 1 A, 2 B) escolhe o lado do
 PTT e só vale com a escuta ligada. A ida do PTT (`0x01E43E8A`) testa o TDR (`0x01E43F86`), lê o
 byte (`0x01E43F92`) e, se o lado (valor − 1) não está em evidência, troca os lados
@@ -1207,7 +1229,8 @@ registrador com o bit 7 ligado.
 **O compressor de TX** vem configurado e desligado. A partida põe `0xAA00` no `0x29` (`0x01E56602`:
 razão 2:1 nos bits 15:14, ponto de 0 dB 84) e `0x0B40` no `0x28` (`0x01E565F8`: o expansor do RX, com
 a razão 0, desligado), mas nada liga o bit 3 do `0x31`, que liga os dois. As escritas do `0x31` leem,
-mudam o bit 0 (o NR: `0x01E44078`, `0x01E440A2`, `0x01E4B0B8`, `0x01E4B0DE`) ou o 1 (o scramble:
+mudam o bit 0 (o AM, e não o NR, como dizia até a v78: `0x01E44078`, `0x01E440A2`, `0x01E4B0B8`,
+`0x01E4B0DE`, [seção 25](#25-a-pasta-audio-o-expander-e-a-noise-gate-e-o-que-é-a-nr-v79)) ou o 1 (o scramble:
 `0x01E4090E`, `0x01E4092A`, `0x01E4094A`) e gravam; o espectro guarda e devolve o `0x31` inteiro, com
 mais dez (`0x01E3FEE4`, a lista de `0x01E5FF7B`: `0x13`, `0x30`, `0x31`, `0x37`, `0x3D`, `0x40`, `0x43`,
 `0x47`, `0x48`, `0x7D`, `0x7E`). O bit posto por nós fica. **O AGC do microfone** é o bit 15 do `0x19`
@@ -1749,7 +1772,7 @@ Entraram na v74:
 - O buffer do rodapé foi de 16 a 18 B ("SYNC 65535/65535" e o 0), e o teste do PC apaga a pasta temporária
   (eram 1,4 MB a cada execução).
 
-**A próxima fase** (achados da auditoria que mudam comportamento, para decidir depois):
+**A próxima fase** (achados da auditoria que mudam comportamento; feita na v75, abaixo):
 
 - **ack automático** para a mensagem dirigida a mim (o remetente repete até receber) e o mesmo id ao
   reenviar a mesma mensagem (hoje cada SEND troca o id, e o outro lado a vê como nova);
@@ -1766,6 +1789,155 @@ Entraram na v74:
   compara letra a letra);
 - testes no PC do laço do RX, do histórico e da tela, que hoje só rodam no rádio.
 
+### A v75: a segunda fase da auditoria, o ack e as teclas
+
+Tudo o que a auditoria deixou para a próxima fase entrou na v75, junto com pedidos do dono para a tela do RX.
+
+**O ack automático.** A mensagem para mim com número (`{id`) arma o ack: o texto em `aprs_texto` devolve o
+número (até 5, sem o `}` da resposta embutida, e achado mesmo quando o texto passa do limite da tela), o
+registro do histórico guarda a origem em 9 colunas e o número, o `0x903E` dos ajustes (`b[0x14BEA]`, livre
+pela varredura da v59) guarda qual registro é, e o estado do envio vai a `'K'`. O laço sai da tela sozinho,
+porque o firmware nunca transmite com o menu aberto: a volta seguinte do laço do sinal (`gancho_ida_ptt`)
+inicia a TX, o que fecha o menu, e o `gancho_fim_tx` manda `:ORIGEM   :ackNUMERO`, com o meu indicativo e o
+caminho do menu, depois dos 0,5 s de portadora muda. Cada cópia da mensagem é confirmada, porque o ack
+anterior pode não ter chegado. O SEND não troca mais o número: ele só anda quando o destinatário ou o texto
+mudam (`aprs_guarda_texto`), e mandar de novo a mesma mensagem é repeti-la.
+
+**O envio.** O indicativo e o destinatário são gravados em maiúsculas (o editor tem o modo abc) e só com
+letras, números e, no destinatário, o `-` do SSID. Durante o conteúdo, o scramble (bit 1 do `0x31`) e o
+subtom (bit 15 do `0x51`, que a fábrica liga com o nível em `0x01E441BE` e desliga com 0) ficam desligados,
+e voltam antes do fim de fábrica: o scramble usa o mesmo `0x71` do tom.
+
+**O histórico em anel** ("HST3"). Cada setor (`0xD6000` e `0xD7000`) tem o seu cabeçalho, a marca e uma
+geração, um byte que anda a cada setor novo, e 31 registros de 128 B. Quando o setor que recebe enche, o
+outro (o dos mais velhos) é apagado e recomeça com a geração seguinte: ficam sempre os últimos 31 a 62. O
+setor que precisa ser apagado é apagado com a captura parada, fora dos bits (`hist_prepara`), e só por
+último, se uma rajada não deixar, dentro da gravação. O registro guarda o texto (até 104 caracteres), a cor,
+a origem e o número do ack e a hora da chegada (`TIQUE_MS`), e o byte "usado" é gravado por último: uma
+queda de energia no meio deixa um lugar ocupado sem o "usado", que a tela pula. A cópia do mesmo texto da
+mesma estação (com o mesmo número) chegada em até 30 s, a que vem direto e pelos digipeaters, não entra de
+novo. O `0xD7000` só é usado apagado ou nosso; com outra coisa num dos dois, nada é gravado. O "HST2" da
+v74 e o "HST1" das v70 a v73 são apagados na primeira entrada.
+
+**O laço não para mais.** As teclas são lidas sem esperar soltar (a apertada só conta de novo depois de
+solta), o EXIT segurado é medido no próprio laço (o toque curto vale ao soltar) e o redesenho depois de uma
+tecla vai pelas faixas, entre as leituras do modem. A pilha do laço ficou em 736 B no ponto da chamada:
+para caber, o buffer do quadro foi de 160 a 136 B, os quatro registradores devolvidos na saída cabem em
+duas variáveis e a comparação das cópias lê 12 bytes por vez.
+
+**A tela.** O `*` apaga a luz (`0x01E394D6(0)`, que o desvio da v60 atende pelo PWM) e o laço continua
+recebendo; a tecla seguinte só a acende. A seta segurada repete (depois de 0,8 s, a cada 0,15 s), e o
+histórico dá a volta nas duas pontas. O rodapé ganhou um fundo próprio, o dos segmentos apagados do
+medidor (o da barra de cima saía quase preto no LCD), com o texto branco e o `*:OFF`.
+
+**O teste do laço no PC** (`tests/teste_rx.py`). O `mensagem.c` compila inteiro com `TESTE_RX`, e o
+`tests/teste_rx.h` imita o modem do BK4819 como está mapeado (só sincroniza no padrão do `0x5A`, passa os
+bits crus por uma FIFO de 8 palavras com aviso em 4 e conta as que não couberam), a flash, as teclas, a
+luz e a tela, que gasta 15 ms por faixa. Ele confere quadros separados por uma flag só (o defeito da v71 à
+v73), as duas polaridades, as cópias, o ack e o quadro dele, o anel e a troca de setor, a conversão do
+histórico velho, o setor alheio intocado, a FIFO sem transbordar e as teclas. O ruído antes de um pacote às
+vezes dá um sync por acaso, que abre uma captura de 13,6 s: no rádio isso também acontece e não faz mal.
+
+### A v76: os formatos do APRS decodificados e a V3.0T
+
+O `aprs_texto` passou a decodificar os formatos que chegavam ilegíveis, a pedido do dono, sempre em
+unidades daqui (km/h, metros, graus Celsius, rumo em graus):
+
+- **Mic-E** (`` ` `` e `'`), o dos rádios Kenwood e Yaesu e de muitos rastreadores: a latitude, os
+  hemisférios, o deslocamento de 100° da longitude e a mensagem vêm nos 6 caracteres do destino; a
+  longitude, a velocidade, o rumo e o símbolo, nos 8 bytes seguintes; depois, o tipo do rádio e a altitude
+  `xxx}` em base 91. A mensagem padrão sai pelo nome (EN ROUTE, IN SERVICE, OFF DUTY, EMERGENCY...), e a
+  própria (A-K) fica de fora. O Mic-E que chega por igate é decodificado pelo destino em texto do
+  cabeçalho de dentro.
+- **Posição comprimida** (`/YYYYXXXX$csT`, base 91): a latitude e a longitude, e o rumo e a velocidade do
+  `cs` (o rumo de 4 em 4 graus, a velocidade 1,08^s − 1 nós). Com os bits 4:3 do `T` em 2, o `cs` é a
+  altitude, que fica de fora.
+- **Depois do símbolo** de uma posição comum: o rumo e a velocidade (`ddd/sss`), e o PHG do digipeater
+  (`PHGphgd`: p² W, 10 × 2^h pés em metros, g dB).
+- **No comentário:** a altitude `/A=pés` em metros, e o `!wXY!` da precisão extra (DAO) sai.
+- **Tempo:** a estação com o símbolo `_` e o relatório sem posição (`_MMDDHHMM`): a temperatura, a umidade,
+  a pressão e o vento.
+- **Objeto** (`;`) e **item** (`)`): "OBJ NOME" ou "ITEM NOME" e a posição deles.
+
+A conta da posição comprimida cabe em 32 bits: a parte inteira dos graus sai de `y / 380926` (ou
+`x / 190463`), e o resto vezes 6000 é menor que 2^32. O `decimal`, que era recursivo, virou o `numero`, sem
+recursão.
+
+**APRS DECODE** (a pasta APRS, que passou a ter 8 itens): OFF mostra a info como veio, para conferir, e
+vale para os quadros que chegam depois de mudar. No `0x903F` dos ajustes (`b[0x14BEB]`, livre pela
+varredura da v59): OFF só com `0xB1`; o RESET de fábrica deixa 229, que vale ON.
+
+**A pilha.** A decodificação, montada dentro do `guarda` em cima do registro de 128 B, levou o laço a
+848 B, de 740. O registro em montagem passou para a memória de vídeo (`0x10190`, a faixa de 160×32 da tela),
+que o firmware de fábrica já empresta como rascunho ao regravar canal: o `guarda` roda entre uma faixa e
+outra, e a tela é redesenhada inteira depois de um quadro novo. Ficou em 720 B.
+
+**A versão** que o item VERSION mostra passou a V3.0T (o texto `V0.12` em `0x01E5FD10`, no `montar.py`).
+
+### Os modos do modem na tecla 0 (v77, experimental)
+
+**O que a v75 mostrou.** Com os ganhos comparados no ar, o MEDIUM foi o melhor e os outros, piores; mesmo
+nele, SYNC e BAD passam de 70% dos pacotes, e a maioria do que se ouve num outro rádio não vira quadro. O
+limite é o do modem: na recepção o 0x58 só escolhe entre pares fixos, e nenhum registrador dá o tom (o
+0x72 é a velocidade). Na transmissão o gerador de tom contorna isso (o 0x71 troca entre 1200 e 2200 Hz a
+cada bit); na recepção não há atalho.
+
+**Os campos do 0x58**, pelos comentários do driver do BK4819 no firmware do UV-K5 (o do OneOfEleven, no
+`BK4819_enable_mdc1200_rx`): 15:13 o modo de TX (1 = FFSK 1200/1800, 3 = 1200/2400, 5 = NOAA SAME); 12:10 o
+modo de RX (7 = FFSK 1200/1800, 4 = FFSK 1200/2400, 0 = FSK direto e NOAA SAME; 1-3 e 5-6 sem
+documentação); 9:8 o ganho; 7:6 sem documentação; 5:4 o tipo de preâmbulo; 3:1 a banda de RX (1 = 1200/1800,
+2 = NOAA SAME, 4 = FSK 2400 e 1200/2400; 3 e 5-7 sem documentação); 0 o modem ligado. Por eles, a "banda
+larga" da v70 (`0x3FC9`) é a 4, a do 1200/2400, e o modo 3 da v70 (`0x33C9`) era o 1200/2400 com a banda
+dele: o par casado, que não ouviu nada.
+
+**A v77** põe na tecla 0 do APRS RX o que ainda não foi testado, cada um mudando uma coisa só do modo de
+antes (o 1), com o ganho escolhido no `#`. Na barra de cima, ao lado do ganho, a etiqueta `M1` a `M10`; a
+troca zera os contadores, e cada entrada começa no M1.
+
+| Modo | 0x58 sem o ganho | O que muda do M1 |
+|---|---|---|
+| M1 | `0x3CC3` | nada: o de antes (RX 7, banda 1, bits 7:6 = 3) |
+| M2 | `0x3C03` | os bits 7:6 em 0, como o receptor de MDC1200 do OneOfEleven |
+| M3 | `0x3CC5` | a banda 2 (a do NOAA SAME) |
+| M4 | `0x3CC7` | a banda 3 (sem documentação) |
+| M5 | `0x20C5` | o caminho do NOAA SAME: RX 0 com a banda 2 |
+| M6 a M10 | `0x24C3`, `0x28C3`, `0x2CC3`, `0x34C3`, `0x38C3` | o modo de RX 1, 2, 3, 5 e 6 (sem documentação) |
+
+É um experimento: não há o que provar no desmontado (a fábrica só usa o `0x3FC3`, no roger TONE1200), e
+o que cada modo faz só o ar mostra. Um valor sem documentação no 0x58 só mexe no modem; a saída grava 0
+nele, como antes. O código 13 é a tecla 0: na tabela das teclas (`0x01E60369`) a última coluna da matriz
+é `*` (9), 0 (13) e `#` (17), e o código longo do 13 é o 33, a ação do 0 segurado (a caixa de tensão). Até
+a v76 ele saía da tela, como as outras teclas sem função.
+
+**A pilha.** A conta do modo seguinte dentro do laço levava o quadro dele de 256 para 268 B (a pilha do
+item a 732 B, de 740), mesmo com a escrita do 0x58 numa rotina à parte: é a alocação de registradores do
+laço. A conta e a escrita juntas numa rotina que recebe a tecla (`modem_58`) devolvem os 720 B.
+
+**Conferido no PC:** o `teste_rx.py` aperta o 0 onze vezes e o `#` uma, e confere cada valor gravado no
+0x58 contra o registrador montado campo a campo.
+
+### O resultado da v77 e as gravações do ar (v78)
+
+**Os modos da v77**, testados no ar com o ganho em MEDIUM: nenhum decodificou mais que o M1, e eles saíram
+na v78 (a tecla 0 volta a sair da tela, como as outras sem função). O registrador fica no `0x3CC3` de
+antes, com o ganho do `#`.
+
+**Quatro gravações** de pacotes do canal, feitas pelo dono com o celular perto do alto-falante (HE-AAC de
+48 kb/s, de 0,9 a 1,2 s de sinal cada), passaram por um demodulador escrito para elas (filtro de 700 a
+2800 Hz, correlação em 1200 e 2200 Hz numa janela de um bit, 13 compensações de torção de −12 a +12 dB,
+relógio por PLL, NRZI, destuffing e FCS), conferido antes no WAV do nosso TX (`firmware/build/aprs.wav`):
+ali ele acha o quadro e os indicativos. Nas quatro, nenhum quadro com o FCS certo; aparecem de 3 a 7
+flags seguidas, e o que vem depois não forma indicativo. A potência entre 1000 e 2400 Hz fica só ~10 dB
+acima da de 2800 a 3800 Hz (19 dB no WAV limpo), sem saturação: muito chiado. Pelo caminho acústico não
+dá para separar o que já chega ruim pelo ar do que o alto-falante, o microfone e a compressão do celular
+estragam.
+
+**O próximo passo** é medir o sinal sem o caminho acústico: o áudio do rádio por cabo (a saída de fone)
+numa entrada de áudio, ou um decodificador de APRS no celular ouvindo o alto-falante (o APRSdroid tem o
+modo "AFSK via microfone"). Se um decodificador em software pega a maior parte do que se ouve, o limite é
+o modem do chip, e vale procurar o áudio recebido numa entrada do JieLi para demodular em software; se
+nem ele pega, os sinais chegam fracos, e nenhum firmware os recupera.
+
 ### A pilha
 
 O conteúdo roda no slot do roger, no laço do sinal, e o laço do RX no set do item; os dois dentro do de
@@ -1773,3 +1945,100 @@ fábrica (620 e 740 B). O gancho da ida do PTT põe o "no ar" antes do início e
 fábrica como saltos (o quadro dele já desfeito), e o `pilha.py` passou a tratar o `goto` do nosso código
 para outra rotina como no grafo de fábrica (salto de cauda: o quadro de quem salta não soma). A V2.9T dá
 os mesmos números com o `pilha.py` novo.
+
+## 25. A pasta AUDIO: o EXPANDER e a NOISE GATE, e o que é a NR (v79)
+
+**O EXPANDER** é o expansor do áudio de RX do BK4819, o gêmeo do compressor da pasta MIC: abaixo do ponto
+de 0 dB, cada 1 dB a menos vira 2, 3 ou 4 (LOW, MID e HIGH: 1:2, 1:3 e 1:4 nos bits 15:14 do `0x28`, pela
+documentação da comunidade do UV-K5). Ele desfaz a compressão de quem transmite com compander e cala o
+chiado nas pausas; com uma estação comum, a voz fraca fica mais fraca. Liga pelo mesmo bit 3 do `0x31` que
+o compressor, e só com ele o compressor fica na razão 0 (desligado). Ligado, os bits 13:9 do `0x28` vão a
+`10101`, os da receita do UV-K5 (`0x6B38`, o ponto de 0 dB em 86); desligado, ficam os de fábrica.
+
+**A NOISE GATE** é a porta de ruído do áudio de RX: pela tabela oficial da Beken citada na issue 739 do
+firmware do UV-K5 v3, o bit 8 do mesmo `0x28` a liga e os bits 7:0 são o nível; os 11:9 são o filtro de
+DC (`101` no RX), e os 13:12 não têm descrição. A partida grava `0x0B40` (`0x01E565F2`): o expansor
+desligado e a porta ligada no nível 64. DEFAULT é isso; OFF desliga o bit 8; LOW, MID e HIGH usam os
+níveis 32, 96 e 160 (desde a v80; na v79 eram LOW e HIGH, 32 e 128; qual corta mais, só o ouvido diz).
+
+**No rádio.** O padrão é o de hoje: sem mexer nos itens, o `0x28`, o `0x29` e o `0x31` ficam como a partida
+de fábrica os deixa. Só a partida escreve no `0x28` e no `0x29` (`0x01E565F2`, `0x01E565FC`), e o
+espectro não os guarda. O `aplica_audio` (o antigo `aplica_mic`) põe tudo na partida, no set dos itens e
+nos ajustes que chegam pelo cabo. Os níveis ficam em dois bytes dos ajustes que nada de fábrica lê nem
+grava (a varredura da v59): o EXPANDER no `0x9034` (`b[0x14BE0]`), como `0xC0` + o nível, e a NOISE GATE no
+`0x9031` (`b[0x14BDD]`), como `0xE8` + a opção (0 OFF, 1 DEFAULT, 2 LOW, 3 MID, 4 HIGH; o `0xE0` da v79,
+com outra ordem, vale DEFAULT). Sem a marca vale o de fábrica, OFF e DEFAULT: o RESET deixa
+208 e 0. Os dois entram no grupo AUDIO, em ordem alfabética antes do NOISE REDUCTION, e a tabela do menu
+passa a 92 de 96 vagas. A pilha não muda.
+
+**O APRS.** O decodificador do chip provavelmente pega o áudio antes desses blocos (na v71, desligar o
+de-ênfase não mudou nada), e a tela do APRS não mexe no `0x28`.
+
+### O que é o bit 0 do `0x31`, e o que é a NR
+
+**Até a v78 esta documentação chamava de NR o bit 0 do `0x31`. Ele é do AM.** As quatro escritas
+(`0x01E44078`, `0x01E440A2`, `0x01E4B0B8`, `0x01E4B0DE`) são das duas rotinas que põem o receptor em AM ou
+em FM: `0x01E4404E` (pela entrada `0x01E440C4`: r0 = 1 é AM) e a do espectro (`0x01E4B0A0`, logo depois da
+troca de AM/FM dele, `0x01E4B04C`). Em AM: o bit 0 do `0x31` ligado, `0x42` = `0x6F5C`, `0x2A` = `0x7434` e
+`0x2B` = `0x0500` (sem o passa-alta de 300 Hz e sem o de-ênfase do RX); em FM, o bit 0 desligado,
+`0x6B5A`, `0x7400` e `0`. A partida grava `0x6600` no `0x2A`. O laço do sinal põe o AM ao começar a
+receber (`0x01E47B74..0x01E47BC6`) na faixa aeronáutica (108 a 136 MHz) ou, de 18 a 1000 MHz, com o RX
+MODULATION (`b[0x15E2F]`, o get `0x01E3D10C`) em 1, e põe o FM no resto e ao voltar a sintonizar
+(`0x01E466B6`).
+
+**A NOISE REDUCTION é a redução de ruído do microfone, no TX, e roda no JieLi.** O item grava o bit 0 de
+`b[0x14BDE]` (o `0x9032`; o get `0x01E3D0E0`), que tem dois leitores: o ícone da barra (`0x01E3B154`) e a
+ida do PTT (`0x01E478F8`, logo depois do ganho do microfone, `0x01E477D8`), que monta o caminho do
+microfone com `0x01E42080(0, NR, 4, 17)`. Provado no desmontado:
+
+- o microfone entra no ADC do JieLi (canal MIC, aberto em `0x01E33C2A` por `0x01E41CBA`) a 16 kHz, em
+  blocos de 256 amostras de 16 bits a cada 16 ms, entregues pela interrupção de áudio (`0x01E32488` →
+  `0x01E34180`) ao `0x01E41C06`;
+- com a NR em 0, cada bloco vai direto ao DAC (`0x01E41BA0` → `0x01E321F8`); em 1, à tarefa `aec` do SDK
+  (`0x01E24522`), cuja saída vai ao DAC (`0x01E41BE8`). Do DAC à entrada de microfone do BK4819 é a fiação
+  (suposição);
+- a supressão (`0x01E23168`, rodando em `0x01E240BE`) é por faixa de frequência, com FFT de 512 e passo
+  de 256: o ganho de cada faixa sai da estimativa de ruído com o piso em 0,02 (−34 dB), a força em 1,8 e o
+  ganho de saída em 2,5, constantes da inicialização (`0x01E245F8`). Os pesos de ~32 KB em
+  `0x01E1C02C..` são dela;
+- o item só passa 0 ou 1. Há uma tabela de oito níveis (`0x01E41D26`), mas o 1 é sempre o usado, e não se
+  achou quem leia os dois campos dela que pareciam a força;
+- o caminho é desmontado no fim do TX (`0x01E445AC`) e só é montado com a licença `b[0x146A0]`, conferida
+  na partida contra o identificador do chip.
+
+**O áudio recebido não passa pelo JieLi.** No firmware de fábrica, o ADC do JieLi só lê o microfone (no
+TX) e a entrada de linha do rádio FM interno dele (`0x01E571E4` → `0x01E33EFC`); o fechamento do squelch
+(`0x01E47E8E..`) só mexe no BK4819 e no amplificador. Um demodulador de APRS em software precisaria do
+áudio do BK4819 numa entrada do JieLi, e se a placa o liga a alguma, o firmware nunca a lê.
+### A NR com níveis, na pasta MIC (v80)
+
+Como a NOISE REDUCTION é do microfone, ela passou à pasta MIC, com OFF, DEFAULT, LOW, MID e HIGH no mesmo
+byte do item de fábrica (`b[0x14BDE]`, o `0x9032`; o item 48 com o get, o set e as opções nossos, como o
+ROGER e o SCRAMBLE): 0 OFF, 1 DEFAULT, 2 LOW, 3 MID e 4 HIGH. DEFAULT é o ligado de fábrica. A ida do PTT
+passa o byte à montagem do caminho do microfone, que o trata como "ligada" se não for 0 e como índice da
+tabela de presets de `0x01E41D06`, que pula o que passa de 7 (`0x01E41D08`) e cujos campos nada lê. Acima
+de 4 (o RESET deixa 200), o byte vale DEFAULT, como a fábrica o trata (ligada; o menu de fábrica, que só
+olhava o bit 0, mostrava OFF).
+
+Os níveis mexem nas duas constantes do núcleo que decidem o quanto cortar. A inicialização da supressão
+(`0x01E41E4E`) grava no bloco dela `[attr+120]` = 0,02 (`0x3CA3D70A`, o piso do ganho de cada faixa, −34 dB),
+`[attr+124]` = 1,8 (`0x3FE66666`, a força), `[attr+128]` = 2,5 e `[attr+132]` = 0,3, e chama `0x01E245F8`
+com `r0` = `attr` em `0x01E42078`; dali o piso e a força vão ao núcleo (`0x01E23168`, chamado em
+`0x01E248AE` com os dois em `r2:r3`). A chamada passa pelo `gancho_nr_inicia`, que em LOW, MID e HIGH troca
+os dois e segue em salto de cauda, com `r0..r3` como vieram:
+
+| Nível | Piso | Força |
+|---|---|---|
+| DEFAULT | 0,02 (−34 dB, o de fábrica) | 1,8 |
+| LOW | 0,1 (−20 dB) | 1,2 |
+| MID | 0,05 (−26 dB) | 1,5 |
+| HIGH | 0,01 (−40 dB) | 2,5 |
+
+LOW e MID cortam menos que o DEFAULT, e HIGH mais. A escolha dos valores é de ouvido: a fórmula do ganho
+(`g = s² / (força + (1 − força)·s²)`, limitado pelo piso) mostra o sentido, não o resultado no ar.
+
+**Na barra de cima**, a NR e a NOISE GATE ganham etiquetas: fora em OFF; no DEFAULT, na cor das outras;
+em LOW, MID e HIGH, verde, amarela e vermelha. Os dois níveis vão no byte `nr` da `struct estado`
+(bits 3:0 e 7:4), que está no caminho mais fundo da pilha e não podia crescer, e a etiqueta é uma rotina
+separada: embutida duas vezes, levava o quadro da barra de 44 a 52 B. Sem lugar antes da tensão, ela não
+entra. As raízes continuam em 740, 620 e 696 B.

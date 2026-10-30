@@ -5,6 +5,67 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v80 — 29/10 — a NR com níveis na pasta MIC, a NOISE GATE com cinco opções e as etiquetas coloridas (a testar)
+
+`firmware/releases/BJ8300_BANK_v80.anc` (sha256 `812bd533…`). A pedido do dono: a NOISE REDUCTION, que é a do
+microfone, passa à pasta MIC com OFF, DEFAULT (o ligado de fábrica), LOW, MID e HIGH, que mudam o quanto ela
+corta; a NOISE GATE ganha o MID (OFF, DEFAULT, LOW, MID e HIGH); e as duas aparecem na barra de cima como NR
+e NG, na cor de sempre no DEFAULT e verde, amarela e vermelha no LOW, MID e HIGH. Os padrões continuam os de
+fábrica.
+[Seção 25](engenharia-reversa.md#a-nr-com-níveis-na-pasta-mic-v80).
+
+## v79 — 29/10 — a pasta AUDIO com o EXPANDER e a NOISE GATE (a testar)
+
+`firmware/releases/BJ8300_BANK_v79.anc` (sha256 `557f2752…`). A pedido do dono, a pasta AUDIO ganha o
+EXPANDER (o expansor do áudio de RX, OFF, LOW, MID e HIGH, como o COMPRESSOR) e a NOISE GATE (a porta de
+ruído do áudio de RX: DEFAULT, o de hoje, OFF, LOW e HIGH). Sem mexer neles, o rádio fica como sempre
+foi. E a documentação se corrige: o que ela chamava de NR no chip é a
+configuração do AM, e a NOISE REDUCTION de verdade é a redução de ruído do microfone, no TX, feita pelo
+processador. O áudio recebido não passa por ele.
+[Seção 25](engenharia-reversa.md#25-a-pasta-audio-o-expander-e-a-noise-gate-e-o-que-é-a-nr-v79).
+
+## v78 — 29/10 — só o A no SINGLE, e os modos da v77 fora (a testar)
+
+`firmware/releases/BJ8300_BANK_v78.anc` (sha256 `68bf2d45…`). A pedido do dono, o WATCH em SINGLE fica sempre
+no A: a tecla A/B não leva mais ao B nem à C, e o WATCH posto em SINGLE com o B ou a C em evidência volta
+ao A quando o menu fecha. Os dez modos do modem da v77 não decodificaram mais que o de sempre e saíram.
+Quatro gravações do ar feitas pelo celular não decodificaram nem num demodulador em software: o próximo
+passo é medir o sinal sem o caminho acústico.
+[Seção 18](engenharia-reversa.md#18-a-dupla-escuta-e-o-triple-v42-a-v51) e
+[seção 24](engenharia-reversa.md#24-morse-e-aprs-v65).
+
+## v77 — 29/10 — os modos do modem na tecla 0, para testar no ar (experimental)
+
+`firmware/releases/BJ8300_BANK_v77.anc` (sha256 `33d4bf71…`). Na v75, o MODEM GAIN em MEDIUM foi o melhor, e
+mesmo assim a maior parte dos pacotes ouvidos não vira quadro: o modem do chip só conhece pares fixos de
+tom na recepção, e nenhum é o 1200/2200 do APRS. A tecla 0 do APRS RX passa por 10 modos do modem, o de
+antes (M1) e nove combinações do registrador 0x58 nunca testadas (bits sem documentação, as bandas do NOAA
+SAME e a sem nome, e os modos de RX sem documentação), com uma etiqueta `M1` a `M10` na barra de cima ao
+lado do ganho. É para achar no ar se algum decodifica mais que o M1.
+[Seção 24](engenharia-reversa.md#24-morse-e-aprs-v65).
+
+## v76 — 29/10 — o Mic-E, a posição comprimida, o tempo e os objetos decodificados, e a V3.0T (a testar)
+
+`firmware/releases/BJ8300_BANK_v76.anc` (sha256 `1fe18080…`). A pedido do dono, os formatos do APRS que
+chegavam ilegíveis saem decodificados: o Mic-E (o dos rádios Kenwood e Yaesu, inclusive o que vem por
+igate), a posição comprimida, o rumo e a velocidade em km/h, o PHG dos digipeaters, a altitude em metros, as
+estações de tempo (temperatura, umidade, pressão e vento) e os objetos e itens. O item APRS DECODE mostra a
+info como veio, para conferir. Para caber na pilha, o registro em montagem passou para a memória de vídeo,
+como o firmware de fábrica faz ao regravar canal. O item VERSION mostra V3.0T.
+[Seção 24](engenharia-reversa.md#24-morse-e-aprs-v65).
+
+## v75 — 29/10 — o ack automático, o histórico em anel e sem cópias, a tela apagada no * e as setas que repetem (a testar)
+
+`firmware/releases/BJ8300_BANK_v75.anc` (sha256 `ba8efe26…`). A segunda fase da auditoria e os pedidos do dono
+para a tela do RX. A mensagem para mim com número é confirmada sozinha: a tela sai e o rádio manda o ack. O
+SEND repete o mesmo número, o indicativo e o destinatário vão em maiúsculas e só com o que o AX.25 aceita, e
+o scramble e o subtom ficam desligados durante o pacote. O histórico virou um anel de dois setores (ficam os
+últimos 31 a 62, sem apagar tudo de uma vez), sem as cópias de 30 s, com o setor apagado fora dos bits e o
+registro à prova de queda de energia. O laço não espera mais tecla soltar; o `*` apaga a tela e continua
+recebendo; a seta segurada repete e o histórico dá a volta; o rodapé ganhou um fundo que se vê. O laço
+inteiro roda no PC (`tests/teste_rx.py`).
+[Seção 24](engenharia-reversa.md#24-morse-e-aprs-v65).
+
 ## v74 — 29/10 — o APRS RX sem perder o quadro seguinte, o texto inteiro no OK, e a auditoria (a testar)
 
 `firmware/releases/BJ8300_BANK_v74.anc` (sha256 `84b1d6e2…`). No rádio, a v73 mostrou mais syncs que quadros, e
