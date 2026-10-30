@@ -690,6 +690,23 @@ BRIGHTNESS_OPTIONS = ['100%', '60%', '35%', '20%', '10%']
 # out of range, as the factory reset leaves it (189), counts as 240 Hz, the default since v69.
 LIGHT_PWM_OPTIONS = ['240 Hz', '580 Hz', '1 kHz', '5 kHz', '25 kHz']
 LIGHT_PWM_VALUES = [3, 4, 0, 1, 2]                       # list position -> value in the radio
+# CALIBRATION > MODEM GAIN (firmware v73): the input gain of the radio chip's data modem, which only APRS RX
+# uses, at 0x903D (past the base class settings struct, so read and written as a raw byte). The radio stores
+# 0xA0 + the gain (0 Off to 3 High); any other value, as a radio that never changed it, counts as High.
+MODEM_GAIN_ADDR = 0x903D
+MODEM_GAIN_OPTIONS = ['Off', 'Low', 'Medium', 'High']
+# AUDIO > EXPANDER and NOISE GATE (firmware v79, the noise gate with five options since v80): raw bytes like
+# the modem gain, 0xC0 + the expander level at 0x9034 and 0xE8 + the noise gate option at 0x9031 (the base
+# class calls 0x9031 noise reduction and 0x9034 FM interrupt, but neither means anything on the BJ8300: its
+# noise reduction is 0x9032, and FM interrupt is RT-920 only). Any other value, as a radio that never changed
+# them (or v79's 0xE0 noise gate), counts as the stock behaviour: expander Off, noise gate Default.
+EXPANDER_ADDR, EXPANDER_MARK = 0x9034, 0xC0
+EXPANDER_OPTIONS = ['Off', 'Low', 'Mid', 'High']
+NOISE_GATE_ADDR, NOISE_GATE_MARK = 0x9031, 0xE8
+# MIC > NOISE REDUCTION (firmware v80): the microphone noise reduction, with levels, in the stock byte 0x9032
+# (0 Off, 1 Default = the stock On, then Low, Mid and High); above 4, as the factory reset leaves it (200),
+# the radio counts it as on, Default.
+LEVEL_OPTIONS = ['Off', 'Default', 'Low', 'Mid', 'High']
 
 
 def _compressor_setting(level):
@@ -752,6 +769,15 @@ class _LightPwmSetting(MemSetting):
         memobj.settings.unknown_903b = LIGHT_PWM_VALUES[int(self.value)]
 
 
+def _modem_gain_index(raw):
+    return raw & 3 if raw & 0xFC == 0xA0 else 3
+
+
+def _marked_index(raw, mark, count, stock):
+    """The option of a byte stored as mark + option (0 to count - 1); without the mark, the stock one."""
+    return raw & 7 if raw & 0xF8 == mark and raw & 7 < count else stock
+
+
 def _light_pwm_setting(value):
     value = int(value)
     rs = _LightPwmSetting('settings.unknown_903b', 'Light PWM', RadioSettingValueList(
@@ -783,8 +809,11 @@ def _same_as_memsetting(old, path):
 
 
 def _noise_reduction_setting(old, nr):
-    rs = MemSetting('settings.unknown_9032', old.get_shortname(), RadioSettingValueBoolean(int(nr) & 1))
-    rs.set_doc(old.__doc__ or '')
+    rs = MemSetting('settings.unknown_9032', old.get_shortname(), RadioSettingValueList(
+        LEVEL_OPTIONS, current_index=int(nr) if int(nr) < 5 else 1))
+    rs.set_doc("The microphone noise reduction, done by the radio's processor while transmitting, as the "
+               "radio's MIC > NOISE REDUCTION item. Default is the stock On; Low and Mid cut less noise "
+               'than it, High more. Levels need firmware v80 or later (before it, any level counts as On).')
     return rs
 
 
@@ -980,13 +1009,17 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         if parent is None:
             LOG.warning('noise reduction setting not found: Mic Gain goes to the end')
             parent = settings[-1]
-        _put(parent, _mic_gain_setting(self._memobj.settings.unknown_9033), after='settings_unknown_9032')
+        # EXPANDER and NOISE GATE (firmware v79), the radio's AUDIO folder, right after it
+        _put(parent, self._expander_setting(), after='settings_unknown_9032')
+        _put(parent, self._noise_gate_setting(), after='expander')
+        _put(parent, _mic_gain_setting(self._memobj.settings.unknown_9033), after='noise_gate')
         # COMPRESSOR, MIC AGC and CRYSTAL FINE (firmware v59) right after it, in the same block
         _put(parent, _compressor_setting(self._memobj.settings.unknown_9035), after='settings_unknown_9033')
         _put(parent, _mic_agc_setting(self._memobj.settings.unknown_9036), after='settings_unknown_9035')
         _put(parent, _crystal_setting(self._memobj.settings), after='settings_unknown_9036')
         _put(parent, _brightness_setting(self._memobj.settings.unknown_9039), after='settings_unknown_9037')
         _put(parent, _light_pwm_setting(self._memobj.settings.unknown_903b), after='settings_unknown_9039')
+        _put(parent, self._modem_gain_setting(), after='settings_unknown_903b')
         if _take(settings, 'settings_voice') is None:
             LOG.warning('voice prompts setting not found in the base class')
         # The banks firmware (v37 onwards) is English only: the LANGUAGE menu item is gone and the
@@ -1207,6 +1240,47 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         rs.set_doc(doc)
         rs.set_apply_callback(self._apply_watch_channel_c)
         return rs
+
+    def _modem_gain_setting(self):
+        rs = RadioSetting('modem_gain', 'Modem gain (APRS RX)', RadioSettingValueList(
+            MODEM_GAIN_OPTIONS, current_index=_modem_gain_index(self._mmap[MODEM_GAIN_ADDR][0])))
+        rs.set_doc('Input gain of the radio chip\'s data modem, as the radio\'s CALIBRATION > MODEM GAIN item. '
+                   'Only APRS RX uses it (voice does not go through the modem); High is the stock level. Off '
+                   'leaves APRS RX deaf. Needs firmware v73 or later.')
+        rs.set_apply_callback(self._apply_modem_gain)
+        return rs
+
+    def _apply_modem_gain(self, setting):
+        if setting.value.changed():
+            self._mmap[MODEM_GAIN_ADDR] = bytes([0xA0 | MODEM_GAIN_OPTIONS.index(str(setting.value))])
+
+    def _marked_setting(self, name, label, addr, mark, options, stock, doc):
+        """A list kept in the radio as mark + the option's position (the expander and the noise gate)."""
+        rs = RadioSetting(name, label, RadioSettingValueList(
+            options, current_index=_marked_index(self._mmap[addr][0], mark, len(options), stock)))
+        rs.set_doc(doc)
+
+        def apply(setting):
+            if setting.value.changed():
+                self._mmap[addr] = bytes([mark | options.index(str(setting.value))])
+        rs.set_apply_callback(apply)
+        return rs
+
+    def _expander_setting(self):
+        return self._marked_setting(
+            'expander', 'Expander', EXPANDER_ADDR, EXPANDER_MARK, EXPANDER_OPTIONS, 0,
+            "The radio chip's RX audio expander, as the radio's AUDIO > EXPANDER item, the twin of the "
+            'compressor: below its reference level each dB less becomes 2, 3 or 4 (Low, Mid, High). It undoes '
+            'the compression of a station transmitting with a compander, and quiets the hiss in the pauses; '
+            'with a plain station, weak voices get weaker. Off is the stock behaviour. Needs firmware v79 or '
+            'later.')
+
+    def _noise_gate_setting(self):
+        return self._marked_setting(
+            'noise_gate', 'Noise gate', NOISE_GATE_ADDR, NOISE_GATE_MARK, LEVEL_OPTIONS, 1,
+            "The radio chip's RX audio noise gate, as the radio's AUDIO > NOISE GATE item: it mutes the "
+            'audio below a level. Default is the stock one (on, level 64); Off turns it off; Low, Mid and '
+            'High use levels 32, 96 and 160. Needs firmware v80 or later.')
 
     def _mdf_c_setting(self, store):
         rs = RadioSetting('watch_mdf_c', 'Memory Display Format C (MDF-C)', RadioSettingValueList(

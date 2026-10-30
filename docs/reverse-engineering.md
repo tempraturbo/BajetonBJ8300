@@ -1874,6 +1874,9 @@ conversion, the foreign sector left untouched, the FIFO without overflow and the
 sometimes gives a sync by chance, which opens a 13.6 s capture: that happens on the radio too, and it does
 no harm.
 
+**The CHIRP driver** shows MODEM GAIN (`0x903D`, past the base class settings struct, read and written as a
+raw byte), after Light PWM.
+
 ### v76: the APRS formats decoded, and V3.0T
 
 `aprs_texto` now decodes the formats that used to arrive unreadable, at the owner's request, always in
@@ -2006,6 +2009,11 @@ and NOISE GATE at `0x9031` (`b[0x14BDD]`), as `0xE8` + the option (0 OFF, 1 DEFA
 in another order, counts as DEFAULT). Without the mark the stock behaviour
 holds, OFF and DEFAULT: RESET leaves 208 and 0. Both join the AUDIO group, alphabetically before NOISE
 REDUCTION, and the menu table goes to 92 of 96 slots. The stack does not change.
+
+**In CHIRP**, "Expander" and "Noise gate" come right after Noise reduction, as raw bytes with the mark (the
+Modem gain pattern). The base class calls `0x9031` noise reduction and `0x9034` FM interrupt, but neither
+applies to the BJ-8300: its noise reduction is `0x9032`, and FM interrupt is RT-920 only. A `1` the base
+may have written to `0x9031` reads DEFAULT.
 
 **APRS.** The chip's decoder probably takes the audio before these blocks (on v71, turning off de-emphasis
 changed nothing), and the APRS screen does not touch `0x28`.

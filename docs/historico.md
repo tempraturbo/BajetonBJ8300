@@ -5,6 +5,19 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 29/10 — o Modem gain, o Expander, a Noise gate e os níveis da NR
+
+- No **BJ8300_v2.9TEMPRA Specific**, depois do Light PWM, o **Modem gain** (o `0x903D`, fora do struct de
+  ajustes da classe base, lido e gravado como byte cru): Off, Low, Medium e High, como o MODEM GAIN da
+  CALIBRATION (firmware v73). Sem a marca `0xA0` (o rádio que nunca o mudou), High, o de fábrica.
+- Logo depois da **Noise reduction**, o **Expander** (`0x9034`, `0xC0` + o nível: Off, Low, Mid e High) e a
+  **Noise gate** (`0x9031`, `0xE8` + a opção: Off, Default, Low, Mid e High), da pasta AUDIO (firmware v79 e
+  v80). Sem a marca, o de fábrica, Off e Default. A classe base chama o `0x9031` de noise reduction e o
+  `0x9034` de FM interrupt, que não valem no BJ-8300.
+- A **Noise reduction** (o `0x9032`) virou lista: Off, Default (o On de fábrica), Low, Mid e High (firmware
+  v80); acima de 4, como o reset de fábrica deixa, Default.
+- O `teste_chirp_real` ganhou a `10ze` a `10zm`.
+
 ## v80 — 29/10 — a NR com níveis na pasta MIC, a NOISE GATE com cinco opções e as etiquetas coloridas (a testar)
 
 `firmware/releases/BJ8300_BANK_v80.anc` (sha256 `812bd533…`). A pedido do dono: a NOISE REDUCTION, que é a do

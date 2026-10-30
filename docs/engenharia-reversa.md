@@ -1838,6 +1838,9 @@ v73), as duas polaridades, as cópias, o ack e o quadro dele, o anel e a troca d
 histórico velho, o setor alheio intocado, a FIFO sem transbordar e as teclas. O ruído antes de um pacote às
 vezes dá um sync por acaso, que abre uma captura de 13,6 s: no rádio isso também acontece e não faz mal.
 
+**O driver do CHIRP** mostra o MODEM GAIN (`0x903D`, fora do struct de ajustes da classe base, lido e
+gravado como byte cru), depois do Light PWM.
+
 ### A v76: os formatos do APRS decodificados e a V3.0T
 
 O `aprs_texto` passou a decodificar os formatos que chegavam ilegíveis, a pedido do dono, sempre em
@@ -1970,6 +1973,11 @@ grava (a varredura da v59): o EXPANDER no `0x9034` (`b[0x14BE0]`), como `0xC0` +
 com outra ordem, vale DEFAULT). Sem a marca vale o de fábrica, OFF e DEFAULT: o RESET deixa
 208 e 0. Os dois entram no grupo AUDIO, em ordem alfabética antes do NOISE REDUCTION, e a tabela do menu
 passa a 92 de 96 vagas. A pilha não muda.
+
+**No CHIRP**, "Expander" e "Noise gate" vêm logo depois da Noise reduction, como bytes crus com a marca (o
+molde do Modem gain). A classe base chama o `0x9031` de noise reduction e o `0x9034` de FM interrupt, mas
+nenhum dos dois vale no BJ-8300: a noise reduction dele é o `0x9032`, e o FM interrupt é só do RT-920. Um
+`1` que a base tenha gravado no `0x9031` lê DEFAULT.
 
 **O APRS.** O decodificador do chip provavelmente pega o áudio antes desses blocos (na v71, desligar o
 de-ênfase não mudou nada), e a tela do APRS não mexe no `0x28`.

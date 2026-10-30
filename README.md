@@ -166,7 +166,7 @@ desenho que vai para o rádio.
 | 📊 **Espectro com 320 e 640 pontos** e **passo de 10 kHz** | Além dos 160 pontos de fábrica, para ver uma faixa maior de uma vez |
 | 📈 **Pico seguro no espectro** | A barra sobe na hora e, quando o sinal some, desce aos poucos |
 | 🎯 **Espectro que mostra mais** | A coluna que está sendo medida em branco, a frequência que roda no alto, a frequência do pico de cada passada em verde, com o dBm |
-| 🔌 **Driver do CHIRP próprio** | Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, o WATCH, o VFO C, o MIC GAIN, o compressor, o AGC, o CRYSTAL FINE e o BRIGHTNESS, numa sessão só pelo cabo; fica na lista do **Bajeton**. Recusa gravar num rádio com firmware de fábrica ([como usar](#-como-usar-o-chirp-com-este-firmware)) |
+| 🔌 **Driver do CHIRP próprio** | Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, o WATCH, o VFO C, o MIC GAIN, o compressor, o AGC, o CRYSTAL FINE, o BRIGHTNESS, o LIGHT PWM, o MODEM GAIN, o EXPANDER, a NOISE GATE e os níveis da NOISE REDUCTION, numa sessão só pelo cabo; fica na lista do **Bajeton**. Recusa gravar num rádio com firmware de fábrica ([como usar](#-como-usar-o-chirp-com-este-firmware)) |
 | 🧰 **Comando estendido no cabo** | Leitura do chip de dados inteiro (endereço de 24 bits) e gravação só na área dos bancos. É o que o driver do CHIRP usa |
 
 ### 🖥️ A tela nova, tela por tela

@@ -5,6 +5,19 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 29 — Modem gain, Expander, Noise gate and the NR levels
+
+- In **BJ8300_v2.9TEMPRA Specific**, after Light PWM, **Modem gain** (`0x903D`, past the base class settings
+  struct, read and written as a raw byte): Off, Low, Medium and High, like CALIBRATION's MODEM GAIN (firmware
+  v73). Without the `0xA0` mark (a radio that never changed it), High, the stock level.
+- Right after **Noise reduction**, **Expander** (`0x9034`, `0xC0` + the level: Off, Low, Mid and High) and
+  **Noise gate** (`0x9031`, `0xE8` + the option: Off, Default, Low, Mid and High), from the AUDIO folder
+  (firmware v79 and v80). Without the mark, the stock behaviour, Off and Default. The base class calls
+  `0x9031` noise reduction and `0x9034` FM interrupt, which do not apply to the BJ-8300.
+- **Noise reduction** (`0x9032`) became a list: Off, Default (the stock On), Low, Mid and High (firmware
+  v80); above 4, as the factory reset leaves it, Default.
+- `teste_chirp_real` gained `10ze` to `10zm`.
+
 ## v80 — Oct 29 — NR with levels in the MIC folder, NOISE GATE with five options and coloured tags (to be tested)
 
 `firmware/releases/BJ8300_BANK_v80.anc` (sha256 `812bd533…`). At the owner's request: NOISE REDUCTION, which is

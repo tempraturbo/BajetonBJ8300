@@ -451,14 +451,16 @@ def main():
     {s.get_name(): s for s in aj.walk()}['vfo_a_voicepri'].value.set_value('ENCRY2')
     aj.apply_to(r._memobj)
     confere('10o. Voice Privacy do VFO A gravada', int(r._memobj.vfo.a.voicepri), 2)
-    # 10p. MIC GAIN (firmware v49): o byte 0x9033 do bloco de ajustes, logo depois do Noise reduction
+    # 10p. MIC GAIN (firmware v49): o byte 0x9033 do bloco de ajustes, depois do Noise reduction e dos dois
+    # da pasta AUDIO (v79)
     r = bj.BJ8300(imagem())
     aj = r.get_settings()
     spec = aj['spec']
     mic = {s.get_name(): s for s in aj.walk()}['settings_unknown_9033']
-    confere('10p. Mic Gain no Specific, logo depois do Noise reduction, em HIGH com o byte em 0',
-            (spec.keys()[spec.keys().index('settings_unknown_9032') + 1], mic.get_shortname(), str(mic.value)),
-            ('settings_unknown_9033', 'Mic Gain', 'HIGH'))
+    i = spec.keys().index('settings_unknown_9032')
+    confere('10p. Mic Gain no Specific, depois do Noise reduction, do Expander e do Noise gate, em HIGH com o '
+            'byte em 0', (spec.keys()[i + 1:i + 4], mic.get_shortname(), str(mic.value)),
+            (['expander', 'noise_gate', 'settings_unknown_9033'], 'Mic Gain', 'HIGH'))
     mic.value.set_value('LOW')
     aj.apply_to(r._memobj)
     confere('10q. LOW grava 2 em 0x9033', r._mmap[0x9033], bytes([2]))
@@ -534,6 +536,63 @@ def main():
     r._mmap[0x903B] = bytes([0])
     confere('10zd. o 0 gravado (o padrao da v67 e da v68) le 1 kHz',
             str(ajuste_de(r, 'settings_unknown_903b').value), '1 kHz')
+
+    # 10ze. MODEM GAIN (firmware v73): 0x903D, fora do struct da base, depois do Light PWM; 0xA0 + o ganho,
+    # e qualquer outro valor (o 198 do reset de hoje) le High
+    r = bj.BJ8300(imagem())
+    r._mmap[0x903D] = bytes([198])
+    aj = r.get_settings()
+    spec = aj['spec']
+    s = {x.get_name(): x for x in aj.walk()}
+    confere('10ze. Modem gain depois do Light PWM; o 198 do reset le High',
+            (spec.keys()[spec.keys().index('settings_unknown_903b') + 1], str(s['modem_gain'].value)),
+            ('modem_gain', 'High'))
+    s['modem_gain'].value.set_value('Low')
+    for x in aj.apply_to(r._memobj):
+        if x.has_apply_callback() and x.get_name() == 'modem_gain':
+            x.run_apply_callback()
+    confere('10zf. Low grava 0xA1 em 0x903D, sem mexer no 0x903C', (r._mmap[0x903D], r._mmap[0x903C]),
+            (bytes([0xA1]), bytes([0])))
+    r._mmap[0x903D] = bytes([0xA2])
+    confere('10zg. o 0xA2 do radio le Medium', str(ajuste_de(r, 'modem_gain').value), 'Medium')
+
+    # 10zh. EXPANDER e NOISE GATE (firmware v79; a porta com cinco opcoes desde a v80): 0xC0 + o nivel em
+    # 0x9034 e 0xE8 + a opcao (Off, Default, Low, Mid, High) em 0x9031; sem a marca (o reset deixa 208 e 0),
+    # o de fabrica: Off e Default
+    r = bj.BJ8300(imagem())
+    r._mmap[0x9034] = bytes([208])
+    r._mmap[0x9031] = bytes([0])
+    aj = r.get_settings()
+    s = {x.get_name(): x for x in aj.walk()}
+    confere('10zh. o reset le Expander Off e Noise gate Default', (str(s['expander'].value), str(s['noise_gate'].value)),
+            ('Off', 'Default'))
+    s['expander'].value.set_value('Mid')
+    s['noise_gate'].value.set_value('Off')
+    for x in aj.apply_to(r._memobj):
+        if x.has_apply_callback() and x.get_name() in ('expander', 'noise_gate'):
+            x.run_apply_callback()
+    confere('10zi. Mid grava 0xC2 em 0x9034 e Off grava 0xE8 em 0x9031, sem mexer no 0x9032 nem no 0x9033',
+            (r._mmap[0x9034], r._mmap[0x9031], r._mmap[0x9032], r._mmap[0x9033]),
+            (bytes([0xC2]), bytes([0xE8]), bytes([0]), bytes([0])))
+    r._mmap[0x9034] = bytes([0xC3])
+    r._mmap[0x9031] = bytes([0xEB])
+    confere('10zj. o 0xC3 e o 0xEB do radio leem High e Mid',
+            (str(ajuste_de(r, 'expander').value), str(ajuste_de(r, 'noise_gate').value)), ('High', 'Mid'))
+    for v in (1, 0xE1, 0xED):
+        r._mmap[0x9031] = bytes([v])
+        confere('10zk. o %#x no 0x9031 (o 1 da base, o Off da v79, fora da faixa) le Default' % v,
+                str(ajuste_de(r, 'noise_gate').value), 'Default')
+
+    # 10zl. NOISE REDUCTION com niveis (firmware v80): o proprio 0x9032, 0 Off, 1 Default (o On de fabrica),
+    # 2 Low, 3 Mid, 4 High; acima de 4 (o reset deixa 200), Default
+    r = bj.BJ8300(imagem())
+    for v, nome in ((200, 'Default'), (0, 'Off'), (1, 'Default'), (2, 'Low'), (4, 'High')):
+        r._mmap[0x9032] = bytes([v])
+        confere('10zl. o %d no 0x9032 le %s' % (v, nome), str(ajuste_de(r, 'settings_unknown_9032').value), nome)
+    aj = r.get_settings()
+    {x.get_name(): x for x in aj.walk()}['settings_unknown_9032'].value.set_value('Mid')
+    aj.apply_to(r._memobj)
+    confere('10zm. Mid grava 3 no 0x9032', r._mmap[0x9032], bytes([3]))
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')
