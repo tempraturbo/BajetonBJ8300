@@ -1591,8 +1591,9 @@ __attribute__((noinline)) static void eq_grava(unsigned k)
  * e sobe quando cai abaixo do de baixo, 1 dB por passo: a fabrica grava 85 e 50 (0x2AB2), uma janela de 35 dB,
  * e nenhum salto entre degraus pode passar dela, senao ele fica pulando entre os dois. A fabrica so grava os
  * cinco na partida (0x01E56558..0x01E56580; o espectro guarda e devolve o 0x13, 0x01E3FEE4 e 0x01E3FF0E):
- * -2, -17, -40, -57 e -71 dB. MAX, a pedido do dono: 0, -10, -25, -40 e -65 dB, saltos de 10 a 25 dB. Com sinal
- * fraco so vale o degrau de cima, 2 dB a mais no LNA. Gravado no 0x9040 dos ajustes (b[0x14BEC], livre desde
+ * -2, -17, -40, -57 e -71 dB. MAX, a pedido do dono: 0, -6, -15, -30 e -50 dB (v114; na v113, 0, -10, -25, -40 e
+ * -65), saltos de 6 a 20 dB, com o LNA no maximo nos tres de cima. Com sinal fraco so vale o degrau de cima, 2 dB
+ * a mais no LNA; o de baixo, 21 dB acima do de fabrica, deixa um sinal muito forte saturar antes. Gravado no 0x9040 dos ajustes (b[0x14BEC], livre desde
  * a v111 e fora da janela do cabo) como 0xA5, que nem o EQ das v108 a v110 (0xB0 + a posicao) nem a sujeira
  * do cabo ate a v110 (a frequencia do VFO A em BCD) deixam ali; qualquer outro valor vale DEFAULT. */
 #define GANHO_RX       (*(volatile u8 *)0x00014BEC)
@@ -1601,7 +1602,7 @@ DADO_NA_LIVRE const char titulo_rx_ganho[] = "RX GAIN";
 DADO_NA_LIVRE const char *const rx_ganho_opcoes[2] = {"DEFAULT", "MAX"};
 DADO_NA_LIVRE static const u16 agc_degraus[2][5] = {
     {0x0318, 0x033A, 0x03DB, 0x03DF, 0x0210},   /* o 0x10 a 0x14 da partida: -57, -40, -17, -2 e -71 dB */
-    {0x033A, 0x033D, 0x03BD, 0x03FF, 0x0300}};  /* MAX: -40, -25, -10, 0 e -65 dB */
+    {0x037A, 0x03FB, 0x03FD, 0x03FF, 0x0298}};  /* MAX: -30, -15, -6, 0 e -50 dB */
 
 /* Na partida, nos ajustes de fabrica ou do cabo, e no OK do item. */
 NA_LIVRE_COD void aplica_agc(void)

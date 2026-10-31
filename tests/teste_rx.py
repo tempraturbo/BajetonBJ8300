@@ -194,7 +194,7 @@ m1 = quadro('PU2XYZ-9', ':PY2ABC-7 :Oi, tudo bem?{12')
 s = roda(ar_com((1.0, transmissao([m1]))), sai_em(9.0), nome='ack')
 confere('4. a mensagem para mim entra em ambar', s['R'], ['1 PU2XYZ-9> Oi, tudo bem?'])
 confere('4. o laco saiu antes do EXIT, com o ack armado e a volta pedida (v112)',
-        (s['E'][0], s['C']['ms'] < 8000, s['T']), (ord('K'), True, (8, 0, 0)))
+        (s['E'][0], s['C']['ms'] < 8000, s['T']), (ord('K'), True, (8, 0, 0, 0)))
 info = s['A'][s['A'].index(b'\x03\xf0') + 2:-2] if s['A'] else b''   # sem o FCS
 confere('4. o ack: ":PU2XYZ-9 :ack12", do meu indicativo', (info, s['A'][7:14] if s['A'] else b''),
         (b':PU2XYZ-9 :ack12', endereco('PY2ABC-7', ultimo=False)[:6] + bytes([s['A'][13]]) if s['A'] else b''))
@@ -261,22 +261,23 @@ s = roda(ar_com(), [(1.0, 1.1, 'ZERO'), (1.5, 1.6, 'CIMA'), (2.0, 2.1, 'ZERO'), 
 confere('9b. o 0 desliga o FILTER e o 0 seguinte o liga de novo; a saida devolve o canal',
         (s['F'], s['G']), ([ligado, antes, antes, ligado, ligado], (antes, 2)))   # os menus no 0 e na saida
 
-# 10. a tela MESSAGES (v112). O # curto pede a caixa da mensagem (b[0x14BF2] = 1) e o segurado 0,6 s a do TO
-# (2), com o FILTER desligado pela tecla 0 no bit 2; o laco sai no aperto, e o tempo e medido na saida, que
-# espera a tecla soltar.
+# 10. a tela MESSAGES (v112). O # curto (solto antes de 0,6 s) pede a caixa da mensagem (b[0x14BF2] = 1); o
+# segurado, a do TO (2), aos 0,6 s e ainda apertado (v114), e sai sem esperar soltar, com a tecla presa
+# (b[0x14BF1] = 5) para a fabrica nao o ver; o FILTER desligado pela tecla 0 vai no bit 2.
 s = roda(ar_com(), [(1.0, 1.1, 'CERQUILHA')], nome='caixa_msg')
-confere('10. o # curto pede a caixa da mensagem', s['T'], (1, 0, 0))
+confere('10. o # curto pede a caixa da mensagem', s['T'], (1, 0, 0, 0))
 s = roda(ar_com(), [(1.0, 2.0, 'CERQUILHA')], nome='caixa_to')
-confere('10. o # segurado pede a do TO, depois de soltar', (s['T'], s['C']['ms'] >= 2000), ((2, 0, 0), True))
+confere('10. o # segurado pede a do TO aos 0,6 s, ainda apertado, e fica preso',
+        (s['T'], 1550 <= s['C']['ms'] < 1800), ((2, 0, 0, 5), True))
 s = roda(ar_com(), [(1.0, 1.1, 'ZERO'), (1.5, 1.6, 'CERQUILHA')], nome='caixa_filtro')
-confere('10. com o FILTER desligado, a caixa leva o bit dele', s['T'], (5, 0, 0))
+confere('10. com o FILTER desligado, a caixa leva o bit dele', s['T'], (5, 0, 0, 0))
 s = roda(ar_com(), sai_em(2.0), nome='saida_normal')
-confere('10. o EXIT nao pede nada', s['T'], (0, 0, 0))
+confere('10. o EXIT nao pede nada', s['T'], (0, 0, 0, 0))
 # de volta (o b[0x14BF2] com a volta e o FILTER desligado; o b[0x14BEF] com o bipe calado, que estava em 1, e 5
 # leituras): o FILTER continua desligado na entrada, o bipe volta e o estado zera
 s = roda(ar_com(), [(1.0, 1.1, 'CIMA')] + sai_em(2.0), nome='de_volta', tela=4 | 8, injeta=0x80 | 5)
 confere('10. de volta, o FILTER como estava (desligado), o bipe de volta e o estado zerado',
-        (s['F'], s['T']), ([antes, antes], (0, 0, 1)))
+        (s['F'], s['T']), ([antes, antes], (0, 0, 1, 0)))
 
 
 def roda_modo(modo):
@@ -286,20 +287,26 @@ def roda_modo(modo):
     return [l.split(' ') for l in r.stdout.splitlines()]
 
 
-# a volta: cada OK apertado 5 leituras e solto 11; espera o envio; na pasta poe o MESSAGES (o item 2, valor 2,
-# tipo 0); uma tecla de verdade desiste e devolve o bipe; a caixa fechada pelo EXIT vira volta; presa, desiste
-# depois de 7 OKs
+# a volta: espera o envio; um ciclo parado (v114) e um OK por ciclo, apertado 5 leituras e solto 11; na pasta
+# poe o MESSAGES (o item 2, valor 2, tipo 0); uma tecla de verdade desiste e devolve o bipe; a caixa fechada
+# pelo EXIT vira volta e sintoniza de novo, e a volta espera a sintonia (o estado 2 ou mais); presa, desiste
+# depois de 7 ciclos; a tecla presa (v115) devolve "nenhuma" ate 5 leituras seguidas sem tecla, e a leitura
+# falsa 0 da fabrica no meio nao a solta
 v = roda_modo('volta')
 ciclo = [2] * 5 + [255] * 11
 k = [list(map(int, l[1:])) for l in v if l[0] == 'K']
 rr = [tuple(map(int, l[1:])) for l in v if l[0] == 'R']
-presa = [2 if (c & 15) < 5 else 255 for c in range(1, 112)] + [255, 255]
-confere('10. a volta: espera o envio, um OK por ciclo, o MESSAGES na pasta, a tecla desiste',
+presa = [255] * 16 + [2 if (c & 15) < 5 else 255 for c in range(16, 112)] + [255]
+confere('10. a volta: espera o envio, um ciclo parado, um OK por ciclo, o MESSAGES na pasta, a tecla desiste',
         (k[:6], rr[:6]),
-        ([[255] * 3, ciclo, ciclo, [2], [4], [2]],
-         [(8, 0, 1, 0, 0, 0), (8, 144, 0, 0, 0, 0), (8, 160, 0, 0, 0, 0), (8, 161, 0, 2, 2, 0), (0, 0, 1, 2, 2, 0),
-          (12, 129, 0, 2, 2, 0)]))
-confere('10. a volta presa desiste depois de 7 OKs, com o bipe de volta', (k[6], rr[6]), (presa, (0, 0, 1, 2, 2, 0)))
+        ([[255] * 3, [255] * 16, ciclo, [2], [4], [255]],
+         [(8, 0, 1, 0, 0, 0, 4, 0), (8, 144, 0, 0, 0, 0, 4, 0), (8, 160, 0, 0, 0, 0, 4, 0), (8, 161, 0, 2, 2, 0, 4, 0),
+          (0, 0, 1, 2, 2, 0, 4, 0), (12, 0, 1, 2, 2, 0, 0, 0)]))
+confere('10. a volta presa desiste depois de 7 ciclos, com o bipe de volta', (k[6], rr[6]),
+        (presa, (0, 0, 1, 2, 2, 0, 2, 0)))
+confere('10. a tecla presa: nada passa ate 5 leituras soltas seguidas, nem a leitura falsa 0',
+        (k[7:13], [r[7] for r in rr[7:13]]),
+        ([[255] * 3, [255], [255] * 4, [255], [255] * 5, [17]], [5, 5, 1, 5, 0, 0]))
 
 # a caixa: abre no TO (item 5, tipo 7), a da mensagem vazia ate 37 e a do TO com o gravado ate 9; o OK da
 # mensagem a grava com o numero seguinte e arma o envio ('A'), vazia nao arma; o TO em branco se grava; fora da

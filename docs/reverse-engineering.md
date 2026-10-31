@@ -2223,8 +2223,8 @@ and the return find MESSAGES and TO at positions 2 and 5 (`ITEM_MESSAGES` and `I
 **# on the screen.** The raw code of # is 17 (the matrix's last column, `0x01E60369`). The loop leaves on the
 press, like with the other keys, with `b[0x14BF2]` = 1; the exit already waits for the key to be released
 (`espera_soltar`), and if # stayed pressed 0.6 s the requested box becomes TO's (2). Bit 2 carries the FILTER
-turned off by key 0, and the ack leaves with 8 (the return). Measuring on the exit kept the loop as in v111:
-extending EXIT's wait to # cost 90 B.
+turned off by key 0, and the ack leaves with 8 (the return). Since v114 holding # acts at 0.6 s, still pressed
+([below](#the-messages-screen-the-boxes-and-the-return-v112)).
 
 **The box.** MESSAGES' set returns to the stock OK (`0x01E49996`, which calls it at `0x01E49A00`), and the
 detour after the set (`b_menu_marca`, `0x01E49A86`) calls `aprs_caixa_abre`: the item moves to TO
@@ -2273,6 +2273,37 @@ uses the menu editor's drawing, and drawing the spectrum's labels and columns (`
 spectrum hooks that already live there call them, and the spectrum only runs in mode 20
 ([section 15](#15-voices-removed); `4g` checks that nothing in `.text` or `.livre` calls `.vozes`). 34 B remain in
 `.livre` and 70 in `.vozes`. The stack: interface 740, signal loop 620, boot 696, and MESSAGES' set 728 of 740.
+
+**v114's fixes**, from the owner's test of v113:
+
+- **No sound after the return.** With SQL open, after TO's box or the cancelling EXIT the screen came back with
+  no sound until the next return through a transmission. The screen's loop stops the signal loop, and the chip's
+  audio and the amplifier only come back when reception enters state 4 (`0x01E47E0A`, the audio; `0x01E47E1A`,
+  the amplifier request): the OK that closes the editing retunes (`b[0x15367]` = 0, `0x01E49A86`), and the key beep
+  plays through the chip's tone generator, with its end in the interface loop (`0x01E4B68C..0x01E4B70E`). The
+  screen opened before all that settled; after a transmission the return already waited for the TX to end and went
+  through more OKs. Now the return only presses with no beep playing (`b[0x14924]`) and reception out of tuning
+  (state 2 or above), and it waits one cycle before the first OK; the cancelling EXIT also retunes, like the stock
+  OK.
+- **Holding #** acts at 0.6 s with the key still pressed, like holding EXIT (`ESPERA_CERQ` in the loop). The exit
+  does not wait for the release: # goes into the held key (`b[0x14BF1]`, `0x9045`, which until v113 was only the
+  mark of EXIT held in the editor and now keeps any key's raw code + 1), and `gancho_teclas` returns it as "none"
+  until it is released, so the editor does not read it as the ABC/123 toggle. v112 said that extending EXIT's wait
+  cost 90 B: measured again, it is the same size as measuring on the exit.
+- **The black screen with the line.** The menu entry clears below the bar (`LIMPA(2)` at `0x01E4CBAE`: black from
+  16 to 128 and a white line at y 55), and on the return the quiet menu draws nothing over it.
+  `gancho_limpa_volta` skips that clear when the return is pending: the main screen stays until the RX screen is
+  back.
+- **Space**: the footer labels in a single string, separated by 0, instead of the two pointer arrays (34 B less).
+  14 B remain in `.livre`; the stack stays at 740, 620 and 696, and MESSAGES' set at 732 of 740.
+- **v114's held key locked the keypad (v115).** The mark cleared on the first read without the key, and the stock
+  read (`0x01E43D50`) sometimes returns 0 with the key pressed (`0x01E43D5E`: bit 5 of `[obj+4]` clear; the stock
+  firmware copes because it only accepts the same key in three reads in a row). With # still pressed, the firmware
+  started seeing it and, at 100 passes, sent #'s long code (2, `0x01E6037B`), which on the main screen and in the
+  menu goes to `0x01E49630`: the keypad lock, `b[0x14B87]` (settings byte `0x901B`, saved), toggled between 0 and 1.
+  Read through the cable on the owner's radio, the settings record in use only differed from the previous one in
+  that byte. Since v115 the mark is a countdown from 5 (`b[0x14BF1]`): until it reaches zero every read counts as
+  "none"; each read without a key takes 1 off, and any read with a key, the false one included, sets it back to 5.
 
 ## 25. The AUDIO folder: EXPANDER and NOISE GATE, and what NR is (v79)
 
@@ -2549,7 +2580,8 @@ write both.
 **The BK4819's AGC** moves through five steps, from 3 (the most gain) to −1, each a register: `0x13`, `0x12`,
 `0x11`, `0x10` and `0x14`. Each one adds four gains, by Beken's table (`BK4819_Registers_V1.1`, in
 `docs/referencias`): the short LNA (bits 9:8: 0, −11, −16 and −19 dB), the LNA (7:5: 0, −2, −4, −6, −9, −14, −19
-and −24 dB), the mixer (4:3: 0, −3, −6 and −8 dB) and the PGA (2:0: 0, −3, −6, −9, −15, −21, −27 and −33 dB). It
+and −24 dB), the mixer (4:3: 0, −3, −6 and −8 dB) and the PGA (2:0: 0, −3, −6, −9, −15, −21, −27 and −33 dB).
+There is no gain above 0 dB: the step with all four at maximum is the chip's ceiling. It
 steps down when the level goes above `0x49`'s upper threshold and up when it falls below the lower one, 1 dB per
 step; the stock firmware writes `0x2AB2`, 85 and 50, a 35 dB window. A jump between steps bigger than the window
 makes the AGC bounce between the two with a strong signal. `0x7E` (`0x303E`) leaves the AGC on automatic.
@@ -2564,8 +2596,10 @@ not Beken's: with them the last step would be −84.)
 outside the cable window) as `0xA5`: neither the v108 to v110 EQ (`0xB0` + the position) nor the cable's garbage
 up to v110 (VFO A's frequency in BCD) leaves that value there, and any other value means DEFAULT. `aplica_agc`
 (`bancos.c`) writes the chosen table's five, at boot (after the stock one), on factory or cable settings and on the
-item's OK. MAX, at the owner's request: `0x033A`, `0x033D`, `0x03BD`, `0x03FF` and `0x0300`, −40, −25, −10, 0 and
-−65 dB, jumps of 10 to 25 dB. With a weak signal only the top step counts.
+item's OK. MAX, at the owner's request, since v114: `0x037A`, `0x03FB`, `0x03FD`, `0x03FF` and `0x0298`, −30, −15,
+−6, 0 and −50 dB, jumps of 6 to 20 dB, with the LNA at maximum on the top three (in v113, `0x033A`, `0x033D`,
+`0x03BD`, `0x03FF` and `0x0300`: −40, −25, −10, 0 and −65). With a weak signal only the top step counts; the bottom
+one, 21 dB above the stock one, lets a very strong signal saturate sooner.
 
 **Space.** The item cost ~150 B (the menu table slot, 28; the menu texts, 4; its table, routines and texts). It
 came from the number and text copy routines, which `mensagem.c` had just like the screen's, without the final 0:

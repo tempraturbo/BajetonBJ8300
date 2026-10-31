@@ -1088,9 +1088,10 @@ SEPARADA static void aprs_linhas(u32 a, unsigned y, unsigned n)
 
 SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
 {
-    static const char *const TECLAS_RX[6] = {"#", "HOLD #", "0", "OK", "*", "HOLD EXIT"};
-    static const char *const FAZ_RX[6] = {"MSG", "TO", "FLT", "OPEN", "OFF", "CLR"};
+    /* as teclas do rodape e o que cada uma faz, em pares, uma cadeia so (v114: sem os dois vetores) */
+    static const char RODAPE[] = "#\0MSG\0HOLD #\0TO\0" "0\0FLT\0OK\0OPEN\0*\0OFF\0HOLD EXIT\0CLR";
     char s[14];                            /* o nome do canal (12) ou "65535/65535", e o 0 */
+    const char *r = RODAPE;
     unsigned i = LADO_B != 0, x;
 
     if (NA_JANELA(0, 18)) {
@@ -1138,11 +1139,15 @@ SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
 
             if (i == 3)
                 x = 3;
-            c = etiqueta(x, y, TECLAS_RX[i], COR_ESTADO, COR_TEXTO, 0);
-            if (TECLAS_RX[i][0] == 'H')    /* segurada: o HOLD apagado no mesmo quadrado (a fonte nao tem
+            c = etiqueta(x, y, r, COR_ESTADO, COR_TEXTO, 0);
+            if (*r == 'H')                 /* segurada: o HOLD apagado no mesmo quadrado (a fonte nao tem
                                             * minusculas) */
                 texto(x + 3, y + 2, "HOLD", 1, COR_CINZA);
-            x = texto(c, y + 2, i == 3 && aberto ? "BACK" : FAZ_RX[i], 1, COR_CINZA) + 4;
+            while (*r++)
+                ;
+            x = texto(c, y + 2, i == 3 && aberto ? "BACK" : r, 1, COR_CINZA) + 4;
+            while (*r++)
+                ;
         }
     }
 }

@@ -811,7 +811,10 @@ CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o e
                    (0x01E46280, 0x01E43D50, 'gancho_teclas', 'editor: EXIT segurado 0,6 s sai sem salvar'),
                    # v112: o EXIT que cancela o editor limpa a tela (LIMPA(2)); com a caixa da tela
                    # MESSAGES aberta, nao: a tela do RX fica no LCD ate voltar
-                   (0x01E4D524, 0x01E3ACBA, 'gancho_limpa_caixa', 'APRS: o EXIT que fecha a caixa nao limpa a tela'))
+                   (0x01E4D524, 0x01E3ACBA, 'gancho_limpa_caixa', 'APRS: o EXIT que fecha a caixa nao limpa a tela'),
+                   # v114: a entrada do menu limpa embaixo da barra (LIMPA(2), com o traco em y 55); com a tela
+                   # MESSAGES voltando, nao: o menu calado nao desenha por cima
+                   (0x01E4CBAE, 0x01E3ACBA, 'gancho_limpa_volta', 'APRS: a entrada do menu na volta nao limpa a tela'))
 EDITOR_REMENDOS += ((0x01E4A0F0, bytes.fromhex('02fc041c'), bytes.fromhex('02fc0448'),
                      'o limite fixo da insercao vai de 15 a 37 letras'),
                     # v112: a saida do editor no EXIT que cancela (call 0x01E3C7AA) vira nop: o gancho_limpa_caixa,
@@ -857,7 +860,7 @@ MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'ganc
             'aprs_ind_le', 'aprs_ind_grava', 'aprs_ind_exibe', 'titulo_aprs_ind',
             'aprs_ssid_le', 'aprs_ssid_grava', 'aprs_ssid_exibe', 'titulo_aprs_ssid',
             'aprs_dest_le', 'aprs_dest_grava', 'aprs_dest_exibe', 'titulo_aprs_dest',
-            'aprs_caixa_abre', 'gancho_limpa_caixa', 'aprs_caminho_le', 'aprs_caminho_grava',
+            'aprs_caixa_abre', 'gancho_limpa_caixa', 'gancho_limpa_volta', 'aprs_caminho_le', 'aprs_caminho_grava',
             'aprs_caminho_opcoes', 'titulo_aprs_caminho', 'aprs_rx_grava', 'aprs_rx_opcoes', 'titulo_aprs_rx',
             'modem_ganho_le', 'modem_ganho_grava', 'titulo_modem_ganho', 'modem_ganho_opcoes',
             'aprs_decode_le', 'aprs_decode_grava', 'titulo_aprs_decode', 'aprs_decode_opcoes')

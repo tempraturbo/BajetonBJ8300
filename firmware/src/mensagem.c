@@ -1159,7 +1159,14 @@ static void espera_soltar(void)
 #define CONTA_TECLA   RAM(u8, 0x00014680)   /* voltas com a mesma tecla, no laco do sinal */
 #define MENU_EDITANDO RAM(u8, 0x00014BF9)
 #define MENU_TIPO     RAM(u8, 0x00014C00)
-#define EXIT_PRESO    RAM(u8, 0x00014BF1)   /* 0x9045 */
+/* A tecla que agiu segurada (o EXIT no editor, v72; o # da tela MESSAGES, v114): enquanto a marca esta no
+ * 0x9045 (b[0x14BF1]), toda leitura vale "nenhuma", e ela so sai depois de 5 leituras seguidas sem tecla.
+ * A leitura de fabrica (0x01E43D50) as vezes devolve 0, e nao 255, com a tecla apertada (0x01E43D5E: o bit 5
+ * de [obj+4] desligado) - a fabrica aguenta isso porque so aceita a mesma tecla em tres leituras seguidas.
+ * Na v114 uma leitura assim soltava a marca do #, a fabrica via o # segurado e, em 1 s, ligava a trava do
+ * teclado (o codigo longo do #, o evento 2: 0x01E49630 alterna b[0x14B87], o 0x901B dos ajustes). */
+#define TECLA_PRESA   RAM(u8, 0x00014BF1)   /* 0: nenhuma; 1 a 5: presa, as leituras soltas que ainda faltam */
+#define ESTADO_RX     RAM(u8, 0x00015367)   /* 0 e 1 sintoniza, 2 espera, 3 vigia, 4 recebendo, 5 MO */
 
 /* A caixa da tela MESSAGES (v112). O # curto abre por cima da tela a caixa MESSAGE TO SEND, sempre vazia, e o
  * # segurado a caixa TO, com o destinatario gravado: o laco sai (aprs_rx_grava), e o desvio depois do set
@@ -1171,11 +1178,15 @@ static void espera_soltar(void)
  * A volta a tela, depois do OK, do EXIT que cancela, do envio e do ack: a tecla OK, injetada aqui na leitura
  * das teclas do laco do sinal, como se o dono a apertasse - na tela principal ela abre o menu (0x01E4CBA2,
  * o evento 17), que reabre na pasta APRS (menu_abre); nos grupos, entra na pasta; na pasta, o item vai ao
- * MESSAGES e o OK o abre; aberto, o OK chama o set, e a tela volta. So com a TX parada e o envio feito; o
- * bipe das teclas (o BEEP PROMPT, b[0x14B72], que 0x01E38B4C le) fica calado enquanto isso. Uma tecla de
- * verdade ou o PTT desistem da volta, e ela desiste sozinha depois de 7 OKs sem a tela voltar (o
- * caminho pede 4). Cada OK: apertado 5 leituras de 10 ms (a fabrica so aceita a mesma em tres seguidas) e
- * solto 11, para o toque curto sair e a interface o tratar.
+ * MESSAGES e o OK o abre; aberto, o OK chama o set, e a tela volta. So com a TX parada, o envio feito, nenhum
+ * bipe tocando (b[0x14924]) e a recepcao fora da sintonia (o estado 2 ou mais), e um ciclo parado antes do
+ * primeiro OK (v114): o laco da tela para o laco do sinal, e o audio do chip e o amplificador so voltam quando a
+ * recepcao entra no estado 4 (0x01E47E0A e 0x01E47E1A) - com a tela aberta antes, ficavam mudos ate a saida
+ * (o OK e o EXIT da caixa sintonizam de novo, e o bipe da tecla passa pelo gerador de tom, 0x01E4B68C..
+ * 0x01E4B70E). O bipe das teclas (o BEEP PROMPT, b[0x14B72], que 0x01E38B4C le) fica calado enquanto isso. Uma
+ * tecla de verdade ou o PTT desistem da volta, e ela desiste sozinha depois de 7 ciclos sem a tela voltar (o
+ * caminho pede 5, com o parado). Cada OK: apertado 5 leituras de 10 ms (a fabrica so aceita a mesma em tres
+ * seguidas) e solto 11, para o toque curto sair e a interface o tratar.
  *
  * O estado mora no 0x9046 dos ajustes (b[0x14BF2]) e a conta da volta no 0x9043 (b[0x14BEF]), livres pela
  * varredura da v111, fora da janela do cabo; a partida e os ajustes de fabrica os zeram. */
@@ -1210,25 +1221,26 @@ unsigned gancho_teclas(void)
 {
     unsigned k = TECLAS(), t = TELA_APRS, j = INJETA, editor = MENU_TIPO == 7 && MENU_EDITANDO == 1;
 
-    if (k != TECLA_EXIT)
-        EXIT_PRESO = 0;
-    else if (EXIT_PRESO)
+    if (TECLA_PRESA) {                     /* a tecla que ja agiu segurada: nada passa ate soltar de vez */
+        TECLA_PRESA = k == 255 ? TECLA_PRESA - 1 : 5;
         k = 255;
-    else if (editor && CONTA_TECLA >= 60) {
+    } else if (k == TECLA_EXIT && editor && CONTA_TECLA >= 60) {
         EDITOR_CURSOR = 0;
-        EXIT_PRESO = 1;
+        TECLA_PRESA = 5;
         k = 255;
     }
-    if ((t & CAIXA) && !editor)            /* a caixa fechou pelo EXIT (o OK ja pos a volta) */
-        TELA_APRS = t = (t & FILTRO_OFF) | VOLTA;
+    if ((t & CAIXA) && !editor) {          /* a caixa fechou pelo EXIT (o OK ja pos a volta): sintoniza de */
+        TELA_APRS = t = (t & FILTRO_OFF) | VOLTA;   /* novo, como o OK de fabrica (0x01E49A86) */
+        ESTADO_RX = 0;
+    }
     if (!(t & VOLTA))
         return k;
     if (k != 255 || !PTT_SOLTO() || (j & 0x7F) >= 7 * 16) {
         volta_fim();
         return k;
     }
-    if (ESTADO_MSG || TX_ESTADO || MODO_TELA > 1)
-        return k;                          /* o envio ainda nao foi, ou a tela nao e a principal nem o menu */
+    if (ESTADO_MSG || TX_ESTADO || MODO_TELA > 1 || BIPE || ESTADO_RX < 2)
+        return k;                          /* o envio, um bipe ou a sintonia em curso; ou outra tela */
     if (!j) {
         j = BEEP_PROMPT << 7;
         BEEP_PROMPT = 0;
@@ -1239,7 +1251,7 @@ unsigned gancho_teclas(void)
         MENU_TIPO = 0;
     }
     INJETA = j + 1;
-    return (j & 15) < 5 ? TECLA_OK : 255;
+    return (j & 15) < 5 && (j & 0x70) ? TECLA_OK : 255;   /* o primeiro ciclo, parado */
 }
 
 /* Parar no meio: o PTT ou qualquer tecla. */
@@ -1813,9 +1825,11 @@ void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas)
 #define ANEL_VELHOS(a)  ((a) >> 2)
 #define DUPLICADO_MS 30000u                /* a mesma estacao com o mesmo texto: so a primeira entra */
 #define EXIT_LONGO   100                   /* o EXIT segurado 0,6 s */
+#define CERQ_LONGO   101                   /* o # segurado 0,6 s (v114) */
 #define ABERTO       1u                    /* os bits de modo, no laco */
 #define PRESO        2u                    /* uma tecla esta apertada: so conta de novo depois de solta */
 #define ESPERA_EXIT  4u                    /* o EXIT apertado: curto ou segurado, so se sabe depois */
+#define ESPERA_CERQ  32u                   /* o # apertado, do mesmo jeito (v114) */
 #define ESCURO       8u                    /* a tela apagada pelo * */
 #define REPETE       16u                   /* uma seta apertada: segurada, ela repete */
 #define REPETE_DEPOIS 800u                 /* a seta segurada comeca a repetir em 0,8 s, a cada 0,15 s */
@@ -2165,7 +2179,9 @@ void aprs_rx_grava(void)
         if (k == 255) {
             if (modo & ESPERA_EXIT)
                 f = TECLA_EXIT;
-            modo &= ~(PRESO | ESPERA_EXIT | REPETE);
+            else if (modo & ESPERA_CERQ)
+                f = TECLA_CERQUILHA;
+            modo &= ~(PRESO | ESPERA_EXIT | ESPERA_CERQ | REPETE);
         } else if (!(modo & PRESO)) {
             modo |= PRESO;
             desde_tecla = TIQUE_MS;
@@ -2175,14 +2191,16 @@ void aprs_rx_grava(void)
                 pede = 15;
             } else if (k == TECLA_EXIT) {
                 modo |= ESPERA_EXIT;
+            } else if (k == TECLA_CERQUILHA) {
+                modo |= ESPERA_CERQ;
             } else {
                 f = k;
                 if (k == TECLA_CIMA || k == TECLA_BAIXO)
                     modo |= REPETE;
             }
-        } else if ((modo & ESPERA_EXIT) && TIQUE_MS - desde_tecla >= 600) {
-            modo &= ~ESPERA_EXIT;
-            f = EXIT_LONGO;
+        } else if ((modo & (ESPERA_EXIT | ESPERA_CERQ)) && TIQUE_MS - desde_tecla >= 600) {
+            f = modo & ESPERA_EXIT ? EXIT_LONGO : CERQ_LONGO;
+            modo &= ~(ESPERA_EXIT | ESPERA_CERQ);
         } else if ((modo & REPETE) && TIQUE_MS - desde_tecla >= REPETE_DEPOIS) {
             desde_tecla = TIQUE_MS - REPETE_DEPOIS + REPETE_CADA;
             f = k;
@@ -2208,9 +2226,11 @@ void aprs_rx_grava(void)
                 modo &= ~ABERTO;
             } else if (f == TECLA_EXIT && (modo & ABERTO)) {
                 modo &= ~ABERTO;
-            } else {                       /* o EXIT curto e as outras teclas saem; o # (v112), para a caixa */
-                if (f == TECLA_CERQUILHA)
+            } else {                       /* o EXIT curto e as outras teclas saem; o # (v112), para a caixa: */
+                if (f == TECLA_CERQUILHA)  /* a da mensagem, ou a do TO segurado (v114: a 0,6 s, apertado) */
                     TELA_APRS = CAIXA_MSG;
+                else if (f == CERQ_LONGO)
+                    TELA_APRS = CAIXA_TO;
                 break;
             }
             pede = 15;
@@ -2284,9 +2304,10 @@ void aprs_rx_grava(void)
         if (i != h.ruins + h.consertados)
             pede |= 8;
     }
-    espera_soltar();
-    if (TELA_APRS == CAIXA_MSG && TIQUE_MS - desde_tecla >= 600)
-        TELA_APRS = CAIXA_TO;              /* o # segurado 0,6 s: a caixa do TO */
+    if (TELA_APRS == CAIXA_TO)             /* o # ainda apertado: a caixa abre ja, e a fabrica nao o ve */
+        TECLA_PRESA = 5;
+    else
+        espera_soltar();
     if (TELA_APRS)                         /* a caixa ou a volta: o FILTER como esta */
         TELA_APRS |= num[0] * FILTRO_OFF;
     if (modo & ESCURO)

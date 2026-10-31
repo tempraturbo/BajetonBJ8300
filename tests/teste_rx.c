@@ -16,18 +16,19 @@
  *   G os mesmos registradores no fim, e quantas vezes o aplica_audio rodou
  *   V <o SAVE na primeira tecla> <o SAVE no fim> (o do menu e 3)
  *   C <syncs marca> <syncs espaco> <BAD> <FIX> <transbordou> <faixas> <ms> <luz> <posicao na tela>
- *   T <b[0x14BF2], a caixa e a volta> <b[0x14BEF]> <o BEEP PROMPT> (v112) */
+ *   T <b[0x14BF2], a caixa e a volta> <b[0x14BEF]> <o BEEP PROMPT> <a tecla presa, + 1> (v112; v114) */
 #include "../firmware/src/mensagem.c"
 
 /* A volta (v112): o gancho_teclas numa sequencia de estados, cada chamada uma leitura de 10 ms do laco do
- * sinal. Imprime "K <o que devolveu, em sequencia>" e "R <TELA_APRS> <INJETA> <BEEP> <item> <valor> <tipo>"
- * depois de cada passo. */
+ * sinal. Imprime "K <o que devolveu, em sequencia>" e "R <TELA_APRS> <INJETA> <BEEP> <item> <valor> <tipo>
+ * <estado da recepcao> <tecla presa>" depois de cada passo. */
 static void leituras(unsigned n)
 {
     printf("K");
     while (n--)
         printf(" %u", gancho_teclas());
-    printf("\nR %u %u %u %u %u %u\n", TELA_APRS, INJETA, BEEP_PROMPT, MENU_NUMERO, VALOR, MENU_TIPO);
+    printf("\nR %u %u %u %u %u %u %u %u\n", TELA_APRS, INJETA, BEEP_PROMPT, MENU_NUMERO, VALOR, MENU_TIPO,
+           ESTADO_RX, TECLA_PRESA);
 }
 
 static int volta(void)
@@ -35,10 +36,11 @@ static int volta(void)
     RAM(u32, 0x001E5004) = 0x1000;         /* o PTT solto */
     TELA_APRS = VOLTA;                     /* 1. o envio no ar: espera, sem contar */
     BEEP_PROMPT = 1;
+    ESTADO_RX = 4;
     ESTADO_MSG = 'a';
     TX_ESTADO = 1;
     leituras(3);
-    ESTADO_MSG = TX_ESTADO = 0;            /* 2. na tela principal: o OK que abre o menu */
+    ESTADO_MSG = TX_ESTADO = 0;            /* 2. na tela principal: um ciclo parado (v114) */
     leituras(16);
     MODO_TELA = 1;                         /* 3. nos grupos: o OK que entra na pasta */
     MENU_TABELA = MENU_BASE;
@@ -50,10 +52,25 @@ static int volta(void)
     tecla_forcada = TECLA_BAIXO;           /* 5. uma tecla de verdade: a volta desiste e o bipe volta */
     leituras(1);
     tecla_forcada = 255;
-    TELA_APRS = CAIXA_MSG | FILTRO_OFF;    /* 6. a caixa fechou pelo EXIT (o editor nao esta aberto) */
-    leituras(1);
-    MENU_TABELA = MENU_BASE;               /* 7. presa nos grupos: desiste depois de 7 OKs */
+    TELA_APRS = CAIXA_MSG | FILTRO_OFF;    /* 6. a caixa fechou pelo EXIT (o editor nao esta aberto): */
+    leituras(1);                           /* sintoniza de novo, e espera a sintonia */
+    ESTADO_RX = 2;                         /* 7. presa nos grupos: desiste depois de 7 ciclos */
+    MENU_TABELA = MENU_BASE;
     leituras(7 * 16 + 1);
+    TECLA_PRESA = 5;                       /* 8. a tecla que agiu segurada (v115): nada passa ate soltar de */
+    tecla_forcada = TECLA_CERQUILHA;       /* vez - nem a leitura falsa 0 da fabrica no meio */
+    leituras(3);
+    tecla_forcada = 0;
+    leituras(1);
+    tecla_forcada = 255;
+    leituras(4);
+    tecla_forcada = TECLA_CERQUILHA;
+    leituras(1);
+    tecla_forcada = 255;
+    leituras(5);
+    tecla_forcada = TECLA_CERQUILHA;
+    leituras(1);
+    tecla_forcada = 255;
     return 0;
 }
 
@@ -179,7 +196,7 @@ int main(int argc, char **argv)
 
     aprs_rx_grava();
     printf("V %u %u\n", save_na_tela, RAM(u8, 0x00014B6D));
-    printf("T %u %u %u\n", TELA_APRS, INJETA, BEEP_PROMPT);
+    printf("T %u %u %u %u\n", TELA_APRS, INJETA, BEEP_PROMPT, TECLA_PRESA);
 
     hist = hist_abre(&anel);
     printf("H %d\n", hist);

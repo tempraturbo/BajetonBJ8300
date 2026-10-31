@@ -5,7 +5,43 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
-## v113 — Oct 31 — RX GAIN in CALIBRATION, with v112's MESSAGES screen (to be tested)
+## v115 — Oct 31 — the held key only lets go for good: holding # no longer locks the keypad (to be tested)
+
+`BJ8300_BANK_v115.anc` (sha256 `1bba2f5b…`), kept out of the commits like the other test builds. **v114 locked the
+owner's keypad**: holding # on the MESSAGES screen, TO's box opened and, a moment later, the radio turned on the
+stock keypad lock, which is saved in the settings and does not go away by reflashing (keys beep and do nothing;
+only PTT and the side keys work). Read through the cable, the settings record in use only differed from the
+previous one in `0x901B`, the lock, from 0 to 1. The lock toggles by holding # for 1 s, on the main screen or in
+the menu: that is how it comes off.
+
+- **The cause.** v114 marked # as "held" until released, but cleared the mark on the first read without it. The
+  stock key read sometimes returns 0 with the key pressed; with one of those the mark went, the firmware saw #
+  still pressed and, 1 s later, turned the lock on.
+- **The fix.** After a key acts while held (# on the MESSAGES screen and EXIT held in the editor), every read counts
+  as "none" until the key has been released for 5 reads in a row; any read with a key, the false one included,
+  restarts the count. `teste_rx.py` checks the false read in the middle.
+- The rest is v114. 6 B remain; the stack stays at 740, 620 and 696 B, and MESSAGES' set at 732.
+
+## v114 — Oct 31 — the fixes from the v113 test: sound on the return, holding #, no black screen, and a higher MAX (locked the keypad: see v115)
+
+`BJ8300_BANK_v114.anc` (sha256 `c99f8920…`), kept out of the commits like the other test builds. The VERSION item
+shows **V3.2T**. The owner tested v113 and found three defects on the MESSAGES screen:
+
+- **No sound on the return.** With SQL open, after TO's box (by OK or by EXIT) or a cancelled message box, the
+  screen came back without sound. It opened before reception settled after the key beep and the retune, and its
+  loop stops the rest of the radio. Now the return waits for no beep to be playing and for reception to be out of
+  tuning, and it waits one cycle before the first OK; the cancelling EXIT retunes, like OK.
+- **Holding #** opens TO's box at 0.6 s, still pressed, as holding EXIT clears the history; # stays held until it
+  is released, so the editor does not read it.
+- **The black screen with a line**, which showed between sending and the return: it is the menu entry's clear,
+  which now does not run during the return. The main screen stays until the RX screen is back.
+- **RX GAIN MAX**, at the owner's request, with the upper steps higher: 0, −6, −15, −30 and −50 dB (in v113, 0, −10,
+  −25, −40 and −65). There is no gain above 0 dB: the top step is already the chip's maximum.
+- Space: the footer labels in a single string. 14 B remain; the stack stays at 740, 620 and 696 B, and MESSAGES'
+  set goes to 732 of 740. `teste_rx.py` checks holding #, the held key, the wait for tuning and the idle cycle.
+  [Section 24](reverse-engineering.md#the-messages-screen-the-boxes-and-the-return-v112).
+
+## v113 — Oct 31 — RX GAIN in CALIBRATION, with v112's MESSAGES screen (tested: the fixes came in v114)
 
 `BJ8300_BANK_v113.anc` (sha256 `f8d994ba…`), kept out of the commits like the other test builds: all of v112 plus
 RX GAIN. The VERSION item shows **V3.2T**, and if the owner's test passes it becomes the release.

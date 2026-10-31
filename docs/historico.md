@@ -5,7 +5,43 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
-## v113 — 31/10 — o RX GAIN na CALIBRATION, com a tela MESSAGES da v112 (a testar)
+## v115 — 31/10 — a tecla presa só solta de vez: o # segurado não trava mais o teclado (a testar)
+
+`BJ8300_BANK_v115.anc` (sha256 `1bba2f5b…`), fora dos commits como as outras de teste. **A v114 travou o teclado do
+rádio do dono**: segurando o # na tela MESSAGES, a caixa do TO abriu e, um instante depois, o rádio ligou a trava
+do teclado de fábrica, que fica gravada nos ajustes e não sai regravando o firmware (as teclas bipam e não fazem
+nada; só o PTT e as laterais funcionam). Lido pelo cabo, o registro de ajustes em uso só diferia do anterior no
+`0x901B`, a trava, de 0 para 1. A trava liga e desliga com o # segurado 1 s, na tela principal ou no menu: é
+assim que ela sai.
+
+- **A causa.** A v114 marcava o # como "preso" até soltar, mas soltava a marca na primeira leitura sem ele. A
+  leitura de teclas de fábrica às vezes devolve 0 com a tecla apertada; com uma dessas, a marca saía, a fábrica via
+  o # ainda apertado e, 1 s depois, ligava a trava.
+- **O acerto.** Depois de uma tecla agir segurada (o # da tela MESSAGES e o EXIT segurado no editor), toda leitura
+  vale "nenhuma" até a tecla ficar 5 leituras seguidas solta; qualquer leitura com tecla, a falsa inclusive,
+  recomeça a conta. O `teste_rx.py` confere a leitura falsa no meio.
+- O resto é a v114. Sobram 6 B; a pilha segue nos 740, 620 e 696 B, e o set do MESSAGES em 732.
+
+## v114 — 31/10 — os acertos do teste da v113: o som na volta, o # segurado, sem a tela preta, e o MAX mais alto (travou o teclado: ver a v115)
+
+`BJ8300_BANK_v114.anc` (sha256 `c99f8920…`), fora dos commits como as outras de teste. O item VERSION mostra
+**V3.2T**. O dono testou a v113 e achou três defeitos na tela MESSAGES:
+
+- **O som mudo na volta.** Com o SQL aberto, depois da caixa do TO (pelo OK ou pelo EXIT) ou da caixa da mensagem
+  cancelada, a tela voltava sem som. Ela abria antes de a recepção se acertar depois do bipe da tecla e da
+  sintonia nova, e o laço dela para o resto do rádio. Agora a volta espera não haver bipe tocando e a recepção ter
+  saído da sintonia, e fica um ciclo parada antes do primeiro OK; o EXIT que cancela sintoniza de novo, como o OK.
+- **O # segurado** abre a caixa do TO aos 0,6 s, ainda apertado, como o EXIT segurado apaga o histórico; o # fica
+  preso até soltar, para o editor não o ler.
+- **A tela preta com um traço**, que aparecia entre o envio e a volta: é a limpeza da entrada do menu, que agora
+  não roda durante a volta. Fica a tela principal até a do RX voltar.
+- **RX GAIN MAX**, a pedido do dono, com os degraus de cima mais altos: 0, −6, −15, −30 e −50 dB (na v113, 0, −10,
+  −25, −40 e −65). Não há ganho acima de 0 dB: o degrau de cima já é o máximo do chip.
+- O espaço: as legendas do rodapé numa cadeia só. Sobram 14 B; a pilha segue nos 740, 620 e 696 B, e o set do
+  MESSAGES vai a 732 de 740. O `teste_rx.py` confere o # segurado, a tecla presa, a espera da sintonia e o ciclo
+  parado. [Seção 24](engenharia-reversa.md#a-tela-messages-as-caixas-e-a-volta-v112).
+
+## v113 — 31/10 — o RX GAIN na CALIBRATION, com a tela MESSAGES da v112 (testada: os acertos vieram na v114)
 
 `BJ8300_BANK_v113.anc` (sha256 `f8d994ba…`), fora dos commits como as outras de teste: a v112 inteira e o RX GAIN.
 O item VERSION mostra **V3.2T**, e se o teste do dono passar ela vira a release.

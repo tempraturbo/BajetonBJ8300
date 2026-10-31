@@ -2026,6 +2026,15 @@ void gancho_limpa(unsigned modo)
         LIMPA(modo);
 }
 
+/* No lugar da limpeza da entrada do menu (0x01E4CBAE, LIMPA(2): preto embaixo da barra e o traco branco em y
+ * 55): com a tela MESSAGES voltando (v114), nada - o menu calado nao desenha por cima, e o traco ficava a vista
+ * ate a tela voltar. */
+void gancho_limpa_volta(unsigned modo)
+{
+    if (!(TELA_APRS & 8))
+        LIMPA(modo);
+}
+
 /* No lugar da limpeza do EXIT que cancela o editor de texto (0x01E4D524, LIMPA(2)), e da saida do editor
  * logo depois (0x01E4D528, que vira nop no montar.py; ela redesenha a bateria e limpa de novo, LIMPA(5)):
  * com a caixa da tela MESSAGES aberta (v112), nada - a tela do RX fica no LCD ate voltar. Sem ela, as duas

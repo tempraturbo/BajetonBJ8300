@@ -2184,7 +2184,7 @@ volta acham o MESSAGES e o TO pelas posições 2 e 5 (`ITEM_MESSAGES` e `ITEM_TO
 **O # na tela.** O código cru do # é o 17 (a última coluna da matriz, `0x01E60369`). O laço sai no aperto, como
 com as outras teclas, com `b[0x14BF2]` = 1; a saída já espera a tecla soltar (`espera_soltar`), e se o # ficou
 apertado 0,6 s a caixa pedida vira a do TO (2). O bit 2 leva o FILTER desligado pela tecla 0, e o ack sai com 8
-(a volta). Medir na saída deixou o laço como o da v111: generalizar a espera do EXIT para o # custava 90 B.
+(a volta). Desde a v114 o # segurado age aos 0,6 s, ainda apertado ([abaixo](#a-tela-messages-as-caixas-e-a-volta-v112)).
 
 **A caixa.** O set do MESSAGES volta ao OK de fábrica (`0x01E49996`, que o chama em `0x01E49A00`), e o desvio
 depois do set (`b_menu_marca`, `0x01E49A86`) chama o `aprs_caixa_abre`: o item vai ao TO (`b[0x14BFA]` = 5)
@@ -2232,6 +2232,35 @@ desenho do editor do menu, e o desenho dos rótulos e das colunas do espectro (`
 espectro que já moram lá os chamam, e o espectro só roda no modo 20 ([seção 15](#15-vozes-fora); a `4g`
 confere que nada do `.text` nem do `.livre` chama o `.vozes`). Ficam 34 B no `.livre` e 70 no `.vozes`. A
 pilha: interface 740, laço do sinal 620, partida 696, e o set do MESSAGES 728 de 740.
+
+**Os acertos da v114**, do teste do dono na v113:
+
+- **O som mudo na volta.** Com o SQL aberto, depois da caixa do TO ou do EXIT que cancela a tela voltava sem
+  som até a próxima volta por uma transmissão. O laço da tela para o laço do sinal, e o áudio do chip e o
+  amplificador só voltam quando a recepção entra no estado 4 (`0x01E47E0A`, o áudio; `0x01E47E1A`, o pedido do
+  amplificador): o OK que fecha a edição sintoniza de novo (`b[0x15367]` = 0, `0x01E49A86`), e o bipe da tecla
+  toca pelo gerador de tom do chip, com o fim dele no laço da interface (`0x01E4B68C..0x01E4B70E`). A tela abria
+  antes de tudo isso assentar; depois da transmissão a volta já esperava o fim da TX e passava por mais OKs. Agora
+  a volta só aperta com nenhum bipe tocando (`b[0x14924]`) e a recepção fora da sintonia (o estado 2 ou mais), e
+  fica um ciclo parada antes do primeiro OK; o EXIT que cancela também sintoniza de novo, como o OK de fábrica.
+- **O # segurado** age aos 0,6 s com a tecla ainda apertada, como o EXIT segurado (`ESPERA_CERQ` no laço). A
+  saída não espera soltar: o # vai para a tecla presa (`b[0x14BF1]`, o `0x9045`, que até a v113 era só a marca do
+  EXIT segurado no editor e agora guarda o código cru + 1 de qualquer tecla), e o `gancho_teclas` o devolve como
+  "nenhuma" até soltar, para o editor não o ler como a troca de ABC e 123. A v112 dizia que generalizar a espera
+  do EXIT custava 90 B: medido de novo, dá o mesmo tamanho de medir na saída.
+- **A tela preta com o traço.** A entrada do menu limpa embaixo da barra (`LIMPA(2)` em `0x01E4CBAE`: preto de 16
+  a 128 e um traço branco em y 55), e na volta o menu calado não desenha por cima. O `gancho_limpa_volta` pula
+  essa limpeza com a volta pedida: a tela principal fica até a tela do RX voltar.
+- **O espaço**: as legendas do rodapé numa cadeia só, separadas por 0, no lugar dos dois vetores de ponteiros (34
+  B a menos). Sobram 14 B no `.livre`; a pilha fica em 740, 620 e 696, e o set do MESSAGES em 732 de 740.
+- **A tecla presa da v114 travou o teclado (v115).** A marca soltava na primeira leitura sem a tecla, e a leitura de
+  fábrica (`0x01E43D50`) às vezes devolve 0 com a tecla apertada (`0x01E43D5E`: o bit 5 de `[obj+4]` desligado; a
+  fábrica aguenta porque só aceita a mesma tecla em três leituras seguidas). Com o # ainda apertado, a fábrica
+  passava a vê-lo e, aos 100 passes, mandava o código longo do # (o 2, `0x01E6037B`), que na tela principal e no
+  menu vai a `0x01E49630`: a trava do teclado, `b[0x14B87]` (o `0x901B` dos ajustes, gravado), alternada entre 0 e
+  1. Lido pelo cabo no rádio do dono, o registro de ajustes em uso só diferia do anterior nesse byte. Desde a v115
+  a marca é uma conta regressiva de 5 (`b[0x14BF1]`): enquanto ela não zera, toda leitura vale "nenhuma"; cada
+  leitura sem tecla desconta 1, e qualquer leitura com tecla, a falsa inclusive, volta a 5.
 
 ## 25. A pasta AUDIO: o EXPANDER e a NOISE GATE, e o que é a NR (v79)
 
@@ -2508,7 +2537,8 @@ CHIRP usa para gravar os dois.
 **O AGC do BK4819** anda por cinco degraus, do 3 (o de mais ganho) ao −1, cada um um registrador: `0x13`, `0x12`,
 `0x11`, `0x10` e `0x14`. Cada um soma quatro ganhos, pela tabela da Beken (`BK4819_Registers_V1.1`, em
 `docs/referencias`): o LNA curto (bits 9:8: 0, −11, −16 e −19 dB), o LNA (7:5: 0, −2, −4, −6, −9, −14, −19 e −24
-dB), o mixer (4:3: 0, −3, −6 e −8 dB) e o PGA (2:0: 0, −3, −6, −9, −15, −21, −27 e −33 dB). Ele desce um degrau
+dB), o mixer (4:3: 0, −3, −6 e −8 dB) e o PGA (2:0: 0, −3, −6, −9, −15, −21, −27 e −33 dB). Não há ganho acima de
+0 dB: o degrau com os quatro no máximo é o teto do chip. Ele desce um degrau
 quando o nível passa do limite de cima do `0x49` e sobe quando cai abaixo do de baixo, 1 dB por passo; a fábrica
 grava `0x2AB2`, 85 e 50, uma janela de 35 dB. Um salto entre degraus maior que a janela faz o AGC pular entre os
 dois com um sinal forte. O `0x7E` (`0x303E`) deixa o AGC no automático.
@@ -2523,8 +2553,10 @@ os da Beken: com eles o último degrau seria −84.)
 fora da janela do cabo) como `0xA5`: nem o EQ das v108 a v110 (`0xB0` + a posição) nem a sujeira do cabo até a
 v110 (a frequência do VFO A em BCD) deixam esse valor ali, e qualquer outro vale DEFAULT. O `aplica_agc`
 (`bancos.c`) grava os cinco da tabela escolhida, na partida (depois da de fábrica), nos ajustes de fábrica ou do
-cabo e no OK do item. MAX, a pedido do dono: `0x033A`, `0x033D`, `0x03BD`, `0x03FF` e `0x0300`, −40, −25, −10, 0
-e −65 dB, saltos de 10 a 25 dB. Com sinal fraco só o degrau de cima conta.
+cabo e no OK do item. MAX, a pedido do dono, desde a v114: `0x037A`, `0x03FB`, `0x03FD`, `0x03FF` e `0x0298`, −30,
+−15, −6, 0 e −50 dB, saltos de 6 a 20 dB, com o LNA no máximo nos três de cima (na v113, `0x033A`, `0x033D`,
+`0x03BD`, `0x03FF` e `0x0300`: −40, −25, −10, 0 e −65). Com sinal fraco só o degrau de cima conta; o de baixo, 21
+dB acima do de fábrica, deixa um sinal muito forte saturar antes.
 
 **O espaço.** O item custou ~150 B (a vaga da tabela do menu, 28; os textos do menu, 4; a tabela, as rotinas e
 os textos dele). Veio das rotinas de número e de cópia de texto, que o `mensagem.c` tinha iguais às da tela, sem
