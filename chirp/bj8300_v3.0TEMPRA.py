@@ -808,6 +808,18 @@ EXPANDER_OPTIONS = ['Off', 'Low', 'Mid', 'High']
 # expander byte (1 = Off); with it, the mark is the high nibble alone (0xC0 to 0xCF), and the expander level
 # stays in bits 1:0. The factory reset's 208 (0xD0) still has no mark: expander Off, de-emphasis On.
 DEEMPHASIS_OPTIONS = ['On', 'Off']
+# AUDIO > EQ BASS and EQ TREBLE, MIC > EQ BASS and EQ TREBLE (firmware V3.1T): the radio chip's RX and TX
+# equalizers (bass at 300 Hz, treble at 3 kHz), two settings per byte, 0x903A the RX one and 0x903C the TX one:
+# bits 7:6 the mark, 10; bits 5:3 the treble and 2:0 the bass, as positions in the radio's menu lists (0 =
+# DEFAULT, the stock response, so each list skips the step DEFAULT already is). Without the mark, or with the
+# treble past its list, both read DEFAULT: the factory reset leaves 0xCA and 0xC7 there, and earlier firmware
+# kept runtime values in them (always below 0x80).
+EQ_MARK = 0x80
+EQ_RX_ADDR, EQ_TX_ADDR = 0x903A, 0x903C
+EQ_RX_BASS = ['DEFAULT', '-3 dB', '-2 dB', '0 dB', '+1 dB', '+2 dB', '+3 dB', '+4 dB']     # DEFAULT: -1 dB
+EQ_RX_TREBLE = ['DEFAULT', '-1 dB', '+1 dB', '+2 dB', '+3 dB', '+4 dB']                    # DEFAULT: 0 dB
+EQ_TX_BASS = ['DEFAULT', '-3 dB', '-2 dB', '-1 dB', '+1 dB', '+2 dB', '+3 dB', '+4 dB']    # DEFAULT: 0 dB
+EQ_TX_TREBLE = ['DEFAULT', '-1 dB', '0 dB', '+1 dB', '+2 dB', '+3 dB', '+4 dB']            # DEFAULT: the factory's
 NOISE_GATE_ADDR, NOISE_GATE_MARK = 0x9031, 0xE8
 # MIC > NOISE REDUCTION (firmware v80): the microphone noise reduction, with levels, in the stock byte 0x9032
 # (0 Off, 1 Default = the stock On, 2 Low, 3 Mid, 4 High); above 4, as the factory reset leaves it (200), the
@@ -888,6 +900,12 @@ def _expander_fields(raw):
     if raw & 0xF0 != EXPANDER_MARK:
         return 0, False
     return raw & 3, raw >> 2 & 3 == 1
+
+
+def _eq_byte(raw, trebles):
+    """The EQ byte as the radio reads it (firmware V3.1T): as it is, or the mark alone (bass and treble DEFAULT)
+    when it has no mark or its treble is past the `trebles` options of its list."""
+    return raw if raw & 0xC0 == EQ_MARK and raw >> 3 & 7 < trebles else EQ_MARK
 
 
 def _marked_index(raw, mark, count, stock):
@@ -1145,11 +1163,19 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         _put(parent, self._expander_setting(), after='settings_unknown_9032')
         _put(parent, self._noise_gate_setting(), after='expander')
         _put(parent, self._deemphasis_setting(), after='noise_gate')        # DE-EMPHASIS (firmware v85)
-        _put(parent, _mic_gain_setting(self._memobj.settings.unknown_9033), after='deemphasis')
+        # EQ BASS and EQ TREBLE (firmware V3.1T): the RX pair closes the AUDIO folder, the TX pair the MIC one
+        rx_bass, rx_treble = self._eq_settings('RX', EQ_RX_ADDR, EQ_RX_BASS, EQ_RX_TREBLE, ('-1 dB', '0 dB'))
+        tx_bass, tx_treble = self._eq_settings('TX', EQ_TX_ADDR, EQ_TX_BASS, EQ_TX_TREBLE,
+                                               ('0 dB', "the factory's own level, below -1 dB"))
+        _put(parent, rx_bass, after='deemphasis')
+        _put(parent, rx_treble, after='eq_rx_bass')
+        _put(parent, _mic_gain_setting(self._memobj.settings.unknown_9033), after='eq_rx_treble')
         # COMPRESSOR, MIC AGC and CRYSTAL FINE (firmware v59) right after it, in the same block
         _put(parent, _compressor_setting(self._memobj.settings.unknown_9035), after='settings_unknown_9033')
         _put(parent, _mic_agc_setting(self._memobj.settings.unknown_9036), after='settings_unknown_9035')
-        _put(parent, _crystal_setting(self._memobj.settings), after='settings_unknown_9036')
+        _put(parent, tx_bass, after='settings_unknown_9036')
+        _put(parent, tx_treble, after='eq_tx_bass')
+        _put(parent, _crystal_setting(self._memobj.settings), after='eq_tx_treble')
         _put(parent, _brightness_setting(self._memobj.settings.unknown_9039), after='settings_unknown_9037')
         _put(parent, _light_pwm_setting(self._memobj.settings.unknown_903b), after='settings_unknown_9039')
         _put(parent, self._modem_gain_setting(), after='settings_unknown_903b')
@@ -1492,24 +1518,39 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         rs.set_apply_callback(apply)
         return rs
 
-    def _expander_byte_setting(self, name, label, options, index, store, doc):
-        """A list kept in a field of the 0x9034 byte, which the expander and the de-emphasis share: index
-        reads the field from (level, de-emphasis off), store makes the new byte from the list position and
-        those two as they are now in the image."""
+    def _byte_field_setting(self, name, label, addr, fields, options, index, store, doc):
+        """A list kept in a field of a byte two settings share (0x9034, the expander and the de-emphasis; the
+        EQ bytes, bass and treble): fields(byte) gives what the byte holds, index(*fields) the list position,
+        and store(position, *fields) the new byte, made from the byte as it is in the image when written, so
+        the other setting's field stays."""
         rs = RadioSetting(name, label, RadioSettingValueList(
-            options, current_index=index(*_expander_fields(self._mmap[EXPANDER_ADDR][0]))))
+            options, current_index=index(*fields(self._mmap[addr][0]))))
         rs.set_doc(doc)
 
         def apply(setting):
             if setting.value.changed():
-                fields = _expander_fields(self._mmap[EXPANDER_ADDR][0])
-                self._mmap[EXPANDER_ADDR] = bytes([store(options.index(str(setting.value)), *fields)])
+                self._mmap[addr] = bytes([store(options.index(str(setting.value)), *fields(self._mmap[addr][0]))])
         rs.set_apply_callback(apply)
         return rs
 
+    def _eq_settings(self, side, addr, basses, trebles, stock):
+        """EQ bass and EQ treble of one side, the RX (the radio's AUDIO folder) or the TX (its MIC folder): the
+        two fields of the EQ byte at addr. stock is what DEFAULT means for each."""
+        folder = 'AUDIO' if side == 'RX' else 'MIC'
+
+        def setting(part, options, shift, band, default):
+            return self._byte_field_setting(
+                'eq_%s_%s' % (side.lower(), part), 'EQ %s (%s)' % (part, side), addr,
+                lambda raw: (_eq_byte(raw, len(trebles)),), options,
+                lambda b: b >> shift & 7, lambda i, b: b & ~(7 << shift) | i << shift,
+                "The %s (%s) of the radio chip's %s audio equalizer, as the radio's %s > EQ %s item. DEFAULT is "
+                'the stock response (%s); the other steps follow in order, without the one DEFAULT already is. '
+                'Needs firmware V3.1T or later.' % (part, band, side, folder, part.upper(), default))
+        return setting('bass', basses, 0, '300 Hz', stock[0]), setting('treble', trebles, 3, '3 kHz', stock[1])
+
     def _expander_setting(self):
-        return self._expander_byte_setting(
-            'expander', 'Expander', EXPANDER_OPTIONS, lambda level, off: level,
+        return self._byte_field_setting(
+            'expander', 'Expander', EXPANDER_ADDR, _expander_fields, EXPANDER_OPTIONS, lambda level, off: level,
             lambda i, level, off: EXPANDER_MARK | off << 2 | i,
             "The radio chip's RX audio expander, as the radio's AUDIO > EXPANDER item, the twin of the "
             'compressor: below its reference level each dB less becomes 2, 3 or 4 (Low, Mid, High). It undoes '
@@ -1518,8 +1559,9 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             'later.')
 
     def _deemphasis_setting(self):
-        return self._expander_byte_setting(
-            'deemphasis', 'De-emphasis', DEEMPHASIS_OPTIONS, lambda level, off: int(off),
+        return self._byte_field_setting(
+            'deemphasis', 'De-emphasis', EXPANDER_ADDR, _expander_fields, DEEMPHASIS_OPTIONS,
+            lambda level, off: int(off),
             lambda i, level, off: EXPANDER_MARK | i << 2 | level,
             "The radio chip's FM RX de-emphasis, as the radio's AUDIO > DE-EMPHASIS item: the filter every FM "
             'receiver uses to take the treble back to the level it had before the transmitter boosted it, '

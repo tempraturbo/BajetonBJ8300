@@ -464,16 +464,17 @@ def main():
     {s.get_name(): s for s in aj.walk()}['vfo_a_voicepri'].value.set_value('ENCRY2')
     aj.apply_to(r._memobj)
     confere('10o. Voice Privacy do VFO A gravada', int(r._memobj.vfo.a.voicepri), 2)
-    # 10p. MIC GAIN (firmware v49): o byte 0x9033 do bloco de ajustes, depois do Noise reduction e dos dois
-    # da pasta AUDIO (v79)
+    # 10p. MIC GAIN (firmware v49): o byte 0x9033 do bloco de ajustes, depois do Noise reduction e dos da
+    # pasta AUDIO (v79, v85 e o EQ do RX da V3.1T)
     r = bj.BJ8300(imagem())
     aj = r.get_settings()
     spec = aj['spec']
     mic = {s.get_name(): s for s in aj.walk()}['settings_unknown_9033']
     i = spec.keys().index('settings_unknown_9032')
-    confere('10p. Mic Gain no Specific, depois do Noise reduction, do Expander, do Noise gate e da De-emphasis, '
-            'em HIGH com o byte em 0', (spec.keys()[i + 1:i + 5], mic.get_shortname(), str(mic.value)),
-            (['expander', 'noise_gate', 'deemphasis', 'settings_unknown_9033'], 'Mic Gain', 'HIGH'))
+    confere('10p. Mic Gain no Specific, depois do Noise reduction, do Expander, do Noise gate, da De-emphasis '
+            'e do EQ do RX, em HIGH com o byte em 0', (spec.keys()[i + 1:i + 7], mic.get_shortname(), str(mic.value)),
+            (['expander', 'noise_gate', 'deemphasis', 'eq_rx_bass', 'eq_rx_treble', 'settings_unknown_9033'],
+             'Mic Gain', 'HIGH'))
     mic.value.set_value('LOW')
     aj.apply_to(r._memobj)
     confere('10q. LOW grava 2 em 0x9033', r._mmap[0x9033], bytes([2]))
@@ -496,17 +497,18 @@ def main():
     confere('10t. C grava 3 nos 2 bits de 0x9013, sem mexer nos outros', r._mmap[0x9013], bytes([0xFF]))
     confere('10u. e le de volta C', str(ajuste_de(r, 'settings_dualtx').value), 'C')
     # 10v. a pasta MIC e o CALIBRATION (firmware v59): 0x9035 o compressor, 0x9036 o AGC e 0x9037..0x9038
-    # o cristal, em 10 Hz com sinal, logo depois do Mic Gain; o que o reset de fabrica deixa (197, 181 e
-    # 0xC4C0) le Off, On e 0, como o firmware
+    # o cristal, em 10 Hz com sinal, logo depois do Mic Gain (o EQ do TX, da V3.1T, entre o AGC e o cristal);
+    # o que o reset de fabrica deixa (197, 181 e 0xC4C0) le Off, On e 0, como o firmware
     r = bj.BJ8300(imagem())
     r._mmap[0x9035] = bytes([197, 181, 0xC0, 0xC4])
     aj = r.get_settings()
     spec = aj['spec']
     i = spec.keys().index('settings_unknown_9033')
-    confere('10v. Compressor, Mic AGC e Crystal fine depois do Mic Gain; o lixo do reset le Off, On e 0',
-            (spec.keys()[i + 1:i + 4], str(ajuste_de(r, 'settings_unknown_9035').value),
+    confere('10v. Compressor, Mic AGC, EQ do TX e Crystal fine depois do Mic Gain; o lixo do reset le Off, On e 0',
+            (spec.keys()[i + 1:i + 6], str(ajuste_de(r, 'settings_unknown_9035').value),
              str(ajuste_de(r, 'settings_unknown_9036').value), int(ajuste_de(r, 'settings_unknown_9037').value)),
-            (['settings_unknown_9035', 'settings_unknown_9036', 'settings_unknown_9037'], 'Off', 'On', 0))
+            (['settings_unknown_9035', 'settings_unknown_9036', 'eq_tx_bass', 'eq_tx_treble', 'settings_unknown_9037'],
+             'Off', 'On', 0))
     aj = r.get_settings()
     s = {x.get_name(): x for x in aj.walk()}
     s['settings_unknown_9035'].value.set_value('High')
@@ -632,7 +634,56 @@ def main():
              [str(x) for x in ajuste_de(r, 'noise_gate').value.get_options()]),
             (['Off', 'Low', 'Mid', 'Default', 'High'], ['Off', 'Low', 'Default', 'Mid', 'High']))
 
-    NOMES_11 = ('aprs_callsign', 'aprs_ssid', 'aprs_path', 'aprs_to', 'aprs_message', 'aprs_decode',
+    # 10zq. EQ BASS e EQ TREBLE (firmware V3.1T): o do RX no 0x903A, o do TX no 0x903C, dois por byte: a marca
+    # 10 nos bits 7:6, os agudos nos 5:3 e os graves nos 2:0, como posicoes nas listas do menu (0 = DEFAULT)
+    EQ = ('eq_rx_bass', 'eq_rx_treble', 'eq_tx_bass', 'eq_tx_treble')
+
+    def eq_de(radio):
+        w = {s.get_name(): s for s in radio.get_settings().walk()}
+        return tuple(str(w[n].value) for n in EQ)
+
+    r = bj.BJ8300(imagem())
+    w = {s.get_name(): s for s in r.get_settings().walk()}
+    confere('10zq. os nomes dizem RX e TX', [w[n].get_shortname() for n in EQ],
+            ['EQ bass (RX)', 'EQ treble (RX)', 'EQ bass (TX)', 'EQ treble (TX)'])
+    confere('10zr. as opcoes, como no menu do radio', [[str(x) for x in w[n].value.get_options()] for n in EQ],
+            [['DEFAULT', '-3 dB', '-2 dB', '0 dB', '+1 dB', '+2 dB', '+3 dB', '+4 dB'],
+             ['DEFAULT', '-1 dB', '+1 dB', '+2 dB', '+3 dB', '+4 dB'],
+             ['DEFAULT', '-3 dB', '-2 dB', '-1 dB', '+1 dB', '+2 dB', '+3 dB', '+4 dB'],
+             ['DEFAULT', '-1 dB', '0 dB', '+1 dB', '+2 dB', '+3 dB', '+4 dB']])
+    # 10zs. cada valor lido de um byte montado; sem a marca (o 0xCA e o 0xC7 do reset, o 'M' e o 1 que ate a v110
+    # moravam ali, o 0 das imagens antigas, as marcas 00 e 01) ou com os agudos fora da lista (6 no RX, 7 no TX),
+    # os dois DEFAULT
+    for rx, tx, esperado in ((0x80, 0x80, ('DEFAULT',) * 4), (0x8B, 0x93, ('0 dB', '-1 dB', '-1 dB', '0 dB')),
+                             (0xAF, 0xB1, ('+4 dB', '+4 dB', '-3 dB', '+4 dB')),
+                             (0x91, 0xB2, ('-3 dB', '+1 dB', '-2 dB', '+4 dB')),
+                             (0xCA, 0xC7, ('DEFAULT',) * 4), (0x4D, 0x01, ('DEFAULT',) * 4),
+                             (0x00, 0x00, ('DEFAULT',) * 4), (0x0B, 0x4B, ('DEFAULT',) * 4),
+                             (0xB2, 0xBA, ('DEFAULT',) * 4)):
+        r._mmap[0x903A] = bytes([rx])
+        r._mmap[0x903C] = bytes([tx])
+        confere('10zs. %#04x no 0x903A e %#04x no 0x903C leem %s' % (rx, tx, ' / '.join(esperado)), eq_de(r), esperado)
+    # 10zt. gravar um campo mantem o outro e a marca; sobre um byte sem valor (o reset, o lixo de antes, os agudos
+    # fora da lista) a marca entra e o outro vai DEFAULT (0); mudar os dois de uma vez junta os dois; os vizinhos
+    # (Light PWM no 0x903B, Modem gain no 0x903D) ficam como estavam, e a pagina le de volta o que gravou
+    for rx, tx, valores, novo in ((0xAF, 0xB1, {'eq_rx_bass': '-3 dB'}, (0xA9, 0xB1)),
+                                  (0xAF, 0xB1, {'eq_rx_treble': 'DEFAULT'}, (0x87, 0xB1)),
+                                  (0xAF, 0xB1, {'eq_tx_treble': '0 dB'}, (0xAF, 0x91)),
+                                  (0xAF, 0xB1, {'eq_tx_bass': '+4 dB'}, (0xAF, 0xB7)),
+                                  (0xCA, 0xC7, {'eq_rx_treble': '+2 dB'}, (0x98, 0xC7)),
+                                  (0xCA, 0xC7, {'eq_tx_bass': '+4 dB'}, (0xCA, 0x87)),
+                                  (0xB2, 0x01, {'eq_rx_bass': '0 dB'}, (0x83, 0x01)),
+                                  (0x4D, 0x01, {'eq_tx_bass': '-1 dB', 'eq_tx_treble': '+1 dB'}, (0x4D, 0x9B))):
+        r = bj.BJ8300(imagem())
+        r._mmap[0x903A] = bytes([rx, 4, tx, 0xA2])
+        muda_ajustes(r, **valores)
+        w = {s.get_name(): s for s in r.get_settings().walk()}
+        confere('10zt. %s sobre %#04x/%#04x grava %#04x/%#04x' % (
+                    ', '.join('%s %s' % kv for kv in valores.items()), rx, tx, novo[0], novo[1]),
+                (r._mmap[0x903A:0x903E], [str(w[n].value) for n in valores]),
+                (bytes([novo[0], 4, novo[1], 0xA2]), list(valores.values())))
+
+    NOMES_11 =('aprs_callsign', 'aprs_ssid', 'aprs_path', 'aprs_to', 'aprs_message', 'aprs_decode',
                 'morse_message', 'morse_speed', 'morse_tone')
     # 11. APRS e MORSE (firmware v65; gravados pelo cabo desde a v110): os registros APR1 e MRS1, um bloco
     # cada depois do VFO C. Sem registro (o bloco apagado), o que o radio mostra: os padroes.

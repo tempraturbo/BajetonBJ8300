@@ -5,6 +5,14 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 31 — the EQ
+
+The module shows EQ bass and EQ treble for RX (right after De-emphasis) and TX (after Mic AGC), in Settings >
+Specific, with the radio menu's lists, in V3.1T's bytes `0x903A` and `0x903C`. Expander and De-emphasis now use
+the same two-settings-in-one-byte routine. `teste_chirp_real` gained tests 10zq to 10zt. It needs v111: on
+V3.0T those bytes are the armed send, which the radio clears after the cable, and the held-EXIT mark, which
+clears on the next key.
+
 ## v111 — Oct 31 — the EQ in CHIRP, the FILTER with EQ and on key 0, SAVE off in APRS RX, MORE below and the cleanup (to be tested)
 
 `BJ8300_BANK_v111.anc` (sha256 `1a18ea2d…`), outside `firmware/releases/` like the other test builds. The
