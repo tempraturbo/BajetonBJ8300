@@ -54,7 +54,7 @@ echo "=== tamanho: $(stat -c%s build/bancos.bin) bytes"
 echo
 python -I scripts/montar.py "$ORIGINAL" build/bancos.bin "$SAIDA" build/simbolos.txt
 echo
-python -I scripts/conferir.py "$SAIDA" build/bancos.bin
+python -I scripts/conferir.py "$SAIDA" build/bancos.bin "$ORIGINAL"
 
 # a pilha (scripts/pilha.py), contra o desmontado do firmware de fabrica, que se gera uma vez
 if [ ! -f build/app.dis ] || [ build/app.bin -nt build/app.dis ]; then

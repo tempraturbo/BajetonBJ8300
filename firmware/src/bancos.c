@@ -87,6 +87,7 @@ FIRMWARE(TROCA_AB, 0x01E40E52);     void TROCA_AB(unsigned);      /* troca o lad
  * 0x14B86) vao para o log 0x9000 - a tecla VFO/MR os grava assim (0x01E4DCB6). */
 FIRMWARE(SALVA_VFO, 0x01E3A4FE);    void SALVA_VFO(unsigned lado);
 FIRMWARE(SALVA_AJUSTES, 0x01E3AB36); void SALVA_AJUSTES(void);
+FIRMWARE(SALVA_CANAL, 0x01E3AC0A);  void SALVA_CANAL(unsigned canal, const void *dados);   /* 31 B, se mudou */
 FIRMWARE(LUZ, 0x01E394D6);          void LUZ(unsigned acende);    /* a luz da tela: 1 acende, 0 apaga */
 /* A tela inteira de novo (limpa, a barra e 0x01E3C132(0)): o fim da troca de lados de fabrica
  * (0x01E40EF4) e do retorno a tela principal que tambem poe o canal no lado (0x01E4BDBE, logo depois
@@ -889,6 +890,34 @@ NA_LIVRE_COD unsigned watch_vista(void)
 NA_LIVRE_COD u16 watch_le(void)
 {
     return watch_posicao[watch_vista()];
+}
+
+/* ---------- o OK de cada edicao grava (v101) ----------
+ * A fabrica so grava os ajustes do menu ao fecha-lo, em 0x01E3C29C, com o modo de tela no menu: o log
+ * 0x9000 (0x01E3AB36) e o lado do menu, o canal (0x01E3AC0A) ou o VFO (0x01E3A4FE). Desligado com o menu
+ * aberto, o que mudou se perdia. Aqui vai o mesmo, na mesma ordem, no OK que confirma cada edicao
+ * (b_menu_marca, tela.c, depois do set): 0x01E3C2B0..0x01E3C30E. O lado do menu em canal (b[0x15212] = 1,
+ * posto com o canal em h[0x1583C] por 0x01E3A4D0) grava o canal - na zona (MODO_ZONA 0), o numero mais a
+ * zona do menu (b[0x15215]) x 64 -, com os 31 B do lado em 0x14DD3 + lado x 31; senao, o VFO do lado
+ * (b[0x15204]). As tres rotinas comparam com o que esta no chip e so gravam o que mudou. */
+#define MENU_LADO      (*(volatile u8 *)0x00015204)
+#define MENU_EM_CANAL  (*(volatile u8 *)0x00015212)
+#define MENU_ZONA      (*(volatile u8 *)0x00015215)
+#define MENU_CANAL     (*(volatile u16 *)0x0001583C)
+
+NA_LIVRE_COD void salva_menu(void)
+{
+    unsigned n;
+
+    SALVA_AJUSTES();
+    if (MENU_EM_CANAL != 1) {
+        SALVA_VFO(MENU_LADO);
+        return;
+    }
+    n = MENU_CANAL;
+    if (MODO_ZONA == 0)
+        n = (u16)(n + (MENU_ZONA << 6));
+    SALVA_CANAL(n, (const u8 *)0x00014DD3 + MENU_LADO * 31);
 }
 
 NA_LIVRE_COD void watch_grava(void)

@@ -796,6 +796,14 @@ CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o e
                    (0x01E46280, 0x01E43D50, 'gancho_teclas', 'editor: EXIT segurado 0,6 s sai sem salvar'))
 EDITOR_REMENDOS += ((0x01E4A0F0, bytes.fromhex('02fc041c'), bytes.fromhex('02fc0448'),
                      'o limite fixo da insercao vai de 15 a 37 letras'),)
+# v100: a NOISE GATE (v79/v80) mora no 0x9031 dos ajustes (b[0x14BDD]) como 0xE8 + o nivel, e a carga dos
+# ajustes na partida (0x01E55C9A) zera esse byte quando ele passa de 1: "if (r1 >= 2) { r1 = 0; b[r4+r0] =
+# r1 }" em 0x01E55D2C, com r0 = 1373 (0x14BDD - 0x14680) vindo de r1 + 6, o que a varredura da v59 nao via.
+# Nada mais de fabrica le ou grava o byte. O "r1 = 0" vira nop e a escrita devolve o mesmo valor: a NOISE GATE
+# passa a sobreviver ao desligar. Os outros bytes que essa carga confere sao de fabrica e ficam (o PF2, o PF2
+# LONG PRESS e o PF3 em 0x14BD7..0x14BD9, ate 8; a zona dos lados em 0x14BDB e 0x14BDC, ate 15).
+AJUSTES_REMENDOS = ((0x01E55D30, bytes.fromhex('4120'), bytes.fromhex('0000'),
+                     'NOISE GATE: a partida nao zera mais o 0x9031'),)
 # (onde, o ponteiro de fabrica, o simbolo novo, o que e)
 PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com o espaco primeiro e - / = + @'),
                    # v86 (experimental): o APRS pelo DAC. A abertura do microfone (0x01E41CBA) entrega a
@@ -1126,6 +1134,7 @@ def main():
         escritas += [(e, 4, f'espectro B: {d}') for e, _, _, d in ESPECTRO_B_FUNCOES]
     escritas += [(s, len(a), f'vozes: {d}') for s, a, _, d in VOZES_REMENDOS]
     escritas += [(s, len(a), f'editor de nome: {d}') for s, a, _, d in EDITOR_REMENDOS]
+    escritas += [(s, len(a), f'ajustes: {d}') for s, a, _, d in AJUSTES_REMENDOS]
     escritas += [(s, 4, d) for s, _, _, d in PONTEIROS_LIVRE]
     escritas += [(ROGER_DESVIO_EM, 4, 'roger: valores 3 e 4 no caminho do BEEP'),
                  (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
@@ -1227,7 +1236,8 @@ def main():
 
     # 3b2. vozes fora: os tres caminhos que tocam voz viram o "sem voz" de cada um; e (v52) a tecla #
     # do editor de nome
-    for rotulo, remendos in (('vozes', VOZES_REMENDOS), ('editor de nome', EDITOR_REMENDOS)):
+    for rotulo, remendos in (('vozes', VOZES_REMENDOS), ('editor de nome', EDITOR_REMENDOS),
+                             ('ajustes', AJUSTES_REMENDOS)):
         for sitio, antes, depois, oque in remendos:
             o = sitio - BASE_APP
             if bytes(app[o:o + len(antes)]) != antes:

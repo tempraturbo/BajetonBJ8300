@@ -5,6 +5,37 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v100 e v101 — 31/10 — a NOISE GATE fica, e o OK grava (em teste)
+
+`BJ8300_BANK_v101.anc` (sha256 `d9f94f2d…`), fora de `firmware/releases/` como as outras de teste. O dono viu o
+SQL em 0 voltar a 1 depois de desligar o rádio. A causa é de fábrica: os ajustes do menu só iam para o chip ao
+fechar o menu, e desligado com ele aberto, mesmo numa pasta, o que mudou se perdia. Desde a v101, cada OK que
+confirma uma edição grava na hora o que a saída do menu gravaria: o log dos ajustes e o canal ou o VFO do lado,
+só o que mudou. A auditoria de todos os itens achou um defeito nosso: a conferência dos ajustes na partida
+zerava o byte da NOISE GATE, que voltava ao padrão a cada partida; a v100 (só essa correção, sha256
+`127ba2a7…`, nunca gravada) a desligou para esse byte. Saiu também o diagnóstico do COMBO, e a recepção do APRS
+é a da v88. O `build.sh` e o `conferir.py` passaram a usar o firmware original do próprio repositório
+(`firmware/original/`), e não mais uma cópia fora dele. [Seção 26](engenharia-reversa.md#26-os-ajustes-que-se-perdiam-a-noise-gate-e-a-gravação-no-ok-v100-e-v101).
+
+## v93 a v99 — 30 e 31/10 — o fim dos diagnósticos da recepção do APRS (não lançadas)
+
+O modem a 2400 e a 4800 bps (v93; os tons escalam junto e os bits saem ao acaso), os registradores de medição do
+BK4819 (v94 e v95; nenhum traz o áudio), os pinos pelo ADC do JieLi (v96; nenhum recebe o áudio, nem mudo nem
+com o alto-falante ligado), o AFC e o filtro de corrente contínua (v97) e um COMBO com o filtro de RF no
+máximo, o cancelamento de corrente contínua e as bandas do modem (v98 e v99): nenhum mudou a recepção além do
+acaso. A v93 também passou o envio antigo pelo gerador de tom para os testes do PC (uns 260 B a mais no
+`.livre`). O firmware de fábrica traz um segundo receptor, um Si473x, para LW, MW e SW. A recepção ficou a da
+v88. [Seção 24](engenharia-reversa.md#o-limite-do-modem-na-recepção-v89-a-v99).
+
+## v89 a v92 — 30/10 — diagnósticos da recepção do APRS (não lançadas)
+
+A v89 mostrava no menu os registradores das portas A e B (só leitura), para achar uma entrada de linha do
+JieLi com o áudio recebido; a v90 e a v91 deixavam a tecla 0 do APRS RX trocar o `0x43` (filtros e ganho
+depois do demodulador); a v92 gravava no chip de dados os bits crus de cada sync, lidos depois pelo cabo. O
+resultado: nenhum pino livre comprovado para o áudio, os ajustes do `0x43` mudam o som e não a decodificação,
+e o modem do chip erra bits no meio dos pacotes (o teto dele com o APRS). A recepção ficou a da v88.
+[Seção 24](engenharia-reversa.md#o-limite-do-modem-na-recepção-v89-a-v99).
+
 ## v88 — 30/10 — o APRS sai pelo microfone (testada)
 
 `firmware/releases/BJ8300_BANK_v88.anc` (sha256 `0e15392f…`). O envio do APRS (a mensagem e o ack) sai como de um

@@ -31,22 +31,10 @@ FIRMWARE(TOM, 0x01E43B4E);         void TOM(unsigned, unsigned);     /* os 2 ger
 FIRMWARE(ESPERA_2MS, 0x01E36286);  void ESPERA_2MS(unsigned);        /* espera ocupada, n x 2 ms */
 
 /* O relogio: b[0x14810] conta milissegundos, de 2 em 2 no tique do TIMER1 (a espera de fabrica,
- * 0x01E36286, espera n x 2 nele), e o contador do TIMER1 (0x1E0504, de 0 ao PRD em 0x1E0508) e a
- * fracao do tique - a conta de 0x01E4F888, que da os microssegundos dentro dele. */
+ * 0x01E36286, espera n x 2 nele). Os microssegundos do contador do TIMER1 (0x1E0504, de 0 ao PRD em
+ * 0x1E0508; a conta de 0x01E4F888) eram so do envio pelo gerador de tom, que desde a v88 so roda no PC
+ * (o agora_us dele mora nos .h dos testes). */
 #define TIQUE_MS   RAM(u32, 0x00014810)
-#define T1_CNT     RAM(u32, 0x001E0504)
-#define T1_PRD     RAM(u32, 0x001E0508)
-
-static u32 agora_us(void)
-{
-    u32 ms, cnt;
-
-    do {
-        ms = TIQUE_MS;
-        cnt = T1_CNT;
-    } while (ms != TIQUE_MS);              /* o tique veio no meio: le de novo */
-    return ms * 1000 + cnt * 2000 / T1_PRD;
-}
 #endif
 
 #define HZ(f)  ((u16)((f) * 10.32444 + 0.5))     /* unidade do reg 0x71, a conta do roger */
@@ -184,6 +172,9 @@ unsigned ax_quadro(u8 *q, const char *origem, unsigned n_origem, unsigned caminh
 #define MARCA   HZ(1200)
 #define ESPACO  HZ(2200)
 
+/* Desde a v88 o firmware manda pelo microfone (o AFSK pelo DAC, abaixo); o envio pelo gerador de tom
+ * fica so nos testes do PC, como referencia conferida (v93: os ~260 B dele saem do firmware). */
+#if defined(TESTE_PC) || defined(TESTE_RX)
 struct afsk {
     u32 alvo;                              /* fim do bit em curso, em us */
     u8 terco;                              /* qual dos 3 bits do ciclo de 2500 us */
@@ -243,6 +234,7 @@ void afsk_manda(const u8 *q, unsigned n, unsigned flags)
         afsk_byte(&a, 0x7E, 0);
     afsk_bit(&a, 1);                       /* o ultimo bit inteiro no ar antes de desligar o tom */
 }
+#endif
 
 /* ---------- AFSK pelo DAC (v86, experimental) ----------
  * Pelo gerador de tom do chip (afsk_manda), o APRSdroid nao leu nenhum pacote nosso, com o ganho, os

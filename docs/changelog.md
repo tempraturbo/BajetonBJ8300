@@ -5,6 +5,37 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v100 and v101 — Oct 31 — NOISE GATE stays, and OK saves (under test)
+
+`BJ8300_BANK_v101.anc` (sha256 `d9f94f2d…`), left out of `firmware/releases/` like the other test builds. The
+owner saw SQL at 0 go back to 1 after switching the radio off. The cause is the factory's: menu settings only
+reached the chip when the menu closed, and switched off with it open, even inside a folder, whatever had changed
+was lost. Since v101, every OK that confirms an edit saves right away what leaving the menu would save: the
+settings log and the side's channel or VFO, only what changed. The audit of every item found a bug of ours: the
+settings check at startup zeroed the NOISE GATE byte, which went back to the default at every startup; v100
+(only that fix, sha256 `127ba2a7…`, never flashed) turned it off for that byte. The COMBO diagnostic was also
+removed, and APRS receiving is v88's. `build.sh` and `conferir.py` now use the original firmware in the
+repository itself (`firmware/original/`), no longer a copy outside it. [Section 26](reverse-engineering.md#26-settings-that-got-lost-noise-gate-and-saving-on-ok-v100-and-v101).
+
+## v93 to v99 — Oct 30 and 31 — the end of the APRS receive diagnostics (not released)
+
+The modem at 2400 and 4800 bps (v93; the tones scale along and the bits come out at random), the BK4819's
+measurement registers (v94 and v95; none carries the audio), the pins through the JieLi's ADC (v96; none gets
+the audio, muted or with the speaker on), the AFC and the DC filter (v97), and a COMBO with the RF filter at its
+widest, the DC cancellation and the modem bands (v98 and v99): none changed receiving beyond chance. v93 also
+moved the old send through the tone generator to the PC tests (about 260 B more in `.livre`). The stock
+firmware carries a second receiver, a Si473x, for LW, MW and SW. Receiving stayed as in v88.
+[Section 24](reverse-engineering.md#the-modems-limit-on-receive-v89-to-v99).
+
+## v89 to v92 — Oct 30 — APRS receive diagnostics (not released)
+
+v89 showed the port A and B registers in the menu (read only), to find a JieLi line input carrying the
+received audio; v90 and v91 let the APRS RX 0 key change `0x43` (filters and gain after the demodulator); v92
+stored the raw bits of each sync on the data chip, read later through the cable. The result: no proven free
+pin for the audio, the `0x43` settings change the sound and not decoding, and the chip's modem gets bits
+wrong in the middle of packets (its ceiling with APRS). Receiving stayed as in v88.
+[Section 24](reverse-engineering.md#the-modems-limit-on-receive-v89-to-v99).
+
 ## v88 — Oct 30 — APRS goes out through the microphone (tested)
 
 `firmware/releases/BJ8300_BANK_v88.anc` (sha256 `0e15392f…`). APRS sending (the message and the ack) goes out like

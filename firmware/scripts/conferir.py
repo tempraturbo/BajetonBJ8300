@@ -30,7 +30,8 @@ montar.S.update(montar.le_simbolos(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), '..', 'build', 'simbolos.txt')))
 
 novo, codigo = sys.argv[1], sys.argv[2]
-original = sys.argv[3] if len(sys.argv) > 3 else r'C:\temp\BJ8300_V0.12.anc'
+original = sys.argv[3] if len(sys.argv) > 3 else os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
+                                                                'original', 'BJ8300_V0.12.anc')
 blob = open(codigo, 'rb').read()
 erros = []
 
@@ -842,6 +843,14 @@ for sitio, antes, depois, oque in montar.EDITOR_REMENDOS:
     if not ok:
         erros.append(f'editor de nome: remendo errado em {sitio:#x}')
 previsto_tela += [(s_, s_ + len(a_) - 1, 'editor de nome: ' + d_) for s_, a_, _, d_ in montar.EDITOR_REMENDOS]
+# 4u. a NOISE GATE (v100): na carga dos ajustes da partida, o "r1 = 0" da conferencia do 0x14BDD vira nop.
+for sitio, antes, depois, oque in montar.AJUSTES_REMENDOS:
+    o = sitio - montar.BASE_APP
+    ok = bytes(app_velho[o:o + len(antes)]) == antes and bytes(app[o:o + len(antes)]) == depois
+    print(f'4u. ajustes {sitio:#x}: {oque}: ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append(f'ajustes: remendo errado em {sitio:#x}')
+previsto_tela += [(s_, s_ + len(a_) - 1, 'ajustes: ' + d_) for s_, a_, _, d_ in montar.AJUSTES_REMENDOS]
 # v65: o ponteiro da tecla 0 do editor: de fabrica o da sequencia original, remendado o da nossa, que
 # tem de estar no .livre e trazer o espaco primeiro e o 0 no fim. v86: o do bloco do microfone, o
 # gancho_mic, tambem no .livre.

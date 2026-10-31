@@ -14,6 +14,8 @@ conclusão veio de experimento, está dito qual.
 | Tela | 160×128, RGB565, memória de vídeo em **0x10190** (10240 B por banda de 160×32) |
 | Canais | 960, registros de 32 bytes |
 | Família no CHIRP | Radtel **RT-920** / Bajeton **BJ7800** (mesmo protocolo e formato) |
+| Rádio | Beken **BK4819**, de 18 MHz para cima ([seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)) |
+| Receptor de HF | um **Si473x** da Silicon Labs: o firmware traz o programa de SSB do Si4735 (15.832 B em `0x01E64D40`, 1979 comandos de 8 B começados por `0x15` ou `0x16`, no formato que o chip recebe) e as bandas LW, MW e SW do RX MODULATION |
 
 São **duas memórias diferentes**, e confundi-las custa caro:
 
@@ -66,7 +68,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 
 | Faixa | Conteúdo |
 |---|---|
-| `0x00000–0x09FFF` | 960 canais de 32 B |
+| `0x00000–0x09FFF` | 960 canais de 32 B (até `0x077FF`); em `0x8000` o log dos VFOs de A e B, e em `0x9000` o log dos ajustes ([seção 26](#26-os-ajustes-que-se-perdiam-a-noise-gate-e-a-gravação-no-ok-v100-e-v101)) |
 | `0x0A000–0x0FFFF` | ajustes; `0x0F000–0x0F24F` é calibração de fábrica (potência de TX em `0xF000–0xF0BF`, [seção 20](#20-a-potência-de-tx-mapa-só-leitura); ganho do microfone em `0xF210`, [seção 19](#19-o-ganho-do-microfone-e-o-mic-gain-v49); squelch, subtom e cristal, [seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)) |
 | `0x10000–0x1AFFF` | **imagem de abertura**: 160×138 em RGB565 little-endian, 44160 B |
 | `0x20000–0x99FFF` | fontes e textos em chinês (~480 KB) |
@@ -2001,6 +2003,97 @@ mesmo com o volume do Baofeng quase no mínimo.
 O nível do pacote no ar segue o caminho da voz (o MIC GAIN e o AGC do microfone). O Morse continua pelo
 gerador de tom, e o `afsk_manda` fica no código, conferido no PC, como referência.
 
+### O limite do modem na recepção (v89 a v99)
+
+Com o envio resolvido, a recepção foi atrás do mesmo caminho ao contrário: o áudio recebido numa entrada do
+JieLi, para demodular em software. O ADC dele tem o microfone e três pares de entrada de linha
+(`0x01E33EFC(linha, máscara)`: 4, 8 e 12 no PA0/PA1; 16, 32 e 48 no PB7/PB8; 64, 128 e 192 no PB9/PB10). A
+fábrica nunca abre nenhum: o rádio FM é o embutido no JieLi (`0x01E571E4` compara o dispositivo com
+`fm_inside`), e o caminho pelo PB7/PB8 com o AMUX (`0x01E32A92`) é o do FM externo do SDK, que não se usa aqui
+(o PB7 é a luz). O tocador de linha da fábrica (`0x01E4F5F4`) escolhe o par por um valor de configuração que
+a fábrica deixa em `0xFF`, e então pula a abertura. A v89, de diagnóstico, mostrou no menu os registradores
+das portas A e B com o rádio ligado: o PB8, o PB9 e o PB10 são saídas em 1, e só o PA0/PA1 está como entrada
+analógica, sem pull, que é também o estado em que o SDK deixa um pino sem uso. O dono quer a recepção em
+silêncio (o microfone ouvindo o alto-falante está fora) e sem abrir o rádio, então o caminho em software
+ficou sem um fio comprovado para seguir.
+
+No próprio chip, a v90 e a v91 deixaram a tecla 0 da tela do APRS RX trocar o `0x43`: o filtro de sinal fraco
+igual ao forte, o filtro de RF dois passos mais largo, o ganho depois do demodulador em 0 dB, e os três
+juntos, com cada um dos ganhos do modem. O som mudou; a decodificação, não.
+
+A v92 gravou no chip de dados (`0xD8000..0xDFFFF`, livres no mapa da seção 3, em 32 lugares de 1 KB) as
+palavras do `0x5F` depois de cada sync, com a polaridade, o `0x0B`, o ganho e o RSSI, e o cabo as leu pelo
+`R` estendido. Em duas rodadas, cerca de 30 capturas:
+
+- os pacotes chegam e o chip sincroniza neles: há preâmbulos de 30 a 41 flags seguidas, e num deles o
+  cabeçalho saiu inteiro e certo (destino, origem, caminho, `03 F0` e o começo da informação, uns 24 bytes);
+- mas no meio do quadro aparecem bits errados. O bit sozinho de um tom some, dobra ou adianta: no preâmbulo,
+  o espaçamento entre os bits do tom minoritário tem o pico em 8, com muito 1, 6, 7 e 16. O quadro do
+  cabeçalho certo não fecha nem com dois tons trocados em qualquer posição;
+- os syncs falsos, um a cada ~15 s logo depois de cada rearme, são do ruído.
+
+Na mesma rodada, o APRSdroid ouvindo um Baofeng ao lado leu uns 10 pacotes, e o Bajeton 2. Com os bits já
+decididos pelo chip, sem a confiança de cada um, corrigir três ou mais tons num CRC de 16 bits daria mais
+quadros falsos que verdadeiros. É o teto do modem do BK4819 com o Bell 202: só passa o pacote que chega sem
+erro, ou com o tom trocado que a correção da v70 conserta.
+
+**A v93** pôs o modem a 2400 e a 4800 bps (`0x72`), para ler 2 ou 4 vezes cada bit do APRS e decidir no
+processador. Não dá: o `0x72` escala os tons junto com a velocidade (o par de 1200/1800 vira 2400/3600 e
+4800/7200), e os bits saem ao acaso. Na mesma versão, o envio antigo pelo gerador de tom (o `struct afsk`, o
+`afsk_manda` e o `agora_us`), sem uso no rádio desde a v88, passou a compilar só nos testes do PC, e uns 260 B
+voltaram ao `.livre`.
+
+**As v94 e v95** leram 256 vezes seguidas cada um dos 20 registradores de estado e medição do BK4819 (`0x0B`
+a `0x0E` e `0x60` a `0x6F`; o `0x02` e a FIFO ficam de fora, porque ler mexe neles), com um tom DTMF contínuo
+no ar, e gravaram no chip de dados. A v94 reiniciava nas 5120 leituras seguidas; a v95 lia e gravava um
+registrador por vez, com o watchdog limpo. Cada leitura pelo barramento do chip leva 1,36 ms (736 por
+segundo). Dezesseis ficaram parados, e os que mexeram são medições: o `0x6F` (o nível do áudio, um VU, não a
+onda), o `0x6D` (em −14 e −15), o `0x6E` e o `0x66` em uma ou duas unidades. Nenhum registrador traz o áudio.
+
+**A v96** leu os pinos com o ADC lento do JieLi, o da bateria (CON em `0x1E3100`, RES em `0x1E3104`). O
+`adc_sample` de fábrica (`0x01E35EAA`) monta o CON como `0xF06E | canal << 8` e liga o bit 4 e o 6; o
+diagnóstico usava o mesmo sem o bit 5 (o aviso de interrupção, que faria a `0x01E41B12` parar o ADC), esperava
+o bit 7 e redisparava pelo 6, como o `0x01E35FCA`. A varredura da bateria (`0x01E41A30`, no timer) não faz nada
+enquanto a vaga preemptiva da fila (`w[0x1514C]`) não é −1: o diagnóstico a ocupava, esperava a conversão dela
+acabar e a devolvia no fim. Foram 512 leituras de cada canal de 0 a 14 (o 15 é o da PMU), a 1842 por segundo,
+em duas passadas: o áudio como a tela do APRS RX o deixa, e o áudio do chip aberto com o amplificador pedido
+(o `0x01E47E0A..1A` de fábrica). Pelo mapa de pinos do BR23 ([kagaimiq/jielie](https://github.com/kagaimiq/jielie/blob/main/chips/br23/iomap.md)),
+o canal 6 é o PB3, o da bateria (791, como a leitura de fábrica), e o PA1 é o canal 0; o PA0 não tem canal
+nesse ADC, só na entrada de linha do ADC de áudio. Nenhum canal trouxe o tom. O PA1 dá um pulo quando o
+amplificador liga e volta devagar, como um pino solto; o canal 3 (PA10) vai de 0 a 1023 com o amplificador e o
+11 (PC6, o microfone) cai a 0. O tom estava no ar: na segunda passada, a bateria oscila com ele (o alto-falante
+puxando corrente), em meio degrau do ADC.
+
+**A v97** passava, na tecla 0 do APRS RX, pelo AFC (`0x73`: bit 4 desliga, bits 13:11 a faixa, `000` a máxima;
+pela documentação do BK4819, `BK4819_Registers_V1.1`, ele vem ligado na faixa máxima, e a fábrica nunca o
+escreve), desligado e em três faixas, e pelo filtro de corrente contínua do RX (`0x7E` bits 2:0, 0 sem
+filtro; a partida grava 6), em 0 e em 7. A decodificação não mudou; o 0 baixa o volume e o 7 o sobe.
+
+**As v98 e v99** juntaram, num COMBO, os filtros de antes do modem na posição que a documentação indica para
+o APRS: o filtro de RF no máximo, o de sinal fraco igual e o modo de 25 kHz que dobra os dois (`0x43` bits
+14:12 e 11:9 em 7, 4,5 kHz, e 5:4 em 2), e o cancelamento de corrente contínua depois do demodulador (`0x2B`
+bit 14, que vem ligado no chip e a fábrica desliga ao gravar 0 no `0x2B` em FM, `0x01E440BE`). O `0x3028` de
+fábrica (3 kHz, e 1,7 kHz com sinal fraco, os dois dobrados) é o valor original da Quansheng no UV-K5, que o
+firmware da comunidade abre para 3,75 kHz e 2,5 ou 3,75 kHz no fraco
+([`BK4819_SetFilterBandwidth`](https://github.com/egzumer/uv-k5-firmware-custom/blob/main/driver/bk4819.c)). A
+v99 acrescentou a banda 4 do modem (`0x3CC9`, a do par 1200/2400, que inclui o 2200 Hz inteiro) e o RX
+1200/2400 com ela (`0x30C9`). As gravações do alto-falante que o dono fez com o celular apontavam o filtro de
+RF: nos 7 pacotes do Bajeton o 2200 Hz chegava de 3,5 a 6,7 dB abaixo do 1200 Hz, e no do Baofeng de 2,7 a
+5 dB acima (de estações diferentes, então é um indício). No ar, o COMBO leu um ou dois pacotes a mais numa
+rodada, e nas seguintes nenhuma combinação se separou do acaso.
+
+**O TA1JS** ([BI4MTL/uv-k5-firmware-ta1js](https://github.com/BI4MTL/uv-k5-firmware-ta1js), `app/aprs_minimal.c`)
+recebe com a mesma receita (`0x58` = `0x3FC3`, sync `0xFEFE`, sem o CRC do chip, a FIFO em 4 palavras), sem
+corrigir bit e sem publicar taxa de acerto; e transmite 1200/1800, que os TNCs de hardware não decodificam.
+
+**O segundo receptor** do rádio, o Si473x ([seção 1](#1-o-aparelho)), não ajuda: vai até 30 MHz em AM e SSB e
+de 64 a 108 MHz em FM, e o APRS daqui está em 145 MHz.
+
+Com o rádio fechado, o áudio recebido não chega a nenhum pino que o JieLi lê, nenhum registrador o traz, e
+nenhum filtro nem modo do BK4819 tira o modem do teto com o par 1200/2200. Os diagnósticos saíram, e a
+recepção ficou a da v88. Daqui, só com o áudio do BK4819 levado por fio a uma entrada do JieLi e um
+demodulador em software.
+
 ### A pilha
 
 O conteúdo roda no slot do roger, no laço do sinal, e o laço do RX no set do item; os dois dentro do de
@@ -2153,3 +2246,44 @@ O item mora nos bits 3:2 do byte do EXPANDER (`0x9034`, 1 = OFF), com o nível d
 marca passa a ser só o nibble alto, `0xC`. O `0xC0` a `0xC3` de antes vale ON, e o 208 (`0xD0`) do RESET
 continua sem marca (EXPANDER OFF e DE-EMPHASIS ON). O driver do CHIRP ganhou a De-emphasis, e o Expander e
 ela gravam cada um o seu campo sem mexer no outro.
+
+## 26. Os ajustes que se perdiam: a NOISE GATE e a gravação no OK (v100 e v101)
+
+**O log dos ajustes.** O setor `0x9000` do chip de dados tem 6 bytes de marcas e registros de 96 B em
+`0x9010 + n × 0x60`. A gravação (`0x01E3AB36`) monta o registro com os 32 B de `0x14B6C` e os 39 de `0x14BCC`
+e o CRC-16/XMODEM dos 94 primeiros nos bytes 94 e 95 (`0x01E3A34C`), o baixo primeiro. O registro em uso é o
+do primeiro bit ainda em 1 nas marcas, do bit 0 do primeiro byte em diante (`0x01E3A30A`). Se o novo é igual
+ao em uso (o CRC e os 64 primeiros bytes), nada é gravado; senão ele vai depois do em uso, e as marcas perdem
+mais um bit (a tabela `FE FC F8 … 00` de `0x01E5A411`). Passado o registro 40, o setor é apagado e o novo vai
+para `0x9010`. A partida (`0x01E55C9A`) lê o registro em uso e, com o CRC errado ou sem registro, põe os de
+fábrica (`0x01E4842E`).
+
+**A NOISE GATE na partida (v100).** Depois de copiar o registro, a partida zera os bytes fora da faixa:
+`0x14BD7..0x14BDA` de 9 em diante (o PF2, o PF2 LONG PRESS, o PF3 e mais um), `0x14BDB` e `0x14BDC` de 16 em
+diante (a zona de cada lado) e `0x14BDD` de 2 em diante. Este último, o `0x9031`, é onde a NOISE GATE (v79 e
+v80) guarda `0xE8` + o nível, e ela voltava ao padrão a cada partida. A varredura da v59 não viu a conferência
+porque o deslocamento vem de `r1 + 6` (`0x01E55D26..0x01E55D34`: `if (r1 >= 2) { r1 = 0; b[r4+r0] = r1 }`). Nada
+mais de fábrica lê ou grava o byte: o `r1 = 0` (`0x01E55D30`) vira nop e a escrita devolve o mesmo valor. A
+NOISE GATE continua no `0x9031`, onde o driver do CHIRP a lê. Os outros bytes conferidos são de fábrica e a
+conferência fica: os valores que o menu permite cabem nos limites.
+
+**A gravação no OK (v101).** A fábrica só grava ao fechar o menu (`0x01E3C29C`), e só com o modo de tela no
+menu (`b[0x1533D]` = 1): o log `0x9000` e o lado do menu. Com ele em canal (`b[0x15212]` = 1, que
+`0x01E3A4D0` põe com o número do canal em `h[0x1583C]`), o canal (`0x01E3AC0A`, com o número mais a zona
+`b[0x15215]` × 64 na navegação por zona, e os 31 B do lado em `0x14DD3 + lado × 31`); em VFO, o VFO do lado
+(`0x01E3A4FE`, `b[0x15204]`). Desligado com o menu aberto, mesmo numa pasta, o que mudou se perdia. O
+`salva_menu` (`bancos.c`) faz o mesmo, na mesma ordem (`0x01E3C2B0..0x01E3C30E`), a cada OK que confirma uma
+edição: ele roda no `b_menu_marca`, que o desvio da v55 já chamava depois do set (`0x01E49A86`), e o firmware só
+chega ali com o menu aberto. Todo tipo de item passa por ali, o editor de texto inclusive (o OK dele também é
+o de `0x01E49996`). As três rotinas comparam com o chip e só gravam o que mudou. Na pilha, o desvio do OK
+chega a 324 B e a interface fica nos 740 B de fábrica.
+
+Onde cada item do menu grava (os get e set da tabela montada, conferidos no desmontado):
+
+| Onde | Itens |
+|---|---|
+| o log `0x9000` | SQL, STE, EXPANDER, NOISE GATE, DE-EMPHASIS, a pasta MIC, a DISPLAY (menos o MDF-C), DTMF, KEYS, RP-STE, RPT-RL, TONE, SC-REV, SYSTEM, ROGER, TOT, VOX, VOX DELAY, TTR, TX-A/B/C, CRYSTAL FINE, LIGHT PWM, MODEM GAIN e o DECODE do APRS |
+| o canal ou o VFO do lado | a pasta CHANNEL (BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N), OFFSET, SFT-D, a pasta TONES, SCAN ADD e CH-NAME |
+| o setor próprio, no set | APRS (CALLSIGN, SSID, TO, MESSAGE, PATH), MORSE (MESSAGE, SPEED, TONE), BANKS, WATCH e MDF-C |
+
+O SEND do APRS e do Morse (`0x903A`) a partida zera de propósito, para nada transmitir sozinho.

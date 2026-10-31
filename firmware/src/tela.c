@@ -1158,14 +1158,17 @@ u32 b_menu_um(void)
 }
 
 /* Depois do set, no OK editando (0x01E49A86, onde o firmware zera o estado da recepcao, b[0x15367], e
- * fecha a edicao): nos itens de marcar varios (MARCA_VARIOS: o BANK e o CHANNEL dos BANKS, v55) a
- * edicao continua. So o estado da recepcao vai a 0 - sintoniza de novo, como o de fabrica faz depois
- * de mudar o ajuste - e o desvio segue para o redesenho e a volta (0x01E49C7C). O EXIT sai: cada OK
- * ja gravou. */
+ * fecha a edicao; so com o menu aberto, b[0x1533D] = 1): o que a saida do menu grava vai para o chip ja
+ * aqui (v101, salva_menu, bancos.c), para nada se perder com o radio desligado de menu aberto. E nos
+ * itens de marcar varios (MARCA_VARIOS: o BANK e o CHANNEL dos BANKS, v55) a edicao continua. So o
+ * estado da recepcao vai a 0 - sintoniza de novo, como o de fabrica faz depois de mudar o ajuste - e o
+ * desvio segue para o redesenho e a volta (0x01E49C7C). O EXIT sai: cada OK ja gravou. */
+void salva_menu(void);
 u32 b_menu_marca(void)
 {
     unsigned n = menu_nivel();
 
+    salva_menu();
     if (n == 0 || n >= RADIO
         || !(MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO) & MARCA_VARIOS))
         return 0;
