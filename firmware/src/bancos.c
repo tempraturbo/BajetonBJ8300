@@ -138,6 +138,7 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 #define DADO_NA_LIVRE  __attribute__((section(".livre.bancos.rodata")))
 unsigned watch_vista(void);
 void aplica_audio(void);                  /* as pastas MIC (v49, v59) e AUDIO (expansor e porta, v79) */
+void aplica_eq(void);                     /* o EQ das duas pastas (v108) */
 void aplica_cristal(void);                /* o CRYSTAL FINE (v59) */
 void luz_inicia(void);                    /* a luz por PWM (v60, tela.c) */
 void luz_aplica(void);                    /* o nivel do BRIGHTNESS na hora (v61, tela.c) */
@@ -550,6 +551,7 @@ void gancho_partida(void)
     ESTADO_ENVIO = 0;
     aplica_audio();                        /* por cima da copia da calibracao e do init do chip (MIC e AUDIO) */
     aplica_cristal();                      /* idem (CRYSTAL FINE) */
+    aplica_eq();                           /* por cima do EQ da partida de fabrica (v108) */
     if (watch_vista() == WATCH_SINGLE)     /* no SINGLE a dupla escuta fica desligada (WATCH, abaixo) */
         TDR = 0;
     aplica_filtro(0);
@@ -1440,8 +1442,9 @@ NA_LIVRE_COD u16 deenfase_le(void)                  /* 0 ON (o de fabrica), 1 OF
 
 /* O ganho, o compressor (razao 1,33:1, 2:1 ou 4:1 nos bits 15:14 do 0x29, o resto como a partida
  * deixa; desligado, o 0xAA00 dela, ou a razao 0 se o expansor liga o bit 3), o expansor e a porta de
- * ruido (o 0x28; os dois de fabrica dao o 0x0B40 da partida), o AGC e, em FM, a DE-EMPHASIS (o 0x2B). */
-NA_LIVRE_COD void aplica_audio(void)
+ * ruido (o 0x28; os dois de fabrica dao o 0x0B40 da partida), o AGC e, em FM, a DE-EMPHASIS (o 0x2B).
+ * Desde a v109 no fim da imagem, e nao no .livre: o medidor S nao cabia la. */
+void aplica_audio(void)
 {
     unsigned c = compressor_le(), e = expansor_le(), p = porta_nivel[porta_le()], r = LE_REG(0x31);
 
@@ -1499,6 +1502,125 @@ NA_LIVRE_COD void porta_grava(void)
 {
     PORTA = MARCA_PORTA | (VALOR < 5 ? porta_ordem[VALOR] : NIVEL_DEFAULT);
     aplica_audio();
+}
+
+/* ---------- EQ BASS e EQ TREBLE: o equalizador do BK4819 (v108, as pastas AUDIO e MIC) ----------
+ * O chip ajusta a resposta do audio em 300 Hz e em 3 kHz, no RX e no TX (o RF_SetAfResponse da nota de
+ * aplicacao da Beken, de -1 a +4 dB, sem a tabela de cada passo). Os valores vem de um bloco desligado
+ * (#if 0) do driver/bk4819.c do firmware do OneOfEleven para o UV-K5: 300 Hz nos regs 0x54 e 0x55, de -3 a
+ * +4 dB, e 3 kHz no 0x75, de -1 a +4 dB. A linha de -1 dB dos 300 Hz (0x91C1, 0x3040) e exatamente o que a
+ * partida de fabrica grava, e a de 0 dB e o padrao do chip (0x9009 e 0x31A9; 0xF50B em 3 kHz). O TX tem os
+ * mesmos padroes (0x44 e 0x45; 0x74), entao vale a mesma tabela. A fabrica so grava os quatro uma vez, na
+ * partida (0x01E5676A..0x01E56794): 0x75 = 0 dB, 0x54/0x55 = -1 dB e 0x74 = 0xFEF0, mais fraco que o -1 dB
+ * da tabela; o 0x44 e o 0x45 ficam no padrao do chip. O reset do chip (reg 0x00, 0x01E5653C) roda antes, na
+ * mesma partida, e o gancho dela vem depois. No menu, DEFAULT e o que a fabrica faz, e o resto vem em ordem,
+ * sem repetir o passo do DEFAULT.
+ * Os niveis ficam nos bytes 0x9040 a 0x9043 do bloco de ajustes (b[0x14BEC..0x14BEF]), que nada de fabrica
+ * le nem grava fora das copias do bloco inteiro (gravar, 0x01E3AB36; partida; padrao, 0x01E4842E, que deixa
+ * ali o texto em chines CE DE D0 A7) e que o cabo nao le (so 32 B a partir de 0x9020): 0xB0 + a posicao no
+ * menu. Sem a marca vale DEFAULT. */
+#define EQ_NIVEL(k)    (*(volatile u8 *)(0x00014BEC + (k)))  /* 0 graves RX, 1 agudos RX, 2 graves TX, 3 agudos TX */
+#define MARCA_EQ       0xB0
+#define EQ_74_FABRICA  0xFEF0              /* os agudos do TX que a partida grava, fora da tabela */
+const char titulo_eq_graves_rx[] = "EQ BASS";    /* um titulo por item: o conferir.py acha o item por ele */
+const char titulo_eq_agudos_rx[] = "EQ TREBLE";
+const char titulo_eq_graves_tx[] = "EQ BASS";
+const char titulo_eq_agudos_tx[] = "EQ TREBLE";
+const char *const eq_graves_rx_opcoes[8] = {"DEFAULT", "-3 dB", "-2 dB", "0 dB", "+1 dB", "+2 dB", "+3 dB",
+                                            "+4 dB"};
+const char *const eq_agudos_rx_opcoes[6] = {"DEFAULT", "-1 dB", "+1 dB", "+2 dB", "+3 dB", "+4 dB"};
+const char *const eq_graves_tx_opcoes[8] = {"DEFAULT", "-3 dB", "-2 dB", "-1 dB", "+1 dB", "+2 dB", "+3 dB",
+                                            "+4 dB"};
+const char *const eq_agudos_tx_opcoes[7] = {"DEFAULT", "-1 dB", "0 dB", "+1 dB", "+2 dB", "+3 dB", "+4 dB"};
+static const u16 eq_graves[8][2] = {{0x935A, 0x2EFF}, {0x920B, 0x3010}, {0x91C1, 0x3040}, {0x9009, 0x31A9},
+                                    {0x8F90, 0x31F3}, {0x8F46, 0x31E7}, {0x8ED8, 0x3232}, {0x8D8F, 0x3359}};
+static const u16 eq_agudos[6] = {0xFA02, 0xF50B, 0xE61C, 0xDF22, 0xD42D, 0xCC35};
+static const u8 eq_opcoes[4] = {8, 6, 8, 7};
+static const u8 eq_padrao[4] = {2, 1, 3, 6};   /* o passo do DEFAULT na tabela; 6: o EQ_74_FABRICA */
+
+/* A posicao no menu do nivel k (0 = DEFAULT). */
+__attribute__((noinline)) static u16 eq_le(unsigned k)
+{
+    unsigned v = EQ_NIVEL(k);
+
+    return (v & 0xF0) == MARCA_EQ && (v & 15) < eq_opcoes[k] ? v & 15 : 0;
+}
+
+/* Os seis registradores pelos quatro niveis: a posicao vira o passo da tabela (o DEFAULT, o de fabrica;
+ * as outras, em ordem, pulando ele). Na partida e no OK de cada item. */
+void aplica_eq(void)
+{
+    unsigned k, p, i;
+
+    for (k = 0; k < 4; k++) {
+        p = eq_le(k);
+        i = p ? p - 1 + (p - 1 >= eq_padrao[k]) : eq_padrao[k];
+        if (k & 1)
+            ESCREVE_REG(k & 2 ? 0x74 : 0x75, i < 6 ? eq_agudos[i] : EQ_74_FABRICA);
+        else {
+            ESCREVE_REG(k & 2 ? 0x44 : 0x54, eq_graves[i][0]);
+            ESCREVE_REG(k & 2 ? 0x45 : 0x55, eq_graves[i][1]);
+        }
+    }
+}
+
+__attribute__((noinline)) static void eq_grava(unsigned k)
+{
+    EQ_NIVEL(k) = MARCA_EQ | VALOR;       /* o menu so passa posicao valida */
+    aplica_eq();
+}
+
+u16 eq_graves_rx_le(void)   { return eq_le(0); }
+u16 eq_agudos_rx_le(void)   { return eq_le(1); }
+u16 eq_graves_tx_le(void)   { return eq_le(2); }
+u16 eq_agudos_tx_le(void)   { return eq_le(3); }
+void eq_graves_rx_grava(void) { eq_grava(0); }
+void eq_agudos_rx_grava(void) { eq_grava(1); }
+void eq_graves_tx_grava(void) { eq_grava(2); }
+void eq_agudos_tx_grava(void) { eq_grava(3); }
+
+/* ---------- o medidor S (v109; o desenho no tela.c, b_sinal) ----------
+ * No lugar da leitura de fabrica do nivel do sinal (0x01E46166), que so lia o RSSI recebendo e o reduzia a
+ * 5 degraus pelos limiares de cada faixa (a tabela 0x01E5EB8C, 4 bytes por faixa, do maior ao menor; a
+ * faixa em b[0x15E42], que as rotinas da sintonia escolhem pela frequencia, 0x01E38C1A e 0x01E38CE4; a
+ * aviacao em AM fica em 6, fora das 5 da tabela).
+ * Com as mesmas condicoes dela - nada com b[0x1533C] = 1 (MEDIDOR_FABRICA, e ela volta sem nada); recebendo
+ * (estado 4) so com b[0x15368] ou b[0x1536F] em 1, e so com b[0x14690] em 5 ou mais (antes, o nivel que ja
+ * estava) -, e tambem no MO (estado 5) e transmitindo, que vem antes: o b[0x1533C] e o estado do TX (a
+ * entrada do TX o poe em 1, 0x01E411F4, e o PTT solto o zera, 0x01E46E8C), e na v109 o microfone nunca
+ * era lido. O RSSI (reg 0x67, 9 bits, 0,5 dB por passo) vira 24 segmentos (v110): 2 por S, de 3 dB, do S1
+ * ao S9, e 1 por 10 dB acima, ate S9+60; recebendo, pelo menos 1. O S1 comeca no primeiro degrau de
+ * fabrica da faixa (fora das 5 da tabela, o da 0), que fica no chiado: o RSSI deste radio le o ruido em
+ * -115 a -105 dBm pela formula da Beken (RSSI / 2 - 160), e a escala da IARU (S9 = -93 dBm), usada na v109,
+ * punha o chiado em S6. Transmitindo, o nivel do microfone, | 0x80: o reg 0x6F ("AF Tx/Rx Input Amplitude
+ * (dB)", 7 bits, da lista de registradores da Beken), de 4 em 4 dB a partir de 0 - escala a conferir no
+ * radio. Sem sinal, 255. */
+#define NIVEL_DESENHADO  (*(volatile u8 *)0x00007031)
+#define ESTADO_RX        (*(volatile u8 *)0x00015367)
+#define FAIXA_MEDIDOR    (*(volatile u8 *)0x00015E42)
+static const u8 *const medidor_tabela = (const u8 *)0x01E5EB8C;
+
+unsigned medidor_s(void)
+{
+    unsigned v, s1;
+
+    if (*(volatile u8 *)0x00014685 == 2) {
+        v = LE_REG(0x6F) & 0x7F;
+        return 0x80 | (v < 96 ? v / 4 : 24);
+    }
+    if (*(volatile u8 *)0x0001533C == 1)
+        return 0x100;                      /* MEDIDOR_FABRICA */
+    if (!((ESTADO_RX == 4 && (*(volatile u8 *)0x00015368 == 1 || *(volatile u8 *)0x0001536F == 1))
+          || ESTADO_RX == 5))
+        return 255;
+    if (*(volatile u8 *)0x00014690 < 5)
+        return NIVEL_DESENHADO;
+    v = LE_REG(0x67) & 0x1FF;
+    s1 = medidor_tabela[(FAIXA_MEDIDOR < 5 ? FAIXA_MEDIDOR : 0) * 4 + 3];
+    if (v < s1)
+        return 1;
+    v -= s1;                               /* acima do S1, em 0,5 dB: o S9 vai de 96 a 115 */
+    return v < 116 ? (v < 102 ? 1 + v / 6 : 18) : v < 216 ? 18 + (v - 96) / 20 : 24;
 }
 
 /* ---------- NOISE REDUCTION: a do microfone, com niveis (v80, a pasta MIC) ----------
@@ -1842,8 +1964,9 @@ void gancho_roger_tons(void)
  * O 'W' de fabrica tambem e de 64 B (0x01E4C0E8 espera 68 bytes no buffer), entao o pacote
  * estendido de gravacao tem exatamente o tamanho do de fabrica.
  *
- * Gravacao estendida **so na area dos bancos, no WATCH e nos VFOs da C** (0xC1000..0xD3FFF; ate a
- * v45, 0xD1FFF; da v46 a v48, 0xD2FFF),
+ * Gravacao estendida **so na area dos bancos, no WATCH, nos VFOs da C e nos registros do Morse e do
+ * APRS** (0xC1000..0xD5FFF; ate a v45, 0xD1FFF; da v46 a v48, 0xD2FFF; da v49 a v109, 0xD3FFF; o historico
+ * do APRS RX, em 0xD6000, fica de fora),
  * apagando o setor quando o bloco comeca nele; qualquer outro endereco e ignorado sem escrever nada.
  * Quem grava banco pelo cabo tem que desligar e ligar o radio depois: o filtro e montado na
  * partida.
@@ -1868,11 +1991,11 @@ void gancho_cabo(unsigned grava)
             else
                 LE_FLASH(endereco, (void *)(p + 4), 0x40);
         }
-        /* A faixa 0xC1000..0xD3FFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
+        /* A faixa 0xC1000..0xD5FFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
          * 2026-10-24 mostra que nada mais mora ali, e o chip de 1 MB nao espelha nesse endereco.
          * Quem grava por aqui e o PC mandando registro de banco; o caminho do menu continua com a
          * trava do setor_livre. */
-        else if (setor - (SETOR_CAB >> 12) < NUM_BANCOS + 3u) {   /* o cabecalho, os bancos, o WATCH e os VFOs da C */
+        else if (setor - (SETOR_CAB >> 12) < NUM_BANCOS + 5u) {   /* o cabecalho, os bancos, o WATCH, os VFOs da C, o Morse e o APRS */
             if (endereco == (u32)setor << 12)   /* bloco que abre o setor: apaga antes */
                 APAGA_SETOR(endereco);
             GRAVA_FLASH(endereco, (void *)(p + 4), 0x40);

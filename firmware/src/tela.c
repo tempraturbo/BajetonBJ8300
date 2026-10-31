@@ -69,6 +69,13 @@ FIRMWARE(ENVIA, 0x01E3ADBC);   void ENVIA(void);
  * amplificador (0x01E47E1A) antes de por o estado em 4, e o sinal que cai o solta (0x01E47A9E): na v62,
  * so com o estado, o indicador ficava na barra depois do fim da recepcao. */
 #define RECEBENDO_MENU   (ESTADO_RX == 4 && AMPLI_RX != 0)
+/* O medidor S (v109). O nivel ja desenhado mora no byte que o medidor de fabrica usa para so redesenhar
+ * quando ele muda (0x01E46166; 255 = nenhum, e o firmware o volta a 255 em 0x01E45A70): os segmentos (0 a
+ * 24, v110), com o bit 7 transmitindo. O lado e o que a rotina de fabrica que chama o medidor escolhe
+ * (0x01E452D0): o em evidencia, ou o outro com a dupla escuta parada nele (b[0x15378] = 1). */
+#define NIVEL_DESENHADO  RAM(u8, 0x00007031)
+#define DW_NO_OUTRO      RAM(u8, 0x00015378)
+#define MEDIDOR_LADO     (DW_NO_OUTRO == 1 ? LADO_B == 0 : LADO_B != 0)
 
 /* As cores do rascunho B (#rrggbb convertido para RGB565). */
 #define COR_FUNDO          0x0040u   /* #050806 */
@@ -175,10 +182,10 @@ static void le_lado(struct lado *l, unsigned i, unsigned tx)
     l->sinal = 0;
 }
 
-/* O medidor, como o de fabrica: transmitindo, cheio pela potencia (H 10, M 5, L 2 de 10,
- * 0x01E40F1C); fora disso, vazio. O nivel do sinal so chega pelo gancho do medidor (tela_b_medidor),
- * quando o degrau muda - a tela inteira de fabrica tambem desenha as barras vazias. 20 segmentos =
- * 2 por nivel. */
+/* O medidor: ate a v108 eram 20 segmentos, como o de fabrica: transmitindo, cheio pela potencia (H 10, M
+ * 5, L 2 de 10, 0x01E40F1C), e recebendo, 2 por degrau, so pelo gancho do medidor. Desde a v109 e o medidor
+ * S (b_sinal; 24 segmentos desde a v110), e a tela inteira repete o ultimo nivel que ele desenhou
+ * (le_estado). */
 unsigned watch_vista(void);         /* bancos.c: o WATCH, do registro proprio dele */
 u32 watch_le_tudo(void);            /* modo | mdf_c << 8 | canal_c << 16 */
 #define VISTA_SINGLE 1
@@ -200,8 +207,11 @@ static void le_estado(struct estado *e)
     e->rx = MODO_TELA == 1 && RECEBENDO_MENU;  /* no menu, quem recebe na barra (v62) */
     for (i = 0; i < 2; i++)
         le_lado(&e->lado[i], i, e->tx && i == e->evidencia);
-    if (e->tx)
-        e->lado[e->evidencia].sinal = POTENCIA(e->evidencia) == 0 ? 20 : POTENCIA(e->evidencia) == 1 ? 10 : 4;
+    /* o medidor (v109): o ultimo nivel que o medidor S desenhou, do microfone no lado em evidencia
+     * transmitindo, ou do sinal no lado do medidor recebendo (ou no MO); sem ele, vazio */
+    i = NIVEL_DESENHADO;
+    if ((i & 127) <= 24 && i >> 7 == e->tx && (e->tx || ESTADO_RX == 4 || ESTADO_RX == 5))
+        e->lado[e->tx ? e->evidencia : MEDIDOR_LADO].sinal = i & 127;
     e->digitos[0] = 0;              /* so as rotinas de digitacao os mostram (tela_b_digitando) */
     e->vox = VOX != 0;
     e->dw = TDR != 0;
@@ -403,18 +413,53 @@ static void texto_canal(char *s, unsigned canal)
     numero(junta(s, "CH "), canal, 3);
 }
 
-/* Medidor de 20 segmentos de 4 px, de 5 em 5: 9 verdes, 5 amarelos e 6 vermelhos acesos ate o
- * sinal; transmitindo, todos no vermelho do TX (v38; ate a v37, ambar). */
+/* A cor do segmento i (0 a 23) do medidor S: S1 a S3 verdes, S4 a S8 amarelos, e do S9 em diante
+ * vermelhos (v110; na v109, amarelos ate o S6; ate a v108, 9 verdes, 5 amarelos e 6 vermelhos de 20);
+ * transmitindo, todos no vermelho do TX (v38; ate a v37, ambar). */
+static unsigned cor_segmento(unsigned i, unsigned tx)
+{
+    return tx || i >= 16 ? COR_SEG_VERMELHO : i >= 6 ? COR_SEG_AMARELO : COR_SEG_VERDE;
+}
+
+/* Medidor de 24 segmentos de 3 px, de 4 em 4 (96 px; v110: 2 por S do S1 ao S9 e 1 por 10 dB acima; ate a
+ * v109, 20 de 4 px, de 5 em 5, e ate a v108 o do SINGLE de 7 em 7), acesos ate o sinal. A direita fica o
+ * texto (medidor_texto). */
 static void medidor(unsigned x, unsigned y, unsigned altura, unsigned sinal, unsigned tx, unsigned apagado)
 {
-    unsigned i, passo = altura > 9 ? 7 : 5;     /* o do SINGLE (12 de altura) e mais largo, 140 px */
+    unsigned i;
 
-    for (i = 0; i < 20; i++) {
-        unsigned cor = i >= sinal ? apagado : tx ? COR_SEG_VERMELHO : i < 9 ? COR_SEG_VERDE
-                                                             : i < 14 ? COR_SEG_AMARELO : COR_SEG_VERMELHO;
+    for (i = 0; i < 24; i++)
+        pinta(x + i * 4, y, x + i * 4 + 2, y + altura, i >= sinal ? apagado : cor_segmento(i, tx));
+}
 
-        pinta(x + i * passo, y, x + i * passo + passo - 1, y + altura, cor);
+/* O texto do medidor S, em s: S1 a S9 nos 18 primeiros segmentos (2 por S) e, acima, S9+10 a S9+60, um
+ * segmento por 10 dB (v110); transmitindo, MIC. */
+static char *texto_s(char *s, unsigned sinal, unsigned tx)
+{
+    char *p = s;
+
+    if (tx) {
+        junta(s, "MIC");
+        return s;
     }
+    *p++ = 'S';
+    *p++ = '0' + (sinal < 18 ? (sinal + 1) / 2 : 9);
+    if (sinal > 18) {
+        *p++ = '+';
+        *p++ = '0' + sinal - 18;
+        *p++ = '0';
+    }
+    *p = 0;
+    return s;
+}
+
+/* O texto a direita do medidor (a 100 px do comeco dele), centrado na altura dele, na cor do ultimo
+ * segmento aceso. Embutido no cartao, no SINGLE e no compacto, com o buffer deles, para nao por um quadro
+ * a mais no caminho do cartao, que ja esta no limite da pilha de fabrica (740 B). */
+static COLADA void medidor_texto(unsigned x, unsigned y, unsigned altura, unsigned sinal, unsigned tx, char *s)
+{
+    if (sinal)
+        texto(x + 100, y + altura / 2 - 3, texto_s(s, sinal, tx), 1, cor_segmento(sinal - 1, tx));
 }
 
 /* Uma etiqueta da linha de informacoes, se couber ate x 152; se nao couber, nenhuma depois dela cabe
@@ -527,6 +572,7 @@ SEPARADA static void cartao(const struct estado *e, unsigned i)
         texto(x, y + 27, s, 1, COR_CINZA);
     }
     medidor(8, y + 54, 9, l->sinal, e->tx && i == e->evidencia, COR_SEG_FUNDO);
+    medidor_texto(8, y + 54, 9, l->sinal, e->tx && i == e->evidencia, s);
 }
 
 /* WATCH em SINGLE (v42): o lado em evidencia sozinho, da barra ao pe da tela. O mesmo cartao, maior:
@@ -578,6 +624,7 @@ SEPARADA static void cartao_unico(const struct estado *e, unsigned i)
     if ((digitando && !l->canal) || frequencia_grande)
         texto(x, y + 22 + FONTE_B_ALTURA, s, g - 1, COR_CINZA);    /* 7 x g contra 7 x (g - 1): pelo pe */
     medidor(10, MEDIDOR_UNICO, ALTURA_MED_UNICO, l->sinal, e->tx, COR_SEG_FUNDO);
+    medidor_texto(10, MEDIDOR_UNICO, ALTURA_MED_UNICO, l->sinal, e->tx, s);
     /* com deslocamento, a frequencia em que ele transmite */
     if (!e->tx && (l->desloc == 1 || l->desloc == 2)) {
         frequencia(junta(s, "TX "), le32(VFO(i) + 5), 5);
@@ -617,9 +664,12 @@ SEPARADA static u32 le_canal_c(unsigned canal, char *nome12)
     return f;
 }
 
-/* Uma faixa: selo, o texto da exibicao e o canal (ou VFO). Embutida nas duas que a chamam, e com o
- * canal escrito no mesmo buffer depois de o texto ja estar desenhado: e o fim do caminho mais fundo
- * da tela no TRIPLE, e um quadro a mais (ou um buffer a mais) passava da pilha de fabrica. */
+/* Uma faixa: selo, o texto da exibicao e o canal (ou VFO). rx: 0 sem receber; recebendo, o nivel do
+ * medidor S (1 a 24, v109), que vai no lugar do canal, ou SEM_NIVEL. Embutida nas duas que a chamam, e
+ * com o canal escrito no mesmo buffer depois de o texto ja estar desenhado: e o fim do caminho mais fundo
+ * da tela no TRIPLE, e um quadro a mais (ou um buffer a mais, ou um parametro a mais) passava da pilha de
+ * fabrica. */
+#define SEM_NIVEL 0xFFu
 static inline __attribute__((always_inline)) void faixa(unsigned y, unsigned selo, char *s, unsigned canal,
                                                         unsigned rx)
 {
@@ -629,7 +679,9 @@ static inline __attribute__((always_inline)) void faixa(unsigned y, unsigned sel
     pinta(8, y + 4, 19, y + 15, rx ? COR_TEXTO_AMBAR : COR_SELO_B);
     letra(11, y + 6, selo, 1, rx ? COR_CHIP_AMBAR : COR_CINZA);
     texto(24, y + 6, s, 1, cor);
-    if (canal != 0xFFFF) {
+    if (rx && rx != SEM_NIVEL)
+        etiqueta(152, y + 4, texto_s(s, rx, 0), COR_CHIP_AMBAR, cor, 1);
+    else if (canal != 0xFFFF) {
         if (canal)
             texto_canal(s, canal);
         etiqueta(152, y + 4, canal ? s : "VFO", rx ? COR_CHIP_AMBAR : COR_CHIP_CANAL_B, cor, 1);
@@ -653,7 +705,7 @@ SEPARADA static void faixa_lado(const struct estado *e, unsigned i)
     else
         texto_canal(s, l->canal);
     faixa(y, 'A' + LETRA(e, i), s, l->canal && l->exibicao == 2 ? 0xFFFF : l->canal,
-          (l->sinal || outro_recebendo()) && !c_no_lugar());
+          c_no_lugar() ? 0 : l->sinal ? l->sinal : outro_recebendo() ? SEM_NIVEL : 0);
 }
 
 /* A faixa da terceira - a que esta fora dos dois lados: a C, ou o B quando a C esta no lado B -,
@@ -686,7 +738,8 @@ SEPARADA static void faixa_terceira(const struct estado *e)
             junta(s, "UNNAMED CH");
         n = !f || mdf == 2 ? 0xFFFF : canal + 1;
     }
-    faixa(y, 'A' + j, s, n, (e->lado[!e->evidencia].sinal || outro_recebendo()) && c_no_lugar());
+    faixa(y, 'A' + j, s, n, !c_no_lugar() ? 0 : e->lado[!e->evidencia].sinal ? e->lado[!e->evidencia].sinal
+                                               : outro_recebendo() ? SEM_NIVEL : 0);
 }
 
 /* O outro lado, compacto: selo, o texto da exibicao (no VFO, a frequencia inteira), o canal e um
@@ -713,6 +766,7 @@ SEPARADA static void compacto(const struct estado *e, unsigned i)
         etiqueta(152, y + 4, s, COR_CHIP_CANAL_B, COR_CINZA, 1);
     }
     medidor(8, y + 24, 4, l->sinal, 0, COR_SEG_FUNDO_B);
+    medidor_texto(8, y + 24, 4, l->sinal, 0, s);
 }
 
 /* Barra de cima: o que esta ligado (VOX, DW, MO, NR em texto; DTMF ST, Bluetooth e trava em icone),
@@ -908,10 +962,11 @@ void tela_b(void)
     desenha(&e, 0, 128);
 }
 
-/* O medidor de um lado com o nivel dado (0..10, o do firmware; estado 1 = TX), e a barra de cima,
- * que mostra RX ou TX. E o que o gancho do medidor desenha (b_medidor), colado nele: o RX o chama do
- * laco 0x01E4622A, e assim o caminho fica dentro do que o firmware de fabrica ja usa de pilha ali. */
-static inline __attribute__((always_inline)) void medidor_b(unsigned estado, unsigned nivel, unsigned lado,
+/* O medidor de um lado com os segmentos dados (0..20; estado 1 = TX), e a barra de cima, que mostra RX
+ * ou TX. E o que o gancho do medidor desenha (b_medidor), colado nele: o laco 0x01E4622A o chama (pelo
+ * b_sinal e pela rotina de fabrica), e assim o caminho fica dentro do que o firmware de fabrica ja usa de
+ * pilha ali. */
+static inline __attribute__((always_inline)) void medidor_b(unsigned estado, unsigned sinal, unsigned lado,
                                                             unsigned so_barra)
 {
     struct estado e;
@@ -919,9 +974,9 @@ static inline __attribute__((always_inline)) void medidor_b(unsigned estado, uns
 
     le_estado(&e);
     lado = lado != 0;
-    e.lado[lado].sinal = nivel < 10 ? nivel * 2 : 20;
+    e.lado[lado].sinal = sinal;
     e.tx = estado == 1;
-    e.rx = !e.tx && nivel != 0;
+    e.rx = !e.tx && sinal != 0;
     if (e.vista == VISTA_SINGLE) {       /* so o lado em evidencia tem medidor (o outro nem recebe) */
         if (!so_barra && lado == e.evidencia)
             desenha(&e, MEDIDOR_UNICO, MEDIDOR_UNICO + ALTURA_MED_UNICO);
@@ -936,8 +991,9 @@ static inline __attribute__((always_inline)) void medidor_b(unsigned estado, uns
             desenha(&e, y, y + ALTURA_FAIXA);
         }
     } else if (!so_barra) {         /* nas outras telas (v37) nao ha medidor dos lados: so a barra */
-        y = lado == e.evidencia ? TOPO_CARTAO(lado) + 54 : TOPO_COMPACTO(lado) + 24;
-        desenha(&e, y, y + (lado == e.evidencia ? 9 : 4));
+        /* o do cartao, ou o fino do compacto com o texto dele (v109: 7 px, de 23 a 29) */
+        y = lado == e.evidencia ? TOPO_CARTAO(lado) + 54 : TOPO_COMPACTO(lado) + 23;
+        desenha(&e, y, y + (lado == e.evidencia ? 9 : 7));
     }
     desenha(&e, 0, ALTURA_ESTADO);
 }
@@ -948,7 +1004,7 @@ void tela_b_medidor(unsigned estado, unsigned nivel, unsigned lado)
 {
     unsigned m = MODO_TELA;
 
-    medidor_b(estado, nivel, lado, m == 1 || m == 2 || m == 17 || m == 20);
+    medidor_b(estado, nivel < 10 ? nivel * 2 : 24, lado, m == 1 || m == 2 || m == 17 || m == 20);
 }
 #endif
 
@@ -1069,7 +1125,7 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * a quantidade de posicoes da tabela no byte 1 e uma marca por posicao a partir do byte 4. Os dois saem do
  * compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e zero no resto, e o
  * montar so escreve neles se achar exatamente isso. */
-const unsigned char menu_tabela[96 * 28] __attribute__((aligned(4))) = {0xFF};
+const unsigned char menu_tabela[97 * 28] __attribute__((aligned(4))) = {0xFF};
 const unsigned char menu_textos[640] __attribute__((aligned(4))) = {0xFF};
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
@@ -1626,14 +1682,37 @@ SEPARADA static void barra_menu(void)
     desenha(&e, 0, ALTURA_ESTADO);
 }
 
+/* O medidor S (v109). Fora do menu o desvio faz o trabalho da de fabrica: o medidor_s (bancos.c) mede, e
+ * aqui so se desenha - como a de fabrica, quando o nivel muda (b[0x7031]) e nos modos 0 e 3, no lado que a
+ * rotina dela escolhe (0x01E452D0: o em evidencia, ou o outro com a dupla escuta parada nele, quando ela
+ * tambem marca b[0x1537B]); transmitindo, no lado em evidencia. Sem a tela B (ativa) e no espectro, a de
+ * fabrica. Roda nos tiques 3, 4, 5 e 8 do contador lento (montar.py, SINAL_REMENDOS): 4 vezes por
+ * segundo. */
+#define DW_MEDIDOR       RAM(u8, 0x0001537B)
+#define MEDIDOR_FABRICA  0x100u            /* do medidor_s: a de fabrica faz (e nada faz) */
+#define SEGMENTOS        0x100u            /* no nivel do b_medidor: os segmentos do medidor S */
+unsigned medidor_s(void);                 /* bancos.c: os segmentos, | 0x80 transmitindo; 255 sem sinal */
+u32 b_medidor(u32 estado, u32 nivel, u32 lado);
+
 u32 b_sinal(void)
 {
-    if (MODO_TELA != 1)
-        return 0;
+    unsigned m = MODO_TELA, s;
+
+    if (m == 1) {
 #ifdef DIAG_RX
-    DIAG_CONTA++;
+        DIAG_CONTA++;
 #endif
-    barra_menu();
+        barra_menu();
+        return 1;
+    }
+    if (m == 20 || !ativa() || (s = medidor_s()) == MEDIDOR_FABRICA)
+        return 0;
+    if (s != NIVEL_DESENHADO && s != 255 && (m == 0 || m == 3)) {
+        if (s < 0x80 && DW_NO_OUTRO == 1 && DW_MEDIDOR == 0)
+            DW_MEDIDOR = 1;
+        b_medidor(s >> 7, SEGMENTOS | (s & 127), s >> 7 ? LADO_B != 0 : MEDIDOR_LADO);
+    }
+    NIVEL_DESENHADO = s;
     return 1;
 }
 
@@ -1641,14 +1720,19 @@ u32 b_sinal(void)
  * nossas), so o RX chama (0x01E45328). O nivel que vem e o que vale (o MO passa 10, 0x01E4532C), e a
  * barra de cima acompanha, pelo RX. No espectro so a tecla MO chega aqui (o laco do sinal so chama o
  * medidor nos modos 0 e 3, 0x01E46216), e a de fabrica desenharia o medidor por cima do grafico: so
- * a barra. */
+ * a barra. Desde a v109 o b_sinal tambem chama aqui, com os segmentos do medidor S | SEGMENTOS; o nivel de
+ * fabrica (0 a 10) vira 2 segmentos por nivel e deixa o desenhado sem valor: o proximo tique do medidor S
+ * redesenha por cima, mesmo sem o sinal mudar. Um quadro so, com o medidor_b colado: um gancho chamando
+ * outra rotina empilhava o rets, 4 B alem da pilha de fabrica. */
 u32 b_medidor(u32 estado, u32 nivel, u32 lado)
 {
     unsigned outra = telas_modo() != 0 || MODO_TELA == 20;
 
+    if (nivel < SEGMENTOS)
+        NIVEL_DESENHADO = 255;
     if (!ativa() && !outra)
         return 0;
-    medidor_b(estado, nivel, lado, outra);
+    medidor_b(estado, nivel >= SEGMENTOS ? nivel & 127 : nivel < 10 ? nivel * 2 : 24, lado, outra);
     return 1;
 }
 

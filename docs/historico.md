@@ -5,6 +5,48 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v110 — 31/10 — a barra S no PTT, o chiado no S1, 24 segmentos e o cabo com o Morse e o APRS (a testar)
+
+`BJ8300_BANK_v110.anc` (sha256 `8a6c9425…`), fora de `firmware/releases/` como as outras de teste. Com a v109 o
+dono viu a barra parada no PTT e o chiado em S6. Transmitindo, a barra não lia o microfone: o medidor desistia
+pelo byte do estado do TX antes de conferir o TX. A escala agora começa o S1 no primeiro degrau de fábrica de
+cada faixa, que fica no chiado, e a barra tem 24 segmentos: 2 por S até o S9 e 1 por 10 dB acima, até S9+60,
+verde até o S3, amarelo até o S8 e vermelho do S9 para cima, a pedido do dono. O nível do microfone vai de 4 em
+4 dB, com a escala ainda a conferir. O cabo passou a gravar os registros do Morse e do APRS, para o CHIRP.
+[Seção 27](engenharia-reversa.md#27-o-equalizador-e-o-medidor-s-v108-a-v110).
+
+## v109 — 31/10 — a barra S (testada)
+
+`BJ8300_BANK_v109.anc` (sha256 `e6d63a81…`). O medidor de fábrica tinha 5 degraus e enchia a barra entre −117
+e −96 dBm. A v109 lê o RSSI 4 vezes por segundo e mostra S1 a S9 e S9+10 a S9+50, com o texto à direita da
+barra no SINGLE, no DUAL (o cartão e o compacto) e no TRIPLE (na faixa âmbar de quem recebe, no lugar do
+canal); transmitindo, o nível do microfone, com a potência na etiqueta H/M/L. No rádio, a barra ficou parada
+no PTT e o chiado deu S6 (a v110 conserta os dois). [Seção 27](engenharia-reversa.md#27-o-equalizador-e-o-medidor-s-v108-a-v110).
+
+## v108 — 31/10 — o EQ: graves e agudos na recepção e na transmissão (a testar)
+
+`BJ8300_BANK_v108.anc` (sha256 `de78ceab…`). EQ BASS e EQ TREBLE nas pastas AUDIO (a recepção) e MIC (a
+transmissão), com o DEFAULT primeiro (o que a fábrica faz) e o resto em ordem: graves de −3 a +4 dB e agudos de
+−1 a +4 dB. A tabela de cada passo vem de um bloco desligado do firmware do OneOfEleven para o UV-K5, e a
+linha de −1 dB dos graves é exatamente o que a partida de fábrica grava. Grava no OK, como todo ajuste.
+[Seção 27](engenharia-reversa.md#27-o-equalizador-e-o-medidor-s-v108-a-v110).
+
+## v105 a v107 — 31/10 — os fluxos inteiros da recepção do APRS (diagnósticos, não lançados)
+
+A v105 testou o filtro largo e a DE-EMPHASIS em OFF na recepção normal, com o APRSdroid ouvindo o alto-falante:
+nada mudou. A v106 e a v107 (sha256 `118d224f…`) voltaram à captura crua da v92, e a v107 guardou o fluxo
+inteiro de cada sync. O erro está nos bits que o modem do chip decide, já no primeiro byte depois do
+preâmbulo, e nenhuma das ideias de contorno tem onde agir. A recepção ficou a da v104.
+[Seção 24](engenharia-reversa.md#os-fluxos-inteiros-de-cada-sync-v105-a-v107-diagnóstico).
+
+## v102 a v104 — 31/10 — o FILTER do APRS RX e a tela nova dele
+
+`BJ8300_BANK_v104.anc` (sha256 `11f9f201…`). A tela do APRS RX abre sempre com o FILTER: FM, sem scramble nem
+compressor, o filtro largo do espectro e o cancelamento de corrente contínua, e na saída tudo volta como
+estava. Saíram as teclas do ganho (#) e do filtro (0). O rodapé virou células (SYNC, BAD em vermelho, FIX em
+verde), a mensagem cortada ganha a etiqueta MORE em vermelho, e o HOLD e o EXIT dividem uma etiqueta preta,
+antes do CLR. [Seção 24](engenharia-reversa.md#o-filter-do-aprs-rx-v102-a-v104).
+
 ## v100 e v101 — 31/10 — a NOISE GATE fica, e o OK grava (em teste)
 
 `BJ8300_BANK_v101.anc` (sha256 `d9f94f2d…`), fora de `firmware/releases/` como as outras de teste. O dono viu o

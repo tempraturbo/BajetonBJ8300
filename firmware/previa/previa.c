@@ -411,6 +411,8 @@ int main(int argc, char **argv)
     previa_outro_rx = 1;               /* a dupla escuta parou na C */
     tela_b();
     grava("37-triple-c-recebendo");
+    tela_b_medidor(0, 4, 1);           /* v109: o medidor S no lado da C, S8: na faixa, no lugar do canal */
+    grava("37b-triple-c-recebendo-s8");
     previa_c_no_lugar = 0;
 
     limpa();
@@ -421,6 +423,8 @@ int main(int argc, char **argv)
     previa_mdf_terceira = 1;           /* a C pela frequencia */
     tela_b();
     grava("38-triple-b-em-evidencia-a-recebendo");
+    tela_b_medidor(0, 3, 0);           /* v109: o medidor S no A, S6 */
+    grava("38d-triple-a-recebendo-s6");
     previa_outro_rx = 0;
 
     /* o DTMF no TRIPLE com o B em evidencia */

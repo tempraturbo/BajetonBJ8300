@@ -1777,12 +1777,13 @@ void aprs_caminho_grava(void)
  * economia de bateria e a dupla escuta desarmada antes (fica no lado em evidencia), e o watchdog e
  * limpo aqui. A tela mostra dois quadros por vez, o mais novo em cima, o de cima (o da posicao no alto)
  * num fundo proprio; as setas andam pelo historico (v75: segurada, a seta repete, e o historico da a
- * volta nas duas pontas), o OK abre o de cima inteiro (e fecha), o # troca o ganho, o * apaga a tela
+ * volta nas duas pontas), o OK abre o de cima inteiro (e fecha), o * apaga a tela
  * (v75; a tecla seguinte so a acende), o EXIT segurado apaga o historico (v71), o EXIT curto fecha o
  * aberto ou sai, e as outras teclas saem. A mensagem para mim com numero sai da tela
  * sozinha, para o ack ir ao ar (v75, guarda). Na barra de baixo, quantos syncs o modem achou em cada
  * polaridade, quantos quadros chegaram com o FCS errado (BAD) e quantos a correcao salvou (FIX), desde a
- * entrada ou a ultima troca de ganho. */
+ * entrada. O ganho do modem e o do MODEM GAIN (v103: o # que o trocava saiu), e a cadeia de recepcao
+ * entra filtrada para o APRS e sai como estava (filtro_rx, v102 e v103). */
 /* A luz da tela (0x01E394D6, acende = 1 ou apaga = 0): com o PWM ligado, o desvio da v60 (b_luz, tela.c) a
  * atende pelo ciclo; sem ele, a de fabrica. */
 FIRMWARE(LUZ, 0x01E394D6);          void LUZ(unsigned);
@@ -1812,7 +1813,6 @@ void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas)
 #define TECLA_CIMA   3
 #define TECLA_BAIXO  4
 #define TECLA_ESTRELA 9
-#define TECLA_MODO   17                    /* # */
 #define EXIT_LONGO   100                   /* o EXIT segurado 0,6 s */
 #define ABERTO       1u                    /* os bits de modo, no laco */
 #define PRESO        2u                    /* uma tecla esta apertada: so conta de novo depois de solta */
@@ -1880,6 +1880,35 @@ u16 modem_ganho_le(void)
 void modem_ganho_grava(void)
 {
     GANHO_MODEM = GANHO_MARCA | (VALOR < 4 ? VALOR : 3);
+}
+
+/* FILTER (v102; sempre ligado desde a v103, com a etiqueta no alto da tela do APRS RX): a cadeia de
+ * recepcao como o APRS precisa, sem herdar o canal - o laco so programava o modem, e o resto vinha de quem
+ * sintonizou. A entrada liga: FM (0x01E440C4, a troca de AM e FM de fabrica, que tambem grava o 0x42, o 0x2A
+ * e o 0x2B), sem scramble nem compressor/expansor (bits 1 e 3 do 0x31), o filtro largo do espectro
+ * (FILTRO(0), 0x43 = 0x49A8: 3,75 kHz no sinal forte e no fraco, dobrados, o largo do firmware da comunidade
+ * do UV-K5), o expansor e a porta de ruido desligados (0x28 = 0x0A00) e, no 0x2B, os filtros de audio do RX
+ * de fabrica com o cancelamento de corrente continua depois do demodulador (bit 14, que vem ligado no chip
+ * e a fabrica desliga em FM; v103). A saida devolve o que estava: o modo, o 0x31 e o 0x43 que a entrada leu
+ * (era3) e, pelo aplica_audio (bancos.c), o 0x28, o bit 3 do 0x31 e, em FM, o 0x2B dos itens das pastas
+ * AUDIO e MIC; em AM, o 0x2B da troca de fabrica. */
+FIRMWARE(AM_FM, 0x01E440C4);        void AM_FM(unsigned am);      /* 1 AM, o resto FM */
+FIRMWARE(FILTRO, 0x01E4A980);       void FILTRO(unsigned);        /* o 0x43 do espectro: 0 o largo */
+void aplica_audio(void);
+__attribute__((noinline)) static void filtro_rx(unsigned liga, unsigned era3)
+{
+    if (liga) {
+        AM_FM(0);
+        REG_W(0x31, REG_R(0x31) & ~0x0Au);
+        FILTRO(0);
+        REG_W(0x28, 0x0A00);
+        REG_W(0x2B, 0x4000);
+        return;
+    }
+    AM_FM(era3 >> 16 & 1);
+    REG_W(0x31, era3 >> 16);
+    REG_W(0x43, era3 & 0xFFFF);
+    aplica_audio();
 }
 
 /* Arma a captura com o sync de uma polaridade: 0 parado na marca (FE FE), 1 no espaco (01 01). */
@@ -2099,6 +2128,7 @@ void aprs_rx_grava(void)
     unsigned pede = 15, modo = PRESO, anel = 0, desde_tecla = 0;   /* o OK que abriu ainda esta apertado */
     /* os registradores (de 16 bits) que a saida devolve, dois por variavel: a pilha do laco esta no limite */
     unsigned era1 = REG_R(0x3F) | REG_R(0x70) << 16, era2 = REG_R(0x72) | REG_R(0x5E) << 16;
+    unsigned era3 = REG_R(0x43) | REG_R(0x31) << 16;   /* o canal, para o FILTER (v102) */
     int hist = hist_abre(&anel), topo = 0;
 
     ACORDA();
@@ -2112,6 +2142,7 @@ void aprs_rx_grava(void)
     REG_W(0x5E, 0x0204);                   /* quase cheia com 4 palavras */
     REG_W(0x3F, 0x3002);                   /* avisos: sync, quase cheia, fim */
     REG_W(0x02, 0);
+    filtro_rx(1, era3);
     fsk_rx_arma(0);
     hdlc_comeca(&h, q, sizeof q);
     h.ruins = h.consertados = 0;
@@ -2149,14 +2180,7 @@ void aprs_rx_grava(void)
             f = k;
         }
         if (f) {
-            if (f == TECLA_MODO) {
-                num[0] = (num[0] + 1) & 3;
-                REG_W(0x58, MODEM_RX | num[0] << 8);
-                ativo = 0;
-                fsk_rx_arma(pol);
-                desde = TIQUE_MS;
-                num[3] = num[4] = h.ruins = h.consertados = 0;
-            } else if (f == TECLA_CIMA || f == TECLA_BAIXO) {
+            if (f == TECLA_CIMA || f == TECLA_BAIXO) {
                 if (hist > 0)              /* em volta: depois do mais velho, o mais novo, e o contrario */
                     topo = (topo + (f == TECLA_BAIXO ? 1 : hist - 1)) % hist;
             } else if (f == TECLA_OK) {
@@ -2254,6 +2278,7 @@ void aprs_rx_grava(void)
     REG_W(0x70, era1 >> 16);
     REG_W(0x72, era2 & 0xFFFF);
     REG_W(0x02, 0);
+    filtro_rx(0, era3);                    /* o canal e os menus de novo (v102) */
 }
 
 /* Arma o envio; a mensagem leva um numero (1 a 99) para o outro lado confirmar ("ack"). O numero so anda

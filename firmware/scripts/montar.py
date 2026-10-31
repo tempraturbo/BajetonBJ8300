@@ -309,7 +309,7 @@ PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 # devolve a tabela e, se o menu foi fechado de dentro de um grupo, poe o grupo em [+6], que a entrada
 # le logo depois (0x01E4CBCA). Na chamada, r1..r3 estao mortos (escritos antes de lidos depois dela)
 # e o r4 (0, lido em 0x01E4CBC6) a chamada preserva.
-MENU_VAGAS = 96                                    # v65: 87 com as pastas MORSE e APRS
+MENU_VAGAS = 97                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ
 TABELA_SIMBOLO = 'menu_tabela'
 TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 640
 R5_R0 = bytes.fromhex('0516')
@@ -320,7 +320,7 @@ R5_R0 = bytes.fromhex('0516')
 # EXIT editando fechava o menu inteiro, como nos menus rapidos (0x01E4D53C: "if (conta == 1)" vai a
 # saida); o desvio_menu_um (MENU_DESVIOS) o faz voltar a lista do grupo.
 GRUPOS = {
-    'AUDIO': ('EXPANDER', 'NOISE GATE', 'DE-EMPHASIS', 'SQL', 'STE'),
+    'AUDIO': ('EXPANDER', 'NOISE GATE', 'DE-EMPHASIS', 'EQ BASS RX', 'EQ TREBLE RX', 'SQL', 'STE'),
     'BANKS': ('BANK', 'CHANNEL', 'NAME'),
     'CALIBRATION': ('CRYSTAL FINE',),
     'CHANNEL': ('BCL', 'ENCRYPT', 'RX MODULATION', 'SCRAMBLE', 'STEP', 'TXP', 'W/N'),
@@ -328,7 +328,8 @@ GRUPOS = {
     'DTMF': ('DTMF CODE', 'DTMFST', 'PTT-LT', 'S-CODE'),
     'KEYS': ('AUTOLOCK', 'BEEP PROMPT', 'PF2', 'PF2 LONG PRESS', 'PF3'),
     'MEMORY': ('CH-NAME', 'DELCH', 'MEMCH'),
-    'MIC': ('COMPRESSOR', 'MIC AGC', 'MIC GAIN', 'NOISE REDUCTION'),   # a NR e do microfone (v80)
+    'MIC': ('COMPRESSOR', 'MIC AGC', 'MIC GAIN', 'NOISE REDUCTION',    # a NR e do microfone (v80)
+            'EQ BASS TX', 'EQ TREBLE TX'),                             # v108
     'REPEATER': ('OFFSET', 'RP-STE', 'RPT-RL', 'SFT-D', 'TONE'),
     'SCAN': ('SC-REV', 'SCAN ADD'),
     'SYSTEM': ('AL-MOD', 'BLUETOOTH', 'RESET', 'SAVE', 'VERSION'),
@@ -466,7 +467,21 @@ ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, ma
                           # v85: a de-enfase do RX (o bit 8 do reg 0x2B em FM)
                           dict(nome='DE-EMPHASIS', molde=TDR_ITEM, flags=0, maximo=2, get='deenfase_le',
                                set='deenfase_grava', titulo='titulo_deenfase', exibe='deenfase_opcoes',
-                               opcoes_cn='deenfase_opcoes')]}
+                               opcoes_cn='deenfase_opcoes'),
+                          # v108: o equalizador do BK4819, graves e agudos do RX (AUDIO) e do TX (MIC);
+                          # as duas pastas mostram EQ BASS e EQ TREBLE
+                          dict(nome='EQ BASS RX', texto='EQ BASS', molde=TDR_ITEM, flags=0, maximo=8,
+                               get='eq_graves_rx_le', set='eq_graves_rx_grava', titulo='titulo_eq_graves_rx',
+                               exibe='eq_graves_rx_opcoes', opcoes_cn='eq_graves_rx_opcoes'),
+                          dict(nome='EQ TREBLE RX', texto='EQ TREBLE', molde=TDR_ITEM, flags=0, maximo=6,
+                               get='eq_agudos_rx_le', set='eq_agudos_rx_grava', titulo='titulo_eq_agudos_rx',
+                               exibe='eq_agudos_rx_opcoes', opcoes_cn='eq_agudos_rx_opcoes'),
+                          dict(nome='EQ BASS TX', texto='EQ BASS', molde=TDR_ITEM, flags=0, maximo=8,
+                               get='eq_graves_tx_le', set='eq_graves_tx_grava', titulo='titulo_eq_graves_tx',
+                               exibe='eq_graves_tx_opcoes', opcoes_cn='eq_graves_tx_opcoes'),
+                          dict(nome='EQ TREBLE TX', texto='EQ TREBLE', molde=TDR_ITEM, flags=0, maximo=7,
+                               get='eq_agudos_tx_le', set='eq_agudos_tx_grava', titulo='titulo_eq_agudos_tx',
+                               exibe='eq_agudos_tx_opcoes', opcoes_cn='eq_agudos_tx_opcoes')]}
 
 # ---- revisao dos textos em ingles do menu (ver notas/textos-revisao.md) ----
 # As cadeias vem coladas na flash, sem folga: trocar no lugar so pode ter tamanho igual ou menor
@@ -804,6 +819,16 @@ EDITOR_REMENDOS += ((0x01E4A0F0, bytes.fromhex('02fc041c'), bytes.fromhex('02fc0
 # LONG PRESS e o PF3 em 0x14BD7..0x14BD9, ate 8; a zona dos lados em 0x14BDB e 0x14BDC, ate 15).
 AJUSTES_REMENDOS = ((0x01E55D30, bytes.fromhex('4120'), bytes.fromhex('0000'),
                      'NOISE GATE: a partida nao zera mais o 0x9031'),)
+# v109: o medidor S (tela.c, b_sinal) 4 vezes por segundo. O laco do sinal (0x01E4622A, a cada 10 ms) poe
+# o contador lento b[0x14614] de 0 a 9, um passo a cada 10 voltas, e escolhe a tarefa dele no tbh de
+# 0x01E46A38 (r0 = lento - 1; acima de 7, nenhuma): 1 e 6 em 0x01E46A4A, 2 e 7 em 0x01E46C72, 3 e 8 no
+# medidor (0x01E46C7A: "call 0x01E46166; goto" o fim do laco, 0x01E4772E) e 4 e 5 direto no fim. As
+# entradas do 4 e do 5 (meias palavras em 0x01E46A40 e 0x01E46A42, destino = 0x01E46A3A + 2 x entrada)
+# passam de 0x067A, o fim, a 0x0120, a do medidor: ele roda nos tiques 3, 4, 5 e 8.
+SINAL_REMENDOS = ((0x01E46A40, bytes.fromhex('7a06'), bytes.fromhex('2001'),
+                   'tique lento 4: o medidor, no lugar de nada'),
+                  (0x01E46A42, bytes.fromhex('7a06'), bytes.fromhex('2001'),
+                   'tique lento 5: o medidor, no lugar de nada'))
 # (onde, o ponteiro de fabrica, o simbolo novo, o que e)
 PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com o espaco primeiro e - / = + @'),
                    # v86 (experimental): o APRS pelo DAC. A abertura do microfone (0x01E41CBA) entrega a
@@ -1135,6 +1160,7 @@ def main():
     escritas += [(s, len(a), f'vozes: {d}') for s, a, _, d in VOZES_REMENDOS]
     escritas += [(s, len(a), f'editor de nome: {d}') for s, a, _, d in EDITOR_REMENDOS]
     escritas += [(s, len(a), f'ajustes: {d}') for s, a, _, d in AJUSTES_REMENDOS]
+    escritas += [(s, len(a), f'laco do sinal: {d}') for s, a, _, d in SINAL_REMENDOS]
     escritas += [(s, 4, d) for s, _, _, d in PONTEIROS_LIVRE]
     escritas += [(ROGER_DESVIO_EM, 4, 'roger: valores 3 e 4 no caminho do BEEP'),
                  (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
@@ -1237,7 +1263,7 @@ def main():
     # 3b2. vozes fora: os tres caminhos que tocam voz viram o "sem voz" de cada um; e (v52) a tecla #
     # do editor de nome
     for rotulo, remendos in (('vozes', VOZES_REMENDOS), ('editor de nome', EDITOR_REMENDOS),
-                             ('ajustes', AJUSTES_REMENDOS)):
+                             ('ajustes', AJUSTES_REMENDOS), ('laco do sinal', SINAL_REMENDOS)):
         for sitio, antes, depois, oque in remendos:
             o = sitio - BASE_APP
             if bytes(app[o:o + len(antes)]) != antes:

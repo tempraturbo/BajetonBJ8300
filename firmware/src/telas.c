@@ -1055,24 +1055,26 @@ SEPARADA static void aprs_linhas(u32 a, unsigned y, unsigned n)
                 k = 24;
         }
         j = k + (s[k] == ' ');             /* onde a linha seguinte comeca */
-        if (!n && s[k]) {                  /* a ultima, e o texto continua */
-            if (k > 22)
-                k = 22;
-            s[k++] = ' ';
-            s[k++] = '>';
-        }
+        if (!n && s[k])                    /* a ultima, e o texto continua: a etiqueta MORE (v103); o j */
+            j = 0;                         /* ja nao serve (o laco acaba), e marca sem variavel a mais */
         s[k] = 0;
-        if (NA_JANELA(y, y + 12))
-            texto(4, y, s, 1, cor);
+        while (!j && k > 1 && largura(s, 1) > 112)
+            s[--k] = 0;
+        if (NA_JANELA(y, y + 12)) {
+            k = texto(4, y, s, 1, cor);
+            if (!j)
+                etiqueta(k + 3, y - 2, "MORE", COR_CHIP_VERMELHO, COR_SEG_VERMELHO, 0);
+        }
         a += j;
     }
 }
 
 SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
 {
-    static const char *const ROTULOS[2] = {" BAD ", " FIX "};
-    static const char *const GANHOS[4] = {"OFF", "LOW", "MID", "HIGH"};   /* o MODEM GAIN (v73; MID desde a v82) */
-    char s[18];                            /* "SYNC 65535/65535" e o 0 (v74) */
+    static const char *const ROTULOS[3] = {"SYNC", "BAD", "FIX"};
+    static const char *const TECLAS_RX[3] = {"OK", "*", "HOLD EXIT"};
+    static const u8 CASA[3] = {0, 80, 120};         /* as tres casas dos contadores no rodape (v103) */
+    char s[14];                            /* o nome do canal (12) ou "65535/65535", e o 0 */
     unsigned i = LADO_B != 0, x;
 
     if (NA_JANELA(0, 18)) {
@@ -1086,7 +1088,7 @@ SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
         else
             texto_canal(s, CANAL(i) + 1);
         i = etiqueta(4, 3, s, COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 0);
-        etiqueta(i, 3, GANHOS[num[0] & 3], COR_CHIP_RX, COR_TEXTO_RX, 0);
+        etiqueta(i, 3, "FILTER", COR_CHIP_RX, COR_TEXTO_RX, 0);   /* sempre ligado (v103, filtro_rx) */
         if (num[2]) {
             numero(junta(numero(s, num[1], 1), "/"), num[2], 1);
             texto(156 - largura(s, 1), 5, s, 1, COR_CINZA);
@@ -1104,17 +1106,30 @@ SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
         aprs_linhas(a1, 68, 2);
     }
     if (NA_JANELA(102, 128)) {
-        /* os contadores e as teclas num fundo proprio (v75): o da barra de cima, na v74, saiu quase preto */
+        /* o rodape num fundo proprio (v75; o da barra de cima, na v74, saiu quase preto), em casas (v103):
+         * em cima os contadores - os syncs na marca e no espaco (v71), o BAD em vermelho e o FIX em verde
+         * quando passam de 0 -, embaixo as teclas em etiquetas, com o que cada uma faz */
         pinta(0, 102, 160, 103, COR_LINHA);
         pinta(0, 103, 160, 128, COR_SEG_FUNDO);
-        numero(junta(numero(junta(s, "SYNC "), num[3], 1), "/"), num[4], 1);   /* marca/espaco (v71) */
-        x = texto(4, 107, s, 1, COR_TEXTO);
-        for (i = 0; i < 2; i++) {
-            numero(junta(s, ROTULOS[i]), num[5 + i], 1);
-            x = texto(x, 107, s, 1, COR_TEXTO);
+        pinta(0, 115, 160, 116, COR_LINHA);
+        for (i = 0; i < 3; i++) {
+            if (i)
+                pinta(CASA[i], 103, CASA[i] + 1, 115, COR_LINHA);
+            x = texto(CASA[i] + 4, 106, ROTULOS[i], 1, COR_CINZA) + 4;
+            if (i)
+                numero(s, num[4 + i], 1);
+            else
+                numero(junta(numero(s, num[3], 1), "/"), num[4], 1);
+            texto(x, 106, s, 1, i == 1 && num[5] ? COR_SEG_VERMELHO : i == 2 && num[6] ? COR_VERDE : COR_TEXTO);
         }
-        texto(156 - largura("*:OFF", 1), 107, "*:OFF", 1, COR_TEXTO);   /* a tela apagada (v75) */
-        texto(4, 118, aberto ? "#:GAIN OK:BACK HOLD EXIT:CLR" : "#:GAIN OK:OPEN HOLD EXIT:CLR", 1, COR_TEXTO);
+        for (i = 0, x = 3; i < 3; i++) {
+            unsigned c = etiqueta(x, 117, TECLAS_RX[i], COR_ESTADO, COR_TEXTO, 0);
+
+            if (i == 2)                    /* o EXIT segurado: o HOLD apagado no mesmo quadrado (a fonte nao tem
+                                            * minusculas) */
+                texto(x + 3, 119, "HOLD", 1, COR_CINZA);
+            x = texto(c, 119, i == 2 ? "CLR" : i ? "OFF" : aberto ? "BACK" : "OPEN", 1, COR_CINZA) + 4;
+        }
     }
 }
 

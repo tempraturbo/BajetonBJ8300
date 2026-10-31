@@ -167,14 +167,26 @@ static struct {
 } roteiro[32];
 static unsigned n_roteiro;
 
+/* Os filtros do RX (0x43, 0x31, 0x28 e 0x2B) no comeco de cada tecla do roteiro: o que a tecla anterior
+ * deixou (v102). */
+static unsigned fotos[16][4], n_fotos, foto_de = ~0u;
+
 static unsigned TECLAS(void)
 {
     unsigned i;
 
     anda(50);
     for (i = 0; i < n_roteiro; i++)
-        if (TIQUE_MS >= roteiro[i].de && TIQUE_MS < roteiro[i].ate)
+        if (TIQUE_MS >= roteiro[i].de && TIQUE_MS < roteiro[i].ate) {
+            if (foto_de != roteiro[i].de && n_fotos < 16) {
+                foto_de = roteiro[i].de;
+                fotos[n_fotos][0] = regs[0x43];
+                fotos[n_fotos][1] = regs[0x31];
+                fotos[n_fotos][2] = regs[0x28];
+                fotos[n_fotos++][3] = regs[0x2B];
+            }
             return roteiro[i].tecla;
+        }
     return 255;
 }
 
@@ -230,6 +242,30 @@ static void MIC_BLOCO(unsigned r0, short *b, unsigned n) { (void)r0; (void)b; (v
 static unsigned MIC_DAC(short *b, unsigned n) { (void)b; return n; }
 static void LIMPA(unsigned x) { (void)x; }
 static void SAI_DO_EDITOR(void) {}
+
+/* O FILTER (v102): a troca de AM e FM de fabrica (0x01E440C4, que nao faz nada se o modo ja e o pedido), o
+ * FILTRO do espectro (0x01E4A980) e o aplica_audio, que aqui poe os "menus" do teste (o expansor ligado, a
+ * DE-EMPHASIS em OFF). */
+static unsigned modo_am, n_audio;
+static void AM_FM(unsigned am)
+{
+    if ((am == 1) == modo_am)
+        return;
+    modo_am = am == 1;
+    REG_W(0x31, modo_am ? regs[0x31] | 1 : regs[0x31] & ~1u);
+    REG_W(0x42, modo_am ? 0x6F5C : 0x6B5A);
+    REG_W(0x2A, modo_am ? 0x7434 : 0x7400);
+    REG_W(0x2B, modo_am ? 0x0500 : 0);
+}
+static void FILTRO(unsigned i) { REG_W(0x43, i == 2 ? 0x3658 : i == 1 ? 0x4808 : 0x49A8); }
+static void aplica_audio(void)
+{
+    n_audio++;
+    REG_W(0x28, 0x2A40);
+    REG_W(0x31, regs[0x31] | 8);
+    if (!(regs[0x31] & 1))
+        REG_W(0x2B, 0x0100);
+}
 
 static int SPRINTF(char *d, const char *formato, ...)
 {

@@ -851,6 +851,16 @@ for sitio, antes, depois, oque in montar.AJUSTES_REMENDOS:
     if not ok:
         erros.append(f'ajustes: remendo errado em {sitio:#x}')
 previsto_tela += [(s_, s_ + len(a_) - 1, 'ajustes: ' + d_) for s_, a_, _, d_ in montar.AJUSTES_REMENDOS]
+# 4v. o medidor S (v109): as entradas do tbh do contador lento para os tiques 4 e 5 vao da do fim do laco
+# a do medidor, a mesma dos tiques 3 e 8 (e a do 3 continua 0x0120).
+for sitio, antes, depois, oque in montar.SINAL_REMENDOS:
+    o = sitio - montar.BASE_APP
+    ok = (bytes(app_velho[o:o + len(antes)]) == antes and bytes(app[o:o + len(antes)]) == depois
+          and bytes(app[0x01E46A3E - montar.BASE_APP:0x01E46A40 - montar.BASE_APP]) == depois)
+    print(f'4v. laco do sinal {sitio:#x}: {oque}: ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append(f'laco do sinal: remendo errado em {sitio:#x}')
+previsto_tela += [(s_, s_ + len(a_) - 1, 'laco do sinal: ' + d_) for s_, a_, _, d_ in montar.SINAL_REMENDOS]
 # v65: o ponteiro da tecla 0 do editor: de fabrica o da sequencia original, remendado o da nossa, que
 # tem de estar no .livre e trazer o espaco primeiro e o 0 no fim. v86: o do bloco do microfone, o
 # gancho_mic, tambem no .livre.

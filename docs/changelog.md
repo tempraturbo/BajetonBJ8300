@@ -5,6 +5,49 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v110 — Oct 31 — the S-meter on PTT, the hiss at S1, 24 segments and the cable with Morse and APRS (under test)
+
+`BJ8300_BANK_v110.anc` (sha256 `8a6c9425…`), left out of `firmware/releases/` like the other test builds. With
+v109 the owner saw the bar stuck on PTT and the hiss at S6. While transmitting the bar did not read the
+microphone: the meter gave up on the TX state byte before checking for TX. The scale now starts S1 at the
+factory's first step for each band, which sits on the hiss, and the bar has 24 segments: 2 per S up to S9 and 1
+per 10 dB above, up to S9+60, green up to S3, yellow up to S8 and red from S9 up, as the owner asked. The
+microphone level goes in 4 dB steps, with the scale still to be checked. The cable now writes the Morse and APRS
+records, for CHIRP. [Section 27](reverse-engineering.md#27-the-equalizer-and-the-s-meter-v108-to-v110).
+
+## v109 — Oct 31 — the S-meter (tested)
+
+`BJ8300_BANK_v109.anc` (sha256 `e6d63a81…`). The factory meter had 5 steps and filled the bar between −117 and
+−96 dBm. v109 reads the RSSI 4 times a second and shows S1 to S9 and S9+10 to S9+50, with the text to the right
+of the bar in SINGLE, in DUAL (the card and the compact side) and in TRIPLE (on the amber strip of the side
+receiving, in place of the channel); while transmitting, the microphone level, with the power on the H/M/L
+label. On the radio, the bar stayed still on PTT and the hiss read S6 (v110 fixes both).
+[Section 27](reverse-engineering.md#27-the-equalizer-and-the-s-meter-v108-to-v110).
+
+## v108 — Oct 31 — the EQ: bass and treble on receive and transmit (under test)
+
+`BJ8300_BANK_v108.anc` (sha256 `de78ceab…`). EQ BASS and EQ TREBLE in the AUDIO (receive) and MIC (transmit)
+folders, DEFAULT first (what the factory does) and the rest in order: bass from −3 to +4 dB and treble from −1
+to +4 dB. The table for each step comes from a disabled block in OneOfEleven's UV-K5 firmware, and its −1 dB
+bass row is exactly what the factory startup writes. Saved on OK, like every setting.
+[Section 27](reverse-engineering.md#27-the-equalizer-and-the-s-meter-v108-to-v110).
+
+## v105 to v107 — Oct 31 — the whole APRS receive streams (diagnostics, not released)
+
+v105 tried the wide filter and DE-EMPHASIS OFF on normal receive, with APRSdroid listening to the speaker:
+nothing changed. v106 and v107 (sha256 `118d224f…`) went back to v92's raw capture, and v107 kept the whole
+stream after each sync. The errors are in the bits the chip's modem decides, from the first byte after the
+preamble, and none of the workaround ideas has anywhere to act. Receiving stays v104's.
+[Section 24](reverse-engineering.md#the-whole-stream-of-each-sync-v105-to-v107-diagnostic).
+
+## v102 to v104 — Oct 31 — the APRS RX FILTER and its new screen
+
+`BJ8300_BANK_v104.anc` (sha256 `11f9f201…`). The APRS RX screen always opens with the FILTER: FM, no scramble
+or compressor, the spectrum's wide filter and DC cancelling, and on leaving everything goes back as it was. The
+gain (#) and filter (0) keys are gone. The footer became cells (SYNC, BAD in red, FIX in green), a cut message
+gets a red MORE label, and HOLD and EXIT share one black label, before CLR.
+[Section 24](reverse-engineering.md#the-aprs-rx-filter-v102-to-v104).
+
 ## v100 and v101 — Oct 31 — NOISE GATE stays, and OK saves (under test)
 
 `BJ8300_BANK_v101.anc` (sha256 `d9f94f2d…`), left out of `firmware/releases/` like the other test builds. The

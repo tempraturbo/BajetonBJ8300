@@ -64,6 +64,12 @@ int main(int argc, char **argv)
         fclose(f);
     }
     RAM(u32, 0x001E5004) = 0x1000;         /* o PTT solto */
+    /* o canal e os menus na entrada (v102): o filtro largo de fabrica, FM com scramble e o compressor ou
+     * expansor ligados (bits 1 e 3 do 0x31), o expansor no 0x28 e a DE-EMPHASIS em OFF */
+    regs[0x43] = 0x3028;
+    regs[0x31] = 0x000A;
+    regs[0x28] = 0x2A40;
+    regs[0x2B] = 0x0100;
 
     aprs_rx_grava();
 
@@ -86,6 +92,9 @@ int main(int argc, char **argv)
     for (i = 0; i < n_58; i++)
         printf(" %x", escritas_58[i]);
     printf("\n");
+    for (i = 0; i < n_fotos; i++)
+        printf("F %x %x %x %x\n", fotos[i][0], fotos[i][1], fotos[i][2], fotos[i][3]);
+    printf("G %x %x %x %x %u\n", regs[0x43], regs[0x31], regs[0x28], regs[0x2B], n_audio);
     printf("C %u %u %u %u %u %u %u %u %u\n", ultimo_num[3], ultimo_num[4], ultimo_num[5], ultimo_num[6],
            transbordou, faixas_desenhadas, (unsigned)(relogio_us / 1000), luz, ultima_posicao);
     if (argc > 7) {

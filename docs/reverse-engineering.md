@@ -2136,6 +2136,34 @@ filter or mode takes the modem off its ceiling with the 1200/2200 pair. The diag
 receiving stayed as in v88. From here, only with the BK4819's audio taken by a wire to a JieLi input and a
 demodulator in software.
 
+### The APRS RX FILTER (v102 to v104)
+
+The APRS RX screen always opens with the FILTER, on a fixed label at the top. On entry, `filtro_rx`
+(`mensagem.c`) puts the radio in FM (`0x01E440C4`, the factory's AM/FM switch, with 0), drops scramble and the
+compressor or expander (bits 1 and 3 of `0x31`), writes the spectrum's wide filter to `0x43` (`0x01E4A980` with
+0: `0x49A8`), turns off the expander and noise gate (`0x28` = `0x0A00`) and, in `0x2B`, leaves the RX audio
+filters as the factory leaves them in FM, with DC cancelling on (`0x4000`, v103). On leaving everything comes
+back: the mode, the `0x31` and `0x43` read on entry and, through `aplica_audio` (`bancos.c`), `0x28`, bit 3 of
+`0x31` and, in FM, the `0x2B` of the AUDIO and MIC folder items. The gain (#) and filter (0) keys are gone. The
+footer became cells (SYNC, BAD in red when above 0, FIX in green), a cut message gets a red MORE label, and HOLD
+(grey) and EXIT (white) share one black label, before CLR (v104). Test 9 of `teste_rx.py` checks entry and exit.
+
+### The whole stream of each sync (v105 to v107, diagnostic)
+
+v105 tried the wide filter and DE-EMPHASIS OFF on normal receive, with APRSdroid listening to the speaker:
+nothing changed. v106 and v107 went back to v92's raw capture, only for syncs with RSSI 100 and up (−110 dBm),
+and v107 kept the whole stream after each sync: 16 slots of 2 KB in the data chip, the 13.6 s the chip delivers
+after it. With a fixed APRSdroid beacon sent by a Baofeng nearby:
+
+- most syncs open windows of random bits (runs of seven 1s show up at the noise rate): a sync at the end of
+  the preamble or inside the data;
+- real preambles (10 to 26 flags) are followed by wrong content from the first byte;
+- the chip does not go deaf inside the window: it delivers the flags of the following packets.
+
+The workaround ideas (a 1-byte sync, switching polarity every 25 ms, fixing two tones, fixing the clock slip,
+re-arming earlier, sweeping the `0x72` rate) have nowhere to act: the errors are in the bits the modem decides,
+before anything the firmware sees. Receiving stays v104's.
+
 ### The stack
 
 The content runs in the roger's slot, in the signal loop, and the RX loop in the item's set; both within
@@ -2322,8 +2350,85 @@ Where each menu item saves (the get and set of the built table, checked in the d
 
 | Where | Items |
 |---|---|
-| the `0x9000` log | SQL, STE, EXPANDER, NOISE GATE, DE-EMPHASIS, the MIC folder, DISPLAY (except MDF-C), DTMF, KEYS, RP-STE, RPT-RL, TONE, SC-REV, SYSTEM, ROGER, TOT, VOX, VOX DELAY, TTR, TX-A/B/C, CRYSTAL FINE, LIGHT PWM, MODEM GAIN and the APRS DECODE |
+| the `0x9000` log | SQL, STE, EXPANDER, NOISE GATE, DE-EMPHASIS, the EQs (v108, section 27), the MIC folder, DISPLAY (except MDF-C), DTMF, KEYS, RP-STE, RPT-RL, TONE, SC-REV, SYSTEM, ROGER, TOT, VOX, VOX DELAY, TTR, TX-A/B/C, CRYSTAL FINE, LIGHT PWM, MODEM GAIN and the APRS DECODE |
 | the side's channel or VFO | the CHANNEL folder (BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N), OFFSET, SFT-D, the TONES folder, SCAN ADD and CH-NAME |
 | its own sector, on set | APRS (CALLSIGN, SSID, TO, MESSAGE, PATH), MORSE (MESSAGE, SPEED, TONE), BANKS, WATCH and MDF-C |
 
 Startup clears the APRS and Morse SEND (`0x903A`) on purpose, so nothing transmits by itself.
+
+## 27. The equalizer and the S-meter (v108 to v110)
+
+### EQ BASS and EQ TREBLE (v108)
+
+The BK4819 adjusts the audio response at 300 Hz and at 3 kHz, on receive and on transmit: Beken's application
+note calls it `RF_SetAfResponse` ([references](referencias/README.en.md)), from −1 to +4 dB, without the table
+for each step. The table comes from a disabled block (`#if 0`) of `driver/bk4819.c` in
+[OneOfEleven/uv-k5-firmware-custom](https://github.com/OneOfEleven/uv-k5-firmware-custom): 300 Hz in registers
+`0x54` and `0x55`, from −3 to +4 dB, and 3 kHz in `0x75`, from −1 to +4 dB.
+
+| dB | `0x54` | `0x55` | `0x75` |
+|---|---|---|---|
+| −3 | `0x935A` | `0x2EFF` | |
+| −2 | `0x920B` | `0x3010` | |
+| −1 | `0x91C1` | `0x3040` | `0xFA02` |
+| 0 | `0x9009` | `0x31A9` | `0xF50B` |
+| +1 | `0x8F90` | `0x31F3` | `0xE61C` |
+| +2 | `0x8F46` | `0x31E7` | `0xDF22` |
+| +3 | `0x8ED8` | `0x3232` | `0xD42D` |
+| +4 | `0x8D8F` | `0x3359` | `0xCC35` |
+
+The −1 dB row of 300 Hz is exactly what the factory startup writes, and the 0 dB one is the chip default. The
+startup (`0x01E5676A..0x01E56794`) is the only place the factory writes these registers: `0x75` at 0 dB,
+`0x54`/`0x55` at −1 dB and `0x74` (TX treble, per Beken's list) at `0xFEF0`, weaker than the table's −1 dB;
+`0x44` and `0x45` (TX bass) stay at the chip default, the same as the RX ones, which is why the same table
+applies to TX. The chip reset (`0x00`, `0x01E5653C`) runs earlier in the same startup, and its hook
+(`0x01E56AE8`) writes the EQ afterwards (`aplica_eq`, `bancos.c`).
+
+In the menu, AUDIO and MIC got EQ BASS and EQ TREBLE: DEFAULT is what the factory does, and the rest come in
+order, without repeating DEFAULT's step. The levels live at `0x9040` to `0x9043` of the settings log
+(`b[0x14BEC..0x14BEF]`), inside the 39 B that saving and startup copy (`0x01E55CFC`), which nothing in the
+factory reads or writes outside those copies and the cable does not read (only 32 B from `0x9020`): `0xB0` + the
+menu position. The factory defaults leave there the Chinese text that follows their table (`CE DE D0 A7`), with
+no mark, which reads as DEFAULT. The menu table went from 96 to 97 slots.
+
+### The S-meter (v109 and v110)
+
+**The factory's.** The level reading (`0x01E46166`) runs on ticks 3 and 8 of the signal loop's slow counter:
+the loop is 10 ms, the slow counter moves every 10 turns and picks the task in the `tbh` at `0x01E46A38`, so
+that is 2 readings a second. On receive it reads the RSSI (`0x67`) and reduces it to 5 steps by the band's
+thresholds: the table at `0x01E5EB8C`, 4 bytes per band, highest first, with the band in `b[0x15E42]`, which the
+tuning routines pick by frequency (`0x01E38C1A`, `0x01E38CE4`; AM airband is 6, outside the table's 5). By
+Beken's formula (dBm = RSSI / 2 − 160), full scale sits between −117 and −96 dBm, and the first step, at −109
+dBm in band 0 and −115.5 dBm in band 1, falls on the hiss. It only draws in screen modes 0 and 3, and only when
+the step changes (`b[0x7031]`, which the firmware sets back to 255 at `0x01E45A70`).
+
+**Ours.** The detour at its entry (`b_sinal`, `tela.c`) does the work outside the menu; the measuring is
+`medidor_s` (`bancos.c`). The conditions are the factory's (nothing with `b[0x1533C]` = 1; on receive, state 4
+with `b[0x15368]` or `b[0x1536F]` at 1, and `b[0x14690]` at 5 or more), plus MO (state 5) and TX. `b[0x1533C]`
+is the TX state (TX entry sets it to 1, `0x01E411F4`, and releasing PTT clears it, `0x01E46E8C`); v109 checked
+it before TX, so while transmitting the microphone was never read. v110 checks TX first. The drawn level goes in
+the same `b[0x7031]`, with bit 7 for transmitting, and a full redraw repeats the last one (`le_estado`). Ticks 4
+and 5, which did nothing, went to the same task: the `tbh` entries at `0x01E46A40` and `0x01E46A42` went from
+`0x067A` (the loop's end) to `0x0120` (the meter's), so that is 4 readings a second.
+
+**The scale.** v109 used the IARU one above 30 MHz (S9 = −93 dBm, 6 dB per S) over Beken's formula, and this
+radio's hiss, read between −115 and −105 dBm, showed S6. v110 starts S1 at the factory's first step for the band
+(outside the table's 5, band 0's): 2 segments per S, 3 dB each, from S1 to S9, and 1 per 10 dB above, up to
+S9+60. That is 24 segments of 3 px (96 px) with the text on the right (S1 to S9, S9+10 to S9+60), green from S1
+to S3, yellow from S4 to S8 and red from S9 up. The text goes on the card, in SINGLE and on DUAL's compact side;
+in TRIPLE, the amber strip of the side receiving shows the S in place of the channel. While transmitting, the
+bar is the microphone level, in red with MIC: `0x6F` ("AF Tx/Rx Input Amplitude (dB)", 7 bits, from Beken's
+list), in 4 dB steps, with the scale still to be checked on the radio. The power stays on the H/M/L label; up to
+v108 the TX bar showed the power.
+
+**Space and stack.** `aplica_audio` moved from `.livre` to the end of the image, which has 22 B left; `.livre`
+has 46. The interface and the signal loop stay at the factory's 740 and 620 B, with two precautions: `b_sinal`
+draws through `b_medidor` itself, with no routine in between (a hook calling another routine pushed `rets`, 4 B
+more), and the TRIPLE strip takes the level in the same parameter as "receiving" (a sixth parameter took
+`faixa_terceira`'s frame from 60 to 64 B, and it is the deepest path of the screen).
+
+### The cable with Morse and APRS (v110)
+
+The cable's extended write window (`gancho_cabo`) now goes up to `0xD5FFF`: the Morse (`0xD4000`) and APRS
+(`0xD5000`) records are in, and the APRS RX history (`0xD6000`) stays out. That is what the CHIRP driver uses to
+write both.

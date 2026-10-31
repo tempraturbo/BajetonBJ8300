@@ -109,7 +109,7 @@ def ar_com(*partes, ruido=True):
     return ar
 
 
-TECLA = {'OK': 2, 'CIMA': 3, 'BAIXO': 4, 'EXIT': 5, 'ESTRELA': 9, 'MODO': 17}
+TECLA = {'OK': 2, 'CIMA': 3, 'BAIXO': 4, 'EXIT': 5, 'ESTRELA': 9, 'ZERO': 13, 'MODO': 17}
 
 
 def roda(ar, teclas, meu='PY2ABC', ssid=7, faixa_us=15000, flash_antes=None, nome='ar'):
@@ -135,6 +135,11 @@ def roda(ar, teclas, meu='PY2ABC', ssid=7, faixa_us=15000, flash_antes=None, nom
             saida['E'] = tuple(int(x) for x in l[2:].split())
         elif l.startswith('A '):
             saida['A'] = bytes.fromhex(l[2:])
+        elif l.startswith('F '):
+            saida.setdefault('F', []).append(tuple(int(x, 16) for x in l[2:].split()))
+        elif l.startswith('G '):
+            g = l[2:].split()
+            saida['G'] = (tuple(int(x, 16) for x in g[:4]), int(g[4]))
         elif l.startswith('M'):
             saida['M'] = [int(x, 16) for x in l[1:].split()]
         elif l.startswith('C '):
@@ -228,15 +233,25 @@ s = roda(ar_com(*partes), [(3.0, 3.8, 'EXIT')] + sai_em(5.0), nome='limpa')
 confere('7. o EXIT segurado apaga o historico e o laco segue', (s['H'], s['C']['ms'] >= 5000), (0, True))
 
 # 8. o modem: o 0x58 montado campo a campo, pelos comentarios do driver do BK4819 do UV-K5 (o modo de RX 7
-# = FFSK 1200/1800, a banda 1, os bits 7:6 em 3), com o ganho de fabrica (HIGH, a RAM zerada); o # troca o
-# ganho, e a saida desliga o modem
+# = FFSK 1200/1800, a banda 1, os bits 7:6 em 3), com o ganho do MODEM GAIN (HIGH de fabrica, a RAM zerada); a
+# saida desliga o modem. O # (v103: nao troca mais o ganho) sai da tela, como as outras teclas sem funcao.
 def reg58(rx, banda, b76, ganho):
     return 1 << 13 | rx << 10 | ganho << 8 | b76 << 6 | banda << 1 | 1
 
 
-s = roda(ar_com(), [(1.0 + 0.3 * k, 1.1 + 0.3 * k, 'MODO') for k in range(5)] + sai_em(3.0), nome='ganhos')
-confere('8. o # passa pelos 4 ganhos e volta, e a saida desliga o modem',
-        s['M'], [reg58(7, 1, 3, g) for g in (3, 0, 1, 2, 3, 0)] + [0])
+s = roda(ar_com(), sai_em(2.0), nome='ganho')
+confere('8. a entrada poe o ganho do MODEM GAIN, e a saida desliga o modem', s['M'], [reg58(7, 1, 3, 3), 0])
+s = roda(ar_com(), [(1.0, 1.1, 'MODO')], nome='cerquilha')
+confere('8. o # sai da tela', (s['M'], s['C']['ms'] < 1500), ([reg58(7, 1, 3, 3), 0], True))
+
+# 9. o FILTER (v102; sempre ligado desde a v103): a entrada poe o filtro largo do espectro (0x43 = 0x49A8),
+# FM sem scramble nem compressor (0x31), o expansor e a porta desligados (0x28 = 0x0A00) e os filtros de
+# audio do RX de fabrica com o cancelamento de corrente continua (0x2B = 0x4000); a saida devolve o canal e
+# os menus. Cada foto e o que estava no comeco da tecla.
+s = roda(ar_com(), [(1.0, 1.1, 'CIMA')] + sai_em(2.0), nome='filtro')
+antes, ligado = (0x3028, 0x000A, 0x2A40, 0x0100), (0x49A8, 0x0000, 0x0A00, 0x4000)
+confere('9. a entrada liga o FILTER, e a saida devolve o canal e os menus',
+        (s['F'], s['G']), ([ligado, ligado], (antes, 1)))
 
 print()
 print('tudo certo' if not falhas else f'{len(falhas)} FALHARAM: ' + ', '.join(falhas))
