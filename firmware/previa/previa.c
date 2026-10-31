@@ -524,6 +524,19 @@ int main(int argc, char **argv)
         telas_b(1, 0);
         grava("9-menu-roger");
 
+        /* v111: o SCRAMBLE com as 8 frequencias, no 3300 Hz (o 3400 Hz e o ON de fabrica) */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "SCRAMBLE");
+        menu_no("CHANNEL", "SCRAMBLE");
+        LINHA(0, 1, "3200 Hz");
+        LINHA(1, 2, "3300 Hz");
+        LINHA(2, 1, "3400 Hz");
+        memoria[0x14C10] = 1;
+        memoria[0x14BF9] = 1;
+        telas_b(1, 0);
+        grava("9b-menu-scramble");
+
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "SQL");

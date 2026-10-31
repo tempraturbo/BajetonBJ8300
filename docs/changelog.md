@@ -5,6 +5,18 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V3.1T — Oct 31 — the EQ in CHIRP, the FILTER with EQ and key 0 in APRS RX, and the cleanup
+
+v111 became **V3.1T**: `firmware/releases/BJ8300_BANK_v3.1T.anc` (sha256 `a3cba1cd…`, the same file; the VERSION
+item already showed V3.1T in v111). The owner flashed and tested it on the radio: Morse and APRS sending and
+holding EXIT in the editor, whose bytes moved, work. The CHIRP module became `bj8300_v3.1TEMPRA.py` (model
+`BJ8300_v3.1TEMPRA`), and images saved with `BJ8300_v3.0TEMPRA` open in it (`MODEL_COMPAT`). In the README,
+V3.1T at the top, a section with APRS RX with and without the FILTER, the new APRS RX screen, a screen for
+SCRAMBLE (the preview got scene 9b) and, in the table of what changed since V0.12, the text editor (holding EXIT
+and key 0), which was missing. Published in the
+[V3.1T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.1T), with the CHIRP module,
+the flasher and the cable driver.
+
 ## CHIRP driver — Oct 31 — the EQ
 
 The module shows EQ bass and EQ treble for RX (right after De-emphasis) and TX (after Mic AGC), in Settings >

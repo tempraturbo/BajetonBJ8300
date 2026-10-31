@@ -26,7 +26,7 @@ except ImportError:
     print('chirp nao instalado - nada a testar aqui (o teste_bj8300.py cobre o resto)')
     sys.exit(0)
 
-CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v3.0TEMPRA.py')
+CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v3.1TEMPRA.py')
 _nome = 'chirp.loaded.%s' % os.path.splitext(os.path.basename(CAMINHO))[0]
 _spec = importlib.util.spec_from_file_location(_nome, CAMINHO)
 bj = importlib.util.module_from_spec(_spec)
@@ -118,7 +118,7 @@ def main():
 
     # 1. a classe e um radio do CHIRP, registrado e com o nome combinado
     confere('1. deriva de CloneModeRadio', issubclass(bj.BJ8300, chirp_common.CloneModeRadio), True)
-    confere('1b. nome do modelo', (bj.BJ8300.VENDOR, bj.BJ8300.MODEL), ('Bajeton', 'BJ8300_v3.0TEMPRA'))
+    confere('1b. nome do modelo', (bj.BJ8300.VENDOR, bj.BJ8300.MODEL), ('Bajeton', 'BJ8300_v3.1TEMPRA'))
     confere('1c. 960 canais, como o radio', bj.BJ8300._upper, 960)
 
     # 2. abre uma imagem (e o caminho que o CHIRP usa ao carregar um .img)
@@ -139,7 +139,7 @@ def main():
     with tempfile.TemporaryDirectory() as pasta:
         arq = os.path.join(pasta, 'antigo.img')
         # ate o modulo da V2.8T o fabricante era Baojie; desde entao e Bajeton (v62), e as imagens
-        # salvas com Baojie, inclusive as do BJ8300_v2.8TEMPRA, abrem neste (o da V3.0T)
+        # salvas com Baojie, inclusive as do BJ8300_v2.8TEMPRA, abrem neste (o da V3.1T)
         Antigo.VENDOR = 'Baojie'
         for letra, Antigo.MODEL in (('', 'BJ8300_v1.0TEMPRA'), ('2', 'BJ8300_v2.0TEMPRA'),
                                     ('3', 'BJ8300_v2.5TEMPRA'), ('4', 'BJ8300_v2.6TEMPRA'),
@@ -148,15 +148,15 @@ def main():
             aberto = directory.get_radio_by_image(arq)
             confere(f'2c{letra}. .img Baojie do {Antigo.MODEL} abre neste, como Bajeton',
                     (isinstance(aberto, bj.BJ8300), aberto.VENDOR, aberto.MODEL),
-                    (True, 'Bajeton', 'BJ8300_v3.0TEMPRA'))
+                    (True, 'Bajeton', 'BJ8300_v3.1TEMPRA'))
         Antigo.VENDOR = 'Bajeton'
         for letra, Antigo.MODEL in (('7', 'BJ8300_v2.8TEMPRA'), ('8', 'BJ8300_v2.9TEMPRA'),
-                                    ('9', 'BJ8300_v3.0TEMPRA')):
+                                    ('9', 'BJ8300_v3.0TEMPRA'), ('a', 'BJ8300_v3.1TEMPRA')):
             Antigo(imagem()).save_mmap(arq)
             aberto = directory.get_radio_by_image(arq)
             confere(f'2c{letra}. .img Bajeton do {Antigo.MODEL} abre neste',
                     (isinstance(aberto, bj.BJ8300), aberto.VENDOR, aberto.MODEL),
-                    (True, 'Bajeton', 'BJ8300_v3.0TEMPRA'))
+                    (True, 'Bajeton', 'BJ8300_v3.1TEMPRA'))
         Antigo.MODEL = 'BJ8300_v9.9XYZ'
         Antigo(imagem()).save_mmap(arq)
         try:
@@ -379,7 +379,7 @@ def main():
     aj = r.get_settings()
     confere('10c. VFO A/B/C Channel e FM/AM/SSB Modulation fora do Specific, no topo',
             [g.get_shortname() for g in aj],
-            ['Basic Settings', 'DTMF Settings', 'BJ8300_v3.0TEMPRA Specific', 'VFO A/B/C Channel',
+            ['Basic Settings', 'DTMF Settings', 'BJ8300_v3.1TEMPRA Specific', 'VFO A/B/C Channel',
              'FM/AM/SSB Modulation', 'APRS', 'Morse', 'Banks'])
     abc = aj['abblock']
     confere('10c2. o WATCH e o TTR primeiro no VFO A/B/C Channel, e um bloco para cada lado',

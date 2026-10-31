@@ -5,6 +5,18 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V3.1T — 31/10 — o EQ no CHIRP, o FILTER com EQ e a tecla 0 no APRS RX, e a limpeza
+
+A v111 virou a **V3.1T**: `firmware/releases/BJ8300_BANK_v3.1T.anc` (sha256 `a3cba1cd…`, o mesmo arquivo; o item
+VERSION já mostrava V3.1T na v111). O dono a gravou e testou no rádio: o envio do Morse e do APRS e o EXIT
+segurado no editor, cujos bytes mudaram de lugar, funcionam. O módulo do CHIRP passou a `bj8300_v3.1TEMPRA.py`
+(modelo `BJ8300_v3.1TEMPRA`), e as imagens salvas com o `BJ8300_v3.0TEMPRA` abrem nele (`MODEL_COMPAT`). No
+README, a V3.1T no alto, uma seção com o APRS RX com e sem o FILTER, a tela nova do APRS RX, uma tela para o
+SCRAMBLE (a prévia ganhou a cena 9b) e, na tabela do que mudou desde a V0.12, o editor de texto (o EXIT segurado
+e a tecla 0), que faltava. Publicada no
+[release V3.1T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.1T), com o módulo do
+CHIRP, o gravador e o driver do cabo.
+
 ## Driver do CHIRP — 31/10 — o EQ
 
 O módulo mostra o EQ bass e o EQ treble do RX (logo depois do De-emphasis) e do TX (depois do Mic AGC), em

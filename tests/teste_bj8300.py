@@ -205,10 +205,10 @@ def _stub_chirp():
 MemoryMapBytes = _stub_chirp()
 
 # Carrega o driver do mesmo jeito que o CHIRP carrega (wxui/main.py: load_module), inclusive o
-# nome com ponto - e assim que se prova que "bj8300_v3.0TEMPRA.py" nao quebra o import.
+# nome com ponto - e assim que se prova que "bj8300_v3.1TEMPRA.py" nao quebra o import.
 import importlib.util                                           # noqa: E402
 
-CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v3.0TEMPRA.py')
+CAMINHO = os.path.join(RAIZ, 'chirp', 'bj8300_v3.1TEMPRA.py')
 _nome = 'chirp.loaded.%s' % os.path.splitext(os.path.basename(CAMINHO))[0]
 _spec = importlib.util.spec_from_file_location(_nome, CAMINHO)
 bj8300 = importlib.util.module_from_spec(_spec)
