@@ -5,7 +5,21 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
-## v115 — 31/10 — a tecla presa só solta de vez: o # segurado não trava mais o teclado (a testar)
+## V3.2T — 31/10 — a tela MESSAGES do APRS e o RX GAIN
+
+A v115 virou a **V3.2T**: `firmware/releases/BJ8300_BANK_v3.2T.anc` (sha256 `1bba2f5b…`, o mesmo arquivo; o item
+VERSION já mostrava V3.2T desde a v112). O dono a gravou e testou no rádio, e tudo funcionou: as caixas do # e do #
+segurado, a volta sozinha depois do envio e do cancelamento, com som, e o RX GAIN MAX; o teclado não trava mais. O
+módulo do CHIRP passou a `bj8300_v3.2TEMPRA.py` (modelo `BJ8300_v3.2TEMPRA`), e as imagens salvas com o
+`BJ8300_v3.1TEMPRA` abrem nele (`MODEL_COMPAT`). No README, a V3.2T no alto, uma seção com a tela MESSAGES e as duas
+caixas, as telas novas da pasta APRS, da CALIBRATION e do MESSAGES (a prévia já tinha as cenas 62d e 62e), o RX GAIN
+na tabela do que mudou desde a V0.12 e a coluna das telas dessa tabela mais larga: o GitHub encolhia as imagens a
+uns 45 px, porque a descrição longa ao lado tomava o espaço, e agora elas saem com 300 px (um título que não quebra
+segura a largura da coluna). Publicada no
+[release V3.2T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.2T), com o módulo do CHIRP,
+o gravador e o driver do cabo.
+
+## v115 — 31/10 — a tecla presa só solta de vez: o # segurado não trava mais o teclado (testada: virou a V3.2T)
 
 `BJ8300_BANK_v115.anc` (sha256 `1bba2f5b…`), fora dos commits como as outras de teste. **A v114 travou o teclado do
 rádio do dono**: segurando o # na tela MESSAGES, a caixa do TO abriu e, um instante depois, o rádio ligou a trava

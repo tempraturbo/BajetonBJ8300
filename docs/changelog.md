@@ -5,7 +5,21 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
-## v115 — Oct 31 — the held key only lets go for good: holding # no longer locks the keypad (to be tested)
+## V3.2T — Oct 31 — the APRS MESSAGES screen and RX GAIN
+
+v115 became **V3.2T**: `firmware/releases/BJ8300_BANK_v3.2T.anc` (sha256 `1bba2f5b…`, the same file; the VERSION
+item already showed V3.2T since v112). The owner flashed and tested it on the radio, and everything worked: the #
+and held # boxes, the return by itself after sending and cancelling, with sound, and RX GAIN MAX; the keypad no
+longer locks. The CHIRP module became `bj8300_v3.2TEMPRA.py` (model `BJ8300_v3.2TEMPRA`), and images saved with
+`BJ8300_v3.1TEMPRA` open in it (`MODEL_COMPAT`). In the README, V3.2T at the top, a section with the MESSAGES screen
+and the two boxes, the new screens of the APRS folder, CALIBRATION and MESSAGES (the preview already had scenes 62d
+and 62e), RX GAIN in the table of what changed since V0.12 and a wider screens column in that table: GitHub shrank
+the images to about 45 px, because the long description next to them took the space, and now they come out at
+300 px (a header that does not wrap holds the column's width). Published in the
+[V3.2T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.2T), with the CHIRP module,
+the flasher and the cable driver.
+
+## v115 — Oct 31 — the held key only lets go for good: holding # no longer locks the keypad (tested: became V3.2T)
 
 `BJ8300_BANK_v115.anc` (sha256 `1bba2f5b…`), kept out of the commits like the other test builds. **v114 locked the
 owner's keypad**: holding # on the MESSAGES screen, TO's box opened and, a moment later, the radio turned on the
