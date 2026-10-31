@@ -72,6 +72,7 @@ São 23 trocas, 0 bytes a mais no firmware.
 
 ## Como é aplicado
 
-`scripts/montar.py`, lista `TEXTOS` com `TEXTOS_REVISADOS`. Cada troca **confere o texto antigo
-byte a byte antes de escrever** e recusa se o novo for maior. O `conferir.py` relê cada cadeia no
-firmware montado. Para voltar ao original, é pôr `TEXTOS_REVISADOS = False` e recompilar.
+`scripts/montar.py`, lista `TEXTOS`. Cada troca **confere o texto antigo byte a byte antes de
+escrever** e recusa se o novo for maior. O `conferir.py` relê cada cadeia no firmware montado. Para
+voltar ao original, é tirar a troca da lista e recompilar (a chave `TEXTOS_REVISADOS`, sempre ligada,
+saiu na v111).

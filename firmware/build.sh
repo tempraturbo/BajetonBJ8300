@@ -25,7 +25,7 @@ mkdir -p build
 python -I scripts/fonte.py >/dev/null        # build/fonte_b.h, a fonte da tela B
 compila() {   # $1 = arquivo, $2 = o carimbo do fim
     "$B/clang.exe" -target pi32v2 -integrated-as -Oz -fno-builtin -ffreestanding -Ibuild \
-        -DCARIMBO_FIM=$2 $CFLAGS_EXTRA -c src/$1.c -o build/$1.o    # CFLAGS_EXTRA: so diagnostico
+        -DCARIMBO_FIM=$2 -c src/$1.c -o build/$1.o
 }
 liga() {
     "$B/pi32v2-ld.exe" -T src/bancos.ld -o build/bancos.elf build/bancos.o build/tela.o build/mensagem.o

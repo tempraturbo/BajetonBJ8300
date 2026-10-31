@@ -139,9 +139,11 @@ def roda(ar, teclas, meu='PY2ABC', ssid=7, faixa_us=15000, flash_antes=None, nom
             saida.setdefault('F', []).append(tuple(int(x, 16) for x in l[2:].split()))
         elif l.startswith('G '):
             g = l[2:].split()
-            saida['G'] = (tuple(int(x, 16) for x in g[:4]), int(g[4]))
+            saida['G'] = (tuple(int(x, 16) for x in g[:6]), int(g[6]))
         elif l.startswith('M'):
             saida['M'] = [int(x, 16) for x in l[1:].split()]
+        elif l.startswith('V '):
+            saida['V'] = tuple(int(x) for x in l[2:].split())
         elif l.startswith('C '):
             c = [int(x) for x in l[2:].split()]
             saida['C'] = dict(zip(('marca', 'espaco', 'bad', 'fix', 'transbordou', 'faixas', 'ms', 'luz', 'pos'), c))
@@ -203,14 +205,7 @@ confere('5. depois de 70, o historico tem de 31 a 62, os ultimos e em ordem',
         (31 <= s['H'] <= 62, ultimos == list(range(70 - s['H'], 70))), (True, True))
 confere('5. a rajada que caiu na troca de setor nao transbordou', s['C']['transbordou'], 0)
 
-# 5. o historico da v74 ("HST2") e apagado na entrada
-velho = bytearray(b'\xff' * 0x10000)
-velho[0x6000:0x6004] = (0x32545348).to_bytes(4, 'little')
-velho[0x6080] = 0x5A
-s = roda(ar_com((1.0, transmissao([quadro('PU2EEE-5', '>novo')]))), sai_em(3.0), flash_antes=bytes(velho),
-         nome='migra')
-confere('5. o "HST2" da v74 vira o "HST3", com so o quadro novo', (s['flash'][0x6000:0x6004], s['R']),
-        ((0x33545348).to_bytes(4, 'little'), ['0 PU2EEE-5: >novo']))
+# 5. um setor do historico com outra coisa
 outro = bytearray(b'\xff' * 0x10000)
 outro[0x7000:0x7004] = b'XYZW'                   # o 0xD7000 com outra coisa: nada e gravado
 s = roda(ar_com((1.0, transmissao([quadro('PU2EEE-5', '>novo')]))), sai_em(3.0), flash_antes=bytes(outro),
@@ -246,12 +241,20 @@ confere('8. o # sai da tela', (s['M'], s['C']['ms'] < 1500), ([reg58(7, 1, 3, 3)
 
 # 9. o FILTER (v102; sempre ligado desde a v103): a entrada poe o filtro largo do espectro (0x43 = 0x49A8),
 # FM sem scramble nem compressor (0x31), o expansor e a porta desligados (0x28 = 0x0A00) e os filtros de
-# audio do RX de fabrica com o cancelamento de corrente continua (0x2B = 0x4000); a saida devolve o canal e
-# os menus. Cada foto e o que estava no comeco da tecla.
+# audio do RX de fabrica com o cancelamento de corrente continua (0x2B = 0x4000) e (v111) o EQ do RX com os
+# graves em -3 dB (0x54 = 0x935A) e os agudos em +4 dB (0x75 = 0xCC35); a saida devolve o canal e os menus,
+# o EQ inclusive. Cada foto e o que estava no comeco da tecla.
 s = roda(ar_com(), [(1.0, 1.1, 'CIMA')] + sai_em(2.0), nome='filtro')
-antes, ligado = (0x3028, 0x000A, 0x2A40, 0x0100), (0x49A8, 0x0000, 0x0A00, 0x4000)
+antes = (0x3028, 0x000A, 0x2A40, 0x0100, 0x91C1, 0xF50B)
+ligado = (0x49A8, 0x0000, 0x0A00, 0x4000, 0x935A, 0xCC35)
 confere('9. a entrada liga o FILTER, e a saida devolve o canal e os menus',
         (s['F'], s['G']), ([ligado, ligado], (antes, 1)))
+confere('9. o SAVE fica desligado na tela e volta ao do menu na saida (v111)', s['V'], (0, 3))
+# 9b. a tecla 0 (v111) desliga o FILTER, deixando o canal e os menus como a saida deixa, e liga de novo
+s = roda(ar_com(), [(1.0, 1.1, 'ZERO'), (1.5, 1.6, 'CIMA'), (2.0, 2.1, 'ZERO'), (2.5, 2.6, 'CIMA')] + sai_em(3.0),
+         nome='filtro0')
+confere('9b. o 0 desliga o FILTER e o 0 seguinte o liga de novo; a saida devolve o canal',
+        (s['F'], s['G']), ([ligado, antes, antes, ligado, ligado], (antes, 2)))   # os menus no 0 e na saida
 
 print()
 print('tudo certo' if not falhas else f'{len(falhas)} FALHARAM: ' + ', '.join(falhas))

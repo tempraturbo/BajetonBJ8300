@@ -144,12 +144,21 @@ na gravação, devolve para lá (`0x01E43A32`). No chip, os ajustes são um log 
 cai em `0x9032`; o driver de base o lia em `0x9031`. Os outros 30 itens do menu do bloco batem.
 O `0x8000` é parecido: o cabo recarrega os VFOs de A e B do log (`0x01E3A5E8`) e manda `0x14E42`.
 
-**Leitura de memória (v31, diagnóstico).** No `R` estendido, endereço com o bit 22 ligado
-(`0x400000` em diante, que o chip de 1 MB não tem) devolve 64 B da memória do processador em
+**A segunda metade do `0x9000` copiava 39 B (até a v110).** As duas cópias usam o tamanho da gravação e da
+partida: a leitura põe 39 B de `0x14BCC` no buffer (`0x14E02` + 32), e a gravação devolve 39 B do buffer para
+`0x14BCC` (o `memcpy` em `0x01E43A4A`, com `r2 = 39` em `0x01E43A48`). O cabo só manda 64 B, então os 7 a mais
+da gravação vêm de depois do buffer, `0x14E42`: o VFO A, que o `W` do `0x8000`, gravado pelo CHIRP logo antes,
+deixa ali. Ou seja, todo upload punha os 7 primeiros bytes do VFO A (a frequência em BCD) no `0x9040..0x9046`,
+e o rádio os gravava. Desde a v111 o `r2` é 32 (`AJUSTES_REMENDOS`, `montar.py`): só o que chega vai para os
+ajustes. A leitura continua copiando 39 B para o buffer, o que só suja a cópia do VFO A que o `R` do `0x8000`
+recarrega antes de mandar.
+
+**Leitura de memória (v31 a v110, diagnóstico).** No `R` estendido, endereço com o bit 22 ligado
+(`0x400000` em diante, que o chip de 1 MB não tem) devolvia 64 B da memória do processador em
 `0x01E00000 + (endereço − 0x400000)`: o que o firmware enxerga da flash interna (e da RAM em
 `0x02000000`). A cópia é o `memcpy` da ROM do chip (`0x021127A8`, 191 chamadores no app, destino
 em r0, origem em r1, tamanho em r2). Só leitura. Foi ela que mostrou o caso das vozes
-([seção 15](#15-vozes-fora)).
+([seção 15](#15-vozes-fora)). Saiu na v111, para abrir espaço.
 
 ## 5. Rotinas do firmware usadas
 
@@ -1511,8 +1520,8 @@ transmitindo, com o microfone cortado (reg 0x30 = 0xC3FA por `0x01E3FF3E(4)`), e
 
 O envio usa essa máquina inteira:
 
-1. o SEND só arma: `b[0x14BE6] = 'M'` ou `'A'` (o byte `0x903A` dos ajustes, livre pela varredura da
-   v59; o padrão de fábrica deixa 202 nele);
+1. o SEND só arma: `b[0x14BF0] = 'M'` ou `'A'` (o byte `0x9044` dos ajustes; o padrão de fábrica deixa 0
+   nele; até a v110, o `0x903A`, `b[0x14BE6]`, que agora é do EQ);
 2. **gancho na chamada da ida do PTT** (`0x01E46540`, `call 0x01E43E8A`, em toda volta do laço): com o
    envio armado, sem bipe tocando (o do próprio OK), sem TX, sem alarme e com o PTT solto, põe o "no ar"
    (`'m'`/`'a'`) e chama o início da TX como a ida do PTT (`0x01E39EE4`, `0x01E3951C`, `0x01E41022`); a ida
@@ -1524,7 +1533,7 @@ O envio usa essa máquina inteira:
    `0x01E43AFE(0)`, `0x01E39DEA(0)`), o tom 2 desligado (reg 0x70 = 0xE000), e o fim de fábrica com o roger
    zerado em volta da chamada (o fim não grava os ajustes).
 
-A partida e os ajustes que chegam pelo cabo ou pelo retorno aos de fábrica zeram o `b[0x14BE6]`: nada
+A partida e os ajustes que chegam pelo cabo ou pelo retorno aos de fábrica zeram o `b[0x14BF0]`: nada
 transmite sozinho. Antes do conteúdo, o gancho espera as teclas soltarem (o OK que armou ainda pode estar
 apertado).
 
@@ -1697,9 +1706,9 @@ reconhece), põe o cursor (`b[0x14A37]`) em 0 e passa a devolver "nenhuma tecla"
 depois de três leituras, manda o toque curto, e a rotina do EXIT do editor, com o cursor no começo, sai sem
 salvar (`0x01E4D4F4`), com a tecla ainda apertada. Enquanto o EXIT continuar apertado a leitura segue
 devolvendo "nenhuma", senão o solto de verdade viraria outro EXIT e subiria o menu. A marca disso fica no
-byte `0x903C` dos ajustes (`b[0x14BE8]`): no desmontado de fábrica não há acesso a ele, nem pela base
-`0x14680` (o deslocamento 1384 nunca é carregado), nem pelo endereço. Um valor que sobre nele se apaga na
-primeira leitura sem o EXIT.
+byte `0x9045` dos ajustes (`b[0x14BF1]`; até a v110, o `0x903C`, `b[0x14BE8]`, que agora é do EQ): no
+desmontado de fábrica não há acesso a ele, nem pela base `0x14680` (o deslocamento 1393 nunca é carregado),
+nem pelo endereço. Um valor que sobre nele se apaga na primeira leitura sem o EXIT.
 
 Na tela do APRS RX, que lê as teclas por conta própria, o EXIT segurado já apagava o histórico aos 0,6 s,
 mas a tela só se redesenhava depois de soltar: agora o laço redesenha antes de esperar a tecla soltar, e
@@ -2105,7 +2114,8 @@ compressor ou expansor (bits 1 e 3 do `0x31`), grava no `0x43` o filtro largo do
 `0x49A8`), desliga o expansor e a porta de ruído (`0x28` = `0x0A00`) e, no `0x2B`, deixa os filtros de áudio do
 RX como a fábrica os deixa em FM, com o cancelamento de corrente contínua ligado (`0x4000`, v103). Na saída tudo
 volta: o modo, o `0x31` e o `0x43` que a entrada leu e, pelo `aplica_audio` (`bancos.c`), o `0x28`, o bit 3 do
-`0x31` e, em FM, o `0x2B` dos itens das pastas AUDIO e MIC. As teclas do ganho (#) e do filtro (0) saíram. O
+`0x31` e, em FM, o `0x2B` dos itens das pastas AUDIO e MIC. As teclas do ganho (#) e do filtro (0) saíram (a do
+filtro voltou na v111, [abaixo](#a-tecla-0-o-eq-no-filter-o-save-e-o-more-v111)). O
 rodapé virou células (SYNC, BAD em vermelho quando passa de 0, FIX em verde), a mensagem cortada ganha a
 etiqueta MORE em vermelho, e o HOLD (cinza) e o EXIT (branco) dividem uma etiqueta preta, antes do CLR (v104).
 O teste 9 do `teste_rx.py` confere a entrada e a saída.
@@ -2133,6 +2143,37 @@ fábrica (620 e 740 B). O gancho da ida do PTT põe o "no ar" antes do início e
 fábrica como saltos (o quadro dele já desfeito), e o `pilha.py` passou a tratar o `goto` do nosso código
 para outra rotina como no grafo de fábrica (salto de cauda: o quadro de quem salta não soma). A V2.9T dá
 os mesmos números com o `pilha.py` novo.
+
+### A tecla 0, o EQ no FILTER, o SAVE e o MORE (v111)
+
+**A tecla 0** (o código cru 13) liga e desliga o FILTER, para comparar a recepção com e sem ele. Desligar é o
+`filtro_rx(0, era3)` da saída: o modo, o `0x31` e o `0x43` que a entrada leu, os itens das pastas AUDIO e MIC
+pelo `aplica_audio` e o EQ do menu pelo `aplica_eq`; ligar é o da entrada. Cada troca zera os contadores (S, B e
+F), e a tela sempre abre com o FILTER ligado. O estado vai no `num[0]`, que até a v110 guardava o ganho do modem
+e ninguém lia. O teste 9b do `teste_rx.py` confere as fotos dos registradores a cada tecla e a saída.
+
+**O EQ no FILTER.** Ligado, o FILTER também grava o EQ do RX com os graves em −3 dB (`0x54` = `0x935A`, `0x55` =
+`0x2EFF`) e os agudos em +4 dB (`0x75` = `0xCC35`), as pontas da tabela da [seção 27](#27-o-equalizador-e-o-medidor-s-v108-a-v110):
+o dono achou que assim decodifica mais. São os mesmos registradores que o EQ BASS e o EQ TREBLE da pasta AUDIO
+gravam, os que o dono usou no teste. O EQ do TX (`0x44`, `0x45` e `0x74`) fica.
+
+**A tela.** No alto, a etiqueta FILTER fica sem o fundo do selo quando desligado. No rodapé, os contadores
+viraram S, B e F em casas mais estreitas (0, 52 e 78), e a tecla 0 entra na mesma linha, depois deles. O MORE
+desce para a linha de baixo do registro (`aprs_linhas`, `y + 9`), no vão antes do traço; a segunda linha deixou de
+ser cortada para ele caber e usa a largura toda. Na tela aberta as seis linhas começam em `y = 22`, e o fundo
+vai até o rodapé (`y = 102`), para o MORE da sexta caber.
+
+**O SAVE desligado.** O SAVE do menu é o `b[0x14B6D]` (o `0x9001` dos ajustes; get `0x01E39342`, set
+`0x01E39352`, com 4 opções). Fora deles, só uma instrução o lê: a decisão da economia de bateria no laço do
+sinal (`0x01E48060`), que com ele em 0 não entra no ciclo de dormir. A entrada do APRS RX guarda o valor, põe 0 e
+chama o `0x01E39EE4` (o `ACORDA`, que acorda o receptor se `b[0x15372]` é 1); a saída devolve o valor antes de o
+OK gravar os ajustes (`salva_menu`, v101). O laço só sai por um `break`, para o caminho da saída, com o FILTER
+ligado ou não. O teste 9 confere o SAVE em 0 na tela e o do menu de volta.
+
+**A pilha.** Sem a conversão do histórico das v70 a v74, o `hist_abre` ficou pequeno e o compilador passou a
+colá-lo no laço, com as variáveis dele no quadro do laço (de 320 para 328 B): o set do APRS RX foi a 744 B, acima
+dos 740 de fábrica. Com o `hist_abre` fora (`noinline`), o quadro do laço ficou em 308 B, e o set em 724; com o
+SAVE guardado, 728.
 
 ## 25. A pasta AUDIO: o EXPANDER e a NOISE GATE, e o que é a NR (v79)
 
@@ -2318,7 +2359,8 @@ Onde cada item do menu grava (os get e set da tabela montada, conferidos no desm
 | o canal ou o VFO do lado | a pasta CHANNEL (BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N), OFFSET, SFT-D, a pasta TONES, SCAN ADD e CH-NAME |
 | o setor próprio, no set | APRS (CALLSIGN, SSID, TO, MESSAGE, PATH), MORSE (MESSAGE, SPEED, TONE), BANKS, WATCH e MDF-C |
 
-O SEND do APRS e do Morse (`0x903A`) a partida zera de propósito, para nada transmitir sozinho.
+O SEND do APRS e do Morse (`0x9044`; até a v110, `0x903A`) a partida zera de propósito, para nada transmitir
+sozinho.
 
 ## 27. O equalizador e o medidor S (v108 a v110)
 
@@ -2349,11 +2391,18 @@ mesma tabela vale para o TX. O reset do chip (`0x00`, `0x01E5653C`) roda antes, 
 dela (`0x01E56AE8`) grava o EQ depois (`aplica_eq`, `bancos.c`).
 
 No menu, AUDIO e MIC ganharam EQ BASS e EQ TREBLE: DEFAULT é o que a fábrica faz, e o resto vem em ordem, sem
-repetir o passo do DEFAULT. Os níveis ficam no `0x9040` a `0x9043` do log dos ajustes (`b[0x14BEC..0x14BEF]`),
-dentro dos 39 B que a gravação e a partida copiam (`0x01E55CFC`), que nada de fábrica lê nem grava fora dessas
-cópias e que o cabo não lê (só 32 B a partir de `0x9020`): `0xB0` + a posição no menu. O padrão de fábrica deixa
-ali o texto em chinês que vem depois da tabela dele (`CE DE D0 A7`), sem a marca, que vale DEFAULT. A tabela do
-menu passou de 96 para 97 vagas.
+repetir o passo do DEFAULT. A tabela do menu passou de 96 para 97 vagas.
+
+**Onde os níveis moram.** Da v108 à v110, no `0x9040` a `0x9043` do log dos ajustes (`b[0x14BEC..0x14BEF]`,
+`0xB0` + a posição no menu), dentro dos 39 B que a gravação e a partida copiam (`0x01E55CFC`) e fora dos 64 B
+que o cabo troca; e cada upload do CHIRP os voltava a DEFAULT ([seção 4](#4-protocolo-do-cabo)). Desde a v111,
+no `0x903A` (o RX) e no `0x903C` (o TX), `b[0x14BE6]` e `b[0x14BE8]`, dentro da janela do cabo, para o CHIRP:
+a posição dos agudos nos bits 5:3, a dos graves nos 2:0 e a marca `10` nos bits 7:6. Sem a marca, ou com os
+agudos fora da lista, os dois valem DEFAULT: o padrão de fábrica deixa `0xCA` e `0xC7` neles, e até a v110 eles
+guardavam o envio armado e o EXIT segurado, sempre abaixo de `0x80`. Os dois foram para o `0x9044` e o `0x9045`
+(`b[0x14BF0]` e `b[0x14BF1]`): pela varredura, nada de fábrica os lê nem grava fora das cópias do bloco (nem
+pelos deslocamentos 1392 e 1393 da base `0x14680`), e o padrão de fábrica deixa `00` e `20` neles. O EQ que
+chega pelo cabo vale na hora (`aplica_eq` no `gancho_ajustes`). O `0x9040..0x9043` e o `0x9046` ficam livres.
 
 ### O medidor S (v109 e v110)
 

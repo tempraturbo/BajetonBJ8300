@@ -8,7 +8,10 @@
  *   H <quantos> e um "R <ambar> <texto>" por registro do historico, do mais velho ao mais novo
  *   E <estado do envio> <registro do ack>, e "A <quadro do ack em hexa>" se o ack ficou armado
  *   S <syncs que o modem deu no FE FE> <no 01 01>
- *   M e cada valor gravado no 0x58, em hexa, na ordem (v77)
+ *   M e cada valor gravado no 0x58, em hexa, na ordem
+ *   F <0x43> <0x31> <0x28> <0x2B> <0x54> <0x75> no comeco de cada tecla do roteiro
+ *   G os mesmos registradores no fim, e quantas vezes o aplica_audio rodou
+ *   V <o SAVE na primeira tecla> <o SAVE no fim> (o do menu e 3)
  *   C <syncs marca> <syncs espaco> <BAD> <FIX> <transbordou> <faixas> <ms> <luz> <posicao na tela> */
 #include "../firmware/src/mensagem.c"
 
@@ -70,8 +73,10 @@ int main(int argc, char **argv)
     regs[0x31] = 0x000A;
     regs[0x28] = 0x2A40;
     regs[0x2B] = 0x0100;
+    RAM(u8, 0x00014B6D) = 3;               /* o SAVE do menu ligado (v111: a tela o desliga e devolve) */
 
     aprs_rx_grava();
+    printf("V %u %u\n", save_na_tela, RAM(u8, 0x00014B6D));
 
     hist = hist_abre(&anel);
     printf("H %d\n", hist);
@@ -93,8 +98,10 @@ int main(int argc, char **argv)
         printf(" %x", escritas_58[i]);
     printf("\n");
     for (i = 0; i < n_fotos; i++)
-        printf("F %x %x %x %x\n", fotos[i][0], fotos[i][1], fotos[i][2], fotos[i][3]);
-    printf("G %x %x %x %x %u\n", regs[0x43], regs[0x31], regs[0x28], regs[0x2B], n_audio);
+        printf("F %x %x %x %x %x %x\n", fotos[i][0], fotos[i][1], fotos[i][2], fotos[i][3], fotos[i][4],
+               fotos[i][5]);
+    printf("G %x %x %x %x %x %x %u\n", regs[0x43], regs[0x31], regs[0x28], regs[0x2B], regs[0x54], regs[0x75],
+           n_audio);
     printf("C %u %u %u %u %u %u %u %u %u\n", ultimo_num[3], ultimo_num[4], ultimo_num[5], ultimo_num[6],
            transbordou, faixas_desenhadas, (unsigned)(relogio_us / 1000), luz, ultima_posicao);
     if (argc > 7) {

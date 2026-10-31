@@ -5,12 +5,13 @@
  *
  * O APRS e o padrao de todo radio com APRS: AX.25 a 1200 bps em AFSK Bell 202 (1200 Hz e 2200 Hz),
  * com NRZI, bit stuffing, flags 0x7E e o FCS do X.25. O modem FSK do chip so faz pares fixos de tons
- * (1200/1800 e 1200/2400, o do roger TONE1200), entao o AFSK sai pelo gerador de tom: a cada bit 0 a
- * frequencia do tom troca entre 1200 e 2200 Hz (o NRZI), na hora certa pelo contador do TIMER1.
+ * (1200/1800 e 1200/2400, o do roger TONE1200), entao o AFSK sai como de um TNC de placa de som: amostras
+ * no lugar das do microfone (v88, o AFSK pelo DAC, abaixo). Da v65 a v85 ele saia pelo gerador de tom do
+ * chip, que nao chegava aos 2200 Hz; esse envio saiu dos testes do PC na v111.
  *
  * Nada aqui tem .data nem .bss (nao ha RAM nossa): o pacote e montado na pilha e mandado bit a bit.
  * Compila tambem no PC (TESTE_PC), onde tests/teste_mensagem.py troca o chip e o relogio por imitacoes
- * e confere o pacote, o AFSK e o decodificador; e, inteiro, com o laco do APRS RX (TESTE_RX, v75), onde
+ * e confere o pacote, o AFSK, o decodificador e o Morse; e, inteiro, com o laco do APRS RX (TESTE_RX, v75), onde
  * tests/teste_rx.py imita o modem do BK4819, a flash e as teclas.
  */
 typedef unsigned char u8;
@@ -19,7 +20,7 @@ typedef unsigned int u32;
 typedef int s32;
 
 #if defined(TESTE_PC)
-#include "teste_mensagem.h"           /* REG_W, TOM, agora_us e companhia, imitados */
+#include "teste_mensagem.h"           /* REG_W, TOM e companhia, imitados */
 #elif defined(TESTE_RX)
 #include "teste_rx.h"                 /* o laco do APRS RX no PC: o chip, a flash, as teclas e o relogio (v75) */
 #else
@@ -31,14 +32,12 @@ FIRMWARE(TOM, 0x01E43B4E);         void TOM(unsigned, unsigned);     /* os 2 ger
 FIRMWARE(ESPERA_2MS, 0x01E36286);  void ESPERA_2MS(unsigned);        /* espera ocupada, n x 2 ms */
 
 /* O relogio: b[0x14810] conta milissegundos, de 2 em 2 no tique do TIMER1 (a espera de fabrica,
- * 0x01E36286, espera n x 2 nele). Os microssegundos do contador do TIMER1 (0x1E0504, de 0 ao PRD em
- * 0x1E0508; a conta de 0x01E4F888) eram so do envio pelo gerador de tom, que desde a v88 so roda no PC
- * (o agora_us dele mora nos .h dos testes). */
+ * 0x01E36286, espera n x 2 nele). */
 #define TIQUE_MS   RAM(u32, 0x00014810)
 #endif
 
-#define HZ(f)  ((u16)((f) * 10.32444 + 0.5))     /* unidade do reg 0x71, a conta do roger */
-/* A mesma conta para um tom que so se sabe na hora (o do Morse), sem ponto flutuante: 330382 / 32000. */
+/* Hz na unidade do reg 0x71 (x 10.32444, a conta do roger), para um tom que so se sabe na hora (o do
+ * Morse), sem ponto flutuante: 330382 / 32000. */
 #define HZ_INT(f)  (((f) * 330382u + 16000) / 32000)
 
 /* ---------- Morse ----------
@@ -68,14 +67,14 @@ static unsigned para(void);
 /* Toca o texto com o gerador ja ligado: a unidade e 1200/wpm ms (a palavra PARIS), ponto 1, traco 3,
  * 1 entre elementos, 3 entre letras e 7 entre palavras. A espera conta de 2 em 2 ms. para() e
  * consultada antes de cada caractere e de cada elemento (o radio limpa o watchdog nela; o mais longe
- * entre duas e 10 unidades, 2,4 s a 5 wpm); devolve 0 se ela pediu para parar no meio. */
-unsigned morse_toca(const char *texto, unsigned n, unsigned wpm, unsigned hz)
+ * entre duas e 10 unidades, 2,4 s a 5 wpm); ela pedindo, para no meio. */
+void morse_toca(const char *texto, unsigned n, unsigned wpm, unsigned hz)
 {
     unsigned u = 600 / wpm, i, c, e;
 
     for (i = 0; i < n; i++) {
         if (para())
-            return 0;
+            return;
         c = morse_de((u8)texto[i]);
         if (!c) {                          /* espaco (ou caractere sem codigo): fecha a palavra */
             ESPERA_2MS(4 * u);             /* 3 da letra anterior + 4 = 7 */
@@ -85,7 +84,7 @@ unsigned morse_toca(const char *texto, unsigned n, unsigned wpm, unsigned hz)
             ;
         for (e >>= 1; e; e >>= 1) {
             if (para())
-                return 0;
+                return;
             TOM(HZ_INT(hz), 0);
             ESPERA_2MS(c & e ? 3 * u : u);
             TOM(0, 0);
@@ -93,7 +92,6 @@ unsigned morse_toca(const char *texto, unsigned n, unsigned wpm, unsigned hz)
         }
         ESPERA_2MS(2 * u);                 /* 1 do elemento + 2 = 3 entre letras */
     }
-    return 1;
 }
 
 /* ---------- AX.25 ----------
@@ -165,84 +163,13 @@ unsigned ax_quadro(u8 *q, const char *origem, unsigned n_origem, unsigned caminh
     return p - q;
 }
 
-/* ---------- AFSK 1200 ----------
- * Bell 202: marca (1) = 1200 Hz, espaco (0) = 2200 Hz, 1200 bps. NRZI: o bit 0 troca o tom, o 1 o
- * mantem. Cada bit dura 2500/3 us: o alvo anda 833, 833 e 834 us, 2500 a cada 3 bits, sem acumular
- * erro (e em microssegundos, que dao a volta nos 32 bits junto com o relogio). */
-#define MARCA   HZ(1200)
-#define ESPACO  HZ(2200)
-
-/* Desde a v88 o firmware manda pelo microfone (o AFSK pelo DAC, abaixo); o envio pelo gerador de tom
- * fica so nos testes do PC, como referencia conferida (v93: os ~260 B dele saem do firmware). */
-#if defined(TESTE_PC) || defined(TESTE_RX)
-struct afsk {
-    u32 alvo;                              /* fim do bit em curso, em us */
-    u8 terco;                              /* qual dos 3 bits do ciclo de 2500 us */
-    u8 tom;                                /* 0 marca, 1 espaco */
-    u8 uns;                                /* 1s seguidos, para o bit stuffing */
-};
-
-static void afsk_bit(struct afsk *a, unsigned b)
-{
-    if (++a->terco == 3)
-        a->terco = 0;
-    a->alvo += a->terco ? 833 : 834;
-    while ((s32)(agora_us() - a->alvo) < 0)
-        ;
-    if (!b) {
-        a->tom ^= 1;
-        REG_W(0x71, a->tom ? ESPACO : MARCA);
-    }
-}
-
-static void afsk_byte(struct afsk *a, unsigned v, unsigned stuffing)
-{
-    unsigned k, b;
-
-    for (k = 0; k < 8; k++, v >>= 1) {     /* o bit baixo primeiro */
-        b = v & 1;
-        afsk_bit(a, b);
-        if (!stuffing)
-            continue;
-        if (!b)
-            a->uns = 0;
-        else if (++a->uns == 5) {          /* cinco 1s: um 0 de enchimento */
-            afsk_bit(a, 0);
-            a->uns = 0;
-        }
-    }
-}
-
-/* Manda o quadro com o gerador ja ligado: flags de abertura (o TXDELAY), o quadro com stuffing e
- * flags de fecho. O tom comeca no espaco (v74; ate a v73, na marca): o primeiro bit 0 da flag ja o troca,
- * e as flags ficam paradas na marca, 1200 Hz, a polaridade que o sync de um BK4819 pega (um UV-K5 ou um
- * BJ-8300 de antes da v71 nao sincronizavam no preambulo parado em 2200 Hz). */
-void afsk_manda(const u8 *q, unsigned n, unsigned flags)
-{
-    struct afsk a;
-    unsigned i;
-
-    a.uns = a.terco = 0;
-    a.tom = 1;
-    TOM(ESPACO, 0);
-    a.alvo = agora_us();
-    for (i = 0; i < flags; i++)
-        afsk_byte(&a, 0x7E, 0);
-    for (i = 0; i < n; i++)
-        afsk_byte(&a, q[i], 1);
-    for (i = 0; i < 3; i++)
-        afsk_byte(&a, 0x7E, 0);
-    afsk_bit(&a, 1);                       /* o ultimo bit inteiro no ar antes de desligar o tom */
-}
-#endif
-
-/* ---------- AFSK pelo DAC (v86, experimental) ----------
- * Pelo gerador de tom do chip (afsk_manda), o APRSdroid nao leu nenhum pacote nosso, com o ganho, os
+/* ---------- AFSK pelo DAC (v86; o envio desde a v88) ----------
+ * Pelo gerador de tom do chip (ate a v85), o APRSdroid nao leu nenhum pacote nosso, com o ganho, os
  * passa-baixas do TX e a pre-enfase variados (v84): o bit sozinho de 2200 Hz nao chegava aos 2200 Hz. Aqui
  * o AFSK sai como de um TNC de placa de som: amostras a 16 kHz no lugar das do microfone, que o JieLi manda
  * ao DAC e dali a entrada de microfone do BK4819. A fase e continua (um acumulador de 32 bits: o passo de
  * 1200 e 2200 Hz a 16 kHz) e cada bit tem 13, 13 e 14 amostras (40 a cada 3 bits, sem acumular erro).
- * dac_prepara poe o quadro em bits de linha (NRZI e bit stuffing, como o afsk_manda: um bit de referencia
+ * dac_prepara poe o quadro em bits de linha (NRZI e bit stuffing: um bit de referencia
  * no espaco, as flags paradas na marca, o ultimo bit inteiro); dac_bloco enche um bloco de amostras. */
 #define INC_MARCA    322122547u            /* 2^32 x 1200 / 16000: o passo da fase por amostra */
 #define INC_ESPACO   590558003u            /* 2^32 x 2200 / 16000 */
@@ -1156,12 +1083,12 @@ static char *resumo(const char *t, unsigned n)
  *    ocupado ficam com ele, e o menu fecha (como com o PTT no menu);
  *  - gancho_fim_tx (no lugar da chamada do fim no passo 3, 0x01E46D8C) toca o Morse ou o AFSK no
  *    lugar do roger e chama o fim de fabrica com o roger zerado.
- * O estado mora no byte 0x903A dos ajustes (b[0x14BE6]), livre pela varredura da v59 (so o
- * diagnostico da v63 o usou). Os codigos sao letras que nada mais grava ali (o padrao de fabrica deixa
- * 202), e a partida e os ajustes pelo cabo o zeram (gancho_partida, gancho_ajustes): nada transmite
- * sozinho. O watchdog (~4 s; limpo pela interface a cada 10 ms, que nao roda enquanto o conteudo
+ * O estado mora no byte 0x9044 dos ajustes (b[0x14BF0]; ate a v110, o 0x903A, que agora e do EQ), que
+ * nada de fabrica le nem grava fora das copias do bloco. Os codigos sao letras que nada mais grava ali (o
+ * padrao de fabrica deixa 0), e a partida e os ajustes pelo cabo o zeram (gancho_partida, gancho_ajustes):
+ * nada transmite sozinho. O watchdog (~4 s; limpo pela interface a cada 10 ms, que nao roda enquanto o conteudo
  * toca) e limpo por nos (0x01E37E76), como o roger de fabrica faz antes dos tons. */
-#define ESTADO_MSG     RAM(u8, 0x00014BE6)
+#define ESTADO_MSG     RAM(u8, 0x00014BF0)
 #define ARMADO_MORSE   'M'
 #define ARMADO_APRS    'A'
 #define ARMADO_ACK     'K'               /* v75: o ack de uma mensagem para mim, armado pelo APRS RX */
@@ -1180,6 +1107,10 @@ FIRMWARE(GRAVA_FLASH, 0x01E3A25A);  void GRAVA_FLASH(u32, const void *, u32);
 
 FIRMWARE(IDA_PTT, 0x01E43E8A);     void IDA_PTT(void);
 FIRMWARE(ACORDA, 0x01E39EE4);      void ACORDA(void);         /* sai da economia de bateria */
+/* O SAVE do menu (b[0x14B6D], o 0x9001 dos ajustes; get 0x01E39342, set 0x01E39352): a economia de bateria do
+ * laco do sinal (0x01E48060) so poe o receptor para dormir com ele diferente de 0. Fora o get e o set, nada mais
+ * o le nem grava. */
+#define SAVE           RAM(u8, 0x00014B6D)
 FIRMWARE(LUZ_ABR, 0x01E3951C);     void LUZ_ABR(void);        /* acende a luz pelo ABR */
 FIRMWARE(INICIO_TX, 0x01E41022);   void INICIO_TX(void);
 FIRMWARE(FIM_TX, 0x01E44604);      void FIM_TX(void);
@@ -1226,14 +1157,14 @@ static void espera_soltar(void)
  * editor de texto (MENU_TIPO 7 editando, como a tela B o reconhece), o cursor vai a 0 e a leitura passa a
  * devolver "nenhuma": a fabrica ve o EXIT solto, manda o toque curto, e a rotina do EXIT do editor, com o
  * cursor no comeco, sai sem salvar (0x01E4D486 -> 0x01E4D4F4). Enquanto o EXIT continuar apertado a
- * leitura segue devolvendo "nenhuma" (a marca no 0x903C dos ajustes, b[0x14BE8], livre: nenhum acesso de
- * fabrica pela base 0x14680 nem pelo endereco), para o solto de verdade nao virar outro EXIT, que subiria
- * o menu. Um valor que sobre na marca (os ajustes gravados com ela ligada) se apaga na primeira leitura
- * sem o EXIT. */
+ * leitura segue devolvendo "nenhuma" (a marca no 0x9045 dos ajustes, b[0x14BF1], livre: nenhum acesso de
+ * fabrica pela base 0x14680 nem pelo endereco; ate a v110, o 0x903C, que agora e do EQ), para o solto de
+ * verdade nao virar outro EXIT, que subiria o menu. Um valor que sobre na marca (os ajustes gravados com
+ * ela ligada, ou os 0x20 do RESET de fabrica) se apaga na primeira leitura sem o EXIT. */
 #define CONTA_TECLA   RAM(u8, 0x00014680)   /* voltas com a mesma tecla, no laco do sinal */
 #define MENU_EDITANDO RAM(u8, 0x00014BF9)
 #define MENU_TIPO     RAM(u8, 0x00014C00)
-#define EXIT_PRESO    RAM(u8, 0x00014BE8)   /* 0x903C */
+#define EXIT_PRESO    RAM(u8, 0x00014BF1)   /* 0x9045 */
 
 unsigned gancho_teclas(void)
 {
@@ -1359,7 +1290,7 @@ static unsigned quadro_aprs(u8 *q, u32 ack)
     return ax_quadro(q, origem, n, digis, (char *)q + CAB(digis), p - q - CAB(digis));
 }
 
-/* O AFSK pelo DAC (v86, experimental). O estado mora na memoria de video (0x10190), como o registro do
+/* O AFSK pelo DAC (v86; o envio desde a v88). O estado mora na memoria de video (0x10190), como o registro do
  * APRS RX (v76): enquanto o conteudo toca, a interface nao roda e ninguem desenha. O ESTADO_MSG em 'D'
  * liga o gancho do microfone; o laco espera o ultimo bit, com um prazo (se os blocos do microfone nao
  * vierem, a TX nao trava), e mais 120 ms mudos para o DAC esvaziar. */
@@ -1465,8 +1396,8 @@ void gancho_fim_tx(void)
 }
 
 /* ---------- MORSE ---------- */
-const char titulo_morse_msg[] = "MESSAGE";      /* sem o MORSE da pasta (v83) */
-const char titulo_morse_envia[] = "SEND";
+const char titulo_mensagem[] = "MESSAGE";       /* sem o MORSE da pasta (v83); o mesmo no APRS (v111) */
+const char titulo_envia[] = "SEND";
 const char titulo_morse_wpm[] = "SPEED";
 const char titulo_morse_tom[] = "TONE";
 const char *const envia_opcoes[1] = {"OK TO SEND"};
@@ -1570,11 +1501,9 @@ void morse_envia_grava(void)
 const char titulo_aprs_ind[] = "CALLSIGN";    /* sem o APRS da pasta (v83) */
 const char titulo_aprs_ssid[] = "SSID";
 const char titulo_aprs_dest[] = "TO";
-const char titulo_aprs_msg[] = "MESSAGE";
-const char titulo_aprs_envia[] = "SEND";
 const char titulo_aprs_caminho[] = "PATH";
 const char titulo_aprs_rx[] = "RX";
-const char *const aprs_caminho_opcoes[3] = {"WIDE1-1", "WIDE1-1,WIDE2-1", "NONE"};
+const char *const aprs_caminho_opcoes[3] = {WIDE[0], "WIDE1-1,WIDE2-1", "NONE"};   /* o do quadro (v111) */
 const char *const aprs_rx_opcoes[1] = {"OK TO LISTEN"};
 
 /* Os tres textos do APRS: o indicativo (6), o destinatario (9, com o SSID depois do '-', que a tecla
@@ -1760,8 +1689,7 @@ void aprs_caminho_grava(void)
  * e o setor do historico que precisa ser apagado e apagado com a captura parada, fora dos bits.
  *
  * O modem e o 0x3CC3 (FFSK 1200/1800, o do roger TONE1200 de fabrica, o melhor na v71) com o ganho de
- * entrada da CALIBRATION > MODEM GAIN nos bits 9:8 (v73, ganho_modem, abaixo); a tecla # troca o ganho so
- * aqui, para comparar, e a proxima entrada volta ao da CALIBRATION. Na v70 a banda larga so dava sync sem
+ * entrada da CALIBRATION > MODEM GAIN nos bits 9:8 (v73, ganho_modem, abaixo). Na v70 a banda larga so dava sync sem
  * quadro e o ganho 0 nao ouvia nada; na v71 o 1200/2400 (0x33C3) decodificou menos que o 1200/1800, e tirar
  * o de-enfase do RX (bit 8 do 0x2B) nao mudou nada. Na v77, dez valores do 0x58 nunca testados (os bits
  * 7:6 em 0, as bandas 2 e 3, o caminho do NOAA SAME e os modos de RX 1-3 e 5-6, sem documentacao), na
@@ -1798,12 +1726,9 @@ void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas)
  * (o dos mais velhos) e apagado e recomeca com a geracao seguinte, e os 31 do cheio passam a ser os
  * velhos. Ficam sempre os ultimos 31 a 62. O estado: hist (quantos ha; -1 se um setor tem outra coisa, e
  * ai nada e gravado) e anel (o setor que recebe no bit 0, se o outro precisa ser apagado no bit 1, e
- * quantos velhos ha nele dos bits 2 em diante). Da v70 a v74 o historico era de um bloco so ("HST1",
- * registros de 64 B; "HST2", de 128 B pelos dois setores seguidos, um cabecalho so): ele e apagado na
- * primeira entrada. */
+ * quantos velhos ha nele dos bits 2 em diante). Da v70 a v74, versoes de teste nunca publicadas, o
+ * historico era de um bloco so ("HST1" e "HST2"); a v75 o apagava na primeira entrada, e a v111 tirou isso. */
 #define MARCA_HIST   0x33545348u           /* "HST3" */
-#define MARCA_V74    0x32545348u           /* "HST2" */
-#define MARCA_V70    0x31545348u           /* "HST1" */
 #define POR_SETOR    31u
 #define USADO        0x5A
 #define ANEL_SUJO    2u                    /* o setor que nao recebe tem cabecalho: precisa ser apagado */
@@ -1813,6 +1738,7 @@ void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas)
 #define TECLA_CIMA   3
 #define TECLA_BAIXO  4
 #define TECLA_ESTRELA 9
+#define TECLA_ZERO   13
 #define EXIT_LONGO   100                   /* o EXIT segurado 0,6 s */
 #define ABERTO       1u                    /* os bits de modo, no laco */
 #define PRESO        2u                    /* uma tecla esta apertada: so conta de novo depois de solta */
@@ -1889,12 +1815,15 @@ void modem_ganho_grava(void)
  * (FILTRO(0), 0x43 = 0x49A8: 3,75 kHz no sinal forte e no fraco, dobrados, o largo do firmware da comunidade
  * do UV-K5), o expansor e a porta de ruido desligados (0x28 = 0x0A00) e, no 0x2B, os filtros de audio do RX
  * de fabrica com o cancelamento de corrente continua depois do demodulador (bit 14, que vem ligado no chip
- * e a fabrica desliga em FM; v103). A saida devolve o que estava: o modo, o 0x31 e o 0x43 que a entrada leu
- * (era3) e, pelo aplica_audio (bancos.c), o 0x28, o bit 3 do 0x31 e, em FM, o 0x2B dos itens das pastas
- * AUDIO e MIC; em AM, o 0x2B da troca de fabrica. */
+ * e a fabrica desliga em FM; v103) e, a pedido do dono (v111), o EQ do RX com os graves em -3 dB e os agudos
+ * em +4 dB (os passos da ponta da tabela do bancos.c), que no teste do dono decodificou mais. A saida devolve o
+ * que estava: o modo, o 0x31 e o 0x43 que a entrada leu (era3), pelo aplica_audio (bancos.c) o 0x28, o bit 3
+ * do 0x31 e, em FM, o 0x2B dos itens das pastas AUDIO e MIC (em AM, o 0x2B da troca de fabrica), e pelo
+ * aplica_eq o EQ do menu. */
 FIRMWARE(AM_FM, 0x01E440C4);        void AM_FM(unsigned am);      /* 1 AM, o resto FM */
 FIRMWARE(FILTRO, 0x01E4A980);       void FILTRO(unsigned);        /* o 0x43 do espectro: 0 o largo */
 void aplica_audio(void);
+void aplica_eq(void);
 __attribute__((noinline)) static void filtro_rx(unsigned liga, unsigned era3)
 {
     if (liga) {
@@ -1903,12 +1832,16 @@ __attribute__((noinline)) static void filtro_rx(unsigned liga, unsigned era3)
         FILTRO(0);
         REG_W(0x28, 0x0A00);
         REG_W(0x2B, 0x4000);
+        REG_W(0x54, 0x935A);               /* os graves do RX em -3 dB */
+        REG_W(0x55, 0x2EFF);
+        REG_W(0x75, 0xCC35);               /* os agudos do RX em +4 dB */
         return;
     }
     AM_FM(era3 >> 16 & 1);
     REG_W(0x31, era3 >> 16);
     REG_W(0x43, era3 & 0xFFFF);
     aplica_audio();
+    aplica_eq();
 }
 
 /* Arma a captura com o sync de uma polaridade: 0 parado na marca (FE FE), 1 no espaco (01 01). */
@@ -1947,7 +1880,7 @@ static unsigned conta_setor(unsigned s)
     return n;
 }
 
-/* Apaga o historico (o EXIT segurado na tela, ou o formato velho): os dois setores, e o primeiro recomeca. */
+/* Apaga o historico (o EXIT segurado na tela): os dois setores, e o primeiro recomeca. */
 static int hist_limpa(unsigned *anel)
 {
     APAGA_SETOR(HIST_SETOR(0));
@@ -1958,8 +1891,9 @@ static int hist_limpa(unsigned *anel)
 }
 
 /* Abre o historico: os dois cabecalhos dizem qual setor recebe (a geracao mais nova) e se ha velhos no
- * outro. So usa setor apagado ou ja nosso: com outra coisa num deles, devolve -1 e nada e gravado. */
-static int hist_abre(unsigned *anel)
+ * outro. So usa setor apagado ou ja nosso: com outra coisa num deles, devolve -1 e nada e gravado. Fora do
+ * laco (v111): colada nele, as variaveis dela iam para o quadro do laco, e a pilha passava. */
+__attribute__((noinline)) static int hist_abre(unsigned *anel)
 {
     u32 m[2];
     u8 g[2];
@@ -1969,8 +1903,6 @@ static int hist_abre(unsigned *anel)
         LE_FLASH(HIST_SETOR(s), &m[s], 4);
         LE_FLASH(HIST_SETOR(s) + 4, &g[s], 1);
     }
-    if (m[0] == MARCA_V74 || (m[0] == MARCA_V70 && (m[1] == 0xFFFFFFFFu || m[1] == MARCA_HIST)))
-        return hist_limpa(anel);           /* o da v70 nao usava o 0xD7000: so com ele livre ou nosso */
     for (s = 0; s < 2; s++)
         if (m[s] != MARCA_HIST && m[s] != 0xFFFFFFFFu)
             return -1;
@@ -2123,20 +2055,22 @@ void aprs_rx_grava(void)
                                             * mostra (160 na v74; 136 pela pilha do historico, v75) */
     struct hdlc h;
     char meu[10];
-    u16 num[7];                            /* ganho, posicao, quantos, syncs na marca e no espaco, BAD, FIX */
+    u16 num[7];                            /* FILTER desligado, posicao, quantos, syncs na marca e no espaco,
+                                            * BAD, FIX */
     unsigned i, f, n, k, w = 0, n_meu = meu_indicativo(meu), ativo = 0, pol = 0, desde = TIQUE_MS;
     unsigned pede = 15, modo = PRESO, anel = 0, desde_tecla = 0;   /* o OK que abriu ainda esta apertado */
     /* os registradores (de 16 bits) que a saida devolve, dois por variavel: a pilha do laco esta no limite */
     unsigned era1 = REG_R(0x3F) | REG_R(0x70) << 16, era2 = REG_R(0x72) | REG_R(0x5E) << 16;
     unsigned era3 = REG_R(0x43) | REG_R(0x31) << 16;   /* o canal, para o FILTER (v102) */
+    unsigned era_save = SAVE;              /* a economia de bateria fica desligada na tela (v111) */
     int hist = hist_abre(&anel), topo = 0;
 
+    SAVE = 0;
     ACORDA();
     DESARMA_DW();
     REG_W(0x70, 0x00E0);                   /* o FSK ligado, com o ganho do roger TONE1200 */
     REG_W(0x72, 0x3065);                   /* 1200 bps */
-    num[0] = ganho_modem();
-    REG_W(0x58, MODEM_RX | num[0] << 8);
+    REG_W(0x58, MODEM_RX | ganho_modem() << 8);
     REG_W(0x5C, 0xAA30);                   /* sem o CRC do chip */
     REG_W(0x5D, 0xFFE0);                   /* 2048 bytes */
     REG_W(0x5E, 0x0204);                   /* quase cheia com 4 palavras */
@@ -2146,7 +2080,7 @@ void aprs_rx_grava(void)
     fsk_rx_arma(0);
     hdlc_comeca(&h, q, sizeof q);
     h.ruins = h.consertados = 0;
-    num[3] = num[4] = 0;
+    num[0] = num[3] = num[4] = 0;
     for (;;) {
         WDT();
         /* as teclas, sem esperar soltar: a apertada so conta de novo depois de solta; o EXIT, so ao soltar
@@ -2189,6 +2123,10 @@ void aprs_rx_grava(void)
             } else if (f == TECLA_ESTRELA) {
                 LUZ(0);
                 modo |= ESCURO;
+            } else if (f == TECLA_ZERO) {  /* o FILTER (v111): desligado, o canal e os menus, como na saida; */
+                filtro_rx(num[0], era3);   /* os contadores recomecam, para comparar os dois */
+                num[0] ^= 1;
+                num[3] = num[4] = h.ruins = h.consertados = 0;
             } else if (f == EXIT_LONGO) {  /* segurado: apaga o historico e fica */
                 if (hist >= 0)
                     hist = hist_limpa(&anel);
@@ -2279,6 +2217,7 @@ void aprs_rx_grava(void)
     REG_W(0x72, era2 & 0xFFFF);
     REG_W(0x02, 0);
     filtro_rx(0, era3);                    /* o canal e os menus de novo (v102) */
+    SAVE = era_save;                       /* antes de o OK gravar os ajustes (salva_menu) */
 }
 
 /* Arma o envio; a mensagem leva um numero (1 a 99) para o outro lado confirmar ("ack"). O numero so anda

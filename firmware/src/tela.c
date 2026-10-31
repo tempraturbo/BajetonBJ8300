@@ -290,7 +290,6 @@ static unsigned indice(unsigned c)
  * 2) ganha os 2 px nas duas colunas das pontas, senao sai fina e mais estreita que as outras (v40).
  * A largura de cada coluna vem pronta do fonte.py (fonte_b_media). 1 px entre letras. */
 #define MEDIA         0
-#define ALTURA_MEDIA  9
 #define COLUNA_MEDIA(k) (1 + (fonte_b_media[(k) >> 3] >> ((k) & 7) & 1))
 static const u8 linha_media[8] = {0, 1, 3, 4, 5, 6, 8, 9};
 /* O do menu (v56: a janela de pasta e o item aberto), um pouco maior para ler melhor: as colunas do
@@ -800,29 +799,6 @@ SEPARADA static void quem_recebe(const struct estado *e, unsigned x)
     texto(x + 18, 4, s, 1, COR_TEXTO_AMBAR);
 }
 
-#ifdef DIAG_RX
-/* Diagnostico do fim da recepcao no menu (v63d, so com -DDIAG_RX): no lugar dos icones, no menu, o
- * estado da recepcao (E, b[0x15367]), o pedido do amplificador da recepcao (A, b[0x129D4]), os dois
- * sinalizadores que a leitura do nivel olha (F, b[0x1536F]; G, b[0x15368]) e um contador que anda a
- * cada chamada do b_sinal (no 0x903A dos ajustes, b[0x14BE6], livre). */
-#define DIAG_CONTA RAM(u8, 0x00014BE6)
-SEPARADA static void diag_rx(unsigned x)
-{
-    static const u32 enderecos[4] = {0x15367, 0x129D4, 0x1536F, 0x15368};
-    static const char letras[4] = {'E', 'A', 'F', 'G'};
-    char s[24], *p = s;
-    unsigned i;
-
-    for (i = 0; i < 4; i++) {
-        *p++ = letras[i];
-        p = numero(p, RAM(u8, enderecos[i]), 1);
-        *p++ = ' ';
-    }
-    numero(p, DIAG_CONTA % 100, 2);
-    texto(x + 1, 4, s, 1, COR_TEXTO_AMBAR);
-}
-#endif
-
 /* A NR e a NOISE GATE na barra (v80): fora em OFF; no DEFAULT, como as outras; em LOW, MID e HIGH, verde,
  * amarela e vermelha. Sem lugar antes da tensao, nao entra. Separada: embutida duas vezes, levava o quadro
  * da barra de 44 a 52 B, e a barra esta no caminho mais fundo da interface. */
@@ -850,11 +826,6 @@ SEPARADA static void barra_estado(const struct estado *e)
         texto(x + 8, 4, e->tx ? "TX" : "RX", 1, cor);
         x += 24;
     }
-#ifdef DIAG_RX
-    if (MODO_TELA == 1) {
-        diag_rx(x);
-    } else
-#endif
     if (e->rx && MODO_TELA == 1) {
         quem_recebe(e, x);
     } else {
@@ -1126,7 +1097,7 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e zero no resto, e o
  * montar so escreve neles se achar exatamente isso. */
 const unsigned char menu_tabela[97 * 28] __attribute__((aligned(4))) = {0xFF};
-const unsigned char menu_textos[640] __attribute__((aligned(4))) = {0xFF};
+const unsigned char menu_textos[532] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v111) */
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
  * O mapa do motor de menus esta no telas.c, junto do desenho. O que muda o nivel faz o mesmo que as
@@ -1699,9 +1670,6 @@ u32 b_sinal(void)
     unsigned m = MODO_TELA, s;
 
     if (m == 1) {
-#ifdef DIAG_RX
-        DIAG_CONTA++;
-#endif
         barra_menu();
         return 1;
     }

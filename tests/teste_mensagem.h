@@ -1,16 +1,9 @@
 /* O chip de radio e o relogio imitados, para o firmware/src/mensagem.c rodar no PC (teste_mensagem.py).
- * Cada escrita no chip sai numa linha "R <us> <reg> <valor>"; o relogio anda sozinho a cada leitura,
- * como se o laco de espera gastasse alguns microssegundos por volta, e comeca perto do fim dos 32 bits
- * para o AFSK provar que atravessa a volta. */
+ * Cada escrita no chip sai numa linha "R <us> <reg> <valor>", com o relogio, que anda com as escritas e
+ * as esperas e comeca perto do fim dos 32 bits, para as contas provarem que atravessam a volta. */
 #include <stdio.h>
 
-static u32 relogio_us = 0xFFFC0000u;      /* da a volta nos 32 bits no meio do pacote */
-
-static u32 agora_us(void)
-{
-    relogio_us += 7;
-    return relogio_us;
-}
+static u32 relogio_us = 0xFFFC0000u;      /* da a volta nos 32 bits no meio do conteudo */
 
 static void REG_W(unsigned reg, unsigned valor)
 {

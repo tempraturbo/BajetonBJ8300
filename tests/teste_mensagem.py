@@ -3,10 +3,10 @@
 Compila o C com o zig (pip install ziglang), com o chip de radio e o relogio imitados
 (tests/teste_mensagem.h), e confere:
   1. o quadro AX.25 (enderecos, caminho, FCS) contra um montador escrito aqui;
-  2. o AFSK: as trocas de tom que o C manda ao chip viram audio (a 48 kHz, com a fase continua, como o
-     gerador de tom faz), e um demodulador escrito aqui (correlacao em 1200 e 2200 Hz, relogio tirado
-     das transicoes, NRZI, destuffing, flags e FCS) tem de achar o quadro certo. O audio fica em
-     firmware/build/aprs.wav, para conferir num decodificador de APRS (o atest do Direwolf, por exemplo);
+  2. o AFSK pelo DAC: as amostras de 16 kHz que o C poe no lugar das do microfone passam por um
+     demodulador escrito aqui (correlacao em 1200 e 2200 Hz, relogio tirado das transicoes, NRZI,
+     destuffing, flags e FCS), que tem de achar o quadro certo, com a fase continua. O audio fica em
+     firmware/build/aprs_dac.wav, para conferir num decodificador de APRS (o atest do Direwolf, por exemplo);
   3. o decodificador HDLC do C, com bits de linha montados aqui: quadros nas duas polaridades, ruido
      entre eles, um com um bit errado (nao pode passar) e um abortado;
   4. o Morse: os tempos de tom ligado e desligado viram pontos, tracos e espacos, e o texto tem de
@@ -101,32 +101,12 @@ for origem, caminho, info in CASOS:
     confere(f'1. quadro {origem} caminho {caminho}', q, quadro_ref(origem, caminho, info).hex())
 
 
-# ---------- 2. AFSK: do log do chip ao audio, e de volta ----------
-TAXA = 48000
-
-
+# ---------- 2. AFSK: o demodulador daqui ----------
 def unidade_hz(v):
     return v / 10.32444
 
 
-def audio_do_log(log):
-    """As escritas no reg 0x71 viram um tom de fase continua (o tom 2 fica em 0, como no codigo)."""
-    trocas = [(int(t), int(v)) for c, t, reg, v in (l.split() for l in log.splitlines())
-              if c == 'R' and int(reg) == 0x71]
-    t0, fim = trocas[0][0], trocas[-1][0] + 2000
-    amostras, fase, k = [], 0.0, 0
-    f = unidade_hz(trocas[0][1])
-    for i in range(int((fim - t0) * TAXA / 1e6)):
-        t = t0 + i * 1e6 / TAXA
-        while k + 1 < len(trocas) and trocas[k + 1][0] <= t:
-            k += 1
-            f = unidade_hz(trocas[k][1])
-        fase += 2 * math.pi * f / TAXA
-        amostras.append(math.sin(fase) if f else 0.0)
-    return amostras
-
-
-def demodula(amostras, taxa=TAXA):
+def demodula(amostras, taxa):
     """Correlacao numa janela de um bit em 1200 e 2200 Hz; o relogio sai das transicoes."""
     n = round(taxa / 1200)
     def energia(i0, f):
@@ -180,36 +160,19 @@ def hdlc_ref(linha):
 
 
 os.makedirs(SAIDA, exist_ok=True)
-for origem, caminho, info in CASOS[:2]:
-    log = roda('afsk', origem, caminho, info)
-    amostras = audio_do_log(log)
-    achados = hdlc_ref(demodula(amostras))
-    confere(f'2. AFSK {origem}: o demodulador acha o quadro', achados, [quadro_ref(origem, caminho, info)[:-2]])
-    if caminho == 2:
-        with wave.open(os.path.join(SAIDA, 'aprs.wav'), 'wb') as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(TAXA)
-            silencio = [0.0] * (TAXA // 4)
-            w.writeframes(b''.join(struct.pack('<h', int(a * 20000)) for a in silencio + amostras + silencio))
-        trocas = [int(l.split()[1]) for l in log.splitlines() if l.split()[2] == str(0x71)]
-        tempos = [b - a for a, b in zip(trocas[1:], trocas[2:])]
-        bit = 1e6 / 1200
-        erro = max(abs(d - round(d / bit) * bit) for d in tempos)
-        confere('2. AFSK: cada troca de tom cai a menos de 10 us da grade de 833,3 us', erro < 10, True)
 
-# ---------- 2b. o AFSK pelo DAC (v86): as amostras de 16 kHz no lugar das do microfone ----------
+# ---------- 2. o AFSK pelo DAC (v86): as amostras de 16 kHz no lugar das do microfone ----------
 DAC_TAXA = 16000
 for origem, caminho, info in CASOS[:2]:
     amostras = [int(v) for l in roda('dac', origem, caminho, info).splitlines() if l.startswith('A ')
                 for v in l.split()[1:]]
     achados = hdlc_ref(demodula([a / 8000 for a in amostras], DAC_TAXA))
-    confere(f'2b. DAC {origem}: o demodulador acha o quadro', achados, [quadro_ref(origem, caminho, info)[:-2]])
+    confere(f'2. DAC {origem}: o demodulador acha o quadro', achados, [quadro_ref(origem, caminho, info)[:-2]])
     tom = [i for i, a in enumerate(amostras) if a]
     trecho = amostras[tom[0]:tom[-1] + 1]
     salto = max(abs(b - a) for a, b in zip(trecho, trecho[1:]))
-    confere('2b. DAC: a fase continua (nenhum salto maior que o do 2200 Hz)', salto <= 6912, True)
-    confere('2b. DAC: 0,1 s mudo antes do primeiro bit', tom[0] in range(1600, 1605), True)
+    confere('2. DAC: a fase continua (nenhum salto maior que o do 2200 Hz)', salto <= 6912, True)
+    confere('2. DAC: 0,1 s mudo antes do primeiro bit', tom[0] in range(1600, 1605), True)
     if caminho == 2:
         with wave.open(os.path.join(SAIDA, 'aprs_dac.wav'), 'wb') as w:
             w.setnchannels(1)

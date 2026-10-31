@@ -143,12 +143,21 @@ a log of 96-byte records (`0x9010 + n × 0x60`, written by `0x01E3AB36`). NOISE 
 menu items in the block match. `0x8000` is similar: the cable reloads A's and B's VFOs from the
 log (`0x01E3A5E8`) and sends `0x14E42`.
 
-**Memory read (v31, diagnostic).** In the extended `R`, an address with bit 22 set (`0x400000` and
-up, which the 1 MB chip does not have) returns 64 B of the processor's memory at
+**The second half of `0x9000` copied 39 B (up to v110).** Both copies use the size of saving and startup: the
+read puts 39 B from `0x14BCC` into the buffer (`0x14E02` + 32), and the write puts 39 B of the buffer back at
+`0x14BCC` (the `memcpy` at `0x01E43A4A`, with `r2 = 39` at `0x01E43A48`). The cable only sends 64 B, so the
+write's 7 extra bytes come from past the buffer, `0x14E42`: VFO A, which the `W` of `0x8000`, written by CHIRP
+right before, leaves there. So every upload put VFO A's first 7 bytes (the frequency in BCD) into
+`0x9040..0x9046`, and the radio saved them. Since v111 `r2` is 32 (`AJUSTES_REMENDOS`, `montar.py`): only what
+arrives goes into the settings. The read still copies 39 B into the buffer, which only dirties the VFO A copy
+that the `R` of `0x8000` reloads before sending.
+
+**Memory read (v31 to v110, diagnostic).** In the extended `R`, an address with bit 22 set (`0x400000` and
+up, which the 1 MB chip does not have) returned 64 B of the processor's memory at
 `0x01E00000 + (address − 0x400000)`: what the firmware sees of the internal flash (and of the RAM
 at `0x02000000`). The copy is the chip ROM's `memcpy` (`0x021127A8`, 191 callers in the app,
 destination in r0, source in r1, size in r2). Read only. It is what showed the voice case
-([section 15](#15-voices-removed)).
+([section 15](#15-voices-removed)). It was removed in v111, to free space.
 
 ## 5. Firmware routines used
 
@@ -1535,8 +1544,8 @@ to receive.
 
 Sending uses that whole machine:
 
-1. SEND only arms: `b[0x14BE6] = 'M'` or `'A'` (byte `0x903A` of the settings, free per the v59 scan;
-   the factory default leaves 202 in it);
+1. SEND only arms: `b[0x14BF0] = 'M'` or `'A'` (byte `0x9044` of the settings; the factory default leaves
+   0 in it; up to v110, `0x903A`, `b[0x14BE6]`, which is now the EQ's);
 2. **a hook on the PTT-press call** (`0x01E46540`, `call 0x01E43E8A`, on every loop pass): with a send
    armed, no beep playing (OK's own), no TX, no alarm and PTT released, it sets "on air" (`'m'`/`'a'`)
    and calls the TX start like the PTT press does (`0x01E39EE4`, `0x01E3951C`, `0x01E41022`); the stock
@@ -1547,7 +1556,7 @@ Sending uses that whole machine:
    `0x01E43AFE(0)`, `0x01E39DEA(0)`), tone 2 off (reg 0x70 = 0xE000), and the stock end with the roger
    zeroed around the call (the end does not save the settings).
 
-Power-on and the settings that arrive by cable or by the factory reset zero `b[0x14BE6]`: nothing
+Power-on and the settings that arrive by cable or by the factory reset zero `b[0x14BF0]`: nothing
 transmits on its own. Before the content, the hook waits for the keys to be released (the OK that armed
 it may still be held).
 
@@ -1727,9 +1736,9 @@ it), it sets the cursor (`b[0x14A37]`) to 0 and starts returning "no key". The s
 released after three reads, sends the short press, and the editor's EXIT routine, with the cursor at the
 start, leaves without saving (`0x01E4D4F4`), with the key still held. While EXIT stays held the read keeps
 returning "no key", otherwise the real release would become another EXIT and go up the menu. The mark for
-this lives in settings byte `0x903C` (`b[0x14BE8]`): the stock disassembly has no access to it, neither
-through the `0x14680` base (offset 1384 is never loaded) nor by address. A value left in it is cleared on
-the first read without EXIT.
+this lives in settings byte `0x9045` (`b[0x14BF1]`; up to v110, `0x903C`, `b[0x14BE8]`, which is now the
+EQ's): the stock disassembly has no access to it, neither through the `0x14680` base (offset 1393 is never
+loaded) nor by address. A value left in it is cleared on the first read without EXIT.
 
 On the APRS RX screen, which reads the keys itself, holding EXIT already cleared the history at 0.6 s, but
 the screen was only redrawn after release: the loop now redraws before waiting for the key to be released,
@@ -2144,7 +2153,8 @@ compressor or expander (bits 1 and 3 of `0x31`), writes the spectrum's wide filt
 0: `0x49A8`), turns off the expander and noise gate (`0x28` = `0x0A00`) and, in `0x2B`, leaves the RX audio
 filters as the factory leaves them in FM, with DC cancelling on (`0x4000`, v103). On leaving everything comes
 back: the mode, the `0x31` and `0x43` read on entry and, through `aplica_audio` (`bancos.c`), `0x28`, bit 3 of
-`0x31` and, in FM, the `0x2B` of the AUDIO and MIC folder items. The gain (#) and filter (0) keys are gone. The
+`0x31` and, in FM, the `0x2B` of the AUDIO and MIC folder items. The gain (#) and filter (0) keys are gone (the
+filter one came back in v111, [below](#key-0-the-eq-in-the-filter-save-and-more-v111)). The
 footer became cells (SYNC, BAD in red when above 0, FIX in green), a cut message gets a red MORE label, and HOLD
 (grey) and EXIT (white) share one black label, before CLR (v104). Test 9 of `teste_rx.py` checks entry and exit.
 
@@ -2171,6 +2181,38 @@ stock (620 and 740 B). The PTT-press hook sets "on air" before the start and cal
 PTT press as jumps (its frame already popped), and `pilha.py` now treats a `goto` from our code to
 another routine as in the stock graph (a tail call: the jumping routine's frame does not add up). V2.9T
 gives the same numbers with the new `pilha.py`.
+
+### Key 0, the EQ in the FILTER, SAVE and MORE (v111)
+
+**Key 0** (raw code 13) turns the FILTER on and off, to compare reception with and without it. Off is the exit's
+`filtro_rx(0, era3)`: the mode, the `0x31` and `0x43` the entry read, the AUDIO and MIC folder items through
+`aplica_audio` and the menu's EQ through `aplica_eq`; on is the entry's. Each switch zeroes the counters (S, B
+and F), and the screen always opens with the FILTER on. The state goes in `num[0]`, which up to v110 held the
+modem gain and nobody read. Test 9b of `teste_rx.py` checks the register snapshots at each key and the exit.
+
+**The EQ in the FILTER.** When on, the FILTER also writes the RX EQ with the bass at −3 dB (`0x54` = `0x935A`,
+`0x55` = `0x2EFF`) and the treble at +4 dB (`0x75` = `0xCC35`), the ends of the table in
+[section 27](#27-the-equalizer-and-the-s-meter-v108-to-v110): the owner found it decodes more that way. They are
+the same registers the AUDIO folder's EQ BASS and EQ TREBLE write, the ones the owner used in the test. The TX EQ (`0x44`,
+`0x45` and `0x74`) stays.
+
+**The screen.** At the top, the FILTER tag loses its chip background when off. In the footer, the counters
+became S, B and F in narrower cells (0, 52 and 78), and key 0 sits on the same line, after them. MORE moves to
+the line below the record (`aprs_linhas`, `y + 9`), in the gap before the divider; the second line is no longer
+cut to make room for it and uses the full width. On the open screen the six lines start at `y = 22` and the
+background goes down to the footer (`y = 102`), so the sixth line's MORE fits.
+
+**SAVE off.** The menu's SAVE is `b[0x14B6D]` (settings byte `0x9001`; get `0x01E39342`, set `0x01E39352`,
+with 4 options). Outside them, a single instruction reads it: the battery-saving decision in the signal loop
+(`0x01E48060`), which with it at 0 does not enter the sleep cycle. The APRS RX entry saves the value, writes 0
+and calls `0x01E39EE4` (`ACORDA`, which wakes the receiver if `b[0x15372]` is 1); the exit puts the value back
+before OK saves the settings (`salva_menu`, v101). The loop only leaves through a `break`, to the exit path,
+with the FILTER on or not. Test 9 checks SAVE at 0 on the screen and the menu's value back.
+
+**The stack.** Without the v70 to v74 history conversion, `hist_abre` got small and the compiler began inlining
+it into the loop, with its variables in the loop's frame (from 320 to 328 B): the APRS RX set reached 744 B,
+above the stock 740. With `hist_abre` kept out (`noinline`), the loop's frame is 308 B and the set 724; with
+SAVE saved, 728.
 
 ## 25. The AUDIO folder: EXPANDER and NOISE GATE, and what NR is (v79)
 
@@ -2354,7 +2396,8 @@ Where each menu item saves (the get and set of the built table, checked in the d
 | the side's channel or VFO | the CHANNEL folder (BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N), OFFSET, SFT-D, the TONES folder, SCAN ADD and CH-NAME |
 | its own sector, on set | APRS (CALLSIGN, SSID, TO, MESSAGE, PATH), MORSE (MESSAGE, SPEED, TONE), BANKS, WATCH and MDF-C |
 
-Startup clears the APRS and Morse SEND (`0x903A`) on purpose, so nothing transmits by itself.
+Startup clears the APRS and Morse SEND (`0x9044`; up to v110, `0x903A`) on purpose, so nothing transmits by
+itself.
 
 ## 27. The equalizer and the S-meter (v108 to v110)
 
@@ -2385,11 +2428,19 @@ applies to TX. The chip reset (`0x00`, `0x01E5653C`) runs earlier in the same st
 (`0x01E56AE8`) writes the EQ afterwards (`aplica_eq`, `bancos.c`).
 
 In the menu, AUDIO and MIC got EQ BASS and EQ TREBLE: DEFAULT is what the factory does, and the rest come in
-order, without repeating DEFAULT's step. The levels live at `0x9040` to `0x9043` of the settings log
-(`b[0x14BEC..0x14BEF]`), inside the 39 B that saving and startup copy (`0x01E55CFC`), which nothing in the
-factory reads or writes outside those copies and the cable does not read (only 32 B from `0x9020`): `0xB0` + the
-menu position. The factory defaults leave there the Chinese text that follows their table (`CE DE D0 A7`), with
-no mark, which reads as DEFAULT. The menu table went from 96 to 97 slots.
+order, without repeating DEFAULT's step. The menu table went from 96 to 97 slots.
+
+**Where the levels live.** From v108 to v110, at `0x9040` to `0x9043` of the settings log
+(`b[0x14BEC..0x14BEF]`, `0xB0` + the menu position), inside the 39 B that saving and startup copy
+(`0x01E55CFC`) and outside the 64 B the cable exchanges; and every CHIRP upload put them back to DEFAULT
+([section 4](#4-cable-protocol)). Since v111, at `0x903A` (RX) and `0x903C` (TX), `b[0x14BE6]` and
+`b[0x14BE8]`, inside the cable window, for CHIRP: the treble position in bits 5:3, the bass in 2:0 and the mark
+`10` in bits 7:6. Without the mark, or with the treble past its list, both read DEFAULT: the factory defaults
+leave `0xCA` and `0xC7` there, and up to v110 those bytes held the armed send and the held-EXIT mark, always
+below `0x80`. Those two moved to `0x9044` and `0x9045` (`b[0x14BF0]` and `b[0x14BF1]`): per the scan, nothing in
+the factory reads or writes them outside the block copies (nor through offsets 1392 and 1393 of the `0x14680`
+base), and the factory defaults leave `00` and `20` there. An EQ that arrives by cable applies at once
+(`aplica_eq` in `gancho_ajustes`). `0x9040..0x9043` and `0x9046` are free.
 
 ### The S-meter (v109 and v110)
 

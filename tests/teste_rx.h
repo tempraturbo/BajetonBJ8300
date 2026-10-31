@@ -27,7 +27,7 @@ static unsigned regs[128], armado, capturando, deslocado, palavra, nbits, palavr
 static unsigned fifo[8], fifo_ini, fifo_n, avisos, avisos_lidos;
 static unsigned syncs_modem[2];             /* os syncs que o modem deu, no FE FE e no 01 01 */
 static unsigned transbordou, faixas_desenhadas, tempo_faixa_us = 15000, luz = 1, ultima_posicao, ultimo_num[7];
-static unsigned escritas_58[32], n_58;      /* o que o laco gravou no 0x58 (o modo e o ganho, v77) */
+static unsigned escritas_58[32], n_58;      /* o que o laco gravou no 0x58 (o modo e o ganho) */
 
 static void modem_bit(unsigned b)
 {
@@ -69,12 +69,6 @@ static void anda(unsigned us)
         modem_bit(bit_ar < ar_n ? ar[bit_ar] : (unsigned)(rand() & 1));
         bit_ar++;
     }
-}
-
-static u32 agora_us(void)
-{
-    anda(5);
-    return (u32)relogio_us;
 }
 
 static void REG_W(unsigned reg, unsigned valor)
@@ -169,7 +163,7 @@ static unsigned n_roteiro;
 
 /* Os filtros do RX (0x43, 0x31, 0x28 e 0x2B) no comeco de cada tecla do roteiro: o que a tecla anterior
  * deixou (v102). */
-static unsigned fotos[16][4], n_fotos, foto_de = ~0u;
+static unsigned fotos[16][6], n_fotos, foto_de = ~0u, save_na_tela = ~0u;   /* o SAVE na primeira tecla */
 
 static unsigned TECLAS(void)
 {
@@ -180,10 +174,14 @@ static unsigned TECLAS(void)
         if (TIQUE_MS >= roteiro[i].de && TIQUE_MS < roteiro[i].ate) {
             if (foto_de != roteiro[i].de && n_fotos < 16) {
                 foto_de = roteiro[i].de;
+                if (!n_fotos)
+                    save_na_tela = RAM(u8, 0x00014B6D);
                 fotos[n_fotos][0] = regs[0x43];
                 fotos[n_fotos][1] = regs[0x31];
                 fotos[n_fotos][2] = regs[0x28];
-                fotos[n_fotos++][3] = regs[0x2B];
+                fotos[n_fotos][3] = regs[0x2B];
+                fotos[n_fotos][4] = regs[0x54];    /* o EQ do RX (v111): os graves e os agudos */
+                fotos[n_fotos++][5] = regs[0x75];
             }
             return roteiro[i].tecla;
         }
@@ -244,8 +242,9 @@ static void LIMPA(unsigned x) { (void)x; }
 static void SAI_DO_EDITOR(void) {}
 
 /* O FILTER (v102): a troca de AM e FM de fabrica (0x01E440C4, que nao faz nada se o modo ja e o pedido), o
- * FILTRO do espectro (0x01E4A980) e o aplica_audio, que aqui poe os "menus" do teste (o expansor ligado, a
- * DE-EMPHASIS em OFF). */
+ * FILTRO do espectro (0x01E4A980), o aplica_audio, que aqui poe os "menus" do teste (o expansor ligado, a
+ * DE-EMPHASIS em OFF), e o aplica_eq (v111), que poe o EQ dos menus (os graves do RX em -1 dB e os agudos em
+ * 0 dB, os de fabrica). */
 static unsigned modo_am, n_audio;
 static void AM_FM(unsigned am)
 {
@@ -265,6 +264,12 @@ static void aplica_audio(void)
     REG_W(0x31, regs[0x31] | 8);
     if (!(regs[0x31] & 1))
         REG_W(0x2B, 0x0100);
+}
+static void aplica_eq(void)
+{
+    REG_W(0x54, 0x91C1);
+    REG_W(0x55, 0x3040);
+    REG_W(0x75, 0xF50B);
 }
 
 static int SPRINTF(char *d, const char *formato, ...)

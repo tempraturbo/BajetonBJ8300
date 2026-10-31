@@ -211,7 +211,6 @@ void luz_aplica(void);                    /* o nivel do BRIGHTNESS na hora (v61,
 #define NUM_CANAIS   960
 #define TAM_MAPA     (NUM_CANAIS / 8)      /* 120 */
 #define TAM_NOME     12
-#define NUM_ZONAS    15                    /* 15 x 64 = 960; as mascaras por zona cobrem isso */
 #define TAM_PEDACO   24                    /* le o mapa de um banco em pedacos; 120 = 5 x 24 */
 /* Altura minima da barra do ponto que o espectro esta varrendo, para aparecer onde nao ha sinal. */
 #define MINIMO_ATUAL     3
@@ -539,10 +538,10 @@ static void revalida_lados(void)
  * salvo (0x01E3AB36) grava o 0 no chip. Fora daqui, so o set do LANGUAGE (0x01E3C9B8) gravava o
  * idioma, e o retorno aos ajustes de fabrica (0x01E4842E) o preserva.
  */
-/* O envio do Morse e do APRS armado ou no ar (v65, mensagem.c): o 0x903A dos ajustes. Zerado na
- * partida e nos ajustes que chegam pelo cabo ou pelo retorno aos de fabrica, para nada transmitir
- * sozinho. */
-#define ESTADO_ENVIO   (*(volatile u8 *)0x00014BE6)
+/* O envio do Morse e do APRS armado ou no ar (v65, mensagem.c): o 0x9044 dos ajustes (b[0x14BF0]; ate a
+ * v110, o 0x903A, que agora e do EQ). Zerado na partida e nos ajustes que chegam pelo cabo ou pelo retorno
+ * aos de fabrica, para nada transmitir sozinho. */
+#define ESTADO_ENVIO   (*(volatile u8 *)0x00014BF0)
 
 void gancho_partida(void)
 {
@@ -1005,7 +1004,6 @@ NA_LIVRE_COD void mdf_c_grava(void)
 #define ESTADO_RX      (*(volatile u8 *)0x00015367)          /* 4 = recebendo (o tbh de 0x01E467A6) */
 #define CORRENTE_CRU   ((u8 *)0x00015E44)                    /* o canal cru do lado que esta sendo ouvido, 20 B */
 #define CORRENTE_MODO  (*(volatile u8 *)0x00015E12)          /* 1 = canal */
-#define EVIDENCIA_MODO (*(volatile u8 *)0x00015E13)
 #define CORRENTE_CANAL (*(volatile u16 *)0x00015E3C)
 #define POTENCIA_LADO  ((volatile u8 *)0x00015E30)
 #define EXIBICAO_B     (*(volatile u8 *)0x00014B7A)          /* o MDF-B */
@@ -1515,17 +1513,19 @@ NA_LIVRE_COD void porta_grava(void)
  * da tabela; o 0x44 e o 0x45 ficam no padrao do chip. O reset do chip (reg 0x00, 0x01E5653C) roda antes, na
  * mesma partida, e o gancho dela vem depois. No menu, DEFAULT e o que a fabrica faz, e o resto vem em ordem,
  * sem repetir o passo do DEFAULT.
- * Os niveis ficam nos bytes 0x9040 a 0x9043 do bloco de ajustes (b[0x14BEC..0x14BEF]), que nada de fabrica
- * le nem grava fora das copias do bloco inteiro (gravar, 0x01E3AB36; partida; padrao, 0x01E4842E, que deixa
- * ali o texto em chines CE DE D0 A7) e que o cabo nao le (so 32 B a partir de 0x9020): 0xB0 + a posicao no
- * menu. Sem a marca vale DEFAULT. */
-#define EQ_NIVEL(k)    (*(volatile u8 *)(0x00014BEC + (k)))  /* 0 graves RX, 1 agudos RX, 2 graves TX, 3 agudos TX */
-#define MARCA_EQ       0xB0
+ * Os niveis ficam em dois bytes do bloco de ajustes que o cabo troca (v111, para o CHIRP): o 0x903A, o do
+ * RX, e o 0x903C, o do TX (b[0x14BE6] e b[0x14BE8]). A posicao no menu dos agudos vai nos bits 5:3, a dos
+ * graves nos 2:0, e os bits 7:6 levam a marca, 10. Sem a marca, ou com os agudos fora da lista, os dois valem
+ * DEFAULT: o RESET de fabrica (0x01E4842E) deixa 0xCA e 0xC7 neles, e ate a v110 eles guardavam o envio
+ * armado e o EXIT segurado, sempre abaixo de 0x80. Fora as copias do bloco inteiro (gravar, 0x01E3AB36;
+ * partida; o RESET) nada de fabrica os le nem grava. Da v108 a v110 os niveis moravam no 0x9040..0x9043, que
+ * o cabo nao le e que o 'W' do bloco sujava (AJUSTES_REMENDOS, montar.py). */
+#define EQ_BYTE(k)     (*(volatile u8 *)(0x00014BE6 + ((k) & 2)))   /* k: 0 graves RX, 1 agudos RX, 2 graves TX, 3 agudos TX */
+#define MARCA_EQ       0x80
 #define EQ_74_FABRICA  0xFEF0              /* os agudos do TX que a partida grava, fora da tabela */
-const char titulo_eq_graves_rx[] = "EQ BASS";    /* um titulo por item: o conferir.py acha o item por ele */
-const char titulo_eq_agudos_rx[] = "EQ TREBLE";
-const char titulo_eq_graves_tx[] = "EQ BASS";
-const char titulo_eq_agudos_tx[] = "EQ TREBLE";
+const char titulo_eq_graves[] = "EQ BASS";       /* o mesmo nas pastas AUDIO e MIC: o conferir.py acha o item
+                                                  * pelo titulo e pelo set */
+const char titulo_eq_agudos[] = "EQ TREBLE";
 const char *const eq_graves_rx_opcoes[8] = {"DEFAULT", "-3 dB", "-2 dB", "0 dB", "+1 dB", "+2 dB", "+3 dB",
                                             "+4 dB"};
 const char *const eq_agudos_rx_opcoes[6] = {"DEFAULT", "-1 dB", "+1 dB", "+2 dB", "+3 dB", "+4 dB"};
@@ -1541,9 +1541,11 @@ static const u8 eq_padrao[4] = {2, 1, 3, 6};   /* o passo do DEFAULT na tabela; 
 /* A posicao no menu do nivel k (0 = DEFAULT). */
 __attribute__((noinline)) static u16 eq_le(unsigned k)
 {
-    unsigned v = EQ_NIVEL(k);
+    unsigned v = EQ_BYTE(k);
 
-    return (v & 0xF0) == MARCA_EQ && (v & 15) < eq_opcoes[k] ? v & 15 : 0;
+    if ((v & 0xC0) != MARCA_EQ || (v >> 3 & 7) >= eq_opcoes[k | 1])
+        return 0;
+    return k & 1 ? v >> 3 & 7 : v & 7;
 }
 
 /* Os seis registradores pelos quatro niveis: a posicao vira o passo da tabela (o DEFAULT, o de fabrica;
@@ -1564,9 +1566,12 @@ void aplica_eq(void)
     }
 }
 
+/* O menu so passa posicao valida; o outro nivel do byte fica (com o byte sem marca, DEFAULT). */
 __attribute__((noinline)) static void eq_grava(unsigned k)
 {
-    EQ_NIVEL(k) = MARCA_EQ | VALOR;       /* o menu so passa posicao valida */
+    unsigned v = eq_le(k ^ 1);
+
+    EQ_BYTE(k) = MARCA_EQ | (k & 1 ? VALOR << 3 | v : v << 3 | VALOR);
     aplica_eq();
 }
 
@@ -1596,7 +1601,6 @@ void eq_agudos_tx_grava(void) { eq_grava(3); }
  * (dB)", 7 bits, da lista de registradores da Beken), de 4 em 4 dB a partir de 0 - escala a conferir no
  * radio. Sem sinal, 255. */
 #define NIVEL_DESENHADO  (*(volatile u8 *)0x00007031)
-#define ESTADO_RX        (*(volatile u8 *)0x00015367)
 #define FAIXA_MEDIDOR    (*(volatile u8 *)0x00015E42)
 static const u8 *const medidor_tabela = (const u8 *)0x01E5EB8C;
 
@@ -1755,7 +1759,7 @@ NA_LIVRE_COD char *cristal_exibe(void)
 /* Os ajustes que mudam por fora do menu tambem valem na hora: o 'W' do bloco 0x9000 pelo cabo (o
  * upload do CHIRP) termina num goto para a gravacao dos ajustes (0x01E43A50), e o retorno aos ajustes
  * de fabrica os grava com uma chamada (0x01E4845A), sem reiniciar o radio. Os dois passam por aqui: o
- * microfone, o cristal e a luz do valor novo, e a gravacao de fabrica (0x01E3AB36, que nao le
+ * microfone, o cristal, o EQ e a luz do valor novo, e a gravacao de fabrica (0x01E3AB36, que nao le
  * registrador de entrada). */
 /* ---------- BRIGHTNESS: a intensidade da luz (v61, a pasta DISPLAY) ----------
  * O nivel fica no 0x9039 dos ajustes (b[0x14BE5]), livre como os da v59; o PWM e o ciclo de cada nivel
@@ -1783,6 +1787,7 @@ NA_LIVRE_COD void gancho_ajustes(void)
         TDR = 0;
     aplica_audio();
     aplica_cristal();
+    aplica_eq();                           /* v111: o EQ que o CHIRP grava vale sem religar */
     luz_aplica();
     SALVA_AJUSTES();
 }
@@ -1971,10 +1976,8 @@ void gancho_roger_tons(void)
  * Quem grava banco pelo cabo tem que desligar e ligar o radio depois: o filtro e montado na
  * partida.
  *
- * Leitura com o bit 22 do endereco ligado (0x400000 em diante, que o chip de dados de 1 MB nao tem):
- * le a memoria do processador a partir de 0x01E00000 - o que o firmware enxerga de fato da flash
- * interna (e da RAM em 0x02000000). So leitura; e um diagnostico (v31).
- */
+ * Da v31 a v110 a leitura com o bit 22 do endereco ligado devolvia a memoria do processador a partir de
+ * 0x01E00000 (um diagnostico); saiu na v111, para abrir espaco. */
 void gancho_cabo(unsigned grava)
 {
     volatile u8 *p = CABO;
@@ -1985,12 +1988,8 @@ void gancho_cabo(unsigned grava)
         endereco = ((tam & 0x7F) << 16) | ((u32)p[1] << 8) | p[2];
         setor = endereco >> 12;            /* contas por setor: constantes pequenas, codigo menor */
         p[3] = 0x40;                       /* a resposta do 'R' sai com 4 + este tamanho */
-        if (!grava) {
-            if (endereco & 0x400000)
-                COPIA_MEM((void *)(p + 4), (const void *)(endereco + 0x01A00000), 0x40);  /* 0x01E00000 + (endereco - 0x400000) */
-            else
-                LE_FLASH(endereco, (void *)(p + 4), 0x40);
-        }
+        if (!grava)
+            LE_FLASH(endereco, (void *)(p + 4), 0x40);
         /* A faixa 0xC1000..0xD5FFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
          * 2026-10-24 mostra que nada mais mora ali, e o chip de 1 MB nao espelha nesse endereco.
          * Quem grava por aqui e o PC mandando registro de banco; o caminho do menu continua com a

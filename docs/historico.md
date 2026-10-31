@@ -5,6 +5,43 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v111 — 31/10 — o EQ no CHIRP, o FILTER com EQ e a tecla 0, o SAVE desligado no APRS RX, o MORE embaixo e a limpeza (a testar)
+
+`BJ8300_BANK_v111.anc` (sha256 `1a18ea2d…`), fora de `firmware/releases/` como as outras de teste. O item
+VERSION mostra **V3.1T**.
+
+- **O EQ mudou de lugar.** Da v108 à v110 os quatro níveis moravam no `0x9040..0x9043`, fora dos 64 B de
+  ajustes que o cabo troca. O desmontado mostrou que cada gravação pelo CHIRP os voltava a DEFAULT: o 'W' de
+  fábrica do bloco `0x9000` copia 39 B da segunda metade, e não 32, e os 7 a mais vêm do bloco dos VFOs, que o
+  CHIRP grava logo antes. Agora o EQ do RX fica no `0x903A` e o do TX no `0x903C`, graves e agudos no mesmo
+  byte, com a marca `10` nos bits 7:6. O envio armado do Morse e do APRS e a marca do EXIT segurado, que moravam
+  ali, foram para o `0x9044` e o `0x9045`. A cópia de fábrica passa a 32 B (`r2 = 39` vira `32` em
+  `0x01E43A48`), e o EQ que chega pelo cabo vale na hora. O EQ ajustado na V3.0T volta a DEFAULT uma vez.
+- **O FILTER põe o EQ do RX** com os graves em −3 dB e os agudos em +4 dB, o que o dono achou que decodifica
+  mais.
+- **A tecla 0 na tela do APRS RX** liga e desliga o FILTER, a pedido do dono, para testar o que o filtro troca.
+  Desligado, o rádio fica como a saída da tela o deixa: o canal, o de-ênfase, o expansor, a porta de ruído, o
+  filtro de RF do canal e o EQ do menu. A etiqueta FILTER fica apagada, e os contadores recomeçam, para comparar
+  os dois. O rodapé ficou com S, B e F e a tecla 0.
+- **O SAVE fica desligado na tela do APRS RX**, a pedido do dono: a economia de bateria não põe o receptor para
+  dormir no meio de um pacote. Na saída, com o FILTER ligado ou não, tudo volta ao do menu: o SAVE, o EQ, o
+  canal e os itens das pastas AUDIO e MIC.
+- **O MORE** vai para a linha de baixo do registro, no vão antes do traço, e a segunda linha usa a largura
+  toda. Na tela aberta, as linhas sobem 2 px para o MORE da sexta caber antes do rodapé.
+- **A limpeza**, a pedido do dono. Saíram do firmware a leitura de memória pelo cabo (o diagnóstico da v31, 22
+  B no fim da imagem), a conversão do histórico das v70 a v74 (versões de teste nunca publicadas), os títulos
+  repetidos (EQ BASS, EQ TREBLE, MESSAGE, SEND e o WIDE1-1 do PATH), a folga do vetor dos textos do menu (532
+  de 640 B), o limite conferido duas vezes no espectro e o retorno sem uso do Morse. Do fonte saíram o
+  diagnóstico DIAG_RX (ele usava o byte do envio armado e, compilado, poderia transmitir sozinho), o envio do
+  APRS pelo gerador de tom que só os testes ainda usavam, as chaves de diagnóstico e as sempre ligadas dos
+  scripts, macros sem uso e o `tests/teste.c`. A limpeza do fonte não mudou nenhum byte do firmware. O
+  `conferir.py` passou a achar cada item do menu pelo título e pelo set.
+- **A pilha.** A rotina que abre o histórico do APRS ficou fora do laço: menor sem a conversão, ela passou a
+  ser colada nele, e as variáveis dela levavam o laço a 744 B, acima dos 740 de fábrica. Fora dele, o laço
+  ficou em 728 B (eram 736).
+- **O que sobra:** 22 B no fim da imagem, 54 B na faixa livre e 392 B no espaço das vozes (o C0 e o C1), que só
+  o espectro usa.
+
 ## V3.0T — 31/10 — APRS e Morse, o EQ, a barra S e a pasta AUDIO
 
 A v110 virou a **V3.0T**: `firmware/releases/BJ8300_BANK_v3.0T.anc` (sha256 `8a6c9425…`, o mesmo arquivo; o item

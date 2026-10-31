@@ -932,11 +932,12 @@ static void esp_freq(u32 f, unsigned digitando)
     texto(x, ESP_L1 + 10, pequeno, 1, COR_CINZA);
 }
 
+/* n e p chegam ja limitados (espectro_rotulos, bancos.c). */
 static void esp_pontos(unsigned n)
 {
     static const char rotulos[6][5] = {"X160", "X80", "X40", "X20", "X640", "X320"};
 
-    etiqueta(3, ESP_L1 + 4, rotulos[n < 6 ? n : 0], COR_CHIP_CANAL, COR_TEXTO, 0);
+    etiqueta(3, ESP_L1 + 4, rotulos[n], COR_CHIP_CANAL, COR_TEXTO, 0);
 }
 
 /* A modulacao do espectro ([0x6ED4]): a de fabrica (0x01E4B04C) escolhe o texto por m & 1, "FM" ou
@@ -950,7 +951,7 @@ static void esp_passo(unsigned p)
 {
     static const char rotulos[6][6] = {"6.25K", "8.33K", "12.5K", "20.0K", "25.0K", "10.0K"};
 
-    etiqueta(3, ESP_L2 + 2, rotulos[p < 6 ? p : 0], COR_CHIP_CANAL, COR_TEXTO, 0);
+    etiqueta(3, ESP_L2 + 2, rotulos[p], COR_CHIP_CANAL, COR_TEXTO, 0);
 }
 
 static void esp_pico(u32 f)
@@ -1021,16 +1022,17 @@ static void esp_limite(unsigned x0, unsigned x1, unsigned y)
 
 /* ---------- APRS RX (v65; v70 com o historico e os contadores; v71 com o MDF; v74 lido da flash) ----------
  * A tela do laco de recepcao do APRS (mensagem.c, aprs_rx_grava), a tela inteira: no alto onde se ouve
- * (como o MDF do lado pede), o ganho do modem e a posicao no historico; dois registros do historico em
- * duas linhas cada, o de cima o mais novo e num fundo proprio (o da posicao no alto); aberto, so o de cima,
- * inteiro (ate 6 linhas); a mensagem para o meu indicativo em ambar; embaixo, no fundo da barra de cima, os
- * contadores (syncs na marca e no espaco, FCS errado, consertados) e as teclas. num: ganho, posicao,
- * quantos, syncs na marca, syncs no espaco, BAD, FIX. Os textos (ate TEXTO_MAX, 120) ficam so na flash, e
+ * (como o MDF do lado pede), o FILTER (cinza se a tecla 0 o desligou, v111) e a posicao no historico; dois
+ * registros do historico em duas linhas cada, o de cima o mais novo e num fundo proprio; aberto, so o de
+ * cima, inteiro (ate 6 linhas); a mensagem para o meu indicativo em ambar; embaixo, num fundo proprio, os
+ * contadores (S: syncs na marca e no espaco; B: FCS errado; F: consertados), a tecla 0 e as outras teclas.
+ * num: o FILTER desligado, posicao, quantos, syncs na marca, syncs no espaco, BAD, FIX. Os textos (ate TEXTO_MAX, 120) ficam so na flash, e
  * cada linha e lida dela na hora de desenhar (aprs_linhas): o laco que chama ja tem o quadro e o
  * decodificador na pilha, e esta cadeia tem de caber no resto dos 740 B de fabrica. */
 
 /* O texto do registro de a (0 = nenhum) de y para baixo, em ate n linhas de 24 quebrando num espaco, em
- * ambar se e mensagem para o meu indicativo. Se nao couber, a ultima linha termina em ">" (o OK abre). */
+ * ambar se e mensagem para o meu indicativo. Se nao couber, a etiqueta MORE vai embaixo da ultima linha
+ * (v111; ate a v110, ao lado, com a linha cortada para ela caber), e o OK abre. */
 SEPARADA static void aprs_linhas(u32 a, unsigned y, unsigned n)
 {
     char s[26];
@@ -1058,22 +1060,20 @@ SEPARADA static void aprs_linhas(u32 a, unsigned y, unsigned n)
         if (!n && s[k])                    /* a ultima, e o texto continua: a etiqueta MORE (v103); o j */
             j = 0;                         /* ja nao serve (o laco acaba), e marca sem variavel a mais */
         s[k] = 0;
-        while (!j && k > 1 && largura(s, 1) > 112)
-            s[--k] = 0;
-        if (NA_JANELA(y, y + 12)) {
-            k = texto(4, y, s, 1, cor);
-            if (!j)
-                etiqueta(k + 3, y - 2, "MORE", COR_CHIP_VERMELHO, COR_SEG_VERMELHO, 0);
-        }
+        if (NA_JANELA(y, y + 12))
+            texto(4, y, s, 1, cor);
+        if (!j && NA_JANELA(y + 9, y + 20))   /* embaixo da linha, no vao antes do traco (v111) */
+            etiqueta(3, y + 9, "MORE", COR_CHIP_VERMELHO, COR_SEG_VERMELHO, 0);
         a += j;
     }
 }
 
 SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
 {
-    static const char *const ROTULOS[3] = {"SYNC", "BAD", "FIX"};
+    static const char *const ROTULOS[3] = {"S", "B", "F"};
     static const char *const TECLAS_RX[3] = {"OK", "*", "HOLD EXIT"};
-    static const u8 CASA[3] = {0, 80, 120};         /* as tres casas dos contadores no rodape (v103) */
+    static const u8 CASA[3] = {0, 52, 78};          /* as tres casas dos contadores no rodape (v103; v111 a
+                                                     * tecla 0 depois delas) */
     char s[14];                            /* o nome do canal (12) ou "65535/65535", e o 0 */
     unsigned i = LADO_B != 0, x;
 
@@ -1088,18 +1088,21 @@ SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
         else
             texto_canal(s, CANAL(i) + 1);
         i = etiqueta(4, 3, s, COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 0);
-        etiqueta(i, 3, "FILTER", COR_CHIP_RX, COR_TEXTO_RX, 0);   /* sempre ligado (v103, filtro_rx) */
+        if (num[0])                        /* a tecla 0 desligou o FILTER (v111): o canal e os menus */
+            etiqueta(i, 3, "FILTER", COR_ESTADO, COR_CINZA, 0);   /* apagado: sem o fundo do selo */
+        else                               /* ligado (v103, filtro_rx) */
+            etiqueta(i, 3, "FILTER", COR_CHIP_RX, COR_TEXTO_RX, 0);
         if (num[2]) {
             numero(junta(numero(s, num[1], 1), "/"), num[2], 1);
             texto(156 - largura(s, 1), 5, s, 1, COR_CINZA);
         }
         pinta(0, 17, 160, 18, COR_LINHA);
     }
-    if (a0)                                /* o de cima e o da posicao no alto: no fundo do selo do ganho,
-                                            * que se ve bem no LCD (v74); aberto, a area toda */
-        pinta(3, 20, 157, aberto ? 98 : 56, COR_CHIP_RX);
+    if (a0)                                /* o de cima e o da posicao no alto: num fundo verde, que se ve
+                                            * bem no LCD (v74); aberto, a area toda */
+        pinta(3, 20, 157, aberto ? 102 : 56, COR_CHIP_RX);
     if (aberto) {
-        aprs_linhas(a0, 24, 6);
+        aprs_linhas(a0, 22, 6);            /* 2 px acima: o MORE da 6a linha cabe antes do rodape (v111) */
     } else {
         aprs_linhas(a0, 24, 2);
         pinta(4, 59, 156, 60, COR_LINHA);
@@ -1122,6 +1125,8 @@ SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
                 numero(junta(numero(s, num[3], 1), "/"), num[4], 1);
             texto(x, 106, s, 1, i == 1 && num[5] ? COR_SEG_VERMELHO : i == 2 && num[6] ? COR_VERDE : COR_TEXTO);
         }
+        pinta(102, 103, 103, 115, COR_LINHA);
+        texto(etiqueta(105, 104, "0", COR_ESTADO, COR_TEXTO, 0), 106, "FILTER", 1, COR_CINZA);
         for (i = 0, x = 3; i < 3; i++) {
             unsigned c = etiqueta(x, 117, TECLAS_RX[i], COR_ESTADO, COR_TEXTO, 0);
 

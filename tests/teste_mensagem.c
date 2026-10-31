@@ -1,7 +1,7 @@
 /* Roda o firmware/src/mensagem.c no PC para o teste_mensagem.py. Comandos na linha de comando:
  *   quadro <origem> <caminho> <info>    imprime o quadro AX.25 em hexa ("Q ...")
- *   afsk <origem> <caminho> <info>      manda o quadro em AFSK: as escritas no chip ("R ...")
- *   dac <origem> <caminho> <info>       o mesmo pelo DAC (v86): blocos de 256 amostras a 16 kHz ("A ...")
+ *   dac <origem> <caminho> <info>       manda o quadro em AFSK pelo DAC (v86): blocos de 256 amostras a
+ *                                       16 kHz ("A ...")
  *   morse <wpm> <hz> <texto>            toca o texto em Morse: as escritas no chip
  *   hdlc <arquivo> <max>                passa os bits de linha do arquivo ('0'/'1') pelo decodificador,
  *                                       com um buffer de max bytes, e imprime cada quadro achado ("Q ...")
@@ -30,9 +30,6 @@ int main(int argc, char **argv)
     if (argc == 5 && !strcmp(argv[1], "quadro")) {
         n = ax_quadro(q, argv[2], strlen(argv[2]), atoi(argv[3]), argv[4], strlen(argv[4]));
         hexa(q, n);
-    } else if (argc == 5 && !strcmp(argv[1], "afsk")) {
-        n = ax_quadro(q, argv[2], strlen(argv[2]), atoi(argv[3]), argv[4], strlen(argv[4]));
-        afsk_manda(q, n, 30);
     } else if (argc == 5 && !strcmp(argv[1], "dac")) {
         static struct afsk_dac d;
         short b[256];

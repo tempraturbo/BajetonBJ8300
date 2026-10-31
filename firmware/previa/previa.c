@@ -869,7 +869,7 @@ int main(int argc, char **argv)
             static const char *const rx[2] = {
                 "PU2XYZ-9> OLA, RECEBI O SEU TESTE DO BJ-8300. ESTOU NA ESTRADA E CHAMO DE NOVO MAIS TARDE, 73",
                 "PY2ARS-14: 23 18.07S 046 35.59W DIGI REDE APRS-S"};
-            static const u16 num[7] = {3, 1, 57, 9, 3, 2, 1};
+            static u16 num[7] = {0, 1, 57, 9, 3, 2, 1};   /* o FILTER ligado, posicao, quantos, S, B, F */
             unsigned i;
 
             for (i = 0; i < 2; i++) {
@@ -881,6 +881,9 @@ int main(int argc, char **argv)
             grava("62-aprs-rx");
             tela_aprs(0x8000, 0x8080, 1, num, 15);
             grava("62b-aprs-rx-aberta");
+            num[0] = 1;                    /* a tecla 0 desligou o FILTER (v111) */
+            tela_aprs(0x8000, 0x8080, 0, num, 15);
+            grava("62c-aprs-rx-sem-filtro");
         }
 
         BASE_TELAS();

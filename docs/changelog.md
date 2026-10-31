@@ -5,6 +5,43 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v111 — Oct 31 — the EQ in CHIRP, the FILTER with EQ and on key 0, SAVE off in APRS RX, MORE below and the cleanup (to be tested)
+
+`BJ8300_BANK_v111.anc` (sha256 `1a18ea2d…`), outside `firmware/releases/` like the other test builds. The
+VERSION item shows **V3.1T**.
+
+- **The EQ moved.** From v108 to v110 the four levels lived at `0x9040..0x9043`, outside the 64 B of settings
+  the cable exchanges. The disassembly showed every CHIRP upload put them back to DEFAULT: the stock 'W' of the
+  `0x9000` block copies 39 B of the second half, not 32, and the 7 extra come from the VFO block, which CHIRP
+  writes right before. Now the RX EQ is at `0x903A` and the TX one at `0x903C`, bass and treble in the same
+  byte, with the mark `10` in bits 7:6. The Morse and APRS armed send and the held-EXIT mark, which lived there,
+  moved to `0x9044` and `0x9045`. The stock copy is now 32 B (`r2 = 39` becomes `32` at `0x01E43A48`), and an EQ
+  that arrives by cable applies at once. The EQ set on V3.0T goes back to DEFAULT once.
+- **The FILTER sets the RX EQ** with the bass at −3 dB and the treble at +4 dB, which the owner found decodes
+  more.
+- **Key 0 on the APRS RX screen** turns the FILTER on and off, at the owner's request, to test what the filter
+  changes. Off, the radio is as leaving the screen leaves it: the channel, the de-emphasis, the expander, the
+  noise gate, the channel's RF filter and the menu's EQ. The FILTER tag goes dim, and the counters restart, to
+  compare the two. The footer now has S, B and F and key 0.
+- **SAVE stays off on the APRS RX screen**, at the owner's request: battery saving does not put the receiver to
+  sleep in the middle of a packet. On exit, with the FILTER on or not, everything goes back to the menu's: SAVE,
+  the EQ, the channel and the AUDIO and MIC folder items.
+- **MORE** goes to the line below the record, in the gap before the divider, and the second line uses the full
+  width. On the open screen, the lines move up 2 px so the sixth line's MORE fits before the footer.
+- **The cleanup**, at the owner's request. Out of the firmware: the memory read over the cable (v31's
+  diagnostic, 22 B at the end of the image), the conversion of the v70 to v74 history (test builds never
+  published), the repeated titles (EQ BASS, EQ TREBLE, MESSAGE, SEND and PATH's WIDE1-1), the slack in the menu
+  text array (532 of 640 B), the spectrum's double-checked limit and Morse's unused return value. Out of the
+  source: the DIAG_RX diagnostic (it used the armed-send byte and, if compiled, could transmit by itself), the
+  APRS sending through the tone generator that only the tests still used, the scripts' diagnostic switches and
+  always-on switches, unused macros and `tests/teste.c`. The source cleanup changed no firmware byte.
+  `conferir.py` now finds each menu item by its title and its set.
+- **The stack.** The routine that opens the APRS history stays out of the loop: smaller without the conversion,
+  it got inlined, and its variables took the loop to 744 B, above the stock 740. Out of it, the loop is at
+  728 B (it was 736).
+- **What is left:** 22 B at the end of the image, 54 B in the free range and 392 B in the voice space (C0 and
+  C1), which only the spectrum uses.
+
 ## V3.0T — Oct 31 — APRS and Morse, the EQ, the S-meter and the AUDIO folder
 
 v110 became **V3.0T**: `firmware/releases/BJ8300_BANK_v3.0T.anc` (sha256 `8a6c9425…`, the same file; the VERSION

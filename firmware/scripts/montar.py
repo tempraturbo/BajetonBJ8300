@@ -8,9 +8,9 @@ para o menu passar a apontar para o lugar errado sem ninguem perceber.
 
 O que faz:
   1. grava o codigo novo no espaco livre do fim de cada imagem de flash;
-  2. grava a tabela do menu principal nova NO LUGAR da original - os itens de fabrica, menos o
-     ZONE e o Zone Or Channel (a pedido do usuario), com os tres dos bancos no lugar deles - e fixa
-     a quantidade de itens;
+  2. grava a tabela do menu principal nova no vetor menu_tabela do .livre (v43), em grupos (v53) -
+     os itens de fabrica, menos os de ITENS_FORA, e os nossos -, poe a chamada do menu_abre no lugar
+     do calculo do ponteiro dela e fixa a quantidade de itens (a de grupos);
   3. troca as chamadas (e a instrucao do espectro) em que os ganchos entram: partida, scan, cabo,
      realce, limpeza e teclas do espectro; desvia a entrada das treze rotinas da tela principal para
      a tela B (TELA_DESVIOS); inverte as setas do menu e revisa os textos;
@@ -292,7 +292,6 @@ FLAGS_EDITOR = 0x07   # abre o editor de texto (como o CH-NAME)
 # 0x01E4C3C4) apontam a estrutura do menu para OUTRAS tabelas antes de contar; e as tres constantes
 # com valor na faixa de deslocamentos (13720, 13912, 14357) sao conta e registradores do chip de
 # radio, nao enderecos. O ponteiro fica como esta e so e conferido.
-MENU_NOVO = True          # False = menu de fabrica (sem os itens BANK): corte de diagnostico
 TABELA = 0x01E62F98
 ITENS_ORIGINAIS = 53
 TAM_ITEM = 0x1C
@@ -311,7 +310,7 @@ PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 # e o r4 (0, lido em 0x01E4CBC6) a chamada preserva.
 MENU_VAGAS = 97                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ
 TABELA_SIMBOLO = 'menu_tabela'
-TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 640
+TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 532   # v111: o que o menu usa (era 640); item novo pede mais
 R5_R0 = bytes.fromhex('0516')
 
 # v53: os grupos do menu (src/telas.c), um nivel acima dos itens, a pedido do dono. Cada item fica em
@@ -471,16 +470,16 @@ ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, ma
                           # v108: o equalizador do BK4819, graves e agudos do RX (AUDIO) e do TX (MIC);
                           # as duas pastas mostram EQ BASS e EQ TREBLE
                           dict(nome='EQ BASS RX', texto='EQ BASS', molde=TDR_ITEM, flags=0, maximo=8,
-                               get='eq_graves_rx_le', set='eq_graves_rx_grava', titulo='titulo_eq_graves_rx',
+                               get='eq_graves_rx_le', set='eq_graves_rx_grava', titulo='titulo_eq_graves',
                                exibe='eq_graves_rx_opcoes', opcoes_cn='eq_graves_rx_opcoes'),
                           dict(nome='EQ TREBLE RX', texto='EQ TREBLE', molde=TDR_ITEM, flags=0, maximo=6,
-                               get='eq_agudos_rx_le', set='eq_agudos_rx_grava', titulo='titulo_eq_agudos_rx',
+                               get='eq_agudos_rx_le', set='eq_agudos_rx_grava', titulo='titulo_eq_agudos',
                                exibe='eq_agudos_rx_opcoes', opcoes_cn='eq_agudos_rx_opcoes'),
                           dict(nome='EQ BASS TX', texto='EQ BASS', molde=TDR_ITEM, flags=0, maximo=8,
-                               get='eq_graves_tx_le', set='eq_graves_tx_grava', titulo='titulo_eq_graves_tx',
+                               get='eq_graves_tx_le', set='eq_graves_tx_grava', titulo='titulo_eq_graves',
                                exibe='eq_graves_tx_opcoes', opcoes_cn='eq_graves_tx_opcoes'),
                           dict(nome='EQ TREBLE TX', texto='EQ TREBLE', molde=TDR_ITEM, flags=0, maximo=7,
-                               get='eq_agudos_tx_le', set='eq_agudos_tx_grava', titulo='titulo_eq_agudos_tx',
+                               get='eq_agudos_tx_le', set='eq_agudos_tx_grava', titulo='titulo_eq_agudos',
                                exibe='eq_agudos_tx_opcoes', opcoes_cn='eq_agudos_tx_opcoes')]}
 
 # ---- revisao dos textos em ingles do menu (ver notas/textos-revisao.md) ----
@@ -489,7 +488,6 @@ ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, ma
 # textos ja usa, com a unidade fisica mantendo a grafia certa (Hz). Duas cadeias do STEP sao
 # sufixo de outras - "2.5 K" dentro de "12.5 K" e "5.0 K" dentro de "25.0 K" -, entao so a maior
 # entra aqui e a menor sai corrigida junto.
-TEXTOS_REVISADOS = True
 TEXTOS = [
     (0x01E5A560, 'Middle', 'MIDDLE'),
     (0x01E5A4A0, 'Normal Mode', 'NORMAL MODE'),
@@ -515,7 +513,7 @@ TEXTOS = [
     (0x01E5A60F, 'All', 'ALL'),
     (0x01E5AA81, 'RX Modulation', 'RX MODULATION'),
     # versao do firmware, que o item VERSION mostra (o hardware V01T32 fica como esta)
-    (0x01E5FD10, 'V0.12', 'V3.0T'),
+    (0x01E5FD10, 'V0.12', 'V3.1T'),
     # o nome chines do item e 语音加密 (criptografia de voz): VOICEPRI engana
     (0x01E5A82F, 'VOICEPRI', 'ENCRYPT'),
     # a dupla escuta virou tripla com o TRIPLE (v42): TDR -> TTR, pedido do dono (v48). A cadeia e
@@ -533,13 +531,11 @@ GANCHO_ERA = 0x01E3951C
 # gancho atende os dois. Com o tamanho de sempre (bit 7 em zero) nada muda e o CHIRP continua
 # funcionando; com o bit 7 ligado, os outros 7 bits do tamanho sao o terceiro byte do endereco e o
 # bloco e de 64 B - a leitura alcanca o chip inteiro e a gravacao so a area dos bancos.
-CABO_ESTENDIDO = True
 CABO_SITIOS = ((0x01E4BB66, 'R, leitura'), (0x01E4C0FA, 'W, gravacao'))
 CABO_ERA = 0x01E43970
 
 # Gancho do scan: a chamada que avanca o canal durante a varredura passa a pedir o redesenho da
 # tela, senao a barra de sinal fica no nivel do ultimo canal achado e o numero descasa do nome.
-SCAN_REDESENHA = True
 SCAN_EM = 0x01E46EB6
 SCAN_ERA = 0x01E458E4
 
@@ -756,9 +752,9 @@ PRECISA += ESPECTRO_B
 # tabela 0x01E60B60).
 ITENS_DEPOIS[ROGER_ITEM] = [
     dict(nome='MORSE MESSAGE', texto='MESSAGE', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='morse_msg_le',
-         set='morse_msg_grava', titulo='titulo_morse_msg', exibe='morse_msg_exibe'),
+         set='morse_msg_grava', titulo='titulo_mensagem', exibe='morse_msg_exibe'),
     dict(nome='MORSE SEND', texto='SEND', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='morse_envia_grava',
-         titulo='titulo_morse_envia', exibe='envia_opcoes', opcoes_cn='envia_opcoes'),
+         titulo='titulo_envia', exibe='envia_opcoes', opcoes_cn='envia_opcoes'),
     dict(nome='MORSE SPEED', texto='SPEED', molde=ZONE, flags=FLAGS_NUMERO, maximo=36, get='morse_wpm_le',
          set='morse_wpm_grava', titulo='titulo_morse_wpm', exibe='morse_wpm_exibe'),
     dict(nome='MORSE TONE', texto='TONE', molde=ZONE, flags=FLAGS_NUMERO, maximo=17, get='morse_tom_le',
@@ -770,9 +766,9 @@ ITENS_DEPOIS[ROGER_ITEM] = [
     dict(nome='APRS TO', texto='TO', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_dest_le',
          set='aprs_dest_grava', titulo='titulo_aprs_dest', exibe='aprs_dest_exibe'),
     dict(nome='APRS MESSAGE', texto='MESSAGE', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_msg_le',
-         set='aprs_msg_grava', titulo='titulo_aprs_msg', exibe='aprs_msg_exibe'),
+         set='aprs_msg_grava', titulo='titulo_mensagem', exibe='aprs_msg_exibe'),
     dict(nome='APRS SEND', texto='SEND', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='aprs_envia_grava',
-         titulo='titulo_aprs_envia', exibe='envia_opcoes', opcoes_cn='envia_opcoes'),
+         titulo='titulo_envia', exibe='envia_opcoes', opcoes_cn='envia_opcoes'),
     dict(nome='APRS PATH', texto='PATH', molde=TDR_ITEM, flags=0, maximo=3, get='aprs_caminho_le',
          set='aprs_caminho_grava', titulo='titulo_aprs_caminho', exibe='aprs_caminho_opcoes',
          opcoes_cn='aprs_caminho_opcoes'),
@@ -817,8 +813,15 @@ EDITOR_REMENDOS += ((0x01E4A0F0, bytes.fromhex('02fc041c'), bytes.fromhex('02fc0
 # Nada mais de fabrica le ou grava o byte. O "r1 = 0" vira nop e a escrita devolve o mesmo valor: a NOISE GATE
 # passa a sobreviver ao desligar. Os outros bytes que essa carga confere sao de fabrica e ficam (o PF2, o PF2
 # LONG PRESS e o PF3 em 0x14BD7..0x14BD9, ate 8; a zona dos lados em 0x14BDB e 0x14BDC, ate 15).
+# v111: o 'W' do bloco 0x9000 pelo cabo (0x01E43A32) devolve a 2a metade dos 64 B com um memcpy de 39 B
+# (0x01E43A4A; "r2 = 39" em 0x01E43A48), o tamanho da copia da partida e da gravacao. Os 7 a mais vem de
+# depois do buffer (0x14E02 + 64 = 0x14E42), onde o 'W' do 0x8000, que o CHIRP grava logo antes, deixa o VFO
+# A: o 0x9040..0x9046 recebia os 7 primeiros bytes dele (a frequencia em BCD). Com 32 so os 32 B que chegam
+# vao para os ajustes, e o 0x9040..0x9046 (o envio armado e o EXIT segurado, mensagem.c) fica como estava.
 AJUSTES_REMENDOS = ((0x01E55D30, bytes.fromhex('4120'), bytes.fromhex('0000'),
-                     'NOISE GATE: a partida nao zera mais o 0x9031'),)
+                     'NOISE GATE: a partida nao zera mais o 0x9031'),
+                    (0x01E43A48, bytes.fromhex('4a27'), bytes.fromhex('4a20'),
+                     "o 'W' do bloco 0x9000 pelo cabo copia so os 32 B que chegam (r2 = 39 -> 32)"))
 # v109: o medidor S (tela.c, b_sinal) 4 vezes por segundo. O laco do sinal (0x01E4622A, a cada 10 ms) poe
 # o contador lento b[0x14614] de 0 a 9, um passo a cada 10 voltas, e escolhe a tarefa dele no tbh de
 # 0x01E46A38 (r0 = lento - 1; acima de 7, nenhuma): 1 e 6 em 0x01E46A4A, 2 e 7 em 0x01E46C72, 3 e 8 no
@@ -837,50 +840,34 @@ PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com
                    # das amostras durante o envio e, fora dele, segue para o 0x01E41C06.
                    (0x01E41CEE, 0x01E41C06, 'gancho_mic', 'APRS pelo DAC: o bloco do microfone pelo gancho'))
 MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'gancho_mic', 'tecla_zero', 'acao_le', 'envia_opcoes',
-            'morse_msg_le', 'morse_msg_grava', 'morse_msg_exibe', 'titulo_morse_msg', 'morse_envia_grava',
-            'titulo_morse_envia', 'morse_wpm_le', 'morse_wpm_grava', 'morse_wpm_exibe', 'titulo_morse_wpm',
+            'morse_msg_le', 'morse_msg_grava', 'morse_msg_exibe', 'titulo_mensagem', 'morse_envia_grava',
+            'titulo_envia', 'morse_wpm_le', 'morse_wpm_grava', 'morse_wpm_exibe', 'titulo_morse_wpm',
             'morse_tom_le', 'morse_tom_grava', 'morse_tom_exibe', 'titulo_morse_tom',
             'aprs_ind_le', 'aprs_ind_grava', 'aprs_ind_exibe', 'titulo_aprs_ind',
             'aprs_ssid_le', 'aprs_ssid_grava', 'aprs_ssid_exibe', 'titulo_aprs_ssid',
             'aprs_dest_le', 'aprs_dest_grava', 'aprs_dest_exibe', 'titulo_aprs_dest',
-            'aprs_msg_le', 'aprs_msg_grava', 'aprs_msg_exibe', 'titulo_aprs_msg',
-            'aprs_envia_grava', 'titulo_aprs_envia', 'aprs_caminho_le', 'aprs_caminho_grava',
+            'aprs_msg_le', 'aprs_msg_grava', 'aprs_msg_exibe',
+            'aprs_envia_grava', 'aprs_caminho_le', 'aprs_caminho_grava',
             'aprs_caminho_opcoes', 'titulo_aprs_caminho', 'aprs_rx_grava', 'aprs_rx_opcoes', 'titulo_aprs_rx',
             'modem_ganho_le', 'modem_ganho_grava', 'titulo_modem_ganho', 'modem_ganho_opcoes',
             'aprs_decode_le', 'aprs_decode_grava', 'titulo_aprs_decode', 'aprs_decode_opcoes')
 NA_LIVRE += MENSAGEM
 PRECISA += MENSAGEM
 
-# Realce do bloco do VFO em evidencia na tela principal. O gancho entra no ENVIO do pedaco para o
-# LCD (envia(), 0x01E3ADBC) e nao no preenchimento da janela, porque o fundo do texto nao vem de
-# janela(): as rotinas de texto enchem a celula de cada caractere com uma cor propria, preta fixa.
-# Trocar so a cor da janela - o que a v14 fazia - deixava nome e frequencia em caixas pretas.
-# Detalhes e enderecos em docs/mapa-da-tela.md; a cor fica em COR_REALCE, no bancos.c.
+# Envio da tela de dois VFOs (gancho_envia, no tela.c). O gancho entra no ENVIO do pedaco para o
+# LCD (envia(), 0x01E3ADBC): se uma rotina de fabrica da tela de dois VFOs chegar la com a tela B
+# desenhando, ele redesenha da tela B o lado a que a janela pertence; fora da tela de dois VFOs
+# (layout 0), faz o envio de fabrica. Ate a v36 ele tambem pintava o realce verde do lado em
+# evidencia (dai o nome), que so aparecia no idioma chines; o chines saiu na v37, e o realce com ele.
 #
 # Os sitios abaixo sao TODAS as chamadas de envia() dentro das seis funcoes que desenham a tela de
 # dois VFOs, lidas uma por uma no desmontado. Sao call de 4 bytes trocadas no lugar: nao cresce o
-# codigo. O gancho ainda confere na rotina do firmware (0x01E3B1A2) se a tela e mesmo a de dois
-# VFOs, entao nenhuma outra tela e pintada - nem a de um VFO so, que usa estas mesmas funcoes.
+# codigo.
 #
 # O que faltava na v14 estava aqui: ela so tinha os tres sitios de atualizacao PARCIAL (barra,
 # numero e nome), que correm quando se troca de canal. O redesenho completo - que e o que acontece
 # ao trocar de A para B - passa por 0x01E3C132 e pelo desenhador de bloco 0x01E3BD04, que nao
 # tinham gancho nenhum. Era por isso que o verde so aparecia na barra e so ao mudar de canal.
-REALCE = True
-# Diagnostico (v39, travamento na troca para USB/LSB): com BJ8300_DIAG_GANCHOS no ambiente, o montar
-# so grava os grupos de ganchos de tela listados ali, separados por virgula - 'realce' (o envio e a
-# limpeza da tela de dois VFOs), 'tela13' (os 13 desvios da v35/v36), 'tela37' (os desvios da v37 em
-# diante) e 'envia' (as chamadas do envia() trocadas e o nop), ou um desvio pelo nome (desvio_medidor).
-# Vazio, nenhum. O resto - o registro dos decodificadores zerado e o tela.o na faixa - fica como esta.
-# Nao e versao para usar; o conferir.py acusa os ganchos que faltam. Sem a variavel, a versao normal.
-DIAG_GANCHOS = os.environ.get('BJ8300_DIAG_GANCHOS')
-
-
-def grava_grupo(grupo):
-    """Se o grupo de ganchos de tela entra nesta montagem (sempre, fora do diagnostico)."""
-    return DIAG_GANCHOS is None or grupo in DIAG_GANCHOS.split(',')
-
-
 REALCE_ERA = 0x01E3ADBC
 REALCE_SITIOS_GANCHO = (
     # desenhador de bloco (0x01E3BD04), um bloco por lado: frequencia, nome e o que o modo pedir
@@ -912,21 +899,16 @@ REALCE_SITIOS_GANCHO = (
     (0x01E4B294, 'parcial: nome e frequencia, y=30 no A e 69 no B'),
     (0x01E4B322, 'parcial: numero do canal, y=62 no A e 101 no B'),
 )
-# As janelas nao cobrem a area inteira do lado em evidencia: entre o nome grande e a frequencia, e
-# entre a frequencia e a barra, sobram faixas que ninguem desenha e que a limpeza deixa pretas. Por
-# isso as duas chamadas que limpam a tela e a redesenham inteira passam pelo gancho_limpa, que deixa
-# a limpeza de fabrica correr (preto e a linha separadora) e enche de verde a area do lado em
-# evidencia - 72 linhas a partir de 16 (A) ou 56 (B), a mesma area que a limpeza usa. A entrada do
-# menu tambem limpa no modo 2, mas por outra chamada (0x01E4CBAE), e nao e tocada.
+# As duas chamadas que limpam a tela e a redesenham inteira passam pelo gancho_limpa (tela.c): na
+# tela de dois VFOs a limpeza de fabrica nao roda, porque a tela inteira vem logo depois e a tela B
+# a desenha toda; fora dela (layout 0), a limpeza de fabrica. Ate a v36 ele tambem enchia de verde
+# o lado em evidencia, que as janelas nao cobrem inteiro. A entrada do menu tambem limpa no modo 2,
+# mas por outra chamada (0x01E4CBAE), e nao e tocada.
 LIMPA_ERA = 0x01E3ACBA
 LIMPA_SITIOS = (
     (0x01E3C294, 'limpa e redesenha (0x01E3C290): partida, saida do menu e mais 14 chamadores'),
     (0x01E40F66, 'limpa e redesenha na troca de lado (0x01E40F1C)'),
 )
-# Diagnostico (pintava faixas inteiras trocando so a cor, 2 bytes por sitio) fica desligado: serviu
-# para descobrir qual chamada pinta o que. Os sitios conferidos estao no historico do git.
-REALCE_DIAG = False
-REALCE_SITIOS = ()
 
 # Sentido das setas no menu. De fabrica a seta de cima AVANCA o valor/item - que esta desenhado
 # mais abaixo na tela - e a de baixo retrocede: logico pelo numero, estranho pela posicao. As duas
@@ -1023,7 +1005,7 @@ def itens_da_copia(app):
 def texto_em(endereco, app, codigo, tela):
     """A cadeia em `endereco` como o radio a mostra: no app.bin (com a revisao dos TEXTOS), no .text
     (codigo) ou no .livre (tela)."""
-    for e, _, novo in TEXTOS if TEXTOS_REVISADOS else ():
+    for e, _, novo in TEXTOS:
         if e == endereco:
             return novo
     # o .livre primeiro: ele fica dentro da faixa do app.bin, no lugar dos decodificadores
@@ -1143,14 +1125,11 @@ def main():
     print(f'  .text ligado para {confere_ligacao(codigo, blob):#x} = onde o codigo e gravado: ok')
     tela = secao_ligada(codigo, '.livre', LIVRE, LIVRE_FIM)
     tabela, textos = monta_menu(app, blob, tela)
-    if MENU_NOVO:
-        tela = livre_com_menu(tela, tabela, textos)
+    tela = livre_com_menu(tela, tabela, textos)
     vozes = secao_ligada(codigo, '.vozes', VOZES, VOZES_ACEITAS_FIM)
 
     # Monta a lista de escritas no app.bin e passa pela trava antes de tocar em qualquer byte.
-    escritas = [(GANCHO_EM, 4, 'gancho do filtro na partida')]
-    if SCAN_REDESENHA:
-        escritas.append((SCAN_EM, 4, 'gancho do redesenho no scan'))
+    escritas = [(GANCHO_EM, 4, 'gancho do filtro na partida'), (SCAN_EM, 4, 'gancho do redesenho no scan')]
     if ESPECTRO_TECLAS:
         escritas.append((ESPECTRO_EM, len(ESPECTRO_ANTES), 'gancho das teclas do espectro'))
         escritas += [(s, 4, f'espectro: {d}') for s, _, _, d in ESPECTRO_CHAMADAS]
@@ -1165,17 +1144,12 @@ def main():
     escritas += [(ROGER_DESVIO_EM, 4, 'roger: valores 3 e 4 no caminho do BEEP'),
                  (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
                  (SCRAMBLE_EM, len(SCRAMBLE_ANTES), 'scramble: frequencia pelo valor')]
-    if CABO_ESTENDIDO:
-        escritas += [(s, 4, f'gancho do cabo ({p})') for s, p in CABO_SITIOS]
-    if MENU_NOVO:
-        escritas += [(PONTEIRO_EM, len(PONTEIRO_ANTES), 'ponteiro da tabela de menus, para a faixa livre'),
-                     (CONTAGEM_EM, len(CONTAGEM_ANTES), 'quantidade de itens do menu')]
+    escritas += [(s, 4, f'gancho do cabo ({p})') for s, p in CABO_SITIOS]
+    escritas += [(PONTEIRO_EM, len(PONTEIRO_ANTES), 'ponteiro da tabela de menus, para a faixa livre'),
+                 (CONTAGEM_EM, len(CONTAGEM_ANTES), 'quantidade de itens do menu')]
     if SETAS_INVERTIDAS:
         escritas += [(s, 4, 'sentido das setas no menu') for s, _ in SETAS]
-    if REALCE_DIAG:
-        escritas += [(e, 2, 'cor de faixa (diagnostico)') for e, _ in REALCE_SITIOS]
-    if REALCE:
-        escritas += [(e, 4, f'gancho do realce ({o})') for e, o in REALCE_SITIOS_GANCHO]
+    escritas += [(e, 4, f'gancho do realce ({o})') for e, o in REALCE_SITIOS_GANCHO]
     escritas += [(e, 4, f'tela B: {o}') for e, _, _, _, o in TELA_DESVIOS]
     escritas += [(s_, 4, o_) for s_, _, _, _, _, o_ in MENU_DESVIOS]
     escritas += [(s_, 4, o_) for s_, _, o_ in ENVIA_SITIOS]
@@ -1185,8 +1159,7 @@ def main():
     escritas += [(s_, len(a_), o_) for s_, a_, _, o_ in CHAMADAS_NO_LUGAR]
     escritas += [(LIVRE, len(tela), 'tela B no lugar dos decodificadores G.729 e MP3')]
     escritas += [(r, 4, f'tipo do {d} no registro dos decodificadores') for r, _, _, d in DECODIFICADORES]
-    if TEXTOS_REVISADOS:
-        escritas += [(e, len(v) + 1, f'texto "{v}"') for e, v, _ in TEXTOS]
+    escritas += [(e, len(v) + 1, f'texto "{v}"') for e, v, _ in TEXTOS]
     confere_trava(escritas)
 
     # 1. gancho do filtro
@@ -1197,24 +1170,22 @@ def main():
     app[o:o + 4] = monta_call(GANCHO_EM, S['gancho_partida'])
     print(f"  gancho {GANCHO_EM:#x}: chamada para {GANCHO_ERA:#x} -> {S['gancho_partida']:#x}")
 
-    if CABO_ESTENDIDO:
-        for sitio, papel in CABO_SITIOS:
-            o = sitio - BASE_APP
-            antes = bytes(app[o:o + 4])
-            if antes != monta_call(sitio, CABO_ERA):
-                raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {CABO_ERA:#x}: {antes.hex()}')
-            app[o:o + 4] = monta_call(sitio, S['gancho_cabo'])
-            print(f"  gancho do cabo {sitio:#x} ({papel}): chamada para {CABO_ERA:#x} -> "
-                  f"{S['gancho_cabo']:#x}")
-
-    if SCAN_REDESENHA:
-        o = SCAN_EM - BASE_APP
+    for sitio, papel in CABO_SITIOS:
+        o = sitio - BASE_APP
         antes = bytes(app[o:o + 4])
-        if antes != monta_call(SCAN_EM, SCAN_ERA):
-            raise SystemExit(f'{SCAN_EM:#x} nao e a chamada esperada para {SCAN_ERA:#x}: {antes.hex()}')
-        app[o:o + 4] = monta_call(SCAN_EM, S['gancho_scan'])
-        print(f"  gancho do scan {SCAN_EM:#x}: chamada para {SCAN_ERA:#x} -> {S['gancho_scan']:#x} "
-              '(pede redesenho a cada canal da varredura)')
+        if antes != monta_call(sitio, CABO_ERA):
+            raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {CABO_ERA:#x}: {antes.hex()}')
+        app[o:o + 4] = monta_call(sitio, S['gancho_cabo'])
+        print(f"  gancho do cabo {sitio:#x} ({papel}): chamada para {CABO_ERA:#x} -> "
+              f"{S['gancho_cabo']:#x}")
+
+    o = SCAN_EM - BASE_APP
+    antes = bytes(app[o:o + 4])
+    if antes != monta_call(SCAN_EM, SCAN_ERA):
+        raise SystemExit(f'{SCAN_EM:#x} nao e a chamada esperada para {SCAN_ERA:#x}: {antes.hex()}')
+    app[o:o + 4] = monta_call(SCAN_EM, S['gancho_scan'])
+    print(f"  gancho do scan {SCAN_EM:#x}: chamada para {SCAN_ERA:#x} -> {S['gancho_scan']:#x} "
+          '(pede redesenho a cada canal da varredura)')
 
     for sitio, era, gancho, oque in CHAMADAS_LIVRE:
         o = sitio - BASE_APP
@@ -1300,30 +1271,25 @@ def main():
           f'em {SCRAMBLE_EM:#x}')
 
     # 2 e 3. o ponteiro da tabela de menus (a tabela ja foi para o .livre), e a quantidade fixa.
-    # Com MENU_NOVO desligado nada disso entra: o menu fica o de fabrica (sem os itens BANK), o
-    # que serve de corte de diagnostico - o gancho, o filtro, as setas e os textos continuam.
     itens = len(tabela) // TAM_ITEM
-    if MENU_NOVO:
-        o = PONTEIRO_EM - BASE_APP
-        if bytes(app[o:o + len(PONTEIRO_ANTES)]) != PONTEIRO_ANTES:
-            raise SystemExit(f'{PONTEIRO_EM:#x} nao e o calculo esperado do endereco da tabela')
-        app[o:o + len(PONTEIRO_ANTES)] = monta_ponteiro()
-        print(f'  tabela de menus em {S[TABELA_SIMBOLO]:#x}, na faixa livre ({itens} de {MENU_VAGAS} vagas: '
-              f'{len(GRUPOS)} grupos, os {ITENS_ORIGINAIS - len(ITENS_FORA)} itens de fabrica que ficam e os '
-              f'{sum(isinstance(q, dict) for q in ordem_da_copia())} nossos); '
-              f'{PONTEIRO_EM:#x} chama menu_abre {S["menu_abre"]:#x}')
-        for g, grupo in enumerate(sorted(GRUPOS)):
-            print(f'    {g + 1:2d} {grupo}: ' + ', '.join(f'{g + 1}-{i + 1} {n}'
-                                                       for i, n in enumerate(sorted(GRUPOS[grupo]))))
+    o = PONTEIRO_EM - BASE_APP
+    if bytes(app[o:o + len(PONTEIRO_ANTES)]) != PONTEIRO_ANTES:
+        raise SystemExit(f'{PONTEIRO_EM:#x} nao e o calculo esperado do endereco da tabela')
+    app[o:o + len(PONTEIRO_ANTES)] = monta_ponteiro()
+    print(f'  tabela de menus em {S[TABELA_SIMBOLO]:#x}, na faixa livre ({itens} de {MENU_VAGAS} vagas: '
+          f'{len(GRUPOS)} grupos, os {ITENS_ORIGINAIS - len(ITENS_FORA)} itens de fabrica que ficam e os '
+          f'{sum(isinstance(q, dict) for q in ordem_da_copia())} nossos); '
+          f'{PONTEIRO_EM:#x} chama menu_abre {S["menu_abre"]:#x}')
+    for g, grupo in enumerate(sorted(GRUPOS)):
+        print(f'    {g + 1:2d} {grupo}: ' + ', '.join(f'{g + 1}-{i + 1} {n}'
+                                                   for i, n in enumerate(sorted(GRUPOS[grupo]))))
 
-        o = CONTAGEM_EM - BASE_APP
-        antes = bytes(app[o:o + len(CONTAGEM_ANTES)])
-        if antes != CONTAGEM_ANTES:
-            raise SystemExit(f'{CONTAGEM_EM:#x} nao e a chamada esperada da contagem: {antes.hex()}')
-        app[o:o + len(CONTAGEM_ANTES)] = monta_contagem(len(GRUPOS))
-        print(f'  quantidade de itens {CONTAGEM_EM:#x}: contagem na tabela -> {len(GRUPOS)} fixo (os grupos)')
-    else:
-        print('  MENU_NOVO desligado: menu de fabrica, sem os itens BANK (corte de diagnostico)')
+    o = CONTAGEM_EM - BASE_APP
+    antes = bytes(app[o:o + len(CONTAGEM_ANTES)])
+    if antes != CONTAGEM_ANTES:
+        raise SystemExit(f'{CONTAGEM_EM:#x} nao e a chamada esperada da contagem: {antes.hex()}')
+    app[o:o + len(CONTAGEM_ANTES)] = monta_contagem(len(GRUPOS))
+    print(f'  quantidade de itens {CONTAGEM_EM:#x}: contagem na tabela -> {len(GRUPOS)} fixo (os grupos)')
 
     # 4. sentido das setas no menu
     if SETAS_INVERTIDAS:
@@ -1335,31 +1301,26 @@ def main():
             app[o:o + 4] = monta_call(sitio, RETROCEDE if era == AVANCA else AVANCA)
         print(f'  setas do menu invertidas em {len(SETAS)} sitios: a de cima passa a subir na lista')
 
-    # 4b. realce do VFO selecionado: o gancho entra na chamada que pinta a faixa da barra
-    if REALCE and grava_grupo('realce'):
-        for sitio, oque in REALCE_SITIOS_GANCHO:
-            o = sitio - BASE_APP
-            antes = bytes(app[o:o + 4])
-            if antes != monta_call(sitio, REALCE_ERA):
-                raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {REALCE_ERA:#x}: '
-                                 f'{antes.hex()}')
-            app[o:o + 4] = monta_call(sitio, S['gancho_envia'])
-            print(f"  gancho do realce {sitio:#x} -> {S['gancho_envia']:#x}: {oque}")
-        for sitio, oque in LIMPA_SITIOS:
-            o = sitio - BASE_APP
-            antes = bytes(app[o:o + 4])
-            if antes != monta_call(sitio, LIMPA_ERA):
-                raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {LIMPA_ERA:#x}: '
-                                 f'{antes.hex()}')
-            app[o:o + 4] = monta_call(sitio, S['gancho_limpa'])
-            print(f"  gancho da limpeza {sitio:#x} -> {S['gancho_limpa']:#x}: {oque}")
+    # 4b. envio e limpeza da tela de dois VFOs: as chamadas passam pelos ganchos da tela B
+    for sitio, oque in REALCE_SITIOS_GANCHO:
+        o = sitio - BASE_APP
+        antes = bytes(app[o:o + 4])
+        if antes != monta_call(sitio, REALCE_ERA):
+            raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {REALCE_ERA:#x}: '
+                             f'{antes.hex()}')
+        app[o:o + 4] = monta_call(sitio, S['gancho_envia'])
+        print(f"  gancho do realce {sitio:#x} -> {S['gancho_envia']:#x}: {oque}")
+    for sitio, oque in LIMPA_SITIOS:
+        o = sitio - BASE_APP
+        antes = bytes(app[o:o + 4])
+        if antes != monta_call(sitio, LIMPA_ERA):
+            raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {LIMPA_ERA:#x}: '
+                             f'{antes.hex()}')
+        app[o:o + 4] = monta_call(sitio, S['gancho_limpa'])
+        print(f"  gancho da limpeza {sitio:#x} -> {S['gancho_limpa']:#x}: {oque}")
 
     # 4b2. a tela B: um goto na entrada de cada uma das treze rotinas, sobre os bytes de fabrica
-    if DIAG_GANCHOS is not None:
-        print(f'  DIAGNOSTICO: so os ganchos de tela {DIAG_GANCHOS or "(nenhum)"} (nao e versao final)')
-    desvios = [x for i, x in enumerate(TELA_DESVIOS)
-               if grava_grupo('tela13' if i < 13 else 'tela37') or grava_grupo(x[2])]
-    for entrada, antes, desvio, _, oque in desvios:
+    for entrada, antes, desvio, _, oque in TELA_DESVIOS:
         o = entrada - BASE_APP
         if bytes(app[o:o + len(antes)]) != antes:
             raise SystemExit(f'{entrada:#x} nao comeca com {antes.hex()}: {bytes(app[o:o + len(antes)]).hex()}')
@@ -1371,13 +1332,13 @@ def main():
             raise SystemExit(f'{sitio:#x} nao e {antes.hex()}: {bytes(app[o:o + len(antes)]).hex()}')
         app[o:o + 4] = monta_goto(sitio, S[desvio])
         print(f'  {sitio:#x} -> {desvio} ({S[desvio]:#x}), que segue para {feito:#x}: {oque}')
-    for sitio, gancho, oque in ENVIA_SITIOS if grava_grupo('envia') else ():
+    for sitio, gancho, oque in ENVIA_SITIOS:
         o = sitio - BASE_APP
         if bytes(app[o:o + 4]) != monta_call(sitio, ENVIA_ERA):
             raise SystemExit(f'{sitio:#x} nao e a chamada do envia(): {bytes(app[o:o + 4]).hex()}')
         app[o:o + 4] = monta_call(sitio, S[gancho])
         print(f'  {sitio:#x}: envia() -> {gancho} ({oque})')
-    for sitio, oque in NOP_SITIOS if grava_grupo('envia') else ():
+    for sitio, oque in NOP_SITIOS:
         o = sitio - BASE_APP
         if bytes(app[o:o + 4]) != monta_call(sitio, ENVIA_ERA):
             raise SystemExit(f'{sitio:#x} nao e a chamada do envia(): {bytes(app[o:o + 4]).hex()}')
@@ -1406,26 +1367,15 @@ def main():
     app[o:o + len(tela)] = tela
     print(f'  tela B: {len(tela)} B em {LIVRE:#x} (cabem {LIVRE_FIM - LIVRE} no lugar do G.729 e do MP3)')
 
-    # 4c. diagnostico das faixas: so a cor do preenchimento, 2 bytes por sitio
-    if REALCE_DIAG:
-        for endereco, reg in REALCE_SITIOS:
-            o = endereco - BASE_APP
-            if bytes(app[o:o + 2]) != monta_imm8(reg, 0):
-                raise SystemExit(f'{endereco:#x} nao e "r{reg} = 0": {bytes(app[o:o + 2]).hex()}')
-            app[o:o + 2] = monta_imm8(reg, COR_REALCE)
-        print(f'  DIAGNOSTICO: {len(REALCE_SITIOS)} faixas de largura total pintadas de '
-              f'{COR_REALCE:#06x} (nao e a versao final)')
-
     # 5. revisao dos textos em ingles
-    if TEXTOS_REVISADOS:
-        for endereco, velho, texto in TEXTOS:
-            o = endereco - BASE_APP
-            if bytes(app[o:o + len(velho) + 1]) != velho.encode() + b'\0':
-                raise SystemExit(f'{endereco:#x} nao contem "{velho}"')
-            if len(texto) > len(velho):
-                raise SystemExit(f'"{texto}" nao cabe no lugar de "{velho}"')
-            app[o:o + len(velho) + 1] = texto.encode() + bytes(len(velho) + 1 - len(texto))
-        print(f'  textos revisados: {len(TEXTOS)} cadeias, nenhum byte a mais')
+    for endereco, velho, texto in TEXTOS:
+        o = endereco - BASE_APP
+        if bytes(app[o:o + len(velho) + 1]) != velho.encode() + b'\0':
+            raise SystemExit(f'{endereco:#x} nao contem "{velho}"')
+        if len(texto) > len(velho):
+            raise SystemExit(f'"{texto}" nao cabe no lugar de "{velho}"')
+        app[o:o + len(velho) + 1] = texto.encode() + bytes(len(velho) + 1 - len(texto))
+    print(f'  textos revisados: {len(TEXTOS)} cadeias, nenhum byte a mais')
 
     # 6. codigo novo e CRCs (a tabela ja esta dentro do app.bin)
     print(f'codigo novo: {len(blob)} B em {ENDERECO_CODIGO:#x} (ultimo byte '
