@@ -19,6 +19,13 @@ RX GAIN. The VERSION item shows **V3.2T**, and if the owner's test passes it bec
   (78 B). 78 B remain in `.livre`, and the stack stays at 740, 620 and 696 B; MESSAGES' set goes to 736 of 740.
 - [Section 28](reverse-engineering.md#28-the-receiver-gain-rx-gain-v113).
 
+## CHIRP driver — Oct 31 — the APRS message goes
+
+The Settings > APRS page loses the Message field: since v112 the message is typed in the MESSAGES screen's box,
+which opens empty, and the text the radio keeps is only the last one sent. TO stays, and changing it still gives
+the next message a new number. The module stays `bj8300_v3.1TEMPRA.py` until the release (it is renamed in the
+release's commit). `teste_chirp_real.py` (section 11) and `teste_clonagem.py` (section 8) no longer use the field.
+
 ## v112 — Oct 31 — the MESSAGES screen: the message and TO boxes on #, the automatic return and P (not flashed: went into v113)
 
 `BJ8300_BANK_v112.anc` (sha256 `3931a362…`), kept out of the commits like the other test builds. The VERSION

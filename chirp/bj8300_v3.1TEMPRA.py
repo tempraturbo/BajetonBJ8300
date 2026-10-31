@@ -99,7 +99,8 @@ MORSE_LEN = 48              # magic, text length, WPM, tone / 10, -, text (37 + 
 APRS_SECTOR = 0x0D5000
 APRS_MAGIC = b'APR1'
 APRS_LEN = 64               # magic, the 3 text lengths, SSID, path, message number, callsign (6),
-                            # destination (9), message (37), sum
+                            # destination (9), message (37), sum. Since V3.2T the message is typed in a
+                            # box on the radio's MESSAGES screen, which opens empty: this page leaves it out
 MSG_MAX = 37
 MORSE_BASE = VFC_BASE + VFC_BLOCKS * EXT_BLOCK  # in the .img, after VFO C
 APRS_BASE = MORSE_BASE + EXT_BLOCK
@@ -109,11 +110,9 @@ MORSE_TONES = list(range(40, 121, 5))           # MORSE > TONE in tens of Hz (40
 APRS_PATHS = ['WIDE1-1', 'WIDE1-1,WIDE2-1', 'None']
 # What each text takes. The callsign and the destination go in capitals, with only what AX.25 and APRS
 # accept (the radio filters them the same way, aprs_guarda_texto); the Morse message, the characters the
-# radio has a code for (the rest it skips); the APRS message, those and the few with no Morse code, but
-# none of the three APRS reserves (| ~ {).
+# radio has a code for (the rest it skips).
 CALL_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 MORSE_CHARS = CALL_CHARS + ' !"$&\'()+,-./:;=?@'
-APRS_MSG_CHARS = MORSE_CHARS + '#%*<>'
 # APRS > DECODE (firmware v76): in the settings block, Off only with 0xB1 (the factory reset leaves 229,
 # which reads On); the radio writes 0xB0 for On.
 APRS_DECODE_ADDR, APRS_DECODE_OFF, APRS_DECODE_ON = 0x903F, 0xB1, 0xB0
@@ -438,7 +437,6 @@ def _aprs_store(radio):
 MORSE_TEXT = (_morse_store, 4, 8, MSG_MAX)
 APRS_CALL = (_aprs_store, 4, 10, 6)
 APRS_TO = (_aprs_store, 5, 16, 9)
-APRS_MESSAGE = (_aprs_store, 6, 25, MSG_MAX)
 
 
 def _record_text(rec, field):
@@ -1206,7 +1204,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             store = field[0](self)
             rec = store.record()
             text = _clean_text(str(setting.value), field).encode('latin-1')
-            if field in (APRS_TO, APRS_MESSAGE) and text != _record_text(rec, field).encode('latin-1'):
+            if field == APRS_TO and text != _record_text(rec, field).encode('latin-1'):
                 rec[9] = rec[9] % 99 + 1           # the message number moves on, as in the radio
             _, length, start, size = field
             rec[length] = len(text)
@@ -1232,7 +1230,8 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         return rs
 
     def _aprs_settings(self):
-        """Settings > APRS: the radio's APRS folder (firmware v65), but RX and SEND, which are actions."""
+        """Settings > APRS: the radio's APRS folder (firmware v65), but MESSAGES, the screen where the
+        messages come in and are sent from (V3.2T; until V3.1T, RX, MESSAGE and SEND)."""
         group = RadioSettingGroup('aprs', 'APRS')
         group.append(self._text_setting(
             'aprs_callsign', 'Callsign', APRS_CALL, CALL_CHARS,
@@ -1245,12 +1244,8 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             'APRS > PATH: the digipeaters the packets ask for.'))
         group.append(self._text_setting(
             'aprs_to', 'Message to', APRS_TO, CALL_CHARS + '-',
-            'APRS > TO: who the message goes to, up to 9 characters (a callsign, with its SSID after a '
-            '"-"). Changing it gives the message a new number, as in the radio.'))
-        group.append(self._text_setting(
-            'aprs_message', 'Message', APRS_MESSAGE, APRS_MSG_CHARS,
-            'APRS > MESSAGE: up to 37 characters, sent with APRS > SEND. Changing it gives the message a '
-            'new number, as in the radio.'))
+            'APRS > TO: who the messages go to, up to 9 characters (a callsign, with its SSID after a '
+            '"-"); empty sends them as status. Also on the MESSAGES screen, holding #.'))
         rs = RadioSetting('aprs_decode', 'Decode', RadioSettingValueList(
             ['On', 'Off'], current_index=int(self._mmap[APRS_DECODE_ADDR][0] == APRS_DECODE_OFF)))
         rs.set_doc('APRS > DECODE: On shows the decoded formats of the received packets (Mic-E, compressed '

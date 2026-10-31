@@ -20,6 +20,13 @@ O item VERSION mostra **V3.2T**, e se o teste do dono passar ela vira a release.
   736 de 740.
 - [Seção 28](engenharia-reversa.md#28-o-ganho-do-receptor-o-rx-gain-v113).
 
+## Driver do CHIRP — 31/10 — a mensagem do APRS sai
+
+A página Settings > APRS perde o campo Message: desde a v112 a mensagem é digitada na caixa da tela MESSAGES, que
+abre vazia, e o texto que o rádio guarda é só o da última enviada. O TO continua, e mudá-lo ainda dá à próxima
+mensagem um número novo. O módulo segue `bj8300_v3.1TEMPRA.py` até a release (ele muda de nome no commit dela). O
+`teste_chirp_real.py` (seção 11) e o `teste_clonagem.py` (seção 8) deixam de usar o campo.
+
 ## v112 — 31/10 — a tela MESSAGES: a caixa da mensagem e do TO no #, a volta sozinha e o P (não gravada: foi junto na v113)
 
 `BJ8300_BANK_v112.anc` (sha256 `3931a362…`), fora dos commits como as outras de teste. O item VERSION mostra

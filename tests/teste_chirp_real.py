@@ -683,26 +683,27 @@ def main():
                 (r._mmap[0x903A:0x903E], [str(w[n].value) for n in valores]),
                 (bytes([novo[0], 4, novo[1], 0xA2]), list(valores.values())))
 
-    NOMES_11 =('aprs_callsign', 'aprs_ssid', 'aprs_path', 'aprs_to', 'aprs_message', 'aprs_decode',
+    NOMES_11 = ('aprs_callsign', 'aprs_ssid', 'aprs_path', 'aprs_to', 'aprs_decode',
                 'morse_message', 'morse_speed', 'morse_tone')
     # 11. APRS e MORSE (firmware v65; gravados pelo cabo desde a v110): os registros APR1 e MRS1, um bloco
-    # cada depois do VFO C. Sem registro (o bloco apagado), o que o radio mostra: os padroes.
+    # cada depois do VFO C. Sem registro (o bloco apagado), o que o radio mostra: os padroes. A mensagem do
+    # APRS saiu da pagina na V3.2T: ela vai na caixa da tela MESSAGES, que abre vazia.
     r = bj.BJ8300(imagem())
     r._mmap[0x903F] = bytes([229])                 # o RESET de fabrica: DECODE On
     w = {s.get_name(): s for s in r.get_settings().walk()}
     v = {n: str(w[n].value) for n in NOMES_11}
     confere('11. sem registro: indicativo e textos vazios, sem SSID, WIDE1-1, DECODE On, 15 WPM, 700 Hz',
             [v[n] for n in NOMES_11],
-            ['', 'None', 'WIDE1-1', '', '', 'On', '', '15 WPM', '700 Hz'])
+            ['', 'None', 'WIDE1-1', '', 'On', '', '15 WPM', '700 Hz'])
+    confere('11a. a mensagem do APRS nao esta na pagina (V3.2T)', 'aprs_message' in w, False)
     muda_ajustes(r, aprs_callsign='n0call', aprs_ssid='-9', aprs_path='None', aprs_to='n0call-7',
-                 aprs_message='Hello world', aprs_decode='Off', morse_message='CQ CQ TEST',
-                 morse_speed='20 WPM', morse_tone='800 Hz')
+                 aprs_decode='Off', morse_message='CQ CQ TEST', morse_speed='20 WPM', morse_tone='800 Hz')
     a = bytes(r._mmap[bj.APRS_BASE:bj.APRS_BASE + bj.EXT_BLOCK])
     m = bytes(r._mmap[bj.MORSE_BASE:bj.MORSE_BASE + bj.EXT_BLOCK])
-    confere('11b. o registro do APRS: marca, tamanhos, SSID, PATH e numero 2 (destino e texto mudaram)',
-            (a[:4], tuple(a[4:10])), (bj.APRS_MAGIC, (6, 8, 11, 9, 2, 2)))
-    confere('11c. os textos do APRS: o indicativo e o destino em maiusculas, a mensagem como veio',
-            (a[10:16], a[16:25], a[25:36], a[36:62]), (b'N0CALL', b'N0CALL-7\x00', b'Hello world', bytes(26)))
+    confere('11b. o registro do APRS: marca, tamanhos, SSID, PATH e numero 1 (o destino mudou)',
+            (a[:4], tuple(a[4:10])), (bj.APRS_MAGIC, (6, 8, 0, 9, 2, 1)))
+    confere('11c. os textos do APRS: o indicativo e o destino em maiusculas, sem mensagem',
+            (a[10:16], a[16:25], a[25:62]), (b'N0CALL', b'N0CALL-7\x00', bytes(37)))
     confere('11d. o registro do APRS fecha a soma, e o resto do bloco fica apagado',
             (struct.unpack('<H', a[62:64])[0], a[64:]), (bj._checksum(a[:62]), b''))
     confere('11e. o registro do Morse: marca, tamanho, 20 WPM, 800 Hz (80), o texto, a soma e o resto apagado',
@@ -713,14 +714,14 @@ def main():
     v = {n: str(w[n].value) for n in NOMES_11}
     confere('11g. e a pagina le de volta o que gravou',
             [v[n] for n in NOMES_11],
-            ['N0CALL', '-9', 'None', 'N0CALL-7', 'Hello world', 'Off', 'CQ CQ TEST', '20 WPM', '800 Hz'])
-    muda_ajustes(r, aprs_message='Hello world', aprs_decode='On')
-    confere('11h. o mesmo texto nao muda o numero; DECODE On grava 0xB0',
-            (r._mmap[bj.APRS_BASE + 9], r._mmap[0x903F]), (bytes([2]), bytes([0xB0])))
+            ['N0CALL', '-9', 'None', 'N0CALL-7', 'Off', 'CQ CQ TEST', '20 WPM', '800 Hz'])
+    muda_ajustes(r, aprs_to='N0CALL-7', aprs_decode='On')
+    confere('11h. o mesmo destino nao muda o numero; DECODE On grava 0xB0',
+            (r._mmap[bj.APRS_BASE + 9], r._mmap[0x903F]), (bytes([1]), bytes([0xB0])))
     muda_ajustes(r, aprs_to='abc', aprs_callsign='')
     a = bytes(r._mmap[bj.APRS_BASE:bj.APRS_BASE + bj.APRS_LEN])
-    confere('11i. destino novo: numero 3 e o resto do campo zerado; indicativo vazio: tamanho 0',
-            (a[9], a[4], a[5], a[16:25]), (3, 0, 3, b'ABC' + bytes(6)))
+    confere('11i. destino novo: numero 2 e o resto do campo zerado; indicativo vazio: tamanho 0',
+            (a[9], a[4], a[5], a[16:25]), (2, 0, 3, b'ABC' + bytes(6)))
     try:
         muda_ajustes(r, morse_message='A|B')
         confere('11j. o Morse recusa o que nao tem codigo', 'aceitou', 'recusou')

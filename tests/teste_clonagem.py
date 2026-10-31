@@ -374,7 +374,7 @@ def main():
     radio9 = baixa(sim)
     confere('8. sem registro no radio: os blocos vem apagados',
             bytes(radio9._mmap[bj.MORSE_BASE:bj.IMAGE_SIZE]), b'\xff' * 128)
-    real.muda_ajustes(radio9, morse_speed='25 WPM', aprs_callsign='N0CALL', aprs_message='TEST')
+    real.muda_ajustes(radio9, morse_speed='25 WPM', aprs_callsign='N0CALL', aprs_to='TEST')
     sim.gravacoes_estendidas = []
     sobe(radio9, sim)
     confere('8b. upload com o Morse e o APRS mudados grava os 2 blocos', sim.gravacoes_estendidas,
