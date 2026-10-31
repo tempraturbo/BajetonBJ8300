@@ -12,9 +12,9 @@ um radio que responde do jeito que o firmware responde, lido no desmontado:
     fabrica responde com (tam + 4) & 0xFF bytes: 0x01E4BB6E..0x01E4BB78);
   - 'W' end16 tam + 64 bytes: grava (decifrando abaixo de 0xF000) e responde ACK;
   - FIRMWARE DOS BANCOS: tam com o bit 7 ligado = endereco de 24 bits, bloco de 64 bytes crus, e a
-    resposta sai com tam = 0x40 (o gancho do cabo troca o byte); gravacao so em 0xC1000..0xD2FFF
-    (ate a v45, 0xD1FFF: fora dela o bloco e ignorado e o ACK sai assim mesmo), apagando o setor
-    quando o bloco o abre;
+    resposta sai com tam = 0x40 (o gancho do cabo troca o byte); gravacao so em 0xC1000..0xD5FFF
+    (ate a v45, 0xD1FFF; da v46 a v48, 0xD2FFF; da v49 a v109, 0xD3FFF: fora dela o bloco e ignorado e
+    o ACK sai assim mesmo), apagando o setor quando o bloco o abre;
   - FIRMWARE DE FABRICA: o mesmo comando vira endereco truncado em 16 bits, e a resposta tem
     4 + tam bytes (mais de 128) - 64 de dados e o resto do que estiver no buffer;
   - 'E' (os dois firmwares): responde ACK (0x01E4C0D0 -> 0x01E416C4) e poe a sessao no estado 3,
@@ -49,9 +49,10 @@ ACK = b'\x06'
 class RadioSimulado(object):
     """O lado do radio no cabo. Guarda o espaco de 64 KB do protocolo e o chip de dados de 1 MB."""
 
-    def __init__(self, bancos, espaco=None, chip=None, fim_gravacao=0x0D4000):
+    def __init__(self, bancos, espaco=None, chip=None, fim_gravacao=0x0D6000):
         self.bancos = bancos                       # True = firmware BJ8300_BANK
-        self.fim_gravacao = fim_gravacao           # v49: 0xD4000 (o VFO C); v46-v48 0xD3000; ate a v45, 0xD2000
+        self.fim_gravacao = fim_gravacao           # v110: 0xD6000 (o Morse e o APRS); v49-v109 0xD4000;
+                                                   # v46-v48 0xD3000; ate a v45, 0xD2000
         self.espaco = bytearray(espaco or b'\x00' * 0x10000)
         self.chip = bytearray(chip or b'\xff' * 0x100000)
         self.saida = bytearray()
@@ -226,8 +227,8 @@ def main():
     sim = RadioSimulado(True, espaco_de_fabrica(0), chip_com_bancos())
     radio = baixa(sim)
     modelo = radio.get_bank_model()
-    confere('1. imagem = parte de fabrica + area dos bancos + o bloco do WATCH + os 2 do VFO C',
-            len(radio._mmap), bj.BLOB_BASE + bj.BLOB_SIZE + 3 * 64)
+    confere('1. imagem = fabrica + area dos bancos + WATCH + os 2 do VFO C + MORSE + APRS',
+            len(radio._mmap), bj.BLOB_BASE + bj.BLOB_SIZE + 5 * 64)
     confere('1h. WATCH, CH-C e MDF-C lidos pelo cabo', real.watch_de(radio), ('TRIPLE', 5, 'Frequency', True))
     confere('1b. nomes dos bancos lidos pelo cabo',
             [b.get_name() for b in modelo.get_mappings()][:3], ['test', 'BANK 2', 'bnk'])
@@ -367,6 +368,44 @@ def main():
     except errors.RadioError as e:
         confere('7e. firmware v46-v48: o upload do VFO C avisa que precisa da v49', 'v49' in str(e), True)
     confere('7f. e o VFO C do radio ficou como estava (apagado)', bytes(v48.chip[0x0D3000:0x0D3004]),
+            b'\xff' * 4)
+
+    # ---------- 8. MORSE e APRS (v110): um bloco cada, em 0xD4000 e 0xD5000, so quando mudam ----------
+    radio9 = baixa(sim)
+    confere('8. sem registro no radio: os blocos vem apagados',
+            bytes(radio9._mmap[bj.MORSE_BASE:bj.IMAGE_SIZE]), b'\xff' * 128)
+    real.muda_ajustes(radio9, morse_speed='25 WPM', aprs_callsign='N0CALL', aprs_message='TEST')
+    sim.gravacoes_estendidas = []
+    sobe(radio9, sim)
+    confere('8b. upload com o Morse e o APRS mudados grava os 2 blocos', sim.gravacoes_estendidas,
+            [0x0D4000, 0x0D5000])
+    confere('8c. e o radio ficou com os registros da imagem',
+            (bytes(sim.chip[0x0D4000:0x0D4040]) == bytes(radio9._mmap[bj.MORSE_BASE:bj.APRS_BASE]),
+             bytes(sim.chip[0x0D5000:0x0D5040]) == bytes(radio9._mmap[bj.APRS_BASE:bj.IMAGE_SIZE]),
+             sim.chip[0x0D4005], bytes(sim.chip[0x0D500A:0x0D5010])), (True, True, 25, b'N0CALL'))
+    sim.gravacoes_estendidas = []
+    sobe(radio9, sim)
+    confere('8d. de novo, sem mudanca: nada gravado', sim.gravacoes_estendidas, [])
+    radio10 = baixa(sim)
+    confere('8e. o download traz os registros de volta',
+            (str(real.ajuste_de(radio10, 'morse_speed').value), str(real.ajuste_de(radio10, 'aprs_callsign').value)),
+            ('25 WPM', 'N0CALL'))
+    # imagem salva antes do Morse e do APRS (sem os blocos): o upload nao toca nos do radio
+    radio11 = bj.BJ8300(memmap.MemoryMapBytes(radio9.get_mmap().get_packed()[:bj.MORSE_BASE]))
+    radio11.status_fn = lambda s: None
+    sim.gravacoes_estendidas = []
+    sobe(radio11, sim)
+    confere('8f. imagem sem os blocos: os do radio ficam', sim.gravacoes_estendidas, [])
+    # firmware v49-v109: a janela do cabo para em 0xD3FFF, o bloco e ignorado com ACK
+    v109 = RadioSimulado(True, espaco_de_fabrica(0), chip_com_bancos(), fim_gravacao=0x0D4000)
+    radio12 = baixa(v109)
+    real.muda_ajustes(radio12, morse_tone='900 Hz')
+    try:
+        sobe(radio12, v109)
+        confere('8g. firmware ate a v109: o upload do Morse avisa', 'aceitou', 'avisou')
+    except errors.RadioError as e:
+        confere('8g. firmware ate a v109: o upload do Morse avisa que precisa da v110', 'v110' in str(e), True)
+    confere('8h. e o registro do radio ficou como estava (apagado)', bytes(v109.chip[0x0D4000:0x0D4004]),
             b'\xff' * 4)
 
     # ---------- 5. firmware de fabrica: recusa com a mensagem certa, sem gravar estendido ----------

@@ -5,6 +5,18 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Oct 31 — the APRS and Morse folders, and APRS DECODE
+
+The module reads and writes the Morse record (`0xD4000`: the message, speed and tone) and the APRS one
+(`0xD5000`: callsign, SSID, PATH, destination and message), one 64-byte block each in the image, after VFO C,
+and shows APRS DECODE (`0x903F`). They are in Settings > APRS and Settings > Morse. As on the radio, the
+callsign and destination go in capitals, with only letters and digits (and the destination's `-`), the Morse
+message only with characters that have a code, and the APRS message number moves on when the destination or
+the text changes. Writing them needs firmware v110: up to v109 the cable ignores the block, and the driver
+warns. An image saved earlier leaves the radio's records alone. The EQ is not in CHIRP yet: it lives at
+`0x9040`, outside the 64 bytes of settings the cable moves. `teste_chirp_real` got tests 11 to 11k and
+`teste_clonagem` tests 8 to 8h, with the simulated radio writing up to `0xD5FFF`.
+
 ## v110 — Oct 31 — the S-meter on PTT, the hiss at S1, 24 segments and the cable with Morse and APRS (under test)
 
 `BJ8300_BANK_v110.anc` (sha256 `8a6c9425…`), left out of `firmware/releases/` like the other test builds. With

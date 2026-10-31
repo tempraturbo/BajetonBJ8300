@@ -25,17 +25,22 @@
 # the stock driver keeps working on this radio.
 #
 # The firmware only accepts the extended write inside 0xC1000..0xD1FFF (header + the 16 banks;
-# from v46 on, up to 0xD2FFF, with the WATCH record) and only erases a sector that is empty or
-# already its own: no channel, calibration or boot image address is at risk through this path.
+# from v46 on, up to 0xD2FFF, with the WATCH record; from v49, 0xD3FFF, with VFO C; from v110,
+# 0xD5FFF, with the MORSE and APRS records) and only erases a sector that is empty or already its
+# own: no channel, calibration or boot image address is at risk through this path.
 #
 #   0xD2000            WATCH (firmware v43 on): "WTC1" magic, how many frequencies the main
 #                      screen shows (SINGLE, DUAL, TRIPLE), MDF-C, C's channel, whether C is on
 #                      side B right now and B's channel meanwhile, checksum - 14 bytes
+#   0xD3000            VFO C (firmware v49 on): "VFC1" magic, C's VFO, B's saved VFO, checksum
+#   0xD4000            MORSE (firmware v65 on): "MRS1" magic, the message, speed and tone
+#   0xD5000            APRS (firmware v65 on): "APR1" magic, callsign, SSID, path, the message,
+#                      its destination and number
 #
 # In the CHIRP image (.img) the banks area goes right after the stock part, at 0xF250, as 17
-# sectors of 192 bytes - the same three 64-byte blocks that travel over the cable - and the WATCH
-# block (64 bytes) right after it. That way they survive saving and reopening the .img, like any
-# other radio data.
+# sectors of 192 bytes - the same three 64-byte blocks that travel over the cable - and the WATCH,
+# VFO C, MORSE and APRS blocks right after it. That way they survive saving and reopening the
+# .img, like any other radio data.
 # ---------------------------------------------------------------------------------------------
 
 import logging
@@ -84,7 +89,34 @@ VFO_LEN = 32
 VFC_LEN = 4 + 2 * VFO_LEN + 2                  # magic, C's VFO, B's saved VFO, sum
 VFC_BLOCKS = 2                                 # 70 bytes travel in two 64-byte cable blocks
 VFC_BASE = WATCH_BASE + EXT_BLOCK              # in the .img, after the WATCH block
-IMAGE_SIZE = VFC_BASE + VFC_BLOCKS * EXT_BLOCK
+# --- MORSE and APRS (firmware v65; struct morse and struct aprs in mensagem.c): the texts and options of
+# the radio's MORSE and APRS folders, one record per sector, one cable block each. A zeroed field reads
+# as the radio's default (15 WPM, 700 Hz, WIDE1-1, no SSID). The cable writes them from firmware v110 on:
+# up to v109 it ignores the block (and still acknowledges it). ---
+MORSE_SECTOR = 0x0D4000
+MORSE_MAGIC = b'MRS1'
+MORSE_LEN = 48              # magic, text length, WPM, tone / 10, -, text (37 + the 0), sum
+APRS_SECTOR = 0x0D5000
+APRS_MAGIC = b'APR1'
+APRS_LEN = 64               # magic, the 3 text lengths, SSID, path, message number, callsign (6),
+                            # destination (9), message (37), sum
+MSG_MAX = 37
+MORSE_BASE = VFC_BASE + VFC_BLOCKS * EXT_BLOCK  # in the .img, after VFO C
+APRS_BASE = MORSE_BASE + EXT_BLOCK
+IMAGE_SIZE = APRS_BASE + EXT_BLOCK
+MORSE_WPM = list(range(5, 41))                  # the radio's MORSE > SPEED, 15 by default
+MORSE_TONES = list(range(40, 121, 5))           # MORSE > TONE in tens of Hz (400 to 1200), 70 by default
+APRS_PATHS = ['WIDE1-1', 'WIDE1-1,WIDE2-1', 'None']
+# What each text takes. The callsign and the destination go in capitals, with only what AX.25 and APRS
+# accept (the radio filters them the same way, aprs_guarda_texto); the Morse message, the characters the
+# radio has a code for (the rest it skips); the APRS message, those and the few with no Morse code, but
+# none of the three APRS reserves (| ~ {).
+CALL_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+MORSE_CHARS = CALL_CHARS + ' !"$&\'()+,-./:;=?@'
+APRS_MSG_CHARS = MORSE_CHARS + '#%*<>'
+# APRS > DECODE (firmware v76): in the settings block, Off only with 0xB1 (the factory reset leaves 229,
+# which reads On); the radio writes 0xB0 for On.
+APRS_DECODE_ADDR, APRS_DECODE_OFF, APRS_DECODE_ON = 0x903F, 0xB1, 0xB0
 VFC_LAYOUT = """
 #seekto 0x%X;
 struct {
@@ -369,6 +401,60 @@ class _VfcStore(object):
         return self._sealed(rec)
 
 
+class _RecordStore(object):
+    """A one-block firmware record (le_registro and grava_registro in bancos.c) inside the image: the
+    magic, the fields, the checksum in its last two bytes, and the rest of the 64-byte block erased. A
+    block that is not valid (erased, or never written by the radio) reads as the firmware reads it:
+    zeroed, with the magic."""
+
+    def __init__(self, radio, base, magic, length):
+        self._radio, self._base, self._magic, self._len = radio, base, magic, length
+
+    def block(self):
+        return bytes(self._radio._mmap[self._base:self._base + EXT_BLOCK])
+
+    def valid(self, block):
+        return (block[:4] == self._magic and _checksum(block[:self._len - 2]) ==
+                struct.unpack('<H', block[self._len - 2:self._len])[0])
+
+    def record(self):
+        block = self.block()
+        return bytearray(block[:self._len] if self.valid(block) else self._magic + bytes(self._len - 4))
+
+    def write(self, rec):
+        rec[self._len - 2:self._len] = struct.pack('<H', _checksum(bytes(rec[:self._len - 2])))
+        self._radio._mmap[self._base] = bytes(rec) + b'\xff' * (EXT_BLOCK - self._len)
+
+
+def _morse_store(radio):
+    return _RecordStore(radio, MORSE_BASE, MORSE_MAGIC, MORSE_LEN)
+
+
+def _aprs_store(radio):
+    return _RecordStore(radio, APRS_BASE, APRS_MAGIC, APRS_LEN)
+
+
+# Where each text lives in its record: (record, length byte, first byte, size)
+MORSE_TEXT = (_morse_store, 4, 8, MSG_MAX)
+APRS_CALL = (_aprs_store, 4, 10, 6)
+APRS_TO = (_aprs_store, 5, 16, 9)
+APRS_MESSAGE = (_aprs_store, 6, 25, MSG_MAX)
+
+
+def _record_text(rec, field):
+    _, length, start, size = field
+    return bytes(rec[start:start + min(rec[length], size)]).decode('latin-1')
+
+
+def _clean_text(text, field):
+    """The text as the radio keeps it: callsign and destination in capitals, with only letters and digits
+    (and the destination's '-'), as aprs_guarda_texto; the messages as typed."""
+    if field in (APRS_CALL, APRS_TO):
+        allowed = CALL_CHARS[:36] + ('-' if field is APRS_TO else '')
+        text = ''.join(c for c in text.upper() if c in allowed)
+    return text[:field[3]]
+
+
 class BJ8300Bank(chirp_common.NamedBank):
     """One of the 16 banks: the name lives in the bank's own sector, in the radio."""
 
@@ -519,6 +605,22 @@ class _BankCableMixin(object):
 
     def _read_vfc(self):
         return b''.join(self._read_extended(VFC_SECTOR + i * EXT_BLOCK) for i in range(VFC_BLOCKS))
+
+    def _upload_record(self, store, sector, what):
+        """Writes a MORSE or APRS record only when this image has one (an image saved before this driver
+        read them has the block erased) and it differs from the radio's. Read back, because up to v109
+        the firmware ignores the write (and still acknowledges it)."""
+        data = store.block()
+        if not store.valid(data):
+            return
+        length = store._len
+        if self._read_extended(sector)[:length] == data[:length]:
+            return
+        self._write_extended(sector, data)
+        if self._read_extended(sector)[:length] != data[:length]:
+            raise errors.RadioError(
+                'The radio did not keep %s: it needs the BJ8300_BANK firmware v110 or later. Channels, '
+                'settings, banks, WATCH and VFO C were written.' % what)
 
     def _upload_vfc(self):
         """Writes VFO C only when this image has its block, C is not on side B in the radio (then
@@ -914,6 +1016,9 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             'WATCH, CH-C and MDF-C are in Settings > VFO A/B/C Channel, with MDF-A and MDF-B\n'
             '(WATCH, CH-C and MDF-C need firmware v46 or later).\n'
             '\n'
+            'The APRS and Morse folders hold the radio\'s callsign, path, messages, speed and\n'
+            'tone (writing them needs firmware v110 or later).\n'
+            '\n'
             'Keep a copy of your first download before changing anything.')
         rp.pre_upload = (
             'The upload rewrites the radio\'s 16 bank sectors from this image: a bank that is\n'
@@ -927,9 +1032,10 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         return rp
 
     def process_mmap(self):
-        # An image that does not have the banks area or the WATCH block yet (e.g. saved by the
-        # RT-920 driver, or by this one before WATCH) gets the space, erased: that way the bank
-        # editor opens empty instead of blowing up, and the upload leaves the radio's WATCH alone.
+        # An image that does not have the banks area or the blocks after it yet (e.g. saved by the
+        # RT-920 driver, or by this one before WATCH, VFO C, MORSE or APRS) gets the space, erased:
+        # that way the bank editor opens empty instead of blowing up, and the upload leaves the
+        # radio's blocks alone.
         if self._mmap is not None and len(self._mmap) < IMAGE_SIZE:
             missing = IMAGE_SIZE - len(self._mmap)
             self._mmap = memmap.MemoryMapBytes(self._mmap.get_packed() + b'\xff' * missing)
@@ -950,7 +1056,8 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         try:
             data = radtel_rt900.do_download(self)      # opens the session; stock channels/settings
             self._check_firmware()
-            blob = self._download_banks() + self._read_extended(WATCH_SECTOR) + self._read_vfc()
+            blob = (self._download_banks() + self._read_extended(WATCH_SECTOR) + self._read_vfc() +
+                    self._read_extended(MORSE_SECTOR) + self._read_extended(APRS_SECTOR))
         except errors.RadioError:
             raise
         except Exception:
@@ -985,6 +1092,8 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             self._upload_banks()
             self._upload_watch()
             self._upload_vfc()
+            self._upload_record(_morse_store(self), MORSE_SECTOR, 'the Morse message, speed and tone')
+            self._upload_record(_aprs_store(self), APRS_SECTOR, 'the APRS callsign, path and message')
         except errors.RadioError:
             raise
         except Exception:
@@ -1050,8 +1159,99 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         if _take(settings, 'settings_language') is None:
             LOG.warning('language setting not found in the base class')
         self._vfo_settings(settings)
+        settings.append(self._aprs_settings())
+        settings.append(self._morse_settings())
         settings.append(self._bank_settings())
         return settings
+
+    def _text_setting(self, name, label, field, chars, doc):
+        current = _record_text(field[0](self).record(), field)
+        # what the radio already holds stays readable, even a character its keypad gives and this list
+        # does not (the page would not open otherwise)
+        chars += ''.join(sorted(set(current) - set(chars)))
+        rs = RadioSetting(name, label, RadioSettingValueString(
+            0, field[3], current, autopad=False, charset=chars))
+        rs.set_doc(doc)
+
+        def apply(setting):
+            if not setting.value.changed():
+                return
+            store = field[0](self)
+            rec = store.record()
+            text = _clean_text(str(setting.value), field).encode('latin-1')
+            if field in (APRS_TO, APRS_MESSAGE) and text != _record_text(rec, field).encode('latin-1'):
+                rec[9] = rec[9] % 99 + 1           # the message number moves on, as in the radio
+            _, length, start, size = field
+            rec[length] = len(text)
+            rec[start:start + size] = text + bytes(size - len(text))
+            store.write(rec)
+        rs.set_apply_callback(apply)
+        return rs
+
+    def _record_list(self, name, label, store, offset, options, index, value, doc):
+        """A list kept in one byte of a record: index(byte) is the list position the radio shows,
+        value(position) the byte it writes."""
+        rs = RadioSetting(name, label, RadioSettingValueList(
+            options, current_index=index(store(self).record()[offset])))
+        rs.set_doc(doc)
+
+        def apply(setting):
+            if setting.value.changed():
+                s = store(self)
+                rec = s.record()
+                rec[offset] = value(options.index(str(setting.value)))
+                s.write(rec)
+        rs.set_apply_callback(apply)
+        return rs
+
+    def _aprs_settings(self):
+        """Settings > APRS: the radio's APRS folder (firmware v65), but RX and SEND, which are actions."""
+        group = RadioSettingGroup('aprs', 'APRS')
+        group.append(self._text_setting(
+            'aprs_callsign', 'Callsign', APRS_CALL, CALL_CHARS,
+            'The station callsign, as the radio\'s APRS > CALLSIGN: up to 6 letters and digits, in capitals.'))
+        group.append(self._record_list(
+            'aprs_ssid', 'SSID', _aprs_store, 7, ['None'] + ['-%d' % i for i in range(1, 16)],
+            lambda b: b if b < 16 else 0, lambda i: i, 'APRS > SSID: the number after the callsign.'))
+        group.append(self._record_list(
+            'aprs_path', 'Path', _aprs_store, 8, APRS_PATHS, lambda b: b if b < 3 else 0, lambda i: i,
+            'APRS > PATH: the digipeaters the packets ask for.'))
+        group.append(self._text_setting(
+            'aprs_to', 'Message to', APRS_TO, CALL_CHARS + '-',
+            'APRS > TO: who the message goes to, up to 9 characters (a callsign, with its SSID after a '
+            '"-"). Changing it gives the message a new number, as in the radio.'))
+        group.append(self._text_setting(
+            'aprs_message', 'Message', APRS_MESSAGE, APRS_MSG_CHARS,
+            'APRS > MESSAGE: up to 37 characters, sent with APRS > SEND. Changing it gives the message a '
+            'new number, as in the radio.'))
+        rs = RadioSetting('aprs_decode', 'Decode', RadioSettingValueList(
+            ['On', 'Off'], current_index=int(self._mmap[APRS_DECODE_ADDR][0] == APRS_DECODE_OFF)))
+        rs.set_doc('APRS > DECODE: On shows the decoded formats of the received packets (Mic-E, compressed '
+                   'position, weather, objects); Off, the info as it came. Needs firmware v76 or later.')
+
+        def apply(setting):
+            if setting.value.changed():
+                self._mmap[APRS_DECODE_ADDR] = bytes([APRS_DECODE_OFF if str(setting.value) == 'Off'
+                                                      else APRS_DECODE_ON])
+        rs.set_apply_callback(apply)
+        group.append(rs)
+        return group
+
+    def _morse_settings(self):
+        """Settings > Morse: the radio's MORSE folder (firmware v65), but SEND, which is an action."""
+        group = RadioSettingGroup('morse', 'Morse')
+        group.append(self._text_setting(
+            'morse_message', 'Message', MORSE_TEXT, MORSE_CHARS,
+            'MORSE > MESSAGE: up to 37 characters, sent with MORSE > SEND.'))
+        group.append(self._record_list(
+            'morse_speed', 'Speed', _morse_store, 5, ['%d WPM' % w for w in MORSE_WPM],
+            lambda b: MORSE_WPM.index(b if b in MORSE_WPM else 15), lambda i: MORSE_WPM[i],
+            'MORSE > SPEED, in words per minute.'))
+        group.append(self._record_list(
+            'morse_tone', 'Tone', _morse_store, 6, ['%d Hz' % (t * 10) for t in MORSE_TONES],
+            lambda b: ((b if 40 <= b <= 120 else 70) - 40) // 5, lambda i: MORSE_TONES[i],
+            'MORSE > TONE: the pitch of the beeps.'))
+        return group
 
     def _vfo_settings(self, settings):
         """Settings > VFO A/B/C Channel: the base class VFO A/B Channel and FM/AM/SSB Modulation

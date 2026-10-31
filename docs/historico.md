@@ -5,6 +5,18 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 31/10 — as pastas APRS e Morse, e o APRS DECODE
+
+O módulo lê e grava os registros do Morse (`0xD4000`: a mensagem, a velocidade e o tom) e do APRS (`0xD5000`:
+o indicativo, o SSID, o PATH, o destinatário e a mensagem), um bloco de 64 B cada na imagem, depois do VFO C, e
+mostra o APRS DECODE (`0x903F`). Ficam em Settings > APRS e Settings > Morse. Como no rádio, o indicativo e o
+destinatário vão em maiúsculas, só com letras e números (e o `-` no destinatário), a mensagem do Morse só com o
+que tem código, e o número da mensagem do APRS anda quando o destinatário ou o texto mudam. Gravar os dois
+precisa do firmware v110: até a v109 o cabo ignora o bloco, e o driver avisa. Uma imagem salva antes não mexe
+nos registros do rádio. O EQ ainda não está no CHIRP: mora em `0x9040`, fora dos 64 B de ajustes que o cabo
+transfere. O `teste_chirp_real` ganhou os testes 11 a 11k e o `teste_clonagem` os 8 a 8h, com o rádio simulado
+gravando até `0xD5FFF`.
+
 ## v110 — 31/10 — a barra S no PTT, o chiado no S1, 24 segmentos e o cabo com o Morse e o APRS (a testar)
 
 `BJ8300_BANK_v110.anc` (sha256 `8a6c9425…`), fora de `firmware/releases/` como as outras de teste. Com a v109 o

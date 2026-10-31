@@ -82,6 +82,18 @@ def _VfcStore_valido(radio):
     return bj._VfcStore.valid(bj._VfcStore(radio).block())
 
 
+def muda_ajustes(radio, **valores):
+    """Muda ajustes pelo nome e aplica como o set_settings da base: os MemSetting na memoria e, dos outros,
+    so os callbacks dos que mudaram aqui (os das frequencias dos VFO nao leem a imagem zerada dos testes)."""
+    ajustes = radio.get_settings()
+    w = {s.get_name(): s for s in ajustes.walk()}
+    for nome, valor in valores.items():
+        w[nome].value.set_value(valor)
+    for s in ajustes.apply_to(radio._memobj):
+        if s.has_apply_callback() and s.get_name() in valores:
+            s.run_apply_callback()
+
+
 def muda_watch(radio, **valores):
     """Muda ajustes da pagina Watch e aplica como o set_settings da base: os MemSetting na memoria e,
     dos outros, os callbacks - so os da pagina Watch, porque os das frequencias dos VFO nao leem a
@@ -252,8 +264,8 @@ def main():
     reg4 = crua[bj.BLOB_BASE + 4 * bj.SECTOR_SIZE:bj.BLOB_BASE + 4 * bj.SECTOR_SIZE + bj.RECORD_LEN]
     confere('6b. banco 4 (que ganhou canal no 5j) com marca e soma que fecham',
             (reg4[:4], struct.unpack('<H', reg4[136:])[0]), (bj.BANK_MAGIC, bj._checksum(reg4[:136])))
-    confere('6c. tamanho da imagem = fabrica + 17 setores + o bloco do WATCH + os 2 do VFO C',
-            len(crua), bj.BLOB_BASE + (bj.NUM_BANKS + 1) * bj.SECTOR_SIZE + 3 * bj.EXT_BLOCK)
+    confere('6c. tamanho da imagem = fabrica + 17 setores + WATCH + os 2 do VFO C + MORSE + APRS',
+            len(crua), bj.BLOB_BASE + (bj.NUM_BANKS + 1) * bj.SECTOR_SIZE + 5 * bj.EXT_BLOCK)
 
     # 7. os pacotes do cabo (o que o radio vai receber)
     confere('7. comando de leitura de 0xC1000', bj._command(b'R', 0x0C1000),
@@ -359,15 +371,15 @@ def main():
 
     # 10. WATCH, CH-C e MDF-C (firmware v46): o registro WTC1, no bloco depois dos bancos
     r = bj.BJ8300(imagem())
-    confere('10. imagem sem WATCH ganha os blocos apagados (WATCH e VFO C) depois dos bancos',
+    confere('10. imagem sem WATCH ganha os blocos apagados (WATCH, VFO C, MORSE, APRS) depois dos bancos',
             (len(r._mmap), bytes(r._mmap[bj.WATCH_BASE:bj.IMAGE_SIZE])),
-            (bj.BLOB_BASE + 17 * bj.SECTOR_SIZE + 3 * 64, b'\xff' * 3 * 64))
+            (bj.BLOB_BASE + 17 * bj.SECTOR_SIZE + 5 * 64, b'\xff' * 5 * 64))
     confere('10b. sem registro: DUAL, a C no canal 1, MDF-C Name', watch_de(r), ('DUAL', 1, 'Name', True))
     aj = r.get_settings()
     confere('10c. VFO A/B/C Channel e FM/AM/SSB Modulation fora do Specific, no topo',
             [g.get_shortname() for g in aj],
             ['Basic Settings', 'DTMF Settings', 'BJ8300_v2.9TEMPRA Specific', 'VFO A/B/C Channel',
-             'FM/AM/SSB Modulation', 'Banks'])
+             'FM/AM/SSB Modulation', 'APRS', 'Morse', 'Banks'])
     abc = aj['abblock']
     confere('10c2. o WATCH e o TTR primeiro no VFO A/B/C Channel, e um bloco para cada lado',
             (abc.keys()[:2], abc['settings_tdr'].get_shortname(), 'settings_tdr' in aj['spec'],
@@ -618,6 +630,57 @@ def main():
             ([str(x) for x in ajuste_de(r, 'settings_unknown_9032').value.get_options()],
              [str(x) for x in ajuste_de(r, 'noise_gate').value.get_options()]),
             (['Off', 'Low', 'Mid', 'Default', 'High'], ['Off', 'Low', 'Default', 'Mid', 'High']))
+
+    NOMES_11 = ('aprs_callsign', 'aprs_ssid', 'aprs_path', 'aprs_to', 'aprs_message', 'aprs_decode',
+                'morse_message', 'morse_speed', 'morse_tone')
+    # 11. APRS e MORSE (firmware v65; gravados pelo cabo desde a v110): os registros APR1 e MRS1, um bloco
+    # cada depois do VFO C. Sem registro (o bloco apagado), o que o radio mostra: os padroes.
+    r = bj.BJ8300(imagem())
+    r._mmap[0x903F] = bytes([229])                 # o RESET de fabrica: DECODE On
+    w = {s.get_name(): s for s in r.get_settings().walk()}
+    v = {n: str(w[n].value) for n in NOMES_11}
+    confere('11. sem registro: indicativo e textos vazios, sem SSID, WIDE1-1, DECODE On, 15 WPM, 700 Hz',
+            [v[n] for n in NOMES_11],
+            ['', 'None', 'WIDE1-1', '', '', 'On', '', '15 WPM', '700 Hz'])
+    muda_ajustes(r, aprs_callsign='n0call', aprs_ssid='-9', aprs_path='None', aprs_to='n0call-7',
+                 aprs_message='Hello world', aprs_decode='Off', morse_message='CQ CQ TEST',
+                 morse_speed='20 WPM', morse_tone='800 Hz')
+    a = bytes(r._mmap[bj.APRS_BASE:bj.APRS_BASE + bj.EXT_BLOCK])
+    m = bytes(r._mmap[bj.MORSE_BASE:bj.MORSE_BASE + bj.EXT_BLOCK])
+    confere('11b. o registro do APRS: marca, tamanhos, SSID, PATH e numero 2 (destino e texto mudaram)',
+            (a[:4], tuple(a[4:10])), (bj.APRS_MAGIC, (6, 8, 11, 9, 2, 2)))
+    confere('11c. os textos do APRS: o indicativo e o destino em maiusculas, a mensagem como veio',
+            (a[10:16], a[16:25], a[25:36], a[36:62]), (b'N0CALL', b'N0CALL-7\x00', b'Hello world', bytes(26)))
+    confere('11d. o registro do APRS fecha a soma, e o resto do bloco fica apagado',
+            (struct.unpack('<H', a[62:64])[0], a[64:]), (bj._checksum(a[:62]), b''))
+    confere('11e. o registro do Morse: marca, tamanho, 20 WPM, 800 Hz (80), o texto, a soma e o resto apagado',
+            (m[:4], tuple(m[4:8]), m[8:18], m[18:46], struct.unpack('<H', m[46:48])[0], m[48:]),
+            (bj.MORSE_MAGIC, (10, 20, 80, 0), b'CQ CQ TEST', bytes(28), bj._checksum(m[:46]), b'\xff' * 16))
+    confere('11f. DECODE Off grava 0xB1 no 0x903F', r._mmap[0x903F], bytes([0xB1]))
+    w = {s.get_name(): s for s in r.get_settings().walk()}
+    v = {n: str(w[n].value) for n in NOMES_11}
+    confere('11g. e a pagina le de volta o que gravou',
+            [v[n] for n in NOMES_11],
+            ['N0CALL', '-9', 'None', 'N0CALL-7', 'Hello world', 'Off', 'CQ CQ TEST', '20 WPM', '800 Hz'])
+    muda_ajustes(r, aprs_message='Hello world', aprs_decode='On')
+    confere('11h. o mesmo texto nao muda o numero; DECODE On grava 0xB0',
+            (r._mmap[bj.APRS_BASE + 9], r._mmap[0x903F]), (bytes([2]), bytes([0xB0])))
+    muda_ajustes(r, aprs_to='abc', aprs_callsign='')
+    a = bytes(r._mmap[bj.APRS_BASE:bj.APRS_BASE + bj.APRS_LEN])
+    confere('11i. destino novo: numero 3 e o resto do campo zerado; indicativo vazio: tamanho 0',
+            (a[9], a[4], a[5], a[16:25]), (3, 0, 3, b'ABC' + bytes(6)))
+    try:
+        muda_ajustes(r, morse_message='A|B')
+        confere('11j. o Morse recusa o que nao tem codigo', 'aceitou', 'recusou')
+    except settings.InvalidValueError:
+        confere('11j. o Morse recusa o que nao tem codigo', 'recusou', 'recusou')
+    # o que o radio gravou com um caractere fora da lista (o * da tecla 0) abre a pagina e fica legivel
+    rec = bytearray(bj.MORSE_MAGIC + bytes([3, 0, 0, 0]) + b'A*B' + bytes(35) + b'\x00\x00')
+    rec[46:48] = struct.pack('<H', bj._checksum(bytes(rec[:46])))
+    r._mmap[bj.MORSE_BASE] = bytes(rec)
+    confere('11k. o * do radio na mensagem do Morse le de volta, e os campos zerados como os padroes',
+            (str(ajuste_de(r, 'morse_message').value), str(ajuste_de(r, 'morse_speed').value),
+             str(ajuste_de(r, 'morse_tone').value)), ('A*B', '15 WPM', '700 Hz'))
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')
