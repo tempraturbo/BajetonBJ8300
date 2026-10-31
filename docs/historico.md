@@ -5,6 +5,20 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V3.0T — 31/10 — APRS e Morse, o EQ, a barra S e a pasta AUDIO
+
+A v110 virou a **V3.0T**: `firmware/releases/BJ8300_BANK_v3.0T.anc` (sha256 `8a6c9425…`, o mesmo arquivo; o item
+VERSION já mostrava V3.0T desde a v76). É a V2.9T com as pastas APRS e MORSE (o envio pela entrada do
+microfone, a recepção com o FILTER, a decodificação, o ack e o histórico), o EQ, a barra S, a pasta AUDIO
+(EXPANDER, NOISE GATE e DE-EMPHASIS), a NOISE REDUCTION com níveis, o LIGHT PWM, o MODEM GAIN, o NO TX e a
+gravação no OK. Lançada a pedido do dono antes de a v110 ser gravada: as funções foram testadas nas versões de
+teste, e a v110 corrige a barra S no PTT e a escala. O módulo do CHIRP passou a `bj8300_v3.0TEMPRA.py` (modelo
+`BJ8300_v3.0TEMPRA`), e as imagens salvas com o `BJ8300_v2.9TEMPRA` abrem nele (`MODEL_COMPAT`). No README, a
+tabela de recursos ganhou uma coluna com uma tela de cada, e as telas foram refeitas pela prévia, com as cenas
+novas da pasta AUDIO e do EQ. Publicada no
+[release V3.0T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.0T), com o módulo do
+CHIRP, o gravador e o driver do cabo.
+
 ## Driver do CHIRP — 31/10 — as pastas APRS e Morse, e o APRS DECODE
 
 O módulo lê e grava os registros do Morse (`0xD4000`: a mensagem, a velocidade e o tom) e do APRS (`0xD5000`:

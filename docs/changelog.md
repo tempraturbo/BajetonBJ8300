@@ -5,6 +5,20 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V3.0T — Oct 31 — APRS and Morse, the EQ, the S-meter and the AUDIO folder
+
+v110 became **V3.0T**: `firmware/releases/BJ8300_BANK_v3.0T.anc` (sha256 `8a6c9425…`, the same file; the VERSION
+item had shown V3.0T since v76). It is V2.9T with the APRS and MORSE folders (sending through the microphone
+input, receiving with the FILTER, decoding, the ack and the history), the EQ, the S-meter, the AUDIO folder
+(EXPANDER, NOISE GATE and DE-EMPHASIS), NOISE REDUCTION with levels, LIGHT PWM, MODEM GAIN, NO TX and saving on
+OK. Released at the owner's request before v110 was flashed: the features were tested in the test builds, and
+v110 fixes the S-meter on PTT and its scale. The CHIRP module became `bj8300_v3.0TEMPRA.py` (model
+`BJ8300_v3.0TEMPRA`), and images saved with `BJ8300_v2.9TEMPRA` open in it (`MODEL_COMPAT`). In the README, the
+features table got a column with one screen for each, and the screens were redone from the preview, with the
+new AUDIO folder and EQ scenes. Published in the
+[V3.0T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.0T), with the CHIRP module,
+the flasher and the cable driver.
+
 ## CHIRP driver — Oct 31 — the APRS and Morse folders, and APRS DECODE
 
 The module reads and writes the Morse record (`0xD4000`: the message, speed and tone) and the APRS one

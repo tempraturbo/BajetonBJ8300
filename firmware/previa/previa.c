@@ -793,6 +793,20 @@ int main(int argc, char **argv)
         telas_b(1, 0);
         grava("58-menu-display-brightness");
 
+        /* v108: a pasta AUDIO nos grupos (o EQ, o EXPANDER, a NOISE GATE e a DE-EMPHASIS), e o EQ BASS dela
+         * em +2 dB */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        menu_em(NOS_GRUPOS, grupo("AUDIO"));
+        telas_b(1, 0);
+        grava("63-menu-grupos-audio");
+        menu_no("AUDIO", "EQ BASS");
+        LINHA(0, 1, "+1 dB");
+        LINHA(1, 2, "+2 dB");
+        LINHA(2, 1, "+3 dB");
+        telas_b(1, 0);
+        grava("63b-menu-audio-eq-bass");
+
         /* v59 e v62: o menu aberto recebendo (o estado da recepcao em 4, que o b_sinal acompanha e o
          * le_estado le) - o lado em evidencia na barra de cima, no lugar dos icones: o B pelo nome, a C
          * (TRIPLE, a C no lado B) pela frequencia, um nome longo cortado antes da tensao, e o sinal sumindo */
