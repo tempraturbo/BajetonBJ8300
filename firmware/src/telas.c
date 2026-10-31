@@ -294,11 +294,17 @@ SEPARADA static void editor_cena(void)
     texto(156 - largura(s, 1), y + 38, s, 1, COR_CINZA);
 }
 
+static const char *const modos_editor[2] = {"ABC", "123"};
+
+/* A caixa da tela MESSAGES (v112): o editor de nome do menu, do lugar do item aberto para baixo, numa
+ * borda ambar e com o titulo dela (menu_cena). Em cima fica a tela do RX, que o LCD guarda (tela.c,
+ * telas_faixa). */
+#define CAIXA_Y0    TOPO_MENU
+
 /* O item aberto: o titulo e as tres linhas do menu, na letra do menu, ou o editor de nome (a barra e o
  * resumo sao desenhados pela cena_telas, ao lado). */
 SEPARADA static void menu_cena(const struct menu_b *m)
 {
-    static const char *const modos[2] = {"ABC", "123"};
     unsigned r, x = 4, x1 = 154;
     char s[28];
 
@@ -308,15 +314,19 @@ SEPARADA static void menu_cena(const struct menu_b *m)
      * deles alcanca. */
     if (NA_JANELA(TOPO_MENU, TOPO_MENU + 18)) {
         if (m->editor && EDITOR_MODO - 1u < 2)
-            x1 = etiqueta(156, TOPO_MENU + 3, modos[EDITOR_MODO - 1], COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 1) - 3;
-        if (m->nivel == FORA)
-            numero(s, m->numero, 2);
-        else {
-            x = texto(4, TOPO_MENU + 5, ICONE_PASTA, 1, COR_TEXTO_AMBAR) + 2;
-            numero(m->nivel == RADIO ? s : junta(numero(s, m->nivel, 1), "-"), m->numero + 1, 1);
+            x1 = etiqueta(156, TOPO_MENU + 3, modos_editor[EDITOR_MODO - 1], COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 1) - 3;
+        if (CAIXA_APRS) {                  /* a caixa da tela MESSAGES (v112): o titulo dela, sem o numero */
+            junta(s, CAIXA_APRS == 1 ? "MESSAGE TO SEND" : "TO");
+        } else {
+            if (m->nivel == FORA)
+                numero(s, m->numero, 2);
+            else {
+                x = texto(4, TOPO_MENU + 5, ICONE_PASTA, 1, COR_TEXTO_AMBAR) + 2;
+                numero(m->nivel == RADIO ? s : junta(numero(s, m->nivel, 1), "-"), m->numero + 1, 1);
+            }
+            x = etiqueta(x, TOPO_MENU + 3, s, COR_CHIP_RX, COR_TEXTO_RX, 0);
+            copia_ram(s, MENU_TITULO, 26);
         }
-        x = etiqueta(x, TOPO_MENU + 3, s, COR_CHIP_RX, COR_TEXTO_RX, 0);
-        copia_ram(s, MENU_TITULO, 26);
         texto_menu(x + 2, TOPO_MENU + 4, s, x1 - x - 2, COR_BRANCO);
         pinta(0, TOPO_MENU + 17, 160, TOPO_MENU + 18, COR_LINHA);
     }
@@ -807,6 +817,14 @@ static void cena_telas(const struct telas *t)
 {
     unsigned pasta = t->modo == 1 && t->m.pasta;
 
+    if (t->modo == 1 && CAIXA_APRS) {      /* so a caixa da tela MESSAGES (v112), numa borda ambar de 2 px */
+        menu_cena(&t->m);                  /* nos quatro lados, por cima do traco do titulo */
+        pinta(0, CAIXA_Y0, 160, CAIXA_Y0 + 2, COR_TEXTO_AMBAR);
+        pinta(0, 126, 160, 128, COR_TEXTO_AMBAR);
+        pinta(0, CAIXA_Y0, 2, 128, COR_TEXTO_AMBAR);
+        pinta(158, CAIXA_Y0, 160, 128, COR_TEXTO_AMBAR);
+        return;
+    }
     if (NA_JANELA(0, ALTURA_ESTADO))
         barra_estado(&t->e);
     if (((t->modo == 1 && !pasta) || t->modo == 17) && NA_JANELA(ALTURA_ESTADO, TOPO_MENU))
@@ -933,9 +951,9 @@ static void esp_freq(u32 f, unsigned digitando)
 }
 
 /* n e p chegam ja limitados (espectro_rotulos, bancos.c). */
-static void esp_pontos(unsigned n)
+NAS_VOZES static void esp_pontos(unsigned n)
 {
-    static const char rotulos[6][5] = {"X160", "X80", "X40", "X20", "X640", "X320"};
+    DADO_NAS_VOZES static const char rotulos[6][5] = {"X160", "X80", "X40", "X20", "X640", "X320"};
 
     etiqueta(3, ESP_L1 + 4, rotulos[n], COR_CHIP_CANAL, COR_TEXTO, 0);
 }
@@ -947,9 +965,9 @@ static void esp_modo(unsigned m)
     etiqueta(157, ESP_L1 + 4, m & 1 ? "AM" : "FM", COR_CHIP_RX, COR_TEXTO_RX, 1);
 }
 
-static void esp_passo(unsigned p)
+NAS_VOZES static void esp_passo(unsigned p)
 {
-    static const char rotulos[6][6] = {"6.25K", "8.33K", "12.5K", "20.0K", "25.0K", "10.0K"};
+    DADO_NAS_VOZES static const char rotulos[6][6] = {"6.25K", "8.33K", "12.5K", "20.0K", "25.0K", "10.0K"};
 
     etiqueta(3, ESP_L2 + 2, rotulos[p], COR_CHIP_CANAL, COR_TEXTO, 0);
 }
@@ -1003,7 +1021,7 @@ static void esp_grade(unsigned x0, unsigned x1)
         pinta(x0, y, x1, y + 1, COR_CHIP_CANAL);
 }
 
-static void esp_coluna(unsigned x, unsigned altura, unsigned atual)
+NAS_VOZES static void esp_coluna(unsigned x, unsigned altura, unsigned atual)
 {
     unsigned topo = ESP_GRAFICO + 64 - altura;
 
@@ -1024,8 +1042,8 @@ static void esp_limite(unsigned x0, unsigned x1, unsigned y)
  * A tela do laco de recepcao do APRS (mensagem.c, aprs_rx_grava), a tela inteira: no alto onde se ouve
  * (como o MDF do lado pede), o FILTER (cinza se a tecla 0 o desligou, v111) e a posicao no historico; dois
  * registros do historico em duas linhas cada, o de cima o mais novo e num fundo proprio; aberto, so o de
- * cima, inteiro (ate 6 linhas); a mensagem para o meu indicativo em ambar; embaixo, num fundo proprio, os
- * contadores (S: syncs na marca e no espaco; B: FCS errado; F: consertados), a tecla 0 e as outras teclas.
+ * cima, inteiro (ate 6 linhas); a mensagem para o meu indicativo em ambar; embaixo, num fundo proprio, o P
+ * (v112: os syncs nas duas polaridades, o que o modem pegou; ate a v111, S, B e F) e as teclas.
  * num: o FILTER desligado, posicao, quantos, syncs na marca, syncs no espaco, BAD, FIX. Os textos (ate TEXTO_MAX, 120) ficam so na flash, e
  * cada linha e lida dela na hora de desenhar (aprs_linhas): o laco que chama ja tem o quadro e o
  * decodificador na pilha, e esta cadeia tem de caber no resto dos 740 B de fabrica. */
@@ -1070,10 +1088,8 @@ SEPARADA static void aprs_linhas(u32 a, unsigned y, unsigned n)
 
 SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
 {
-    static const char *const ROTULOS[3] = {"S", "B", "F"};
-    static const char *const TECLAS_RX[3] = {"OK", "*", "HOLD EXIT"};
-    static const u8 CASA[3] = {0, 52, 78};          /* as tres casas dos contadores no rodape (v103; v111 a
-                                                     * tecla 0 depois delas) */
+    static const char *const TECLAS_RX[6] = {"#", "HOLD #", "0", "OK", "*", "HOLD EXIT"};
+    static const char *const FAZ_RX[6] = {"MSG", "TO", "FLT", "OPEN", "OFF", "CLR"};
     char s[14];                            /* o nome do canal (12) ou "65535/65535", e o 0 */
     unsigned i = LADO_B != 0, x;
 
@@ -1109,31 +1125,24 @@ SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
         aprs_linhas(a1, 68, 2);
     }
     if (NA_JANELA(102, 128)) {
-        /* o rodape num fundo proprio (v75; o da barra de cima, na v74, saiu quase preto), em casas (v103):
-         * em cima os contadores - os syncs na marca e no espaco (v71), o BAD em vermelho e o FIX em verde
-         * quando passam de 0 -, embaixo as teclas em etiquetas, com o que cada uma faz */
+        /* o rodape num fundo proprio (v75; o da barra de cima, na v74, saiu quase preto): em cima o P e as
+         * teclas da caixa e do FILTER (v112), embaixo as outras, em etiquetas, com o que cada uma faz */
         pinta(0, 102, 160, 103, COR_LINHA);
         pinta(0, 103, 160, 128, COR_SEG_FUNDO);
         pinta(0, 115, 160, 116, COR_LINHA);
-        for (i = 0; i < 3; i++) {
-            if (i)
-                pinta(CASA[i], 103, CASA[i] + 1, 115, COR_LINHA);
-            x = texto(CASA[i] + 4, 106, ROTULOS[i], 1, COR_CINZA) + 4;
-            if (i)
-                numero(s, num[4 + i], 1);
-            else
-                numero(junta(numero(s, num[3], 1), "/"), num[4], 1);
-            texto(x, 106, s, 1, i == 1 && num[5] ? COR_SEG_VERMELHO : i == 2 && num[6] ? COR_VERDE : COR_TEXTO);
-        }
-        pinta(102, 103, 103, 115, COR_LINHA);
-        texto(etiqueta(105, 104, "0", COR_ESTADO, COR_TEXTO, 0), 106, "FILTER", 1, COR_CINZA);
-        for (i = 0, x = 3; i < 3; i++) {
-            unsigned c = etiqueta(x, 117, TECLAS_RX[i], COR_ESTADO, COR_TEXTO, 0);
+        numero(s, num[3] + num[4], 1);
+        x = texto(texto(4, 106, "P", 1, COR_CINZA) + 4, 106, s, 1, COR_TEXTO) + 3;
+        pinta(x, 103, x + 1, 115, COR_LINHA);
+        for (i = 0, x += 4; i < 6; i++) {
+            unsigned y = i < 3 ? 104 : 117, c;
 
-            if (i == 2)                    /* o EXIT segurado: o HOLD apagado no mesmo quadrado (a fonte nao tem
+            if (i == 3)
+                x = 3;
+            c = etiqueta(x, y, TECLAS_RX[i], COR_ESTADO, COR_TEXTO, 0);
+            if (TECLAS_RX[i][0] == 'H')    /* segurada: o HOLD apagado no mesmo quadrado (a fonte nao tem
                                             * minusculas) */
-                texto(x + 3, 119, "HOLD", 1, COR_CINZA);
-            x = texto(c, 119, i == 2 ? "CLR" : i ? "OFF" : aberto ? "BACK" : "OPEN", 1, COR_CINZA) + 4;
+                texto(x + 3, y + 2, "HOLD", 1, COR_CINZA);
+            x = texto(c, y + 2, i == 3 && aberto ? "BACK" : FAZ_RX[i], 1, COR_CINZA) + 4;
         }
     }
 }
@@ -1220,5 +1229,14 @@ void tensao_b(unsigned decimos)
 void tensao_tecla_b(unsigned decimos)
 {
     tensao_faixas(decimos, TENSAO_X0, TENSAO_X1, TENSAO_Y0, TENSAO_Y1);
+}
+
+/* A caixa da tela MESSAGES (v112): por cima da tela do RX que a previa desenhou antes, como no radio. */
+void caixa_b(void)
+{
+    struct telas t;
+
+    le_telas(&t, 1, 0, 0);
+    desenha_telas(&t, CAIXA_Y0, 128);
 }
 #endif

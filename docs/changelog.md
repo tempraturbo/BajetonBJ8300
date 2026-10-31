@@ -5,6 +5,51 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v113 — Oct 31 — RX GAIN in CALIBRATION, with v112's MESSAGES screen (to be tested)
+
+`BJ8300_BANK_v113.anc` (sha256 `f8d994ba…`), kept out of the commits like the other test builds: all of v112 plus
+RX GAIN. The VERSION item shows **V3.2T**, and if the owner's test passes it becomes the release.
+
+- **CALIBRATION > RX GAIN**, with DEFAULT and MAX: the table of the receiver AGC's five steps. DEFAULT is the
+  stock one (−2, −17, −40, −57 and −71 dB, from the weakest signal to the strongest); MAX, at the owner's request,
+  0, −10, −25, −40 and −65 dB. With a weak signal only the top step counts, 2 dB more in the LNA; the last one
+  stayed at −65, not −80, because the AGC moves up and down within a 35 dB window and a bigger jump makes it
+  bounce between two steps. It applies at once, at boot and after a RESET or a cable write.
+- **Space** came from the number and text copy routines, which existed twice: `mensagem.c` now uses the screen's
+  (78 B). 78 B remain in `.livre`, and the stack stays at 740, 620 and 696 B; MESSAGES' set goes to 736 of 740.
+- [Section 28](reverse-engineering.md#28-the-receiver-gain-rx-gain-v113).
+
+## v112 — Oct 31 — the MESSAGES screen: the message and TO boxes on #, the automatic return and P (not flashed: went into v113)
+
+`BJ8300_BANK_v112.anc` (sha256 `3931a362…`), kept out of the commits like the other test builds. The VERSION
+item shows **V3.2T**.
+
+- **The APRS folder** is now CALLSIGN, DECODE, MESSAGES, PATH, SSID and TO: RX became **MESSAGES**, and MESSAGE
+  and SEND are gone. The message and sending moved to the screen.
+- **# on the MESSAGES screen** opens the **MESSAGE TO SEND** box on top of it, always empty, up to 37
+  characters. OK sends it to TO (empty TO sends it as status), and the screen comes back by itself after the
+  transmission; EXIT with the box empty, or held, cancels and goes back. Each message gets a new number.
+  **Holding #** (0.6 s) opens the **TO** box with the saved addressee; OK saves it, blank included, and goes
+  back.
+- **The box is the stock text editor**, opened on the folder's TO item without the screen clear, in an amber
+  frame. Screen B keeps the top bar, the summary and the two clears of the cancelling EXIT quiet, and the RX
+  screen stays on the LCD behind it. While typing, APRS reception is paused.
+- **The return.** The radio only transmits with the menu closed. After sending, and after the automatic ack,
+  which until v111 left the radio on the main screen, the firmware presses OK by itself in the key reading: on
+  the main screen OK opens the menu, which reopens in the APRS folder; there the item moves to MESSAGES, and two
+  more OKs open the screen. Key beeps stay quiet meanwhile; a real key or PTT gives up, and it gives up by
+  itself after 7 OKs.
+- **The FILTER** stays as it was when coming back from the box or from sending; entered from the menu, it
+  opens on, as before.
+- **The footer** swaps S, B and F for **P**, the total of syncs (frames with a bad FCS or fixed all start with a
+  sync), and gains the labels for # (MSG) and held # (TO); 0 became FLT.
+- **Space.** The box screen did not fit in the 78 B left. The two items came out (56 B of the menu table and 12
+  of the texts), and drawing the spectrum's labels and bars moved to the voice area, next to the spectrum hooks
+  that call it (356 B; the area still holds only the spectrum). 34 B remain in `.livre` and 70 in the voice
+  area, and the stack stays at 740, 620, 696 and 728 B.
+- Tests: `teste_rx.py` gained section 10 (short and held #, the FILTER on return, the return through
+  `gancho_teclas` and the box through TO's set). [Section 24](reverse-engineering.md#the-messages-screen-the-boxes-and-the-return-v112).
+
 ## V3.1T — Oct 31 — the EQ in CHIRP, the FILTER with EQ and key 0 in APRS RX, and the cleanup
 
 v111 became **V3.1T**: `firmware/releases/BJ8300_BANK_v3.1T.anc` (sha256 `a3cba1cd…`, the same file; the VERSION

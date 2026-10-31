@@ -34,6 +34,17 @@ FIRMWARE(ESPERA_2MS, 0x01E36286);  void ESPERA_2MS(unsigned);        /* espera o
 /* O relogio: b[0x14810] conta milissegundos, de 2 em 2 no tique do TIMER1 (a espera de fabrica,
  * 0x01E36286, espera n x 2 nele). */
 #define TIQUE_MS   RAM(u32, 0x00014810)
+
+/* A tabela do menu (tela.c): no comeco, a dos grupos (v112, a volta da tela MESSAGES). */
+extern const unsigned char menu_tabela[];
+#define MENU_BASE  ((u32)menu_tabela)
+
+/* O numero em texto e a copia de texto, os dois com o 0 do fim: os da tela (tela.c, v113). O 0 cai onde o
+ * texto continua (quem monta escreve por cima) ou na folga do fim de cada buffer. */
+char *tela_numero(char *s, unsigned v, unsigned digitos);
+char *tela_junta(char *s, const char *t);
+#define numero  tela_numero
+#define junta   tela_junta
 #endif
 
 /* Hz na unidade do reg 0x71 (x 10.32444, a conta do roger), para um tom que so se sabe na hora (o do
@@ -413,23 +424,7 @@ unsigned hdlc_bit(struct hdlc *h, unsigned linha)
 
 /* Um numero com pelo menos `largura` algarismos (zeros a esquerda). Sem recursao (v76): ela pesava na
  * pilha do guarda, que monta o texto. */
-static char *numero(char *p, unsigned v, unsigned largura)
-{
-    unsigned m = 1;
-
-    while (--largura)
-        m *= 10;
-    while (v / m >= 10)
-        m *= 10;
-    for (; m; m /= 10)
-        *p++ = '0' + v / m % 10;
-    return p;
-}
-
-static char *decimal(char *p, unsigned v)
-{
-    return numero(p, v, 1);
-}
+#define decimal(p, v)  numero((p), (v), 1)
 
 /* Um indicativo do quadro (7 bytes) em texto, "PY2ABC-7"; devolve o fim. */
 static char *aprs_indicativo(char *s, const u8 *a)
@@ -448,13 +443,6 @@ static char *aprs_indicativo(char *s, const u8 *a)
 /* Os simbolos de APRS mais comuns da tabela primaria, pelo caractere: o que a estacao e. */
 static const char SIMBOLOS[] = "#DIGI\0&GATE\0>CAR\0-HOME\0_WX\0kTRUCK\0uTRUCK\0vVAN\0[WALK\0bBIKE\0"
                                "<MOTO\0jJEEP\0RRV\0sBOAT\0OBALLOON\0yYAGI\0rRPTR\0aAMB\0fFIRE\0";
-
-static char *copia(char *s, const char *t)
-{
-    while (*t)
-        *s++ = *t++;
-    return s;
-}
 
 #define TEXTO_MAX  104                  /* o quadro em texto, na tela e no historico (v74: 120; v75: o
                                          * registro de 128 B guarda tambem o ack e a hora) */
@@ -528,7 +516,7 @@ static char *simbolo(char *p, unsigned tabela, unsigned codigo)
             ;
     *p++ = ' ';
     if (*t)
-        return copia(p, t + 1);
+        return junta(p, t + 1);
     *p++ = visivel(codigo);
     return p;
 }
@@ -540,14 +528,14 @@ static char *movimento(char *p, unsigned rumo, unsigned nos)
         return p;
     *p++ = ' ';
     p = numero(p, (nos * 1852 + 500) / 1000, 1);
-    p = copia(p, "KM/H ");
+    p = junta(p, "KM/H ");
     p = numero(p, rumo, 1);
-    return copia(p, "DEG");
+    return junta(p, "DEG");
 }
 
 static char *altitude(char *p, int metros)
 {
-    p = copia(p, "ALT ");
+    p = junta(p, "ALT ");
     if (metros < 0) {
         *p++ = '-';
         metros = -metros;
@@ -606,7 +594,7 @@ static char *tempo(char *p, const u8 **px, const u8 *fim)
             vento = v;
         else if (*x == 't' && v != SEM_DADO) {   /* F em C, arredondado */
             v = (v - 32) * 50 / 9;
-            p = copia(p, " ");
+            p = junta(p, " ");
             if (v < 0) {
                 *p++ = '-';
                 v = -v;
@@ -620,18 +608,18 @@ static char *tempo(char *p, const u8 **px, const u8 *fim)
         } else if (*x == 'b' && v > 0) {
             *p++ = ' ';
             p = numero(p, (v + 5) / 10, 1);
-            p = copia(p, "HPA");
+            p = junta(p, "HPA");
         }
         x += 1 + l[1] - '0';
     }
     if (vento >= 0) {                      /* mph em km/h (SEM_DADO e negativo) */
         *p++ = ' ';
         p = numero(p, (vento * 1609 + 500) / 1000, 1);
-        p = copia(p, "KM/H");
+        p = junta(p, "KM/H");
         if (rumo >= 0) {
             *p++ = ' ';
             p = numero(p, rumo, 1);
-            p = copia(p, "DEG");
+            p = junta(p, "DEG");
         }
     }
     *px = x;
@@ -742,7 +730,7 @@ static char *mic_e(char *p, const u8 *d, unsigned desloc, const u8 **px, const u
     }
     if (!proprio) {
         *p++ = ' ';
-        p = copia(p, MIC_E[bits]);
+        p = junta(p, MIC_E[bits]);
     }
     *px = x;
     return p;
@@ -765,11 +753,11 @@ static char *extensao(char *p, const u8 **px, const u8 *fim)
                algarismo(x[5])) {
         *p++ = ' ';
         p = numero(p, (x[3] - '0') * (x[3] - '0'), 1);
-        p = copia(p, "W ");
+        p = junta(p, "W ");
         p = numero(p, ((10u << (x[4] - '0')) * 3048 + 5000) / 10000, 1);
-        p = copia(p, "M ");
+        p = junta(p, "M ");
         p = numero(p, x[5] - '0', 1);
-        p = copia(p, "DBI");
+        p = junta(p, "DBI");
         *px = x + 7;
     }
     return p;
@@ -857,7 +845,7 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
         for (k = i + 3; k < n && k < i + 8 && alfanumerico(q[k]); k++)
             ;
         if (k == n && k > i + 3 && q[i] == 'a' && q[i + 1] == 'c' && q[i + 2] == 'k') {
-            p = copia(p, "ACK ");          /* "ack" e o id, de 1 a 5, e nada depois (v74: "ackermann" */
+            p = junta(p, "ACK ");          /* "ack" e o id, de 1 a 5, e nada depois (v74: "ackermann" */
             i += 3;                        /* nao e confirmacao) */
         }
     } else {
@@ -871,9 +859,9 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
                 f = mic_e(p, d, d == q, &x, fim);
             } else if (k == '_' && x + 8 <= fim) {
                 x += 8;                    /* sem posicao: MMDDHHMM e os campos (o vento em c e s) */
-                f = tempo(copia(p, "WX"), &x, fim);
+                f = tempo(junta(p, "WX"), &x, fim);
             } else if (k == ';' && x + 17 <= fim) {
-                f = copia(p, "OBJ ");      /* ;NOME_____*DDHHMMz e a posicao */
+                f = junta(p, "OBJ ");      /* ;NOME_____*DDHHMMz e a posicao */
                 for (k = 0; k < 9; k++)
                     *f++ = visivel(x[k]);
                 while (f[-1] == ' ')
@@ -885,7 +873,7 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
                 for (k = 0; k < 9 && x + k < fim && x[k] != '!' && x[k] != '_'; k++)
                     ;
                 if (x + k < fim && k >= 3 && (x[k] == '!' || x[k] == '_')) {
-                    f = copia(p, "ITEM ");
+                    f = junta(p, "ITEM ");
                     while (*x != '!' && *x != '_')
                         *f++ = visivel(*x++);
                     x++;
@@ -1077,7 +1065,8 @@ static char *resumo(const char *t, unsigned n)
  * (0x01E4622A): o inicio (0x01E41022) poe b[0x1533C] = 1 e o passo 0 liga o TX; sem o PTT apertado o
  * passo 2 vai ao 3, e o 3 chama o fim (0x01E44604), que toca o roger ainda transmitindo, com o
  * microfone cortado (reg 0x30 = 0xC3FA), e volta a recepcao. O envio usa essa maquina inteira:
- *  - o SEND do menu so arma (ESTADO_MSG);
+ *  - o SEND do menu (o do Morse; o do APRS, desde a v112, o OK da caixa da tela MESSAGES) so arma
+ *    (ESTADO_MSG);
  *  - na volta seguinte do laco, gancho_ida_ptt (no lugar da chamada da ida do PTT, 0x01E46540)
  *    chama o inicio da TX como o PTT: potencia, desarme da dupla escuta, faixa permitida e canal
  *    ocupado ficam com ele, e o menu fecha (como com o PTT no menu);
@@ -1146,7 +1135,13 @@ static void espera_soltar(void)
     }
 }
 
-#define TECLA_EXIT   5                     /* o codigo cru da varredura (a tabela 0x01E60369) */
+#define TECLA_OK     2                     /* os codigos crus da varredura (a tabela 0x01E60369) */
+#define TECLA_CIMA   3
+#define TECLA_BAIXO  4
+#define TECLA_EXIT   5
+#define TECLA_ESTRELA 9
+#define TECLA_ZERO   13
+#define TECLA_CERQUILHA 17
 
 /* O EXIT segurado no editor de texto sai sem salvar (v72). No uso normal a fabrica manda o toque curto
  * de uma tecla so quando ela e solta (o laco do sinal, 0x01E46372: apertar nao manda nada; segurar 1 s
@@ -1166,20 +1161,85 @@ static void espera_soltar(void)
 #define MENU_TIPO     RAM(u8, 0x00014C00)
 #define EXIT_PRESO    RAM(u8, 0x00014BF1)   /* 0x9045 */
 
+/* A caixa da tela MESSAGES (v112). O # curto abre por cima da tela a caixa MESSAGE TO SEND, sempre vazia, e o
+ * # segurado a caixa TO, com o destinatario gravado: o laco sai (aprs_rx_grava), e o desvio depois do set
+ * (b_menu_marca, tela.c) abre o editor de texto de fabrica no item TO da pasta, sem a limpeza da tela que o
+ * OK de fabrica faria (aprs_caixa_abre). A tela B desenha so a caixa e cala o resto (telas_faixa, desenha,
+ * b_lado, e a limpeza do EXIT que cancela, gancho_limpa_caixa). O OK chama o set do TO (aprs_dest_grava),
+ * que grava o destinatario, ou grava a mensagem e arma o envio; o envio fecha o menu, como o PTT.
+ *
+ * A volta a tela, depois do OK, do EXIT que cancela, do envio e do ack: a tecla OK, injetada aqui na leitura
+ * das teclas do laco do sinal, como se o dono a apertasse - na tela principal ela abre o menu (0x01E4CBA2,
+ * o evento 17), que reabre na pasta APRS (menu_abre); nos grupos, entra na pasta; na pasta, o item vai ao
+ * MESSAGES e o OK o abre; aberto, o OK chama o set, e a tela volta. So com a TX parada e o envio feito; o
+ * bipe das teclas (o BEEP PROMPT, b[0x14B72], que 0x01E38B4C le) fica calado enquanto isso. Uma tecla de
+ * verdade ou o PTT desistem da volta, e ela desiste sozinha depois de 7 OKs sem a tela voltar (o
+ * caminho pede 4). Cada OK: apertado 5 leituras de 10 ms (a fabrica so aceita a mesma em tres seguidas) e
+ * solto 11, para o toque curto sair e a interface o tratar.
+ *
+ * O estado mora no 0x9046 dos ajustes (b[0x14BF2]) e a conta da volta no 0x9043 (b[0x14BEF]), livres pela
+ * varredura da v111, fora da janela do cabo; a partida e os ajustes de fabrica os zeram. */
+#define TELA_APRS     RAM(u8, 0x00014BF2)   /* 0x9046 */
+#define CAIXA         3u                    /* a caixa aberta: 1 a mensagem, 2 o TO */
+#define CAIXA_MSG     1u
+#define CAIXA_TO      2u
+#define FILTRO_OFF    4u                    /* a tecla 0 tinha desligado o FILTER: a tela volta assim */
+#define VOLTA         8u                    /* a tela MESSAGES volta sozinha */
+#define INJETA        RAM(u8, 0x00014BEF)   /* 0x9043: as leituras do OK injetado, de 1 em diante (bits 6:0), e o */
+#define BEEP_PROMPT   RAM(u8, 0x00014B72)   /* BEEP PROMPT (0 ou 1) que a volta calou (bit 7) */
+#define MENU_TABELA   RAM(u32, 0x00014BF4)
+#define MENU_NUMERO   RAM(u8, 0x00014BFA)
+#define MODO_TELA     RAM(u8, 0x0001533D)   /* 0 a tela principal, 1 o menu */
+#define ITEM_MESSAGES 2                     /* na pasta APRS (conferir.py, 3b) */
+#define ITEM_TO       5
+
+/* A volta acabou (a tela voltou, ou ela desistiu): o bipe como estava, e o estado zerado. Devolve o
+ * FILTRO_OFF, que a tela usa. */
+static unsigned volta_fim(void)
+{
+    unsigned f = TELA_APRS / FILTRO_OFF & 1;
+
+    if (INJETA)
+        BEEP_PROMPT = INJETA >> 7;
+    INJETA = 0;
+    TELA_APRS = 0;
+    return f;
+}
+
 unsigned gancho_teclas(void)
 {
-    unsigned k = TECLAS();
+    unsigned k = TECLAS(), t = TELA_APRS, j = INJETA, editor = MENU_TIPO == 7 && MENU_EDITANDO == 1;
 
     if (k != TECLA_EXIT)
         EXIT_PRESO = 0;
     else if (EXIT_PRESO)
         k = 255;
-    else if (MENU_TIPO == 7 && MENU_EDITANDO == 1 && CONTA_TECLA >= 60) {
+    else if (editor && CONTA_TECLA >= 60) {
         EDITOR_CURSOR = 0;
         EXIT_PRESO = 1;
         k = 255;
     }
-    return k;
+    if ((t & CAIXA) && !editor)            /* a caixa fechou pelo EXIT (o OK ja pos a volta) */
+        TELA_APRS = t = (t & FILTRO_OFF) | VOLTA;
+    if (!(t & VOLTA))
+        return k;
+    if (k != 255 || !PTT_SOLTO() || (j & 0x7F) >= 7 * 16) {
+        volta_fim();
+        return k;
+    }
+    if (ESTADO_MSG || TX_ESTADO || MODO_TELA > 1)
+        return k;                          /* o envio ainda nao foi, ou a tela nao e a principal nem o menu */
+    if (!j) {
+        j = BEEP_PROMPT << 7;
+        BEEP_PROMPT = 0;
+    }
+    if (!(j & 15) && MODO_TELA && MENU_TABELA != MENU_BASE && MENU_EDITANDO != 1) {
+        MENU_NUMERO = ITEM_MESSAGES;       /* na pasta: o MESSAGES, que o OK abre */
+        VALOR = ITEM_MESSAGES;
+        MENU_TIPO = 0;
+    }
+    INJETA = j + 1;
+    return (j & 15) < 5 ? TECLA_OK : 255;
 }
 
 /* Parar no meio: o PTT ou qualquer tecla. */
@@ -1266,7 +1326,7 @@ static unsigned quadro_aprs(u8 *q, u32 ack)
         *p++ = ':';
         LE_FLASH(ack, p, 9);
         p += 9;
-        p = (u8 *)copia((char *)p, ":ack");
+        p = (u8 *)junta((char *)p, ":ack");
         LE_FLASH(ack + 9, p, 6);
         p[5] = 0;
         while (*p)
@@ -1502,7 +1562,7 @@ const char titulo_aprs_ind[] = "CALLSIGN";    /* sem o APRS da pasta (v83) */
 const char titulo_aprs_ssid[] = "SSID";
 const char titulo_aprs_dest[] = "TO";
 const char titulo_aprs_caminho[] = "PATH";
-const char titulo_aprs_rx[] = "RX";
+const char titulo_aprs_rx[] = "MESSAGES";      /* o RX ate a v111 */
 const char *const aprs_caminho_opcoes[3] = {WIDE[0], "WIDE1-1,WIDE2-1", "NONE"};   /* o do quadro (v111) */
 const char *const aprs_rx_opcoes[1] = {"OK TO LISTEN"};
 
@@ -1540,8 +1600,10 @@ static unsigned resumo_texto(const char *t, unsigned n)
 /* O texto do editor no campo. O indicativo e o destinatario vao em maiusculas (o editor tem o modo abc),
  * e so com o que o AX.25 e o APRS aceitam: letras e numeros, e o '-' do SSID no destinatario (v75; um
  * espaco ou uma '/' no endereco faziam decodificadores estritos descartarem o quadro). O numero da
- * mensagem anda quando o destinatario ou o texto mudam: o SEND repete o mesmo. */
-__attribute__((noinline)) static void aprs_guarda_texto(unsigned qual)
+ * mensagem anda quando o destinatario muda e a cada mensagem da caixa (v112: cada uma e nova; ate a v111,
+ * so com o texto mudado, e o SEND repetia a mesma). Devolve se ha o indicativo e o campo, o que o envio
+ * pede. */
+__attribute__((noinline)) static unsigned aprs_guarda_texto(unsigned qual)
 {
     struct aprs a;
     unsigned max, i, k, n, c, antes;
@@ -1559,9 +1621,10 @@ __attribute__((noinline)) static void aprs_guarda_texto(unsigned qual)
                 t[n++] = c;
         }
     *tam = n;
-    if (qual && resumo_texto(t, n) != antes)
+    if (qual == 2 || (qual && resumo_texto(t, n) != antes))
         a.id = a.id % 99 + 1;
     grava_aprs(&a);
+    return a.tam_ind && n;
 }
 
 static char *aprs_texto_exibe(unsigned qual)
@@ -1588,28 +1651,46 @@ u16 aprs_dest_le(void)
     return 0;
 }
 
-u16 aprs_msg_le(void)
-{
-    aprs_texto_le(2);
-    return 0;
-}
-
 void aprs_ind_grava(void)
 {
     aprs_guarda_texto(0);
     editor_fecha();
 }
 
+/* O set do TO, que tambem e o das duas caixas da tela MESSAGES (v112): na caixa da mensagem, ela vai ao
+ * registro e o envio fica armado (com o indicativo e a mensagem); na do TO, o destinatario, vazio inclusive.
+ * Da caixa, sem a saida do editor de fabrica, que limparia a tela, e a volta fica pedida. */
 void aprs_dest_grava(void)
 {
-    aprs_guarda_texto(1);
-    editor_fecha();
+    unsigned t = TELA_APRS;
+
+    if (aprs_guarda_texto(t & CAIXA_MSG ? 2 : 1) && (t & CAIXA_MSG))
+        ESTADO_MSG = ARMADO_APRS;
+    if (!(t & CAIXA)) {
+        editor_fecha();
+        return;
+    }
+    TELA_APRS = (t & FILTRO_OFF) | VOLTA;
 }
 
-void aprs_msg_grava(void)
+/* Depois do set, no desvio do OK (b_menu_marca, tela.c): o laco da tela MESSAGES saiu pelo #, e a caixa abre
+ * no item TO da pasta, sem a limpeza da tela que o OK de fabrica faria (0x01E49B1C): o editor com o TO
+ * gravado, ou vazio para a mensagem. O resto do estado e o da abertura do MESSAGES (0x01E49B20..0x01E49B32),
+ * que o laco nao mexeu: editando, com o valor 0 (acao_le) e os campos do digitado zerados. Devolve 1 se
+ * abriu. */
+unsigned aprs_caixa_abre(void)
 {
-    aprs_guarda_texto(2);
-    editor_fecha();
+    unsigned c = TELA_APRS & CAIXA;
+
+    if (!c)
+        return 0;
+    MENU_NUMERO = ITEM_TO;
+    MENU_TIPO = 7;
+    if (c == CAIXA_TO)
+        aprs_texto_le(1);
+    else
+        editor_abre(TEXTO, 0, MAX_MSG);
+    return 1;
 }
 
 char *aprs_ind_exibe(void)
@@ -1620,11 +1701,6 @@ char *aprs_ind_exibe(void)
 char *aprs_dest_exibe(void)
 {
     return aprs_texto_exibe(1);
-}
-
-char *aprs_msg_exibe(void)
-{
-    return aprs_texto_exibe(2);
 }
 
 u16 aprs_ssid_le(void)
@@ -1707,11 +1783,13 @@ void aprs_caminho_grava(void)
  * num fundo proprio; as setas andam pelo historico (v75: segurada, a seta repete, e o historico da a
  * volta nas duas pontas), o OK abre o de cima inteiro (e fecha), o * apaga a tela
  * (v75; a tecla seguinte so a acende), o EXIT segurado apaga o historico (v71), o EXIT curto fecha o
- * aberto ou sai, e as outras teclas saem. A mensagem para mim com numero sai da tela
- * sozinha, para o ack ir ao ar (v75, guarda). Na barra de baixo, quantos syncs o modem achou em cada
- * polaridade, quantos quadros chegaram com o FCS errado (BAD) e quantos a correcao salvou (FIX), desde a
- * entrada. O ganho do modem e o do MODEM GAIN (v103: o # que o trocava saiu), e a cadeia de recepcao
- * entra filtrada para o APRS e sai como estava (filtro_rx, v102 e v103). */
+ * aberto ou sai, o # sai pedindo a caixa da mensagem, ou a do TO se ficou apertado 0,6 s (v112, a caixa
+ * em gancho_teclas), e as outras teclas saem. A mensagem para mim com numero sai da tela
+ * sozinha, para o ack ir ao ar (v75, guarda), e a tela volta depois dele (v112). Na barra de baixo, o P:
+ * quantos syncs o modem achou nas duas polaridades, desde a entrada (o BAD e o FIX, o FCS errado e o que
+ * a correcao salvou, so no num, ate a v111 na tela). O ganho do modem e o do MODEM GAIN (v103: o # que o
+ * trocava saiu), e a cadeia de recepcao entra filtrada para o APRS e sai como estava (filtro_rx, v102 e
+ * v103); de volta da caixa ou do envio (v112), o FILTER fica como estava. */
 /* A luz da tela (0x01E394D6, acende = 1 ou apaga = 0): com o PWM ligado, o desvio da v60 (b_luz, tela.c) a
  * atende pelo ciclo; sem ele, a de fabrica. */
 FIRMWARE(LUZ, 0x01E394D6);          void LUZ(unsigned);
@@ -1734,11 +1812,6 @@ void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas)
 #define ANEL_SUJO    2u                    /* o setor que nao recebe tem cabecalho: precisa ser apagado */
 #define ANEL_VELHOS(a)  ((a) >> 2)
 #define DUPLICADO_MS 30000u                /* a mesma estacao com o mesmo texto: so a primeira entra */
-#define TECLA_OK     2                     /* os codigos crus da varredura (a tabela 0x01E60369) */
-#define TECLA_CIMA   3
-#define TECLA_BAIXO  4
-#define TECLA_ESTRELA 9
-#define TECLA_ZERO   13
 #define EXIT_LONGO   100                   /* o EXIT segurado 0,6 s */
 #define ABERTO       1u                    /* os bits de modo, no laco */
 #define PRESO        2u                    /* uma tecla esta apertada: so conta de novo depois de solta */
@@ -2065,6 +2138,7 @@ void aprs_rx_grava(void)
     unsigned era_save = SAVE;              /* a economia de bateria fica desligada na tela (v111) */
     int hist = hist_abre(&anel), topo = 0;
 
+    num[0] = volta_fim();                  /* de volta da caixa ou do envio (v112): o FILTER como estava */
     SAVE = 0;
     ACORDA();
     DESARMA_DW();
@@ -2076,11 +2150,11 @@ void aprs_rx_grava(void)
     REG_W(0x5E, 0x0204);                   /* quase cheia com 4 palavras */
     REG_W(0x3F, 0x3002);                   /* avisos: sync, quase cheia, fim */
     REG_W(0x02, 0);
-    filtro_rx(1, era3);
+    filtro_rx(!num[0], era3);              /* desligado, a saida dele (o canal e os menus) nao muda nada */
     fsk_rx_arma(0);
     hdlc_comeca(&h, q, sizeof q);
     h.ruins = h.consertados = 0;
-    num[0] = num[3] = num[4] = 0;
+    num[3] = num[4] = 0;
     for (;;) {
         WDT();
         /* as teclas, sem esperar soltar: a apertada so conta de novo depois de solta; o EXIT, so ao soltar
@@ -2134,8 +2208,10 @@ void aprs_rx_grava(void)
                 modo &= ~ABERTO;
             } else if (f == TECLA_EXIT && (modo & ABERTO)) {
                 modo &= ~ABERTO;
-            } else {
-                break;                     /* o EXIT curto e as outras teclas saem */
+            } else {                       /* o EXIT curto e as outras teclas saem; o # (v112), para a caixa */
+                if (f == TECLA_CERQUILHA)
+                    TELA_APRS = CAIXA_MSG;
+                break;
             }
             pede = 15;
             continue;
@@ -2201,12 +2277,18 @@ void aprs_rx_grava(void)
             fsk_rx_arma(pol);
             desde = TIQUE_MS;
         }
-        if (ESTADO_MSG == ARMADO_ACK)      /* uma mensagem para mim: sai, e o ack vai ao ar (v75) */
+        if (ESTADO_MSG == ARMADO_ACK) {    /* uma mensagem para mim: sai, o ack vai ao ar (v75) e a tela */
+            TELA_APRS = VOLTA;             /* volta (v112) */
             break;
+        }
         if (i != h.ruins + h.consertados)
             pede |= 8;
     }
     espera_soltar();
+    if (TELA_APRS == CAIXA_MSG && TIQUE_MS - desde_tecla >= 600)
+        TELA_APRS = CAIXA_TO;              /* o # segurado 0,6 s: a caixa do TO */
+    if (TELA_APRS)                         /* a caixa ou a volta: o FILTER como esta */
+        TELA_APRS |= num[0] * FILTRO_OFF;
     if (modo & ESCURO)
         LUZ(1);
     REG_W(0x59, 0);
@@ -2218,22 +2300,5 @@ void aprs_rx_grava(void)
     REG_W(0x02, 0);
     filtro_rx(0, era3);                    /* o canal e os menus de novo (v102) */
     SAVE = era_save;                       /* antes de o OK gravar os ajustes (salva_menu) */
-}
-
-/* Arma o envio; a mensagem leva um numero (1 a 99) para o outro lado confirmar ("ack"). O numero so anda
- * quando o destinatario ou o texto mudam (v75, aprs_guarda_texto): mandar de novo a mesma mensagem e
- * repeti-la, e o outro lado a confirma sem a mostrar duas vezes. */
-void aprs_envia_grava(void)
-{
-    struct aprs a;
-
-    le_aprs(&a);
-    if (!a.tam_ind || !a.tam_msg)
-        return;
-    if (a.tam_dest && (!a.id || a.id > 99)) {
-        a.id = 1;
-        grava_aprs(&a);
-    }
-    ESTADO_MSG = ARMADO_APRS;
 }
 #endif

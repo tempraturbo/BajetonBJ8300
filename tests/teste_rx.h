@@ -18,6 +18,7 @@ static u8 ram_pc[0x20000];
 #define RAM(tipo, endereco)       (*(volatile tipo *)(ram_pc + ((endereco) & 0x1FFFF)))
 #define FIRMWARE(nome, endereco)  typedef int firmware_##nome
 #define TIQUE_MS                  RAM(u32, 0x00014810)
+#define MENU_BASE                 0x01E30000u     /* a tabela dos grupos do menu (v112) */
 
 /* ---------- o relogio e o modem ---------- */
 static unsigned long long relogio_us;
@@ -165,11 +166,15 @@ static unsigned n_roteiro;
  * deixou (v102). */
 static unsigned fotos[16][6], n_fotos, foto_de = ~0u, save_na_tela = ~0u;   /* o SAVE na primeira tecla */
 
+static unsigned tecla_forcada = 255;      /* v112: a tecla do teste da volta (teste_rx.c, volta) */
+
 static unsigned TECLAS(void)
 {
     unsigned i;
 
     anda(50);
+    if (tecla_forcada != 255)
+        return tecla_forcada;
     for (i = 0; i < n_roteiro; i++)
         if (TIQUE_MS >= roteiro[i].de && TIQUE_MS < roteiro[i].ate) {
             if (foto_de != roteiro[i].de && n_fotos < 16) {
@@ -281,4 +286,26 @@ static int SPRINTF(char *d, const char *formato, ...)
     n = vsprintf(d, formato, v);
     va_end(v);
     return n;
+}
+
+/* O numero em texto e a copia de texto da tela (tela.c), que o firmware usa (v113). */
+static char *numero(char *s, unsigned v, unsigned digitos)
+{
+    unsigned m = 1;
+
+    while (--digitos)
+        m *= 10;
+    while (v / m >= 10)
+        m *= 10;
+    for (; m; m /= 10)
+        *s++ = '0' + v / m % 10;
+    *s = 0;
+    return s;
+}
+
+static char *junta(char *s, const char *t)
+{
+    while ((*s = *t++) != 0)
+        s++;
+    return s;
 }

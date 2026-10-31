@@ -10,7 +10,9 @@ imitados, como estao mapeados) e roda o laco com transmissoes montadas aqui, con
   5. o historico em anel guarda os ultimos 31 a 62, em ordem, e o da v74 ("HST2") e apagado;
   6. a tela, gastando 15 ms por faixa, nao faz a FIFO transbordar numa rajada;
   7. as teclas: o * apaga a luz e a tecla seguinte so a acende; a seta da a volta; segurada, repete;
-     o EXIT segurado apaga o historico e o curto sai.
+     o EXIT segurado apaga o historico e o curto sai;
+  10. a tela MESSAGES (v112): o # pede a caixa da mensagem, e segurado a do TO; a volta (gancho_teclas)
+     e a caixa (aprs_caixa_abre e o set do TO).
 Uso: python -I tests/teste_rx.py   (precisa do zig: pip install ziglang)
 """
 import os
@@ -109,10 +111,10 @@ def ar_com(*partes, ruido=True):
     return ar
 
 
-TECLA = {'OK': 2, 'CIMA': 3, 'BAIXO': 4, 'EXIT': 5, 'ESTRELA': 9, 'ZERO': 13, 'MODO': 17}
+TECLA = {'OK': 2, 'CIMA': 3, 'BAIXO': 4, 'EXIT': 5, 'ESTRELA': 9, 'ZERO': 13, 'CERQUILHA': 17}
 
 
-def roda(ar, teclas, meu='PY2ABC', ssid=7, faixa_us=15000, flash_antes=None, nome='ar'):
+def roda(ar, teclas, meu='PY2ABC', ssid=7, faixa_us=15000, flash_antes=None, nome='ar', tela=0, injeta=0):
     arq = os.path.join(pasta, nome + '.txt')
     open(arq, 'w').write(''.join(map(str, ar)))
     rot = ','.join(f'{int(de * 1000)}:{int(ate * 1000)}:{TECLA[t]}' for de, ate, t in teclas) or '-'
@@ -121,8 +123,8 @@ def roda(ar, teclas, meu='PY2ABC', ssid=7, faixa_us=15000, flash_antes=None, nom
         antes = os.path.join(pasta, nome + '.antes')
         open(antes, 'wb').write(flash_antes)
     depois = os.path.join(pasta, nome + '.depois')
-    s = subprocess.run([exe, arq, rot, meu, str(ssid), str(faixa_us), antes, depois], capture_output=True,
-                       text=True, timeout=120)
+    s = subprocess.run([exe, arq, rot, meu, str(ssid), str(faixa_us), antes, depois, str(tela), str(injeta)],
+                       capture_output=True, text=True, timeout=120)
     if s.returncode:
         sys.exit(f'o laco falhou ({s.returncode}):\n{s.stdout}\n{s.stderr}')
     saida = {'R': [], 'A': None}
@@ -144,6 +146,8 @@ def roda(ar, teclas, meu='PY2ABC', ssid=7, faixa_us=15000, flash_antes=None, nom
             saida['M'] = [int(x, 16) for x in l[1:].split()]
         elif l.startswith('V '):
             saida['V'] = tuple(int(x) for x in l[2:].split())
+        elif l.startswith('T '):
+            saida['T'] = tuple(int(x) for x in l[2:].split())
         elif l.startswith('C '):
             c = [int(x) for x in l[2:].split()]
             saida['C'] = dict(zip(('marca', 'espaco', 'bad', 'fix', 'transbordou', 'faixas', 'ms', 'luz', 'pos'), c))
@@ -189,7 +193,8 @@ confere('3. a copia em 30 s nao entra; depois de 30 s, entra', s['R'], ['0 PU2CC
 m1 = quadro('PU2XYZ-9', ':PY2ABC-7 :Oi, tudo bem?{12')
 s = roda(ar_com((1.0, transmissao([m1]))), sai_em(9.0), nome='ack')
 confere('4. a mensagem para mim entra em ambar', s['R'], ['1 PU2XYZ-9> Oi, tudo bem?'])
-confere('4. o laco saiu antes do EXIT, com o ack armado', (s['E'][0], s['C']['ms'] < 8000), (ord('K'), True))
+confere('4. o laco saiu antes do EXIT, com o ack armado e a volta pedida (v112)',
+        (s['E'][0], s['C']['ms'] < 8000, s['T']), (ord('K'), True, (8, 0, 0)))
 info = s['A'][s['A'].index(b'\x03\xf0') + 2:-2] if s['A'] else b''   # sem o FCS
 confere('4. o ack: ":PU2XYZ-9 :ack12", do meu indicativo', (info, s['A'][7:14] if s['A'] else b''),
         (b':PU2XYZ-9 :ack12', endereco('PY2ABC-7', ultimo=False)[:6] + bytes([s['A'][13]]) if s['A'] else b''))
@@ -229,14 +234,14 @@ confere('7. o EXIT segurado apaga o historico e o laco segue', (s['H'], s['C']['
 
 # 8. o modem: o 0x58 montado campo a campo, pelos comentarios do driver do BK4819 do UV-K5 (o modo de RX 7
 # = FFSK 1200/1800, a banda 1, os bits 7:6 em 3), com o ganho do MODEM GAIN (HIGH de fabrica, a RAM zerada); a
-# saida desliga o modem. O # (v103: nao troca mais o ganho) sai da tela, como as outras teclas sem funcao.
+# saida desliga o modem. O # (v103: nao troca mais o ganho) sai da tela, e desde a v112 pede a caixa.
 def reg58(rx, banda, b76, ganho):
     return 1 << 13 | rx << 10 | ganho << 8 | b76 << 6 | banda << 1 | 1
 
 
 s = roda(ar_com(), sai_em(2.0), nome='ganho')
 confere('8. a entrada poe o ganho do MODEM GAIN, e a saida desliga o modem', s['M'], [reg58(7, 1, 3, 3), 0])
-s = roda(ar_com(), [(1.0, 1.1, 'MODO')], nome='cerquilha')
+s = roda(ar_com(), [(1.0, 1.1, 'CERQUILHA')], nome='cerquilha')
 confere('8. o # sai da tela', (s['M'], s['C']['ms'] < 1500), ([reg58(7, 1, 3, 3), 0], True))
 
 # 9. o FILTER (v102; sempre ligado desde a v103): a entrada poe o filtro largo do espectro (0x43 = 0x49A8),
@@ -255,6 +260,54 @@ s = roda(ar_com(), [(1.0, 1.1, 'ZERO'), (1.5, 1.6, 'CIMA'), (2.0, 2.1, 'ZERO'), 
          nome='filtro0')
 confere('9b. o 0 desliga o FILTER e o 0 seguinte o liga de novo; a saida devolve o canal',
         (s['F'], s['G']), ([ligado, antes, antes, ligado, ligado], (antes, 2)))   # os menus no 0 e na saida
+
+# 10. a tela MESSAGES (v112). O # curto pede a caixa da mensagem (b[0x14BF2] = 1) e o segurado 0,6 s a do TO
+# (2), com o FILTER desligado pela tecla 0 no bit 2; o laco sai no aperto, e o tempo e medido na saida, que
+# espera a tecla soltar.
+s = roda(ar_com(), [(1.0, 1.1, 'CERQUILHA')], nome='caixa_msg')
+confere('10. o # curto pede a caixa da mensagem', s['T'], (1, 0, 0))
+s = roda(ar_com(), [(1.0, 2.0, 'CERQUILHA')], nome='caixa_to')
+confere('10. o # segurado pede a do TO, depois de soltar', (s['T'], s['C']['ms'] >= 2000), ((2, 0, 0), True))
+s = roda(ar_com(), [(1.0, 1.1, 'ZERO'), (1.5, 1.6, 'CERQUILHA')], nome='caixa_filtro')
+confere('10. com o FILTER desligado, a caixa leva o bit dele', s['T'], (5, 0, 0))
+s = roda(ar_com(), sai_em(2.0), nome='saida_normal')
+confere('10. o EXIT nao pede nada', s['T'], (0, 0, 0))
+# de volta (o b[0x14BF2] com a volta e o FILTER desligado; o b[0x14BEF] com o bipe calado, que estava em 1, e 5
+# leituras): o FILTER continua desligado na entrada, o bipe volta e o estado zera
+s = roda(ar_com(), [(1.0, 1.1, 'CIMA')] + sai_em(2.0), nome='de_volta', tela=4 | 8, injeta=0x80 | 5)
+confere('10. de volta, o FILTER como estava (desligado), o bipe de volta e o estado zerado',
+        (s['F'], s['T']), ([antes, antes], (0, 0, 1)))
+
+
+def roda_modo(modo):
+    r = subprocess.run([exe, modo], capture_output=True, text=True, timeout=60)
+    if r.returncode:
+        sys.exit(f'o teste {modo} falhou ({r.returncode}):\n{r.stdout}\n{r.stderr}')
+    return [l.split(' ') for l in r.stdout.splitlines()]
+
+
+# a volta: cada OK apertado 5 leituras e solto 11; espera o envio; na pasta poe o MESSAGES (o item 2, valor 2,
+# tipo 0); uma tecla de verdade desiste e devolve o bipe; a caixa fechada pelo EXIT vira volta; presa, desiste
+# depois de 7 OKs
+v = roda_modo('volta')
+ciclo = [2] * 5 + [255] * 11
+k = [list(map(int, l[1:])) for l in v if l[0] == 'K']
+rr = [tuple(map(int, l[1:])) for l in v if l[0] == 'R']
+presa = [2 if (c & 15) < 5 else 255 for c in range(1, 112)] + [255, 255]
+confere('10. a volta: espera o envio, um OK por ciclo, o MESSAGES na pasta, a tecla desiste',
+        (k[:6], rr[:6]),
+        ([[255] * 3, ciclo, ciclo, [2], [4], [2]],
+         [(8, 0, 1, 0, 0, 0), (8, 144, 0, 0, 0, 0), (8, 160, 0, 0, 0, 0), (8, 161, 0, 2, 2, 0), (0, 0, 1, 2, 2, 0),
+          (12, 129, 0, 2, 2, 0)]))
+confere('10. a volta presa desiste depois de 7 OKs, com o bipe de volta', (k[6], rr[6]), (presa, (0, 0, 1, 2, 2, 0)))
+
+# a caixa: abre no TO (item 5, tipo 7), a da mensagem vazia ate 37 e a do TO com o gravado ate 9; o OK da
+# mensagem a grava com o numero seguinte e arma o envio ('A'), vazia nao arma; o TO em branco se grava; fora da
+# caixa, o TO da pasta como sempre (maiusculas)
+c = [' '.join(l) for l in roda_modo('caixa')]
+confere('10. a caixa e o set do TO', c,
+        ['B 0 0 0 0 0 ', 'B 1 5 7 0 37 ', 'D 12 65 8 6 8 PU2XYZ-9|Ola 73', 'B 1 5 7 0 37 ', 'D 8 0 8 0 9 PU2XYZ-9|',
+         'B 1 5 7 8 9 PU2XYZ-9', 'D 8 0 0 0 10 |', 'D 0 0 5 0 11 PY5ZZ|'])
 
 print()
 print('tudo certo' if not falhas else f'{len(falhas)} FALHARAM: ' + ', '.join(falhas))

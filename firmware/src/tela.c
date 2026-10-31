@@ -61,6 +61,8 @@ FIRMWARE(ENVIA, 0x01E3ADBC);   void ENVIA(void);
 #define NIVEL_BATERIA    RAM(u32, 0x000149C0)
 #define MODO_TELA        RAM(u8, 0x0001533D)             /* 0/3/5 dois VFOs, 1 menu, 2 radio, 7 DTMF,
                                                           * 17 scan QT, 20 espectro */
+#define TELA_APRS        RAM(u8, 0x00014BF2)             /* a tela MESSAGES (mensagem.c, v112): bits 1:0 a */
+#define CAIXA_APRS       (TELA_APRS & 3)                 /* caixa aberta (1 a mensagem, 2 o TO), bit 3 a volta */
 #define ESTADO_RX        RAM(u8, 0x00015367)             /* 0 e 1 sintoniza, 2 espera, 3 vigia,
                                                           * 4 recebendo, 5 MO (0x01E467A6) */
 #define AMPLI_RX         RAM(u8, 0x000129D4)             /* o pedido do amplificador da recepcao: */
@@ -131,6 +133,14 @@ FIRMWARE(ENVIA, 0x01E3ADBC);   void ENVIA(void);
  * os chama, para nao somarem dois quadros no fim do caminho. */
 #define SEPARADA  __attribute__((noinline))
 #define COLADA    inline __attribute__((always_inline))
+/* O que so o espectro chama mora com ele no .vozes (secao 15; v112, para o .livre caber a tela MESSAGES). */
+#ifdef PREVIA
+#define NAS_VOZES
+#define DADO_NAS_VOZES
+#else
+#define NAS_VOZES       __attribute__((section(".vozes.text")))
+#define DADO_NAS_VOZES  __attribute__((section(".vozes.rodata")))
+#endif
 
 struct lado {
     u32 freq;              /* em 10 Hz (441.05000 MHz = 44105000); a de TX enquanto transmite */
@@ -368,7 +378,10 @@ COLADA static unsigned etiqueta(unsigned x, unsigned y, const char *s, unsigned 
     return direita ? x : x + l + 2;
 }
 
-/* Numero sem sinal em texto, com pelo menos `digitos` digitos. Devolve o fim. */
+/* Numero sem sinal em texto, com pelo menos `digitos` digitos, e o 0 do fim. Devolve o fim. Desde a v113 e
+ * tambem a do mensagem.c (tela_numero, abaixo), que ate a v112 tinha a sua, sem o vetor e sem o 0 do fim: com
+ * o jeito dela aqui, os chamadores da tela guardavam mais registradores em volta da chamada, o codigo crescia
+ * 72 B e a pilha da interface passava 8 B. */
 static char *numero(char *s, unsigned v, unsigned digitos)
 {
     char tmp[10];
@@ -384,12 +397,19 @@ static char *numero(char *s, unsigned v, unsigned digitos)
     return s;
 }
 
+/* Copia t para s com o 0 do fim; devolve onde o 0 ficou (v113: tambem a do mensagem.c). */
 static char *junta(char *s, const char *t)
 {
     while ((*s = *t++) != 0)
         s++;
     return s;
 }
+
+/* As duas para o mensagem.c (v113), por outro nome: aqui dentro continuam static, como antes. */
+#ifndef PREVIA
+char *tela_numero(char *s, unsigned v, unsigned digitos) __attribute__((alias("numero")));
+char *tela_junta(char *s, const char *t) __attribute__((alias("junta")));
+#endif
 
 /* "441.05000" (casas = 5) ou "441.050" (casas = 3). */
 static void frequencia(char *s, u32 f, unsigned casas)
@@ -915,9 +935,19 @@ static void cena(const struct estado *e)
         caixa_dtmf(TOPO_DTMF(e));
 }
 
-/* As linhas [y0, y1) da tela, em janelas de ate 32 linhas (32 x 160 x 2 = 10240 B, o buffer todo). */
+/* O menu calado (v112): com a caixa da tela MESSAGES aberta, so ela se desenha, por cima da tela do RX que
+ * o LCD guarda; com a tela voltando, nada. */
+static unsigned calado(void)
+{
+    return MODO_TELA == 1 && (TELA_APRS & 11);
+}
+
+/* As linhas [y0, y1) da tela, em janelas de ate 32 linhas (32 x 160 x 2 = 10240 B, o buffer todo). No menu
+ * calado, nada: a barra de cima e a da tela de tras. */
 static void desenha(const struct estado *e, unsigned y0, unsigned y1)
 {
+    if (calado())
+        return;
     for (; y0 < y1; y0 += 32) {
         janela_b(0, 160, y0, y1 < y0 + 32 ? y1 : y0 + 32, COR_FUNDO);
         cena(e);
@@ -1052,8 +1082,9 @@ void b_esp_eixo(u32 inicio, u32 fim)        /* 0x01E4AB2A (ROTULOS_FREQ) */
 
 /* Os ganchos do espectro no bancos.c (no .vozes) desenham por aqui: os rotulos (a rotina dele troca
  * 0x01E4ABDC), o pico da passada (f = 0 so o apaga, na janela nova) e cada coluna das barras, com x
- * relativo a fatia aberta e o topo de fabrica (64 menos a altura). */
-void b_esp_rotulos(unsigned n, unsigned p)
+ * relativo a fatia aberta e o topo de fabrica (64 menos a altura). Desde a v112 os rotulos e as colunas
+ * moram com eles no .vozes: so eles os chamam. */
+NAS_VOZES void b_esp_rotulos(unsigned n, unsigned p)
 {
     PEDACO_B(0, ESP_X_FREQ, ESP_L1, ESP_L2, esp_pontos(n));
     PEDACO_B(0, ESP_X_PICO, ESP_L2, ESP_GRAFICO, esp_passo(p));
@@ -1064,7 +1095,7 @@ void b_esp_pico(u32 f)
     PEDACO_B(ESP_X_PICO, ESP_X_DBM, ESP_L2, ESP_GRAFICO, if (f) esp_pico(f));
 }
 
-void b_esp_coluna(unsigned x, unsigned topo, unsigned atual)
+NAS_VOZES void b_esp_coluna(unsigned x, unsigned topo, unsigned atual)
 {
     esp_coluna(JAN_X0 + x, topo < 64 ? 64 - topo : 0, atual);
 }
@@ -1096,8 +1127,8 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * a quantidade de posicoes da tabela no byte 1 e uma marca por posicao a partir do byte 4. Os dois saem do
  * compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e zero no resto, e o
  * montar so escreve neles se achar exatamente isso. */
-const unsigned char menu_tabela[97 * 28] __attribute__((aligned(4))) = {0xFF};
-const unsigned char menu_textos[532] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v111) */
+const unsigned char menu_tabela[96 * 28] __attribute__((aligned(4))) = {0xFF};   /* v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN */
+const unsigned char menu_textos[524] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v113) */
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
  * O mapa do motor de menus esta no telas.c, junto do desenho. O que muda o nivel faz o mesmo que as
@@ -1189,13 +1220,20 @@ u32 b_menu_um(void)
  * aqui (v101, salva_menu, bancos.c), para nada se perder com o radio desligado de menu aberto. E nos
  * itens de marcar varios (MARCA_VARIOS: o BANK e o CHANNEL dos BANKS, v55) a edicao continua. So o
  * estado da recepcao vai a 0 - sintoniza de novo, como o de fabrica faz depois de mudar o ajuste - e o
- * desvio segue para o redesenho e a volta (0x01E49C7C). O EXIT sai: cada OK ja gravou. */
+ * desvio segue para o redesenho e a volta (0x01E49C7C). O EXIT sai: cada OK ja gravou. Depois do laco da
+ * tela MESSAGES que saiu pelo # (v112), a caixa abre no editor (aprs_caixa_abre, mensagem.c), e o desvio
+ * segue do mesmo jeito: o redesenho e o da caixa. */
 void salva_menu(void);
+unsigned aprs_caixa_abre(void);
 u32 b_menu_marca(void)
 {
     unsigned n = menu_nivel();
 
     salva_menu();
+    if (aprs_caixa_abre()) {
+        ESTADO_RX = 0;
+        return 1;
+    }
     if (n == 0 || n >= RADIO
         || !(MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO) & MARCA_VARIOS))
         return 0;
@@ -1273,11 +1311,14 @@ static unsigned telas_modo(void)
     return m == 1 || m == 2 || m == 17 ? m : 0;
 }
 
-/* As linhas [y0, y1) de um modo. Separada, para a estrutura so pesar na pilha de quem desenha. */
+/* As linhas [y0, y1) de um modo. Separada, para a estrutura so pesar na pilha de quem desenha. No menu
+ * calado (v112), so o editor, que e a caixa. */
 SEPARADA static void telas_faixa(unsigned m, unsigned y0, unsigned y1, unsigned variante, unsigned item)
 {
     struct telas t;
 
+    if (m == 1 && calado() && !menu_editor())
+        return;
     le_telas(&t, m, variante, item);
     desenha_telas(&t, y0, y1);
 }
@@ -1333,7 +1374,7 @@ u32 b_editor_modo(void)
     if (telas_modo() != 1 || !menu_editor())
         return 0;
     EDITOR_DESENHADO = EDITOR_MODO;
-    telas_faixa(1, ALTURA_ESTADO, 128, 0, 0);
+    telas_faixa(1, calado() ? CAIXA_Y0 : ALTURA_ESTADO, 128, 0, 0);   /* a caixa: de onde ela comeca */
     return 1;
 }
 
@@ -1628,8 +1669,8 @@ u32 b_lado(void)
     unsigned m = telas_modo();
 
     if (m == 1 || m == 17) {
-        if (m == 17 || !menu_pasta())      /* a janela de pasta do menu ocupa o lugar */
-            desenha_resumo();
+        if (m == 17 || !(menu_pasta() || calado()))   /* a janela de pasta do menu ocupa o lugar; o calado */
+            desenha_resumo();              /* deixa a tela do RX (v112) */
         return 1;
     }
     return lado_principal();
@@ -1983,5 +2024,18 @@ void gancho_limpa(unsigned modo)
 {
     if (!ativa())
         LIMPA(modo);
+}
+
+/* No lugar da limpeza do EXIT que cancela o editor de texto (0x01E4D524, LIMPA(2)), e da saida do editor
+ * logo depois (0x01E4D528, que vira nop no montar.py; ela redesenha a bateria e limpa de novo, LIMPA(5)):
+ * com a caixa da tela MESSAGES aberta (v112), nada - a tela do RX fica no LCD ate voltar. Sem ela, as duas
+ * de fabrica, na mesma ordem. */
+FIRMWARE(SAI_DO_EDITOR, 0x01E3C7AA);  void SAI_DO_EDITOR(void);
+void gancho_limpa_caixa(unsigned modo)
+{
+    if (CAIXA_APRS)
+        return;
+    LIMPA(modo);
+    SAI_DO_EDITOR();
 }
 #endif

@@ -507,6 +507,9 @@ for g in range(grupos):
         problemas.append(f'{nome}: marcas {marcas} erradas')
     if filhos != [montar.rotulo(k) for k in chaves]:
         problemas.append(f'{nome}: os textos {filhos} nao sao os do montar')
+    # v112: a caixa e a volta da tela MESSAGES acham o item pela posicao (mensagem.c, ITEM_MESSAGES e ITEM_TO)
+    if nome == 'APRS' and filhos[2:3] + filhos[5:6] != ['MESSAGES', 'TO']:
+        problemas.append(f'APRS: o MESSAGES e o TO fora das posicoes 2 e 5 que a tela usa: {filhos}')
     print(f'3b. {g + 1:2d} {nome:9s} ' + ', '.join(f + ('*' * bool(m)) for f, m in zip(filhos, marcas)))
     vistos += [bytes(tab[(p + i) * T:(p + i + 1) * T]) for i in range(n)]
     p += n

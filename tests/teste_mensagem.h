@@ -26,3 +26,25 @@ static unsigned para(void)
 {
     return 0;                              /* no PC nada para o Morse */
 }
+
+/* O numero em texto e a copia de texto da tela (tela.c), que o firmware usa (v113). */
+static char *numero(char *s, unsigned v, unsigned digitos)
+{
+    unsigned m = 1;
+
+    while (--digitos)
+        m *= 10;
+    while (v / m >= 10)
+        m *= 10;
+    for (; m; m /= 10)
+        *s++ = '0' + v / m % 10;
+    *s = 0;
+    return s;
+}
+
+static char *junta(char *s, const char *t)
+{
+    while ((*s = *t++) != 0)
+        s++;
+    return s;
+}

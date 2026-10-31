@@ -139,6 +139,7 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
 unsigned watch_vista(void);
 void aplica_audio(void);                  /* as pastas MIC (v49, v59) e AUDIO (expansor e porta, v79) */
 void aplica_eq(void);                     /* o EQ das duas pastas (v108) */
+void aplica_agc(void);                    /* o RX GAIN da CALIBRATION (v113) */
 void aplica_cristal(void);                /* o CRYSTAL FINE (v59) */
 void luz_inicia(void);                    /* a luz por PWM (v60, tela.c) */
 void luz_aplica(void);                    /* o nivel do BRIGHTNESS na hora (v61, tela.c) */
@@ -539,18 +540,25 @@ static void revalida_lados(void)
  * idioma, e o retorno aos ajustes de fabrica (0x01E4842E) o preserva.
  */
 /* O envio do Morse e do APRS armado ou no ar (v65, mensagem.c): o 0x9044 dos ajustes (b[0x14BF0]; ate a
- * v110, o 0x903A, que agora e do EQ). Zerado na partida e nos ajustes que chegam pelo cabo ou pelo retorno
- * aos de fabrica, para nada transmitir sozinho. */
-#define ESTADO_ENVIO   (*(volatile u8 *)0x00014BF0)
+ * v110, o 0x903A, que agora e do EQ); e (v112) a caixa e a volta da tela MESSAGES, no 0x9046 e no 0x9043
+ * (b[0x14BF2] e b[0x14BEF]). Zerados na partida e nos ajustes que chegam pelo cabo ou pelo retorno aos de
+ * fabrica, para nada transmitir nem voltar sozinho. */
+NA_LIVRE_COD static void zera_envio(void)
+{
+    *(volatile u8 *)0x00014BEF = 0;
+    *(volatile u16 *)0x00014BF0 = 0;      /* o envio e o EXIT segurado (mensagem.c, gancho_teclas) */
+    *(volatile u8 *)0x00014BF2 = 0;
+}
 
 void gancho_partida(void)
 {
     FIM_DA_CARGA();
     IDIOMA = 0;
-    ESTADO_ENVIO = 0;
+    zera_envio();
     aplica_audio();                        /* por cima da copia da calibracao e do init do chip (MIC e AUDIO) */
     aplica_cristal();                      /* idem (CRYSTAL FINE) */
     aplica_eq();                           /* por cima do EQ da partida de fabrica (v108) */
+    aplica_agc();                          /* e do AGC dela (v113) */
     if (watch_vista() == WATCH_SINGLE)     /* no SINGLE a dupla escuta fica desligada (WATCH, abaixo) */
         TDR = 0;
     aplica_filtro(0);
@@ -1575,6 +1583,47 @@ __attribute__((noinline)) static void eq_grava(unsigned k)
     aplica_eq();
 }
 
+/* ---------- RX GAIN: o ganho do receptor (v113, a pasta CALIBRATION) ----------
+ * O AGC do BK4819 anda por cinco degraus, cada um um registrador com o ganho do LNA curto (bits 9:8: 0, -11,
+ * -16 e -19 dB), do LNA (7:5: 0, -2, -4, -6, -9, -14, -19 e -24 dB), do mixer (4:3: 0, -3, -6 e -8 dB) e do PGA
+ * (2:0: 0, -3, -6, -9, -15, -21, -27 e -33 dB), do 3 para o -1: o 0x13, o 0x12, o 0x11, o 0x10 e o 0x14
+ * (BK4819_Registers_V1.1, docs/referencias). Ele desce um degrau quando o nivel passa do limite de cima do 0x49
+ * e sobe quando cai abaixo do de baixo, 1 dB por passo: a fabrica grava 85 e 50 (0x2AB2), uma janela de 35 dB,
+ * e nenhum salto entre degraus pode passar dela, senao ele fica pulando entre os dois. A fabrica so grava os
+ * cinco na partida (0x01E56558..0x01E56580; o espectro guarda e devolve o 0x13, 0x01E3FEE4 e 0x01E3FF0E):
+ * -2, -17, -40, -57 e -71 dB. MAX, a pedido do dono: 0, -10, -25, -40 e -65 dB, saltos de 10 a 25 dB. Com sinal
+ * fraco so vale o degrau de cima, 2 dB a mais no LNA. Gravado no 0x9040 dos ajustes (b[0x14BEC], livre desde
+ * a v111 e fora da janela do cabo) como 0xA5, que nem o EQ das v108 a v110 (0xB0 + a posicao) nem a sujeira
+ * do cabo ate a v110 (a frequencia do VFO A em BCD) deixam ali; qualquer outro valor vale DEFAULT. */
+#define GANHO_RX       (*(volatile u8 *)0x00014BEC)
+#define GANHO_MAX      0xA5
+DADO_NA_LIVRE const char titulo_rx_ganho[] = "RX GAIN";
+DADO_NA_LIVRE const char *const rx_ganho_opcoes[2] = {"DEFAULT", "MAX"};
+DADO_NA_LIVRE static const u16 agc_degraus[2][5] = {
+    {0x0318, 0x033A, 0x03DB, 0x03DF, 0x0210},   /* o 0x10 a 0x14 da partida: -57, -40, -17, -2 e -71 dB */
+    {0x033A, 0x033D, 0x03BD, 0x03FF, 0x0300}};  /* MAX: -40, -25, -10, 0 e -65 dB */
+
+/* Na partida, nos ajustes de fabrica ou do cabo, e no OK do item. */
+NA_LIVRE_COD void aplica_agc(void)
+{
+    const u16 *t = agc_degraus[GANHO_RX == GANHO_MAX];
+    unsigned i;
+
+    for (i = 0; i < 5; i++)
+        ESCREVE_REG(0x10 + i, t[i]);
+}
+
+NA_LIVRE_COD u16 rx_ganho_le(void)
+{
+    return GANHO_RX == GANHO_MAX;
+}
+
+NA_LIVRE_COD void rx_ganho_grava(void)
+{
+    GANHO_RX = VALOR ? GANHO_MAX : 0;
+    aplica_agc();
+}
+
 u16 eq_graves_rx_le(void)   { return eq_le(0); }
 u16 eq_agudos_rx_le(void)   { return eq_le(1); }
 u16 eq_graves_tx_le(void)   { return eq_le(2); }
@@ -1781,13 +1830,14 @@ NA_LIVRE_COD void brilho_grava(void)
 
 NA_LIVRE_COD void gancho_ajustes(void)
 {
-    ESTADO_ENVIO = 0;
+    zera_envio();
     if (watch_vista() == WATCH_SINGLE)     /* o RESET (VFO e ALL) poe o TDR de fabrica, 1 (a tabela de
                                             * 0x01E607B1), e o CHIRP pode liga-lo: no SINGLE fica em 0 (v82) */
         TDR = 0;
     aplica_audio();
     aplica_cristal();
     aplica_eq();                           /* v111: o EQ que o CHIRP grava vale sem religar */
+    aplica_agc();                          /* v113: o RESET poe o RX GAIN em DEFAULT */
     luz_aplica();
     SALVA_AJUSTES();
 }

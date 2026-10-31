@@ -1,6 +1,9 @@
 /* Roda o laco do APRS RX (firmware/src/mensagem.c, aprs_rx_grava) no PC, com o modem, a flash e as teclas
  * do teste_rx.h, para o teste_rx.py (v75). Uso:
- *   teste_rx <ar> <roteiro> <indicativo> <ssid> <faixa_us> [<flash antes> [<flash depois>]]
+ *   teste_rx <ar> <roteiro> <indicativo> <ssid> <faixa_us> [<flash antes> [<flash depois> [<tela> <injeta>]]]
+ *   teste_rx volta    (v112: a volta da tela MESSAGES, gancho_teclas)
+ *   teste_rx caixa    (v112: a caixa, aprs_caixa_abre e aprs_dest_grava)
+ * <tela>/<injeta>: o b[0x14BF2] e o b[0x14BEF] na entrada (a caixa e a volta, v112), com o BEEP PROMPT em 0.
  * <ar>: os bits de linha ('0'/'1'), 1200 por segundo desde o tempo 0; <roteiro>: as teclas, "de:ate:tecla"
  * em ms separados por virgula ("-" sem nenhuma); <faixa_us>: quanto a tela gasta por faixa de 32 linhas;
  * <flash antes>/<flash depois>: a imagem de 0xD0000 a 0xDFFFF a carregar e a gravar.
@@ -12,8 +15,99 @@
  *   F <0x43> <0x31> <0x28> <0x2B> <0x54> <0x75> no comeco de cada tecla do roteiro
  *   G os mesmos registradores no fim, e quantas vezes o aplica_audio rodou
  *   V <o SAVE na primeira tecla> <o SAVE no fim> (o do menu e 3)
- *   C <syncs marca> <syncs espaco> <BAD> <FIX> <transbordou> <faixas> <ms> <luz> <posicao na tela> */
+ *   C <syncs marca> <syncs espaco> <BAD> <FIX> <transbordou> <faixas> <ms> <luz> <posicao na tela>
+ *   T <b[0x14BF2], a caixa e a volta> <b[0x14BEF]> <o BEEP PROMPT> (v112) */
 #include "../firmware/src/mensagem.c"
+
+/* A volta (v112): o gancho_teclas numa sequencia de estados, cada chamada uma leitura de 10 ms do laco do
+ * sinal. Imprime "K <o que devolveu, em sequencia>" e "R <TELA_APRS> <INJETA> <BEEP> <item> <valor> <tipo>"
+ * depois de cada passo. */
+static void leituras(unsigned n)
+{
+    printf("K");
+    while (n--)
+        printf(" %u", gancho_teclas());
+    printf("\nR %u %u %u %u %u %u\n", TELA_APRS, INJETA, BEEP_PROMPT, MENU_NUMERO, VALOR, MENU_TIPO);
+}
+
+static int volta(void)
+{
+    RAM(u32, 0x001E5004) = 0x1000;         /* o PTT solto */
+    TELA_APRS = VOLTA;                     /* 1. o envio no ar: espera, sem contar */
+    BEEP_PROMPT = 1;
+    ESTADO_MSG = 'a';
+    TX_ESTADO = 1;
+    leituras(3);
+    ESTADO_MSG = TX_ESTADO = 0;            /* 2. na tela principal: o OK que abre o menu */
+    leituras(16);
+    MODO_TELA = 1;                         /* 3. nos grupos: o OK que entra na pasta */
+    MENU_TABELA = MENU_BASE;
+    leituras(16);
+    MENU_TABELA = MENU_BASE + 17 * 28;     /* 4. na pasta, no TO: o item vai ao MESSAGES, e o OK */
+    MENU_NUMERO = ITEM_TO;
+    MENU_TIPO = 7;
+    leituras(1);
+    tecla_forcada = TECLA_BAIXO;           /* 5. uma tecla de verdade: a volta desiste e o bipe volta */
+    leituras(1);
+    tecla_forcada = 255;
+    TELA_APRS = CAIXA_MSG | FILTRO_OFF;    /* 6. a caixa fechou pelo EXIT (o editor nao esta aberto) */
+    leituras(1);
+    MENU_TABELA = MENU_BASE;               /* 7. presa nos grupos: desiste depois de 7 OKs */
+    leituras(7 * 16 + 1);
+    return 0;
+}
+
+/* A caixa (v112): abrir as duas, e o OK de cada uma pelo set do TO. Imprime "B <aberta> <item> <tipo>
+ * <tamanho> <maximo> <texto>" e "D <TELA_APRS> <envio> <tam_dest> <tam_msg> <id> <dest>|<msg>". */
+static void caixa_mostra(unsigned aberta)
+{
+    printf("B %u %u %u %u %u %.*s\n", aberta, MENU_NUMERO, MENU_TIPO, EDITOR_TAM, EDITOR_MAX, EDITOR_TAM,
+           EDITOR_TEXTO);
+}
+
+static void grava_mostra(void)
+{
+    struct aprs *a = (struct aprs *)registro_aprs;
+
+    aprs_dest_grava();
+    printf("D %u %u %u %u %u %.*s|%.*s\n", TELA_APRS, ESTADO_MSG, a->tam_dest, a->tam_msg, a->id, a->tam_dest,
+           a->dest, a->tam_msg, a->msg);
+    ESTADO_MSG = 0;
+}
+
+static void digita(const char *t)
+{
+    EDITOR_TAM = (u8)strlen(t);
+    memcpy((char *)EDITOR_TEXTO, t, strlen(t));
+}
+
+static int caixa(void)
+{
+    struct aprs *a = (struct aprs *)registro_aprs;
+
+    a->tam_ind = 6;
+    memcpy(a->ind, "PY2ABC", 6);
+    a->tam_dest = 8;
+    memcpy(a->dest, "PU2XYZ-9", 8);
+    a->id = 7;
+    caixa_mostra(aprs_caixa_abre());       /* nada pedido: nao abre */
+    TELA_APRS = CAIXA_MSG | FILTRO_OFF;    /* o #: vazia, ate 37 */
+    caixa_mostra(aprs_caixa_abre());
+    digita("Ola 73");
+    grava_mostra();                        /* o OK: a mensagem, o numero novo, o envio armado e a volta */
+    TELA_APRS = CAIXA_MSG;
+    caixa_mostra(aprs_caixa_abre());
+    digita("");
+    grava_mostra();                        /* vazia: nada vai ao ar, e a tela volta */
+    TELA_APRS = CAIXA_TO;                  /* o # segurado: o TO gravado, ate 9 */
+    caixa_mostra(aprs_caixa_abre());
+    digita("");
+    grava_mostra();                        /* em branco tambem se grava */
+    TELA_APRS = 0;                         /* o TO da pasta, fora da caixa */
+    digita("py5zz");
+    grava_mostra();
+    return 0;
+}
 
 static u8 *le_arquivo(const char *nome, unsigned *n)
 {
@@ -40,6 +134,10 @@ int main(int argc, char **argv)
     char *r, *s;
     int hist;
 
+    if (argc == 2 && !strcmp(argv[1], "volta"))
+        return volta();
+    if (argc == 2 && !strcmp(argv[1], "caixa"))
+        return caixa();
     if (argc < 6)
         return 2;
     texto = le_arquivo(argv[1], &n);
@@ -74,9 +172,14 @@ int main(int argc, char **argv)
     regs[0x28] = 0x2A40;
     regs[0x2B] = 0x0100;
     RAM(u8, 0x00014B6D) = 3;               /* o SAVE do menu ligado (v111: a tela o desliga e devolve) */
+    if (argc > 9) {
+        TELA_APRS = atoi(argv[8]);
+        INJETA = atoi(argv[9]);
+    }
 
     aprs_rx_grava();
     printf("V %u %u\n", save_na_tela, RAM(u8, 0x00014B6D));
+    printf("T %u %u %u\n", TELA_APRS, INJETA, BEEP_PROMPT);
 
     hist = hist_abre(&anel);
     printf("H %d\n", hist);

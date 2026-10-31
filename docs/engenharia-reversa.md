@@ -1448,10 +1448,10 @@ Duas pastas novas, para mandar texto num padrão que qualquer rádio entende. O 
 | APRS | APRS CALLSIGN | o indicativo, até 6 letras (editor de texto) |
 | APRS | APRS SSID | 0 (nenhum) a 15 |
 | APRS | APRS TO | o destinatário da mensagem, até 9 (com o SSID depois do `-`); vazio = status |
-| APRS | APRS MESSAGE | a mensagem, até 37 |
-| APRS | APRS SEND | OK manda (ação, sem valor na pasta) |
+| APRS | APRS MESSAGE | a mensagem, até 37 (até a v111: desde a v112, a caixa do # na tela MESSAGES) |
+| APRS | APRS SEND | OK manda (ação, sem valor na pasta; até a v111: desde a v112, o OK da caixa) |
 | APRS | APRS PATH | WIDE1-1, WIDE1-1,WIDE2-1 ou NONE |
-| APRS | APRS RX | OK escuta: a tela dos pacotes recebidos, qualquer tecla sai |
+| APRS | APRS RX | OK escuta: a tela dos pacotes recebidos, qualquer tecla sai (o MESSAGES desde a v112, [abaixo](#a-tela-messages-as-caixas-e-a-volta-v112)) |
 | MORSE | MORSE MESSAGE | a mensagem, até 37 |
 | MORSE | MORSE SEND | OK manda |
 | MORSE | MORSE SPEED | 5 a 40 palavras por minuto (padrão 15) |
@@ -2175,6 +2175,64 @@ colá-lo no laço, com as variáveis dele no quadro do laço (de 320 para 328 B)
 dos 740 de fábrica. Com o `hist_abre` fora (`noinline`), o quadro do laço ficou em 308 B, e o set em 724; com o
 SAVE guardado, 728.
 
+### A tela MESSAGES: as caixas e a volta (v112)
+
+**A pasta.** O RX virou MESSAGES (`titulo_aprs_rx`), e o MESSAGE e o SEND saíram: a tabela do menu tem 95
+vagas, e o `menu_textos` 520 B. A pasta APRS fica CALLSIGN, DECODE, MESSAGES, PATH, SSID e TO, e a caixa e a
+volta acham o MESSAGES e o TO pelas posições 2 e 5 (`ITEM_MESSAGES` e `ITEM_TO`; a `3b` confere).
+
+**O # na tela.** O código cru do # é o 17 (a última coluna da matriz, `0x01E60369`). O laço sai no aperto, como
+com as outras teclas, com `b[0x14BF2]` = 1; a saída já espera a tecla soltar (`espera_soltar`), e se o # ficou
+apertado 0,6 s a caixa pedida vira a do TO (2). O bit 2 leva o FILTER desligado pela tecla 0, e o ack sai com 8
+(a volta). Medir na saída deixou o laço como o da v111: generalizar a espera do EXIT para o # custava 90 B.
+
+**A caixa.** O set do MESSAGES volta ao OK de fábrica (`0x01E49996`, que o chama em `0x01E49A00`), e o desvio
+depois do set (`b_menu_marca`, `0x01E49A86`) chama o `aprs_caixa_abre`: o item vai ao TO (`b[0x14BFA]` = 5)
+com o tipo 7 (`b[0x14C00]`), e o editor recebe o TO gravado (`aprs_texto_le`, até 9) ou nada (até 37). O
+resto do estado da edição é o da abertura do MESSAGES (`0x01E49B20..0x01E49B32`: editando, o valor 0 e os
+campos do digitado zerados), que o laço não mexeu. O desvio devolve 1 e segue para o redesenho (`0x01E49C7C`),
+sem a limpeza que o OK de fábrica faz ao abrir um item de texto (`LIMPA(2)` em `0x01E49B1C`): a tela do RX
+fica no LCD. Daí em diante as teclas são as do editor de fábrica (o # alterna ABC e 123, o EXIT apaga), e o OK
+chama o set do TO (`aprs_dest_grava`). Com a caixa da mensagem, ele a grava no registro com o número seguinte e
+arma o envio (`'A'`, se há indicativo e mensagem); com a do TO, grava o destinatário, vazio inclusive. Da caixa
+ele não chama a saída do editor (`LIMPA(2)` e `0x01E3C7AA`), e pede a volta.
+
+**O desenho.** Com a caixa aberta, a tela B desenha só o editor, de `y = 56` para baixo, numa borda âmbar de 2
+px, com o título da caixa no lugar do número e do nome do item (`menu_cena`); a barra de cima (`desenha`), o
+resumo (`b_lado`) e o resto do menu ficam calados (`calado`). O EXIT que cancela passa por duas limpezas de
+fábrica, `LIMPA(2)` em `0x01E4D524` e a saída do editor em `0x01E4D528` (`0x01E3C7AA`: a bateria, `LIMPA(5)`,
+que apaga de novo tudo abaixo da barra, e a tela). O `gancho_limpa_caixa`, na primeira, faz as duas fora da
+caixa, na mesma ordem, e a segunda vira nop. A `0x01E3AC52`, no mesmo caminho e no do OK, só zera
+`0x14A34..0x14A49` e marca `b[0x14686]`.
+
+**A volta.** O rádio só transmite com o menu fechado (a entrada da TX, `0x01E41022`, fecha o menu), e a tela
+volta pelo OK injetado na leitura das teclas do laço do sinal (`gancho_teclas`, `0x01E46280`): apertado 5
+leituras (a fábrica só aceita a mesma tecla em três seguidas) e solto 11, para o toque curto (`0x01E60369`: 17)
+sair no solto. O tratador das teclas da tela principal (fora do `tbh` dos modos, que vai de 1 a 20: o modo 0
+cai em `0x01E4BE1C`, com o `tbh` dos eventos em `0x01E4BE28`) leva o 17 à entrada do menu (`0x01E4CBA2`), que
+reabre na pasta APRS (`menu_abre`: o menu fechou dentro dela). Nos grupos, o OK entra na pasta; na pasta, o
+gancho põe o item no MESSAGES (`b[0x14BFA]` e `h[0x14BFC]` = 2, tipo 0) antes do OK, que abre o item, e o OK
+seguinte chama o set, e a tela volta. A volta espera o envio acabar (`b[0x14BF0]` e `b[0x1533C]` em 0) e só
+aperta na tela principal ou no menu; uma tecla de verdade ou o PTT desistem, e depois de 7 OKs ela desiste
+sozinha (o caminho pede 4 depois do envio, e 2 depois da caixa do TO ou do EXIT). O bipe das teclas
+(`0x01E38B4C`, por onde passa também o do OK do menu, `0x01E38BD4`) só toca com o BEEP PROMPT (`b[0x14B72]`, 0
+ou 1) ligado: a volta o põe em 0 e guarda o valor no bit 7 do `b[0x14BEF]`, e a entrada da tela o devolve. Nada
+dela grava os ajustes com o bipe em 0: a entrada do menu e o OK que abre um item não gravam, e a tela o devolve
+antes do OK que a fecha.
+
+**Onde mora o estado.** No `0x9046` dos ajustes (`b[0x14BF2]`: a caixa nos bits 1:0, o FILTER desligado no 2,
+a volta no 3) e no `0x9043` (`b[0x14BEF]`: as leituras do OK injetado e o bipe), livres pela varredura da v111
+e fora dos 32 B que o cabo grava. A partida e os ajustes de fábrica zeram os dois, com o `0x9044` e o `0x9045`
+(`zera_envio`).
+
+**O espaço e a pilha.** Os 78 B livres do `.livre` não davam. Saíram o MESSAGE e o SEND (56 B da tabela do
+menu, 12 do `menu_textos` e as rotinas deles), o rodapé com o P ficou menor que o de S, B e F, a caixa usa o
+desenho do editor do menu, e o desenho dos rótulos e das colunas do espectro (`b_esp_rotulos`, `b_esp_coluna`,
+`esp_pontos`, `esp_passo`, `esp_coluna` e as duas tabelas, 356 B) foi para o `.vozes`: só os ganchos do
+espectro que já moram lá os chamam, e o espectro só roda no modo 20 ([seção 15](#15-vozes-fora); a `4g`
+confere que nada do `.text` nem do `.livre` chama o `.vozes`). Ficam 34 B no `.livre` e 70 no `.vozes`. A
+pilha: interface 740, laço do sinal 620, partida 696, e o set do MESSAGES 728 de 740.
+
 ## 25. A pasta AUDIO: o EXPANDER e a NOISE GATE, e o que é a NR (v79)
 
 **O EXPANDER** é o expansor do áudio de RX do BK4819, o gêmeo do compressor da pasta MIC: abaixo do ponto
@@ -2357,7 +2415,7 @@ Onde cada item do menu grava (os get e set da tabela montada, conferidos no desm
 |---|---|
 | o log `0x9000` | SQL, STE, EXPANDER, NOISE GATE, DE-EMPHASIS, os EQ (v108, seção 27), a pasta MIC, a DISPLAY (menos o MDF-C), DTMF, KEYS, RP-STE, RPT-RL, TONE, SC-REV, SYSTEM, ROGER, TOT, VOX, VOX DELAY, TTR, TX-A/B/C, CRYSTAL FINE, LIGHT PWM, MODEM GAIN e o DECODE do APRS |
 | o canal ou o VFO do lado | a pasta CHANNEL (BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N), OFFSET, SFT-D, a pasta TONES, SCAN ADD e CH-NAME |
-| o setor próprio, no set | APRS (CALLSIGN, SSID, TO, MESSAGE, PATH), MORSE (MESSAGE, SPEED, TONE), BANKS, WATCH e MDF-C |
+| o setor próprio, no set | APRS (CALLSIGN, SSID, TO e, desde a v112, a mensagem da caixa; PATH), MORSE (MESSAGE, SPEED, TONE), BANKS, WATCH e MDF-C |
 
 O SEND do APRS e do Morse (`0x9044`; até a v110, `0x903A`) a partida zera de propósito, para nada transmitir
 sozinho.
@@ -2444,3 +2502,36 @@ passava o quadro da `faixa_terceira` de 60 a 64 B, e ela é o caminho mais fundo
 A janela da gravação estendida do cabo (`gancho_cabo`) vai agora até `0xD5FFF`: os registros do Morse
 (`0xD4000`) e do APRS (`0xD5000`) entram, e o histórico do APRS RX (`0xD6000`) fica de fora. É o que o driver do
 CHIRP usa para gravar os dois.
+
+## 28. O ganho do receptor: o RX GAIN (v113)
+
+**O AGC do BK4819** anda por cinco degraus, do 3 (o de mais ganho) ao −1, cada um um registrador: `0x13`, `0x12`,
+`0x11`, `0x10` e `0x14`. Cada um soma quatro ganhos, pela tabela da Beken (`BK4819_Registers_V1.1`, em
+`docs/referencias`): o LNA curto (bits 9:8: 0, −11, −16 e −19 dB), o LNA (7:5: 0, −2, −4, −6, −9, −14, −19 e −24
+dB), o mixer (4:3: 0, −3, −6 e −8 dB) e o PGA (2:0: 0, −3, −6, −9, −15, −21, −27 e −33 dB). Ele desce um degrau
+quando o nível passa do limite de cima do `0x49` e sobe quando cai abaixo do de baixo, 1 dB por passo; a fábrica
+grava `0x2AB2`, 85 e 50, uma janela de 35 dB. Um salto entre degraus maior que a janela faz o AGC pular entre os
+dois com um sinal forte. O `0x7E` (`0x303E`) deixa o AGC no automático.
+
+**O de fábrica.** A partida grava os cinco uma vez só (`0x01E56558..0x01E56580`): `0x0318`, `0x033A`, `0x03DB`,
+`0x03DF` e `0x0210` no `0x10` a `0x14`, −57, −40, −17, −2 e −71 dB. Nada mais os grava; o espectro guarda e
+devolve o `0x13` (`0x01E3FEE4` e `0x01E3FF0E`). Com sinal fraco o AGC fica no degrau de cima, a 2 dB do máximo do
+chip, com a falta toda no LNA. (Os números da comunidade do UV-K5 para o LNA curto, −24, −30 e −33 dB, não são
+os da Beken: com eles o último degrau seria −84.)
+
+**O item.** CALIBRATION > RX GAIN, DEFAULT ou MAX, no `0x9040` dos ajustes (`b[0x14BEC]`, livre desde a v111 e
+fora da janela do cabo) como `0xA5`: nem o EQ das v108 a v110 (`0xB0` + a posição) nem a sujeira do cabo até a
+v110 (a frequência do VFO A em BCD) deixam esse valor ali, e qualquer outro vale DEFAULT. O `aplica_agc`
+(`bancos.c`) grava os cinco da tabela escolhida, na partida (depois da de fábrica), nos ajustes de fábrica ou do
+cabo e no OK do item. MAX, a pedido do dono: `0x033A`, `0x033D`, `0x03BD`, `0x03FF` e `0x0300`, −40, −25, −10, 0
+e −65 dB, saltos de 10 a 25 dB. Com sinal fraco só o degrau de cima conta.
+
+**O espaço.** O item custou ~150 B (a vaga da tabela do menu, 28; os textos do menu, 4; a tabela, as rotinas e
+os textos dele). Veio das rotinas de número e de cópia de texto, que o `mensagem.c` tinha iguais às da tela, sem
+o 0 do fim: ele passa a usar as do `tela.c` (`tela_numero` e `tela_junta`, apelidos das `static`, que lá dentro
+ficam como antes). O 0 do fim cai onde o texto continua ou na folga do fim de cada buffer (o indicativo de 10, o
+quadro com os 2 B do FCS). O `numero` da tela ficou com o vetor: com o jeito do `mensagem.c`, sem vetor, os
+chamadores da tela guardavam mais registradores em volta da chamada, o código crescia 72 B e a pilha da
+interface e a do laço do sinal passavam 8 B. Sobram 78 B no `.livre`, 14 no fim da imagem e 70 no `.vozes`. A
+pilha: 740, 620 e 696 B, e o set do MESSAGES a 736 de 740 (o `numero` com vetor pesa mais no caminho da
+decodificação).

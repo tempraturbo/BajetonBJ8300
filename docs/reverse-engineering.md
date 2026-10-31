@@ -1471,10 +1471,10 @@ Two new folders, to send text in a standard any radio understands. The code is i
 | APRS | APRS CALLSIGN | the callsign, up to 6 letters (text editor) |
 | APRS | APRS SSID | 0 (none) to 15 |
 | APRS | APRS TO | the message's addressee, up to 9 (with the SSID after the `-`); empty = status |
-| APRS | APRS MESSAGE | the message, up to 37 |
-| APRS | APRS SEND | OK sends (an action, no value in the folder) |
+| APRS | APRS MESSAGE | the message, up to 37 (until v111: since v112, the # box on the MESSAGES screen) |
+| APRS | APRS SEND | OK sends (an action, no value in the folder; until v111: since v112, the box's OK) |
 | APRS | APRS PATH | WIDE1-1, WIDE1-1,WIDE2-1 or NONE |
-| APRS | APRS RX | OK listens: the received packets screen, any key leaves |
+| APRS | APRS RX | OK listens: the received packets screen, any key leaves (MESSAGES since v112, [below](#the-messages-screen-the-boxes-and-the-return-v112)) |
 | MORSE | MORSE MESSAGE | the message, up to 37 |
 | MORSE | MORSE SEND | OK sends |
 | MORSE | MORSE SPEED | 5 to 40 words per minute (default 15) |
@@ -2214,6 +2214,66 @@ it into the loop, with its variables in the loop's frame (from 320 to 328 B): th
 above the stock 740. With `hist_abre` kept out (`noinline`), the loop's frame is 308 B and the set 724; with
 SAVE saved, 728.
 
+### The MESSAGES screen: the boxes and the return (v112)
+
+**The folder.** RX became MESSAGES (`titulo_aprs_rx`), and MESSAGE and SEND came out: the menu table has 95
+slots, and `menu_textos` 520 B. The APRS folder is CALLSIGN, DECODE, MESSAGES, PATH, SSID and TO, and the box
+and the return find MESSAGES and TO at positions 2 and 5 (`ITEM_MESSAGES` and `ITEM_TO`; `3b` checks them).
+
+**# on the screen.** The raw code of # is 17 (the matrix's last column, `0x01E60369`). The loop leaves on the
+press, like with the other keys, with `b[0x14BF2]` = 1; the exit already waits for the key to be released
+(`espera_soltar`), and if # stayed pressed 0.6 s the requested box becomes TO's (2). Bit 2 carries the FILTER
+turned off by key 0, and the ack leaves with 8 (the return). Measuring on the exit kept the loop as in v111:
+extending EXIT's wait to # cost 90 B.
+
+**The box.** MESSAGES' set returns to the stock OK (`0x01E49996`, which calls it at `0x01E49A00`), and the
+detour after the set (`b_menu_marca`, `0x01E49A86`) calls `aprs_caixa_abre`: the item moves to TO
+(`b[0x14BFA]` = 5) with type 7 (`b[0x14C00]`), and the editor gets the saved TO (`aprs_texto_le`, up to 9) or
+nothing (up to 37). The rest of the editing state is the one MESSAGES was opened with (`0x01E49B20..0x01E49B32`:
+editing, value 0 and the typed-number fields zeroed), which the loop did not touch. The detour returns 1 and goes
+on to the redraw (`0x01E49C7C`), without the clear the stock OK does when opening a text item (`LIMPA(2)` at
+`0x01E49B1C`): the RX screen stays on the LCD. From there the keys are the stock editor's (# toggles ABC and 123,
+EXIT deletes), and OK calls TO's set (`aprs_dest_grava`). With the message box, it stores the message in the
+record with the next number and arms the sending (`'A'`, if there is a callsign and a message); with TO's box, it
+stores the addressee, empty included. From a box it does not call the editor exit (`LIMPA(2)` and
+`0x01E3C7AA`), and asks for the return.
+
+**Drawing.** With the box open, screen B draws only the editor, from `y = 56` down, in a 2 px amber frame, with
+the box's title instead of the item's number and name (`menu_cena`); the top bar (`desenha`), the summary
+(`b_lado`) and the rest of the menu stay quiet (`calado`). The cancelling EXIT goes through two stock clears,
+`LIMPA(2)` at `0x01E4D524` and the editor exit at `0x01E4D528` (`0x01E3C7AA`: the battery, `LIMPA(5)`, which
+again wipes everything below the bar, and the screen). `gancho_limpa_caixa`, on the first, does both outside the
+box, in the same order, and the second becomes a nop. `0x01E3AC52`, on the same path and on OK's, only zeroes
+`0x14A34..0x14A49` and marks `b[0x14686]`.
+
+**The return.** The radio only transmits with the menu closed (TX start, `0x01E41022`, closes the menu), and the
+screen comes back through an OK injected in the signal loop's key reading (`gancho_teclas`, `0x01E46280`):
+pressed for 5 reads (the firmware only accepts the same key in three in a row) and released for 11, so the short
+press (`0x01E60369`: 17) goes out on release. The main screen's key handler (outside the mode `tbh`, which goes
+from 1 to 20: mode 0 falls to `0x01E4BE1C`, with the event `tbh` at `0x01E4BE28`) takes 17 to the menu entry
+(`0x01E4CBA2`), which reopens in the APRS folder (`menu_abre`: the menu closed inside it). At the groups, OK
+enters the folder; in the folder, the hook moves the item to MESSAGES (`b[0x14BFA]` and `h[0x14BFC]` = 2, type
+0) before the OK that opens it, and the next OK calls the set, and the screen is back. The return waits for the
+sending to finish (`b[0x14BF0]` and `b[0x1533C]` at 0) and only presses on the main screen or in the menu; a real
+key or PTT gives up, and after 7 OKs it gives up by itself (the path takes 4 after sending, and 2 after TO's box
+or EXIT). The key beep (`0x01E38B4C`, which the menu OK's beep, `0x01E38BD4`, also goes through) only sounds with
+BEEP PROMPT (`b[0x14B72]`, 0 or 1) on: the return sets it to 0 and keeps the value in bit 7 of `b[0x14BEF]`, and
+the screen's entry puts it back. Nothing in it saves the settings with the beep at 0: the menu entry and the OK
+that opens an item do not save, and the screen restores it before the OK that closes it.
+
+**Where the state lives.** In settings byte `0x9046` (`b[0x14BF2]`: the box in bits 1:0, the FILTER off in 2,
+the return in 3) and `0x9043` (`b[0x14BEF]`: the injected OK's reads and the beep), free by v111's sweep and
+outside the 32 B the cable writes. Boot and the factory settings zero both, along with `0x9044` and `0x9045`
+(`zera_envio`).
+
+**Space and stack.** The 78 B free in `.livre` were not enough. MESSAGE and SEND came out (56 B of the menu
+table, 12 of `menu_textos` and their routines), the footer with P got smaller than the S, B and F one, the box
+uses the menu editor's drawing, and drawing the spectrum's labels and columns (`b_esp_rotulos`,
+`b_esp_coluna`, `esp_pontos`, `esp_passo`, `esp_coluna` and the two tables, 356 B) moved to `.vozes`: only the
+spectrum hooks that already live there call them, and the spectrum only runs in mode 20
+([section 15](#15-voices-removed); `4g` checks that nothing in `.text` or `.livre` calls `.vozes`). 34 B remain in
+`.livre` and 70 in `.vozes`. The stack: interface 740, signal loop 620, boot 696, and MESSAGES' set 728 of 740.
+
 ## 25. The AUDIO folder: EXPANDER and NOISE GATE, and what NR is (v79)
 
 **EXPANDER** is the BK4819's RX audio expander, the twin of the MIC folder's compressor: below the 0 dB
@@ -2394,7 +2454,7 @@ Where each menu item saves (the get and set of the built table, checked in the d
 |---|---|
 | the `0x9000` log | SQL, STE, EXPANDER, NOISE GATE, DE-EMPHASIS, the EQs (v108, section 27), the MIC folder, DISPLAY (except MDF-C), DTMF, KEYS, RP-STE, RPT-RL, TONE, SC-REV, SYSTEM, ROGER, TOT, VOX, VOX DELAY, TTR, TX-A/B/C, CRYSTAL FINE, LIGHT PWM, MODEM GAIN and the APRS DECODE |
 | the side's channel or VFO | the CHANNEL folder (BCL, ENCRYPT, RX MODULATION, SCRAMBLE, STEP, TXP, W/N), OFFSET, SFT-D, the TONES folder, SCAN ADD and CH-NAME |
-| its own sector, on set | APRS (CALLSIGN, SSID, TO, MESSAGE, PATH), MORSE (MESSAGE, SPEED, TONE), BANKS, WATCH and MDF-C |
+| its own sector, on set | APRS (CALLSIGN, SSID, TO and, since v112, the box's message; PATH), MORSE (MESSAGE, SPEED, TONE), BANKS, WATCH and MDF-C |
 
 Startup clears the APRS and Morse SEND (`0x9044`; up to v110, `0x903A`) on purpose, so nothing transmits by
 itself.
@@ -2483,3 +2543,35 @@ more), and the TRIPLE strip takes the level in the same parameter as "receiving"
 The cable's extended write window (`gancho_cabo`) now goes up to `0xD5FFF`: the Morse (`0xD4000`) and APRS
 (`0xD5000`) records are in, and the APRS RX history (`0xD6000`) stays out. That is what the CHIRP driver uses to
 write both.
+
+## 28. The receiver gain: RX GAIN (v113)
+
+**The BK4819's AGC** moves through five steps, from 3 (the most gain) to −1, each a register: `0x13`, `0x12`,
+`0x11`, `0x10` and `0x14`. Each one adds four gains, by Beken's table (`BK4819_Registers_V1.1`, in
+`docs/referencias`): the short LNA (bits 9:8: 0, −11, −16 and −19 dB), the LNA (7:5: 0, −2, −4, −6, −9, −14, −19
+and −24 dB), the mixer (4:3: 0, −3, −6 and −8 dB) and the PGA (2:0: 0, −3, −6, −9, −15, −21, −27 and −33 dB). It
+steps down when the level goes above `0x49`'s upper threshold and up when it falls below the lower one, 1 dB per
+step; the stock firmware writes `0x2AB2`, 85 and 50, a 35 dB window. A jump between steps bigger than the window
+makes the AGC bounce between the two with a strong signal. `0x7E` (`0x303E`) leaves the AGC on automatic.
+
+**The stock table.** Boot writes the five once (`0x01E56558..0x01E56580`): `0x0318`, `0x033A`, `0x03DB`, `0x03DF`
+and `0x0210` in `0x10` to `0x14`, −57, −40, −17, −2 and −71 dB. Nothing else writes them; the spectrum saves and
+restores `0x13` (`0x01E3FEE4` and `0x01E3FF0E`). With a weak signal the AGC stays on the top step, 2 dB below the
+chip's maximum, all of it in the LNA. (The UV-K5 community's numbers for the short LNA, −24, −30 and −33 dB, are
+not Beken's: with them the last step would be −84.)
+
+**The item.** CALIBRATION > RX GAIN, DEFAULT or MAX, in settings byte `0x9040` (`b[0x14BEC]`, free since v111 and
+outside the cable window) as `0xA5`: neither the v108 to v110 EQ (`0xB0` + the position) nor the cable's garbage
+up to v110 (VFO A's frequency in BCD) leaves that value there, and any other value means DEFAULT. `aplica_agc`
+(`bancos.c`) writes the chosen table's five, at boot (after the stock one), on factory or cable settings and on the
+item's OK. MAX, at the owner's request: `0x033A`, `0x033D`, `0x03BD`, `0x03FF` and `0x0300`, −40, −25, −10, 0 and
+−65 dB, jumps of 10 to 25 dB. With a weak signal only the top step counts.
+
+**Space.** The item cost ~150 B (the menu table slot, 28; the menu texts, 4; its table, routines and texts). It
+came from the number and text copy routines, which `mensagem.c` had just like the screen's, without the final 0:
+it now uses `tela.c`'s (`tela_numero` and `tela_junta`, aliases of the `static` ones, which stay as before in
+there). The final 0 lands where the text goes on or in the slack at the end of each buffer (the 10-byte callsign,
+the frame with the FCS's 2 B). The screen's `numero` kept its array: done `mensagem.c`'s way, without it, the
+screen's callers saved more registers around the call, the code grew 72 B and the interface and signal loop stacks
+went 8 B over. 78 B remain in `.livre`, 14 at the end of the image and 70 in `.vozes`. The stack: 740, 620 and 696
+B, and MESSAGES' set at 736 of 740 (the `numero` with the array weighs more on the decoding path).

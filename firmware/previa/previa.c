@@ -43,6 +43,7 @@ void JANELA(unsigned x0, unsigned x1, unsigned y0, unsigned y1, unsigned limpar,
 
 /* envia() 0x01E3ADBC: manda o buffer da janela aberta para a tela. */
 void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas);   /* telas.c (v74) */
+void caixa_b(void);                                                                  /* telas.c (v112) */
 
 void ENVIA(void)
 {
@@ -897,6 +898,26 @@ int main(int argc, char **argv)
             num[0] = 1;                    /* a tecla 0 desligou o FILTER (v111) */
             tela_aprs(0x8000, 0x8080, 0, num, 15);
             grava("62c-aprs-rx-sem-filtro");
+            /* v112: a caixa por cima da tela, o editor de nome no item TO: o # abre a da mensagem (vazia, e
+             * aqui ja digitada) e o # segurado a do TO (com o gravado) */
+            num[0] = 0;
+            tela_aprs(0x8000, 0x8080, 0, num, 15);
+            memoria[0x1533D] = 1;
+            memoria[0x14BF2] = 1;
+            memoria[0x14C00] = 7;
+            memoria[0x14BF9] = 1;
+            digitando("OLA, TUDO BEM? 73");
+            memoria[0x14A36] = 37;
+            memoria[0x14A38] = 1;
+            caixa_b();
+            grava("62d-aprs-caixa-mensagem");
+            tela_aprs(0x8000, 0x8080, 0, num, 15);
+            memoria[0x14BF2] = 2;
+            digitando("PU2XYZ-9");
+            memoria[0x14A36] = 9;
+            caixa_b();
+            grava("62e-aprs-caixa-to");
+            memoria[0x14BF2] = 0;
         }
 
         BASE_TELAS();

@@ -308,9 +308,9 @@ PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 # devolve a tabela e, se o menu foi fechado de dentro de um grupo, poe o grupo em [+6], que a entrada
 # le logo depois (0x01E4CBCA). Na chamada, r1..r3 estao mortos (escritos antes de lidos depois dela)
 # e o r4 (0, lido em 0x01E4CBC6) a chamada preserva.
-MENU_VAGAS = 97                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ
+MENU_VAGAS = 96                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ; v112: 95; v113: 96
 TABELA_SIMBOLO = 'menu_tabela'
-TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 532   # v111: o que o menu usa (era 640); item novo pede mais
+TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 524   # v111: o que o menu usa (era 640); v112: 520; v113: 524; item novo pede mais
 R5_R0 = bytes.fromhex('0516')
 
 # v53: os grupos do menu (src/telas.c), um nivel acima dos itens, a pedido do dono. Cada item fica em
@@ -513,7 +513,7 @@ TEXTOS = [
     (0x01E5A60F, 'All', 'ALL'),
     (0x01E5AA81, 'RX Modulation', 'RX MODULATION'),
     # versao do firmware, que o item VERSION mostra (o hardware V01T32 fica como esta)
-    (0x01E5FD10, 'V0.12', 'V3.1T'),
+    (0x01E5FD10, 'V0.12', 'V3.2T'),
     # o nome chines do item e 语音加密 (criptografia de voz): VOICEPRI engana
     (0x01E5A82F, 'VOICEPRI', 'ENCRYPT'),
     # a dupla escuta virou tripla com o TRIPLE (v42): TDR -> TTR, pedido do dono (v48). A cadeia e
@@ -765,15 +765,13 @@ ITENS_DEPOIS[ROGER_ITEM] = [
          set='aprs_ssid_grava', titulo='titulo_aprs_ssid', exibe='aprs_ssid_exibe'),
     dict(nome='APRS TO', texto='TO', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_dest_le',
          set='aprs_dest_grava', titulo='titulo_aprs_dest', exibe='aprs_dest_exibe'),
-    dict(nome='APRS MESSAGE', texto='MESSAGE', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='aprs_msg_le',
-         set='aprs_msg_grava', titulo='titulo_mensagem', exibe='aprs_msg_exibe'),
-    dict(nome='APRS SEND', texto='SEND', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='aprs_envia_grava',
-         titulo='titulo_envia', exibe='envia_opcoes', opcoes_cn='envia_opcoes'),
     dict(nome='APRS PATH', texto='PATH', molde=TDR_ITEM, flags=0, maximo=3, get='aprs_caminho_le',
          set='aprs_caminho_grava', titulo='titulo_aprs_caminho', exibe='aprs_caminho_opcoes',
          opcoes_cn='aprs_caminho_opcoes'),
-    dict(nome='APRS RX', texto='RX', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='aprs_rx_grava',
-         titulo='titulo_aprs_rx', exibe='aprs_rx_opcoes', opcoes_cn='aprs_rx_opcoes'),
+    # v112: o RX vira MESSAGES, e a mensagem e o envio vao para a caixa da tela (o # e o # segurado, com o
+    # editor no item TO); o MESSAGE e o SEND saem
+    dict(nome='APRS MESSAGES', texto='MESSAGES', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le',
+         set='aprs_rx_grava', titulo='titulo_aprs_rx', exibe='aprs_rx_opcoes', opcoes_cn='aprs_rx_opcoes'),
     # v76: os formatos decodificados (Mic-E, comprimida, tempo...) ou a info como veio; o 0x903F
     dict(nome='APRS DECODE', texto='DECODE', molde=TDR_ITEM, flags=0, maximo=2, get='aprs_decode_le', set='aprs_decode_grava',
          titulo='titulo_aprs_decode', exibe='aprs_decode_opcoes', opcoes_cn='aprs_decode_opcoes'),
@@ -788,15 +786,21 @@ ITENS_DEPOIS[ROGER_ITEM] += [
     dict(nome='MODEM GAIN', molde=TDR_ITEM, flags=0, maximo=4, get='modem_ganho_le', set='modem_ganho_grava',
          titulo='titulo_modem_ganho', exibe='modem_ganho_opcoes', opcoes_cn='modem_ganho_opcoes'),
 ]
-GRUPOS['CALIBRATION'] = ('CRYSTAL FINE', 'LIGHT PWM', 'MODEM GAIN')
+# v113: o ganho do receptor (bancos.c, a tabela do AGC), DEFAULT ou MAX; o 0x9040
+ITENS_DEPOIS[ROGER_ITEM] += [
+    dict(nome='RX GAIN', molde=TDR_ITEM, flags=0, maximo=2, get='rx_ganho_le', set='rx_ganho_grava',
+         titulo='titulo_rx_ganho', exibe='rx_ganho_opcoes', opcoes_cn='rx_ganho_opcoes'),
+]
+GRUPOS['CALIBRATION'] = ('CRYSTAL FINE', 'LIGHT PWM', 'MODEM GAIN', 'RX GAIN')
+RX_GAIN = ('rx_ganho_le', 'rx_ganho_grava', 'titulo_rx_ganho', 'rx_ganho_opcoes')
+NA_LIVRE += RX_GAIN
+PRECISA += RX_GAIN
 LUZ_PWM = ('luz_pwm_le', 'luz_pwm_grava', 'titulo_luz_pwm', 'luz_pwm_opcoes')
 NA_LIVRE += LUZ_PWM
 PRECISA += LUZ_PWM
 GRUPOS['MORSE'] = ('MORSE MESSAGE', 'MORSE SEND', 'MORSE SPEED', 'MORSE TONE')
-GRUPOS['APRS'] = ('APRS CALLSIGN', 'APRS DECODE', 'APRS MESSAGE', 'APRS PATH', 'APRS RX', 'APRS SEND', 'APRS SSID',
-                  'APRS TO')
-MENU_MARCAS.update({('MORSE', 'MORSE SEND'): MARCA_SEM_VALOR, ('APRS', 'APRS SEND'): MARCA_SEM_VALOR,
-                    ('APRS', 'APRS RX'): MARCA_SEM_VALOR})
+GRUPOS['APRS'] = ('APRS CALLSIGN', 'APRS DECODE', 'APRS MESSAGES', 'APRS PATH', 'APRS SSID', 'APRS TO')
+MENU_MARCAS.update({('MORSE', 'MORSE SEND'): MARCA_SEM_VALOR, ('APRS', 'APRS MESSAGES'): MARCA_SEM_VALOR})
 CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o envio armado liga a TX'),
                    (0x01E46D8C, 0x01E44604, 'gancho_fim_tx', 'Morse e APRS: o conteudo no lugar do roger'),
                    (0x01E46CCE, 0x01E19DCC, 'texto15', 'editor: a copia do texto na piscada, ate 24'),
@@ -804,9 +808,16 @@ CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o e
                    (0x01E48FBA, 0x01E19DCC, 'texto15', 'editor: a copia para o TEXTO, ate 24'),
                    # v72: o EXIT segurado no editor sai sem salvar (a leitura das teclas do laco do sinal;
                    # o gancho da v70, na rotina do EXIT, nunca via o EXIT apertado: o toque vai no solto)
-                   (0x01E46280, 0x01E43D50, 'gancho_teclas', 'editor: EXIT segurado 0,6 s sai sem salvar'))
+                   (0x01E46280, 0x01E43D50, 'gancho_teclas', 'editor: EXIT segurado 0,6 s sai sem salvar'),
+                   # v112: o EXIT que cancela o editor limpa a tela (LIMPA(2)); com a caixa da tela
+                   # MESSAGES aberta, nao: a tela do RX fica no LCD ate voltar
+                   (0x01E4D524, 0x01E3ACBA, 'gancho_limpa_caixa', 'APRS: o EXIT que fecha a caixa nao limpa a tela'))
 EDITOR_REMENDOS += ((0x01E4A0F0, bytes.fromhex('02fc041c'), bytes.fromhex('02fc0448'),
-                     'o limite fixo da insercao vai de 15 a 37 letras'),)
+                     'o limite fixo da insercao vai de 15 a 37 letras'),
+                    # v112: a saida do editor no EXIT que cancela (call 0x01E3C7AA) vira nop: o gancho_limpa_caixa,
+                    # na chamada de antes, faz as duas fora da caixa da tela MESSAGES
+                    (0x01E4D528, bytes.fromhex('bfea3f79'), bytes.fromhex('00000000'),
+                     'APRS: a saida do editor no EXIT que cancela vai pelo gancho_limpa_caixa'))
 # v100: a NOISE GATE (v79/v80) mora no 0x9031 dos ajustes (b[0x14BDD]) como 0xE8 + o nivel, e a carga dos
 # ajustes na partida (0x01E55C9A) zera esse byte quando ele passa de 1: "if (r1 >= 2) { r1 = 0; b[r4+r0] =
 # r1 }" em 0x01E55D2C, com r0 = 1373 (0x14BDD - 0x14680) vindo de r1 + 6, o que a varredura da v59 nao via.
@@ -846,8 +857,7 @@ MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'ganc
             'aprs_ind_le', 'aprs_ind_grava', 'aprs_ind_exibe', 'titulo_aprs_ind',
             'aprs_ssid_le', 'aprs_ssid_grava', 'aprs_ssid_exibe', 'titulo_aprs_ssid',
             'aprs_dest_le', 'aprs_dest_grava', 'aprs_dest_exibe', 'titulo_aprs_dest',
-            'aprs_msg_le', 'aprs_msg_grava', 'aprs_msg_exibe',
-            'aprs_envia_grava', 'aprs_caminho_le', 'aprs_caminho_grava',
+            'aprs_caixa_abre', 'gancho_limpa_caixa', 'aprs_caminho_le', 'aprs_caminho_grava',
             'aprs_caminho_opcoes', 'titulo_aprs_caminho', 'aprs_rx_grava', 'aprs_rx_opcoes', 'titulo_aprs_rx',
             'modem_ganho_le', 'modem_ganho_grava', 'titulo_modem_ganho', 'modem_ganho_opcoes',
             'aprs_decode_le', 'aprs_decode_grava', 'titulo_aprs_decode', 'aprs_decode_opcoes')

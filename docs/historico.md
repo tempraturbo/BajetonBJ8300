@@ -5,6 +5,50 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v113 — 31/10 — o RX GAIN na CALIBRATION, com a tela MESSAGES da v112 (a testar)
+
+`BJ8300_BANK_v113.anc` (sha256 `f8d994ba…`), fora dos commits como as outras de teste: a v112 inteira e o RX GAIN.
+O item VERSION mostra **V3.2T**, e se o teste do dono passar ela vira a release.
+
+- **CALIBRATION > RX GAIN**, com DEFAULT e MAX: a tabela dos cinco degraus do AGC do receptor. DEFAULT é a de
+  fábrica (−2, −17, −40, −57 e −71 dB, do sinal mais fraco para o mais forte); MAX, a pedido do dono, 0, −10,
+  −25, −40 e −65 dB. Com sinal fraco só o degrau de cima conta, 2 dB a mais no LNA; o último ficou em −65, e não
+  em −80, porque o AGC sobe e desce numa janela de 35 dB e um salto maior que ela o faz pular entre dois
+  degraus. Vale na hora, na partida e depois de um RESET ou de uma gravação pelo cabo.
+- **O espaço** veio das rotinas de número e de cópia de texto, que existiam duas vezes: o `mensagem.c` passa a
+  usar as da tela (78 B). Sobram 78 B no `.livre`, e a pilha fica nos 740, 620 e 696 B; o set do MESSAGES vai a
+  736 de 740.
+- [Seção 28](engenharia-reversa.md#28-o-ganho-do-receptor-o-rx-gain-v113).
+
+## v112 — 31/10 — a tela MESSAGES: a caixa da mensagem e do TO no #, a volta sozinha e o P (não gravada: foi junto na v113)
+
+`BJ8300_BANK_v112.anc` (sha256 `3931a362…`), fora dos commits como as outras de teste. O item VERSION mostra
+**V3.2T**.
+
+- **A pasta APRS** ficou com CALLSIGN, DECODE, MESSAGES, PATH, SSID e TO: o RX virou **MESSAGES**, e o MESSAGE
+  e o SEND saíram. A mensagem e o envio passaram para a tela.
+- **O # na tela MESSAGES** abre por cima dela a caixa **MESSAGE TO SEND**, sempre vazia, até 37 caracteres. O
+  OK manda para o TO (vazio, como status), e a tela volta sozinha depois da transmissão; o EXIT com a caixa
+  vazia, ou segurado, cancela e volta. Cada mensagem leva um número novo. **O # segurado** (0,6 s) abre a caixa
+  **TO** com o destinatário gravado; o OK grava, em branco inclusive, e volta.
+- **A caixa é o editor de texto de fábrica**, aberto no item TO da pasta sem a limpeza da tela, numa borda
+  âmbar. A tela B cala a barra de cima, o resumo e as duas limpezas do EXIT que cancela, e a tela do RX fica no
+  LCD atrás dela. Enquanto se digita, a recepção do APRS fica parada.
+- **A volta.** O rádio só transmite com o menu fechado. Depois do envio, e do ack automático, que até a v111
+  deixava o rádio na tela principal, o firmware aperta o OK sozinho na leitura das teclas: na tela principal o
+  OK abre o menu, que reabre na pasta APRS; ali o item vai ao MESSAGES, e mais dois OKs abrem a tela. O bipe
+  das teclas fica calado nesse meio; uma tecla de verdade ou o PTT desistem, e ela desiste sozinha depois de 7
+  OKs.
+- **O FILTER** fica como estava na volta da caixa ou do envio; entrando pelo menu, abre ligado, como antes.
+- **O rodapé** troca o S, o B e o F pelo **P**, o total de syncs (os quadros com o FCS errado ou consertados
+  começam todos por um sync), e ganha as legendas do # (MSG) e do # segurado (TO); o 0 virou FLT.
+- **O espaço.** A tela das caixas não cabia nos 78 B que sobravam. Saíram os dois itens (56 B da tabela do
+  menu e 12 dos textos), e o desenho dos rótulos e das barras do espectro foi para a área das vozes, ao lado dos
+  ganchos do espectro que o chamam (356 B; a área continua só com o espectro). Sobram 34 B no `.livre` e 70 nas
+  vozes, e a pilha segue nos 740, 620, 696 e 728 B.
+- Testes: o `teste_rx.py` ganhou a seção 10 (o # curto e segurado, o FILTER na volta, a volta pelo
+  `gancho_teclas` e a caixa pelo set do TO). [Seção 24](engenharia-reversa.md#a-tela-messages-as-caixas-e-a-volta-v112).
+
 ## V3.1T — 31/10 — o EQ no CHIRP, o FILTER com EQ e a tecla 0 no APRS RX, e a limpeza
 
 A v111 virou a **V3.1T**: `firmware/releases/BJ8300_BANK_v3.1T.anc` (sha256 `a3cba1cd…`, o mesmo arquivo; o item
