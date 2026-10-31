@@ -17,6 +17,9 @@ conclusão veio de experimento, está dito qual.
 | Rádio | Beken **BK4819**, de 18 MHz para cima ([seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)) |
 | Receptor de HF | um **Si473x** da Silicon Labs: o firmware traz o programa de SSB do Si4735 (15.832 B em `0x01E64D40`, 1979 comandos de 8 B começados por `0x15` ou `0x16`, no formato que o chip recebe) e as bandas LW, MW e SW do RX MODULATION |
 
+Os manuais do BK4819 (datasheet, lista de registradores, manual técnico e nota de aplicação) e o
+guia de programação dos Si47xx estão em [`docs/referencias/`](referencias/README.md).
+
 São **duas memórias diferentes**, e confundi-las custa caro:
 
 - **Flash do firmware** — onde o `.anc` é gravado. É ela que limita o tamanho do código.

@@ -17,6 +17,9 @@ over the cable. Where a conclusion came from an experiment, it says so.
 | Radio | Beken **BK4819**, from 18 MHz up ([section 22](#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59)) |
 | HF receiver | a Silicon Labs **Si473x**: the firmware carries the Si4735 SSB patch (15,832 B at `0x01E64D40`, 1979 8-byte commands starting with `0x15` or `0x16`, in the format the chip takes) and the LW, MW and SW bands of RX MODULATION |
 
+The BK4819 manuals (datasheet, register list, technical reference and application note) and the
+Si47xx programming guide are in [`docs/referencias/`](referencias/README.en.md).
+
 There are **two separate memories**, and mixing them up is expensive:
 
 - **Firmware flash** — where the `.anc` is written. This is what limits code size.
