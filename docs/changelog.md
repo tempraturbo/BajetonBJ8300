@@ -17,7 +17,8 @@ and 62e), RX GAIN in the table of what changed since V0.12 and a wider screens c
 the images to about 45 px, because the long description next to them took the space, and now they come out at
 300 px (a header that does not wrap holds the column's width). Published in the
 [V3.2T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.2T), with the CHIRP module,
-the flasher and the cable driver.
+the flasher and the cable driver. After the release, at the owner's request, the same table gives each function
+as a bullet, with the feature's name at the top of the cell; without the narrow names column, the text got wider.
 
 ## v115 — Oct 31 — the held key only lets go for good: holding # no longer locks the keypad (tested: became V3.2T)
 

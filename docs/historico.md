@@ -17,7 +17,8 @@ na tabela do que mudou desde a V0.12 e a coluna das telas dessa tabela mais larg
 uns 45 px, porque a descrição longa ao lado tomava o espaço, e agora elas saem com 300 px (um título que não quebra
 segura a largura da coluna). Publicada no
 [release V3.2T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.2T), com o módulo do CHIRP,
-o gravador e o driver do cabo.
+o gravador e o driver do cabo. Depois do release, a pedido do dono, a mesma tabela passou a dar cada função num
+tópico, com o nome do recurso no alto da célula; sem a coluna estreita dos nomes, o texto ficou mais largo.
 
 ## v115 — 31/10 — a tecla presa só solta de vez: o # segurado não trava mais o teclado (testada: virou a V3.2T)
 
