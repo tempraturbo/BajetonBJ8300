@@ -5,6 +5,15 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## 04/11 — `firmware/releases/` fica só com a versão do momento
+
+Os `.anc` das versões anteriores saíram da pasta, e ficou a V3.2T: as lançadas (v1.0T, V2.0T, V2.6T, V2.7T, V2.8T,
+V2.9T, V3.0T e V3.1T) e as de teste que registravam um passo (v12, v14, v16 a v19, v21, v23, v24, v27, v32, v34,
+v36, v39, v41 e v45). Nada se perdeu: as lançadas continuam nos
+[releases do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases), com o mesmo arquivo, e todas, as de
+teste inclusive, ficam no histórico do git. `git show 919b9ec:firmware/releases/<arquivo>` traz qualquer uma de
+volta, e o sha256 de cada uma está na entrada dela, abaixo.
+
 ## V3.2T — 31/10 — a tela MESSAGES do APRS e o RX GAIN
 
 A v115 virou a **V3.2T**: `firmware/releases/BJ8300_BANK_v3.2T.anc` (sha256 `1bba2f5b…`, o mesmo arquivo; o item

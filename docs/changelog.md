@@ -5,6 +5,15 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Nov 4 — `firmware/releases/` keeps only the current version
+
+The `.anc` files of the earlier versions left the folder, and V3.2T stayed: the released ones (v1.0T, V2.0T, V2.6T,
+V2.7T, V2.8T, V2.9T, V3.0T and V3.1T) and the test builds that recorded a step (v12, v14, v16 to v19, v21, v23,
+v24, v27, v32, v34, v36, v39, v41 and v45). Nothing was lost: the released ones are still on the
+[GitHub releases](https://github.com/tempraturbo/BajetonBJ8300/releases), with the same file, and all of them, test
+builds included, stay in the git history. `git show 919b9ec:firmware/releases/<file>` brings any of them back, and
+each one's sha256 is in its entry below.
+
 ## V3.2T — Oct 31 — the APRS MESSAGES screen and RX GAIN
 
 v115 became **V3.2T**: `firmware/releases/BJ8300_BANK_v3.2T.anc` (sha256 `1bba2f5b…`, the same file; the VERSION
