@@ -5,6 +5,24 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v125 — 05/11 — o barramento do BK4819 mais rápido (testada: o rádio funciona igual, e a leitura do APRS não mudou)
+
+`BJ8300_BANK_v125.anc` (sha256 `a50461fc…`), fora dos commits como as outras de teste: a v124 e quatro bytes.
+Depois da v124, o envio do UV-17L foi medido e corrigido no repositório dele (um tranco a cada bit e a velocidade
+0,5% abaixo, porque o processador dele roda sem cristal), e o BJ leu um pacote do UV pela primeira vez, mas pouco.
+O suspeito seguinte era o próprio barramento do BJ: cada acesso ao BK4819 leva 1,36 ms, e durante um pacote o laço
+lê a FIFO (uns 8 ms a cada ~53 ms), o mesmo tipo de tráfego que dava o apito.
+
+- **O que mudou.** A escrita e a leitura de registrador mandam bit a bit, e cada bit esperava duas vezes pela
+  rotina de espera com 7 (multiplicado por 4 ou 16, em voltas de `nop`). As quatro esperas de cada bit passam a 1;
+  as do começo, do fim e da troca de direção do SDATA ficam. O BK4819 aceita o SCK até 8 MHz, com 25 ns em alto e
+  em baixo, e o BJ segue na faixa dos microssegundos.
+- **O resultado.** O rádio recebe e transmite como antes, e a leitura do APRS não mudou: o tráfego do barramento
+  durante os pacotes não era o limite. Com o envio do UV igual ao do BJ (a forma, os tons, o nível, as trocas e a
+  velocidade, medidos), e o mesmo modem lendo 9 de cada 10 no UV, o que sobra é o receptor do BJ, que também lê
+  pouco da rede: a placa (o PLL sem o regulador interno, que o BJ exige) e não o firmware.
+  [Seção 24](engenharia-reversa.md#o-barramento-do-bk4819-v125).
+
 ## v124 — 05/11 — o apito e o estalo da tela MESSAGES: o laço fala menos com o chip (testada)
 
 `BJ8300_BANK_v124.anc` (sha256 `5a36a200…`), fora dos commits como as outras de teste. O item VERSION continua

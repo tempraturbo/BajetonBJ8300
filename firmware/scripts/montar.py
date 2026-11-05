@@ -846,6 +846,16 @@ SINAL_REMENDOS = ((0x01E46A40, bytes.fromhex('7a06'), bytes.fromhex('2001'),
                    'tique lento 4: o medidor, no lugar de nada'),
                   (0x01E46A42, bytes.fromhex('7a06'), bytes.fromhex('2001'),
                    'tique lento 5: o medidor, no lugar de nada'))
+# v125: o barramento do BK4819 mais rapido. A escrita de registrador (0x01E39D82) e a leitura (0x01E407C0)
+# mandam bit a bit, e cada bit espera duas vezes pela 0x01E38554 com r0 = 7 (ela multiplica por 4 ou 16 e da
+# tantas voltas de nop em 0x01E35E62): cada acesso leva 1,36 ms, e o trafego vazava para o audio (o apito da
+# v124). O BK4819 aceita o SCK a 8 MHz, com 25 ns em alto e em baixo (TRM, tabela 2-1): as esperas de cada bit
+# passam de 7 a 1 (4 ou 16 voltas, nunca 0, que daria 2^32). A do comeco, a do fim e a da troca de direcao do
+# SDATA na leitura ficam. O 0x01E39D22, que manda os bytes, so e chamado pela escrita e pela leitura.
+BARRAMENTO_REMENDOS = ((0x01E39D60, bytes.fromhex('4027'), bytes.fromhex('4021'), 'envio de bit: espera antes do SCK subir'),
+                       (0x01E39D70, bytes.fromhex('4027'), bytes.fromhex('4021'), 'envio de bit: espera depois do SCK subir'),
+                       (0x01E40844, bytes.fromhex('4027'), bytes.fromhex('4021'), 'leitura de bit: espera com o SCK alto'),
+                       (0x01E4085C, bytes.fromhex('4027'), bytes.fromhex('4021'), 'leitura de bit: espera com o SCK baixo'))
 # (onde, o ponteiro de fabrica, o simbolo novo, o que e)
 PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com o espaco primeiro e - / = + @'),
                    # v86 (experimental): o APRS pelo DAC. A abertura do microfone (0x01E41CBA) entrega a
@@ -1153,6 +1163,7 @@ def main():
     escritas += [(s, len(a), f'editor de nome: {d}') for s, a, _, d in EDITOR_REMENDOS]
     escritas += [(s, len(a), f'ajustes: {d}') for s, a, _, d in AJUSTES_REMENDOS]
     escritas += [(s, len(a), f'laco do sinal: {d}') for s, a, _, d in SINAL_REMENDOS]
+    escritas += [(s, len(a), f'barramento: {d}') for s, a, _, d in BARRAMENTO_REMENDOS]
     escritas += [(s, 4, d) for s, _, _, d in PONTEIROS_LIVRE]
     escritas += [(ROGER_DESVIO_EM, 4, 'roger: valores 3 e 4 no caminho do BEEP'),
                  (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
@@ -1247,7 +1258,8 @@ def main():
     # 3b2. vozes fora: os tres caminhos que tocam voz viram o "sem voz" de cada um; e (v52) a tecla #
     # do editor de nome
     for rotulo, remendos in (('vozes', VOZES_REMENDOS), ('editor de nome', EDITOR_REMENDOS),
-                             ('ajustes', AJUSTES_REMENDOS), ('laco do sinal', SINAL_REMENDOS)):
+                             ('ajustes', AJUSTES_REMENDOS), ('laco do sinal', SINAL_REMENDOS),
+                             ('barramento', BARRAMENTO_REMENDOS)):
         for sitio, antes, depois, oque in remendos:
             o = sitio - BASE_APP
             if bytes(app[o:o + len(antes)]) != antes:

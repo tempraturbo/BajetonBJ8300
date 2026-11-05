@@ -2307,6 +2307,17 @@ perder bit.
 espelha, e a segunda metade é a primeira negativa; os 64 saem iguais, conferidos um a um), e mora no `.vozes`, na
 sobra do C1. Sobram 22 B no `.livre`; a pilha fica em 740, 620 e 696 B, e o set do MESSAGES em 740 de 740 (o `olha`).
 
+### O barramento do BK4819 (v125)
+
+A escrita de registrador (`0x01E39D82`) e a leitura (`0x01E407C0`) mandam bit a bit pelo `0x01E39D22`, que só elas
+chamam (7 chamadas: 6 da escrita, 1 da leitura). Cada bit pega o endereço da porta do SCK e do SDATA pela
+`0x01E001BA` (o pino / 16, numa tabela em `0x01E006D0`) e espera duas vezes pela `0x01E38554` com `r0 = 7`, que
+multiplica por 4 ou por 16 (conforme `h[0xD408]`) e dá tantas voltas de `nop` em `0x01E35E62`. As quatro esperas de
+cada bit (`0x01E39D60` e `0x01E39D70` no envio, `0x01E40844` e `0x01E4085C` na leitura) passam a `r0 = 1`, 4 ou 16
+voltas, nunca 0 (que daria 2^32); a do começo, a do fim e a da troca de direção do SDATA ficam. O BK4819 aceita o
+SCK até 8 MHz, com 25 ns em alto e em baixo (TRM, tabela 2-1). O `conferir.py` (4w) confere cada sítio e que a
+instrução seguinte é a chamada. No rádio, nada mudou além disso: a leitura do APRS ficou como estava.
+
 ## 25. A pasta AUDIO: o EXPANDER e a NOISE GATE, e o que é a NR (v79)
 
 **O EXPANDER** é o expansor do áudio de RX do BK4819, o gêmeo do compressor da pasta MIC: abaixo do ponto

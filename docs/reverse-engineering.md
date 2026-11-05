@@ -2351,6 +2351,17 @@ mirrors it, and the second half is the first one negated; all 64 come out the sa
 `.vozes`, in the spare room of C1. 22 B remain in `.livre`; the stack stays at 740, 620 and 696 B, and MESSAGES' set
 at 740 of 740 (`olha`).
 
+### The BK4819 bus (v125)
+
+The register write (`0x01E39D82`) and read (`0x01E407C0`) send bit by bit through `0x01E39D22`, which only they call
+(7 calls: 6 from the write, 1 from the read). Each bit gets the port address of SCK and SDATA from `0x01E001BA` (the
+pin / 16, in a table at `0x01E006D0`) and waits twice on `0x01E38554` with `r0 = 7`, which multiplies by 4 or by 16
+(depending on `h[0xD408]`) and spins that many `nop` loops at `0x01E35E62`. The four per-bit delays (`0x01E39D60` and
+`0x01E39D70` when sending, `0x01E40844` and `0x01E4085C` when reading) become `r0 = 1`, 4 or 16 loops, never 0 (which
+would be 2^32); the ones at the start, at the end and at the SDATA direction change stay. The BK4819 takes SCK up to
+8 MHz, with 25 ns high and low (TRM, table 2-1). `conferir.py` (4w) checks each site and that the next instruction is
+the call. On the radio nothing else changed: APRS reading stayed as it was.
+
 ## 25. The AUDIO folder: EXPANDER and NOISE GATE, and what NR is (v79)
 
 **EXPANDER** is the BK4819's RX audio expander, the twin of the MIC folder's compressor: below the 0 dB

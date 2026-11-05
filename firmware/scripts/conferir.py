@@ -860,6 +860,16 @@ for sitio, antes, depois, oque in montar.SINAL_REMENDOS:
     if not ok:
         erros.append(f'laco do sinal: remendo errado em {sitio:#x}')
 previsto_tela += [(s_, s_ + len(a_) - 1, 'laco do sinal: ' + d_) for s_, a_, _, d_ in montar.SINAL_REMENDOS]
+# 4w. o barramento do BK4819 (v125): as esperas de cada bit da escrita e da leitura vao de 7 a 1, e cada sitio e
+# o "r0 = 7" logo antes de uma chamada a espera 0x01E38554 (a instrucao seguinte, "call", de 4 bytes).
+for sitio, antes, depois, oque in montar.BARRAMENTO_REMENDOS:
+    o = sitio - montar.BASE_APP
+    ok = (bytes(app_velho[o:o + len(antes)]) == antes and bytes(app[o:o + len(antes)]) == depois
+          and app_velho[o + 2:o + 4] == app[o + 2:o + 4] and app_velho[o + 3] == 0xEA)
+    print(f'4w. barramento {sitio:#x}: {oque}: ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append(f'barramento: remendo errado em {sitio:#x}')
+previsto_tela += [(s_, s_ + len(a_) - 1, 'barramento: ' + d_) for s_, a_, _, d_ in montar.BARRAMENTO_REMENDOS]
 # v65: o ponteiro da tecla 0 do editor: de fabrica o da sequencia original, remendado o da nossa, que
 # tem de estar no .livre e trazer o espaco primeiro e o 0 no fim. v86: o do bloco do microfone, o
 # gancho_mic, tambem no .livre.

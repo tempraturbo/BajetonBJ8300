@@ -5,6 +5,24 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v125 — Nov 5 — a faster BK4819 bus (tested: the radio works the same, and APRS reading did not change)
+
+`BJ8300_BANK_v125.anc` (sha256 `a50461fc…`), left out of the commits like the other test versions: v124 plus four
+bytes. After v124, the UV-17L's sending was measured and fixed in its own repository (a jolt on every bit and a speed
+0.5% low, because its processor runs without a crystal), and the BJ read a packet from the UV for the first time,
+but rarely. The next suspect was the BJ's own bus: each access to the BK4819 takes 1.36 ms, and during a packet the
+loop reads the FIFO (about 8 ms every ~53 ms), the same kind of traffic that caused the whistle.
+
+- **What changed.** The register write and read send bit by bit, and each bit waited twice on the delay routine with
+  7 (multiplied by 4 or 16, in `nop` loops). The four per-bit delays become 1; the ones at the start, at the end and
+  at the SDATA direction change stay. The BK4819 takes SCK up to 8 MHz, with 25 ns high and low, and the BJ stays in
+  the microsecond range.
+- **The result.** The radio receives and transmits as before, and APRS reading did not change: the bus traffic
+  during packets was not the limit. With the UV's sending equal to the BJ's (shape, tones, level, transitions and
+  speed, all measured), and the same modem reading 9 out of 10 on the UV, what is left is the BJ's receiver, which
+  also reads little of the network: the board (the PLL without the internal regulator, which the BJ requires) and
+  not the firmware. [Section 24](reverse-engineering.md#the-bk4819-bus-v125).
+
 ## v124 — Nov 5 — the MESSAGES screen's whistle and pop: the loop talks less to the chip (tested)
 
 `BJ8300_BANK_v124.anc` (sha256 `5a36a200…`), left out of the commits like the other test versions. The VERSION item
