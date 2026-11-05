@@ -786,9 +786,9 @@ ITENS_DEPOIS[ROGER_ITEM] += [
     dict(nome='MODEM GAIN', molde=TDR_ITEM, flags=0, maximo=4, get='modem_ganho_le', set='modem_ganho_grava',
          titulo='titulo_modem_ganho', exibe='modem_ganho_opcoes', opcoes_cn='modem_ganho_opcoes'),
 ]
-# v113: o ganho do receptor (bancos.c, a tabela do AGC), DEFAULT ou MAX; o 0x9040
+# v113: o ganho do receptor (bancos.c, a tabela do AGC), DEFAULT ou MAX (MIN desde a v123); o 0x9040
 ITENS_DEPOIS[ROGER_ITEM] += [
-    dict(nome='RX GAIN', molde=TDR_ITEM, flags=0, maximo=2, get='rx_ganho_le', set='rx_ganho_grava',
+    dict(nome='RX GAIN', molde=TDR_ITEM, flags=0, maximo=3, get='rx_ganho_le', set='rx_ganho_grava',
          titulo='titulo_rx_ganho', exibe='rx_ganho_opcoes', opcoes_cn='rx_ganho_opcoes'),
 ]
 GRUPOS['CALIBRATION'] = ('CRYSTAL FINE', 'LIGHT PWM', 'MODEM GAIN', 'RX GAIN')

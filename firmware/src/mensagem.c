@@ -194,12 +194,15 @@ struct afsk_dac {
     u8 linha[DAC_LINHA];                   /* o tom de cada bit, o bit 0 primeiro: 1 espaco, 0 marca */
 };
 
-/* Um seno de 64 pontos, a -12 dB do fundo de escala. */
-static const short seno64[64] = {
-    0, 784, 1561, 2322, 3061, 3771, 4445, 5075, 5657, 6184, 6652, 7055, 7391, 7656, 7846, 7961,
-    8000, 7961, 7846, 7656, 7391, 7055, 6652, 6184, 5657, 5075, 4445, 3771, 3061, 2322, 1561, 784,
-    0, -784, -1561, -2322, -3061, -3771, -4445, -5075, -5657, -6184, -6652, -7055, -7391, -7656, -7846, -7961,
-    -8000, -7961, -7846, -7656, -7391, -7055, -6652, -6184, -5657, -5075, -4445, -3771, -3061, -2322, -1561, -784};
+/* Um seno de 64 pontos, a -12 dB do fundo de escala: so o primeiro quarto, de 0 a 16, porque o segundo o
+ * espelha e a segunda metade e a primeira negativa (v123, pelo espaco; os 64 pontos saem iguais). */
+#if defined(TESTE_PC) || defined(TESTE_RX)
+#define NAS_VOZES
+#else
+#define NAS_VOZES  __attribute__((section(".vozes.rodata.mensagem")))   /* a sobra do C1 (o .livre acabou) */
+#endif
+NAS_VOZES static const short seno17[17] = {
+    0, 784, 1561, 2322, 3061, 3771, 4445, 5075, 5657, 6184, 6652, 7055, 7391, 7656, 7846, 7961, 8000};
 
 static void linha_poe(struct afsk_dac *d, unsigned tom)
 {
@@ -247,6 +250,7 @@ void dac_prepara(struct afsk_dac *d, const u8 *q, unsigned n, unsigned flags, un
 void dac_bloco(struct afsk_dac *d, short *b, unsigned n)
 {
     unsigned i;
+    int k;
 
     for (i = 0; i < n; i++) {
         if (d->silencio) {
@@ -259,7 +263,9 @@ void dac_bloco(struct afsk_dac *d, short *b, unsigned n)
             continue;
         }
         d->fase += d->linha[d->bit >> 3] >> (d->bit & 7) & 1 ? INC_ESPACO : INC_MARCA;
-        b[i] = seno64[d->fase >> 26];
+        k = d->fase >> 26 & 31;
+        k = seno17[k > 16 ? 32 - k : k];
+        b[i] = (short)((s32)d->fase < 0 ? -k : k);
         if (++d->amostra >= 13u + (d->terco == 2)) {
             d->amostra = 0;
             d->terco = d->terco == 2 ? 0 : d->terco + 1;
@@ -1759,12 +1765,20 @@ void aprs_caminho_grava(void)
  * O modem FSK do chip em captura crua: FFSK a 1200 bps (reg 0x72 = 0x3065), sync de 2 bytes = duas flags
  * 0x7E em NRZI, sem o CRC do chip, quadro de 2048 bytes. Os bits de linha vao para o hdlc_bit (NRZI,
  * destuffing, FCS e a correcao aqui). A FIFO de RX tem 8 palavras (107 ms), e o laco a le de 4 em 4 a
- * cada aviso de quase cheia, olhando o pedido de interrupcao (reg 0x0C bit 0) a cada 2 ms.
+ * cada aviso de quase cheia, olhando o pedido de interrupcao (reg 0x0C bit 0) a cada 20 ms.
+ *
+ * O apito e o estalo (v123). Ate a v122 o laco lia o 0x0C logo depois de cada tique de 2 ms (o ESPERA_2MS), e
+ * cada leitura leva 1,36 ms no BJ: o barramento do BK4819 ocupado 2/3 do tempo, num ritmo de 2 ms, vazava para o
+ * audio demodulado - um apito de 500 Hz com os harmonicos (1000, 1500, 2000 e 2500 Hz, em cima dos tons do APRS),
+ * medido numa gravacao do dono com o RX GAIN em MIN e o FILTER ligado, que a tela principal nao tem. O rearme
+ * esperando o sync (4 escritas, 5,4 ms) dava um estalo a cada ~60 ms. Agora o 0x0C e lido a cada 20 ms (o aviso
+ * vem com 4 palavras, ~53 ms antes de a FIFO encher) e o rearme esperando sai a cada 100 ms.
  *
  * A polaridade (v71). Numa flag em NRZI um tom fica 7 bits parado e o outro aparece 1 bit, e qual e qual
  * depende do transmissor. O chip so sincroniza no padrao do 0x5A: com FE FE (parado na marca, 1200 Hz), um
  * WAV com as duas polaridades alternadas so fez sync nas paradas em 1200 Hz, e 95% do trafego real nem
- * mexia no contador (v70). Esperando, o laco troca a cada 50 ms entre FE FE e 01 01 (parado no espaco).
+ * mexia no contador (v70). Esperando, o laco troca a cada 100 ms (50 ate a v122) entre FE FE e 01 01 (parado
+ * no espaco): um preambulo de 113 ms ja pega as duas.
  * Sete bits de linha iguais so existem nas flags (o stuffing os corta dentro do quadro), entao nenhum dos
  * dois padroes aparece no meio de um quadro. Depois do sync o chip passa os bits crus do quadro dele
  * inteiro, de 2048 bytes (13,6 s), e o hdlc_bit acha sozinho as flags dos quadros seguintes, de qualquer
@@ -1906,7 +1920,12 @@ void modem_ganho_grava(void)
  * em +4 dB (os passos da ponta da tabela do bancos.c), que no teste do dono decodificou mais. A saida devolve o
  * que estava: o modo, o 0x31 e o 0x43 que a entrada leu (era3), pelo aplica_audio (bancos.c) o 0x28, o bit 3
  * do 0x31 e, em FM, o 0x2B dos itens das pastas AUDIO e MIC (em AM, o 0x2B da troca de fabrica), e pelo
- * aplica_eq o EQ do menu. */
+ * aplica_eq o EQ do menu.
+ * O 0x2F (v123): ligado, o do UV-17L (F49B, o padrao do chip), que sobe o audio demodulado; a saida devolve o de
+ * fabrica (9890, que so a partida grava, em 0x01E56620). Dos registradores que diferem entre os dois na tela
+ * MESSAGES (o UV le ~9 de cada 10 pacotes na mesma frequencia, o BJ 1 ou 2), foi o unico que melhorou a leitura,
+ * testados um por um nas versoes de diagnostico v116 a v120 (nao lancadas): o 0x1D do UV poe um zumbido, o 0x37
+ * cala o receptor (o BJ precisa do regulador do PLL desviado, v122) e os outros nao mudaram nada. */
 FIRMWARE(AM_FM, 0x01E440C4);        void AM_FM(unsigned am);      /* 1 AM, o resto FM */
 FIRMWARE(FILTRO, 0x01E4A980);       void FILTRO(unsigned);        /* o 0x43 do espectro: 0 o largo */
 void aplica_audio(void);
@@ -1915,6 +1934,7 @@ __attribute__((noinline)) static void filtro_rx(unsigned liga, unsigned era3)
 {
     if (liga) {
         AM_FM(0);
+        REG_W(0x2F, 0xF49B);
         REG_W(0x31, REG_R(0x31) & ~0x0Au);
         FILTRO(0);
         REG_W(0x28, 0x0A00);
@@ -1925,6 +1945,7 @@ __attribute__((noinline)) static void filtro_rx(unsigned liga, unsigned era3)
         return;
     }
     AM_FM(era3 >> 16 & 1);
+    REG_W(0x2F, 0x9890);
     REG_W(0x31, era3 >> 16);
     REG_W(0x43, era3 & 0xFFFF);
     aplica_audio();
@@ -2144,7 +2165,7 @@ void aprs_rx_grava(void)
     char meu[10];
     u16 num[7];                            /* FILTER desligado, posicao, quantos, syncs na marca e no espaco,
                                             * BAD, FIX */
-    unsigned i, f, n, k, w = 0, n_meu = meu_indicativo(meu), ativo = 0, pol = 0, desde = TIQUE_MS;
+    unsigned i, f, n, k, w = 0, n_meu = meu_indicativo(meu), ativo = 0, pol = 0, desde = TIQUE_MS, olha = 0;
     unsigned pede = 15, modo = PRESO, anel = 0, desde_tecla = 0;   /* o OK que abriu ainda esta apertado */
     /* os registradores (de 16 bits) que a saida devolve, dois por variavel: a pilha do laco esta no limite */
     unsigned era1 = REG_R(0x3F) | REG_R(0x70) << 16, era2 = REG_R(0x72) | REG_R(0x5E) << 16;
@@ -2237,9 +2258,9 @@ void aprs_rx_grava(void)
             continue;
         }
         ESPERA_2MS(1);
-        if (!(REG_R(0x0C) & 1)) {
-            if (TIQUE_MS - desde > (ativo ? 300u : 50u)) {
-                /* esperando, a outra polaridade a cada 50 ms; recebendo, a FIFO parou: volta a esperar */
+        if (TIQUE_MS - olha < 20u || (olha = TIQUE_MS, !(REG_R(0x0C) & 1))) {   /* o 0x0C a cada 20 ms */
+            if (TIQUE_MS - desde > (ativo ? 300u : 100u)) {
+                /* esperando, a outra polaridade a cada 100 ms; recebendo, a FIFO parou: volta a esperar */
                 pol ^= !ativo;
                 ativo = 0;
                 fsk_rx_arma(pol);

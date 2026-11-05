@@ -1595,33 +1595,39 @@ __attribute__((noinline)) static void eq_grava(unsigned k)
  * -65), saltos de 6 a 20 dB, com o LNA no maximo nos tres de cima. Com sinal fraco so vale o degrau de cima, 2 dB
  * a mais no LNA; o de baixo, 21 dB acima do de fabrica, deixa um sinal muito forte saturar antes. Gravado no 0x9040 dos ajustes (b[0x14BEC], livre desde
  * a v111 e fora da janela do cabo) como 0xA5, que nem o EQ das v108 a v110 (0xB0 + a posicao) nem a sujeira
- * do cabo ate a v110 (a frequencia do VFO A em BCD) deixam ali; qualquer outro valor vale DEFAULT. */
+ * do cabo ate a v110 (a frequencia do VFO A em BCD) deixam ali; qualquer outro valor vale DEFAULT.
+ * MIN (v123, a pedido do dono, para testar radios perto um do outro, com bem pouco ganho): em cada degrau do
+ * DEFAULT, o ajuste de cada estagio (LNA curto, LNA, mixer e PGA) pela metade (o codigo / 2): -79, -73, -58, -46
+ * dB e, no de baixo, o LNA curto em 0, -82 dB, para os degraus seguirem em ordem (saltos de 3 a 15 dB, dentro da
+ * janela). Gravado como 0xA4 (que tambem nao e BCD). Na lista em ordem de valor: MIN, DEFAULT, MAX. */
 #define GANHO_RX       (*(volatile u8 *)0x00014BEC)
 #define GANHO_MAX      0xA5
+#define GANHO_MIN      0xA4
 DADO_NA_LIVRE const char titulo_rx_ganho[] = "RX GAIN";
-DADO_NA_LIVRE const char *const rx_ganho_opcoes[2] = {"DEFAULT", "MAX"};
-DADO_NA_LIVRE static const u16 agc_degraus[2][5] = {
+DADO_NA_LIVRE const char *const rx_ganho_opcoes[3] = {"MIN", "DEFAULT", "MAX"};
+DADO_NA_LIVRE static const u16 agc_degraus[3][5] = {
+    {0x0108, 0x0109, 0x0169, 0x016B, 0x0008},   /* MIN: -79, -73, -58, -46 e -82 dB */
     {0x0318, 0x033A, 0x03DB, 0x03DF, 0x0210},   /* o 0x10 a 0x14 da partida: -57, -40, -17, -2 e -71 dB */
     {0x037A, 0x03FB, 0x03FD, 0x03FF, 0x0298}};  /* MAX: -30, -15, -6, 0 e -50 dB */
+
+NA_LIVRE_COD u16 rx_ganho_le(void)
+{
+    return GANHO_RX == GANHO_MAX ? 2 : GANHO_RX == GANHO_MIN ? 0 : 1;
+}
 
 /* Na partida, nos ajustes de fabrica ou do cabo, e no OK do item. */
 NA_LIVRE_COD void aplica_agc(void)
 {
-    const u16 *t = agc_degraus[GANHO_RX == GANHO_MAX];
+    const u16 *t = agc_degraus[rx_ganho_le()];
     unsigned i;
 
     for (i = 0; i < 5; i++)
         ESCREVE_REG(0x10 + i, t[i]);
 }
 
-NA_LIVRE_COD u16 rx_ganho_le(void)
-{
-    return GANHO_RX == GANHO_MAX;
-}
-
 NA_LIVRE_COD void rx_ganho_grava(void)
 {
-    GANHO_RX = VALOR ? GANHO_MAX : 0;
+    GANHO_RX = VALOR == 2 ? GANHO_MAX : VALOR == 0 ? GANHO_MIN : 0;
     aplica_agc();
 }
 

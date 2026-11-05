@@ -5,6 +5,37 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v124 — 05/11 — o apito e o estalo da tela MESSAGES: o laço fala menos com o chip (testada)
+
+`BJ8300_BANK_v124.anc` (sha256 `5a36a200…`), fora dos commits como as outras de teste. O item VERSION continua
+V3.2T. **A recepção do APRS do BJ não era o teto do modem.** Na mesma frequência, com o tráfego real e os mesmos
+ajustes de menu, o UV-17L do dono, com firmware nosso e a mesma rotina portada daqui, lia uns 9 de cada 10 pacotes,
+e o BJ 1 ou 2. As versões de diagnóstico v116 a v122 (não lançadas) compararam os registradores do BK4819 dos dois,
+um por um; a v123 juntou o que serviu, e a v124 achou e corrigiu a sujeira. O dono testou: "parou o chiado".
+
+- **O apito e o estalo.** Com o RX GAIN em MIN, o chiado da recepção cai, e na tela MESSAGES apareceu, mesmo sem
+  sinal, um apito e um "pa pa pa". Numa gravação do dono, o apito é um tom de 500,0 Hz com os harmônicos (1000,
+  1500, 2000 e 2500 Hz, em cima dos tons do APRS), e o estalo vem a cada 60 ms. Os dois são do laço da tela: ele
+  lia o pedido de interrupção do modem logo depois de cada tique de 2 ms, e cada leitura leva 1,36 ms no BJ, então o
+  barramento do BK4819 ficava ocupado 2/3 do tempo, e o rearme do modem esperando o sync (4 escritas) vinha a cada
+  ~52 ms. A tela principal não tem o apito. **Agora o laço lê o pedido a cada 20 ms** (o aviso vem com 4 palavras,
+  ~53 ms antes de a FIFO encher) **e rearma a cada 100 ms**; o estalo do rearme só acontece antes de um pacote
+  começar.
+- **O 0x2F do UV no FILTER** (v123). Dos registradores que diferem entre os dois, só ele melhorou a leitura: o
+  `F49B` do UV (o padrão do chip) sobe o áudio demodulado; a partida do BJ grava `9890`. O FILTER o grava, e o
+  desligado e a saída da tela devolvem o de fábrica.
+- **RX GAIN MIN** (v123), a pedido do dono, para testar rádios lado a lado: o ajuste de cada estágio do DEFAULT pela
+  metade, −79, −73, −58, −46 e −82 dB. A lista fica MIN, DEFAULT, MAX; o DEFAULT e o MAX não mudam.
+- **O que as versões de diagnóstico descartaram:** os valores do UV para o sintetizador calam o receptor do BJ (o
+  BJ precisa do regulador do PLL desviado e do bit 15 do `0x37`); o `0x1D` do UV põe um zumbido; o `0x2A`, o `0x42`,
+  os analógicos sem documentação, a janela do AGC e a tabela do RSSI não mudaram nada; o ganho do receptor, o do
+  modem, o PWM da luz e o CRYSTAL FINE não mexiam no estalo. A tecla 0 dessas versões passava pelos estados para
+  comparar na mesma gravação.
+- **O espaço.** O seno do envio do APRS guarda só o primeiro quarto (17 pontos; os 64 saem iguais, conferidos) e
+  foi para a sobra do C1. Sobram 22 B no `.livre`; a pilha fica em 740, 620 e 696 B, e o set do MESSAGES em 740 de
+  740. O `teste_rx.py` roda o laço com a leitura a cada 20 ms sem perder bit.
+  [Seção 24](engenharia-reversa.md#o-apito-e-o-estalo-do-laço-v116-a-v124).
+
 ## 04/11 — `firmware/releases/` fica só com a versão do momento
 
 Os `.anc` das versões anteriores saíram da pasta, e ficou a V3.2T: as lançadas (v1.0T, V2.0T, V2.6T, V2.7T, V2.8T,

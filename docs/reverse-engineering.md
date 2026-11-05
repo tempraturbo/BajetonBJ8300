@@ -2305,6 +2305,52 @@ spectrum hooks that already live there call them, and the spectrum only runs in 
   that byte. Since v115 the mark is a countdown from 5 (`b[0x14BF1]`): until it reaches zero every read counts as
   "none"; each read without a key takes 1 off, and any read with a key, the false one included, sets it back to 5.
 
+### The whistle and the pop of the loop (v116 to v124)
+
+**The comparison with the UV-17L.** On the same frequency, with real traffic and the same menu settings, the owner's
+UV-17L, running our firmware (the same BK4819 and this loop's routine ported), read about 9 packets out of 10 and the
+BJ 1 or 2: v99's conclusion, the modem's ceiling, was wrong. The UV's registers were read through its console with the
+MESSAGES screen open, and the BJ's rebuilt from the 154 writes of `0x01E39D82` (the start-up at
+`0x01E5653C..0x01E56794`, the hooks and `filtro_rx`). The diagnostic versions v116 to v122 set them to the UV's value,
+first all together and then one per state of the 0 key:
+
+- **`0x37`** (BK4819 TRM, section 12: bits 11 to 8 the voltage of the ANA, VCO, RF and PLL regulators, 7 to 4 the
+  bypass of each, 2 the DSP, 1 the crystal, 0 the bandgap): the BJ writes `9D1F` in RX (`0x01E466D0`, the return
+  from tuning; TX writes `9F1F`), with the PLL regulator bypassed, RF at 2.4 V and bit 15, undocumented; the UV writes
+  `1F0F`. With the PLL regulator on (`9D0F`, `9C0F`, `9F0F`), without bit 15 (`1D1F`) or with the UV's value, the BJ's
+  receiver goes silent. RF at 2.7 V (`9F1F`) changes nothing. The UV's `0x1F` and `0x3E` went along in v116, which also
+  went silent.
+- **The UV's `0x1D`** (`0000`; the BJ writes `E555`, the 4.23 kHz IF code of `0x3D`) adds a buzz, the harmonics of a
+  120 to 165 Hz fundamental.
+- **The UV's `0x2F`** (`F49B`, the chip's default; the BJ's start-up writes `9890` at `0x01E56620`) raises the
+  demodulated audio a lot, and was the only one that improved the reading. Since v123 FILTER writes it, and
+  `filtro_rx(0)` puts `9890` back.
+- `0x2A`, `0x42`, `0x1C`, `0x2C`, `0x3A`, `0x53`, `0x4A`, `0x26`, `0x49` (the AGC window) and `0x7B` (the RSSI table)
+  changed nothing. `0x48` was left out (the BJ rewrites it at `0x01E39E20`), and so were the squelch and TX ones.
+
+**The whistle and the pop.** With the UV's `0x2F`, any radio's carrier came out with a pop every ~61 ms, which neither
+RX GAIN, nor MODEM GAIN, nor the light PWM, nor CRYSTAL FINE (−2000 to +2000) affected. With RX GAIN at MIN
+(section 28) the hiss drops, and on the MESSAGES screen with FILTER on the pop and a whistle showed up even with no
+signal. Measured in a recording by the owner: the whistle is a 500.0 Hz tone with its harmonics (1000, 1500, 2000 and
+2500 Hz) and, around each one, lines at ±16.7 Hz; the envelope beats every 60 ms. Without FILTER the whistle is faint,
+and on the main screen it does not exist. It is the loop: it read 0x0C right after every 2 ms tick (`ESPERA_2MS(1)`),
+and each read takes 1.36 ms on the BJ (on the UV, ~0.3 ms), so the BK4819's bus was busy 2/3 of the time at a 2 ms
+rhythm; the modem re-arm while waiting for sync, 4 writes (5.4 ms), came every 52 ms plus the writes, 60 ms. The
+traffic leaks into the demodulated audio, and the harmonics land right on the APRS tones.
+
+**The fix (v124).** The loop reads 0x0C every 20 ms (`olha`): the almost-full alert comes with 4 words, ~53 ms before
+the 8-word FIFO fills, and at 1200 bps each 4-word read takes out more than 20 ms bring in. The re-arm while waiting
+goes to 100 ms: a 113 ms preamble still catches both polarities, and its pop only happens before a packet starts
+(while receiving there is no re-arm until the end of the chip's frame). The register of whoever just synced
+(`h.linha`, from `0x0B`) is now read up to 20 ms after the sync, still in the flags, and `hdlc_bit` finds the flag on
+its own anyway. With RX GAIN at MIN and FILTER, the whistle is gone. `teste_rx.py` runs the whole loop this way
+without losing a bit.
+
+**Space.** The transmit side's 64-point sine (`dac_bloco`) keeps only its first quarter, 17 points (the second quarter
+mirrors it, and the second half is the first one negated; all 64 come out the same, checked one by one), and lives in
+`.vozes`, in the spare room of C1. 22 B remain in `.livre`; the stack stays at 740, 620 and 696 B, and MESSAGES' set
+at 740 of 740 (`olha`).
+
 ## 25. The AUDIO folder: EXPANDER and NOISE GATE, and what NR is (v79)
 
 **EXPANDER** is the BK4819's RX audio expander, the twin of the MIC folder's compressor: below the 0 dB
@@ -2609,3 +2655,9 @@ the frame with the FCS's 2 B). The screen's `numero` kept its array: done `mensa
 screen's callers saved more registers around the call, the code grew 72 B and the interface and signal loop stacks
 went 8 B over. 78 B remain in `.livre`, 14 at the end of the image and 70 in `.vozes`. The stack: 740, 620 and 696
 B, and MESSAGES' set at 736 of 740 (the `numero` with the array weighs more on the decoding path).
+
+**MIN (v123).** At the owner's request, for testing radios side by side with very little gain: in each step of
+DEFAULT, each stage's setting (short LNA, LNA, mixer and PGA) halved, the code / 2: `0x0108`, `0x0109`, `0x0169`,
+`0x016B` and, in the bottom one, with the short LNA at 0 so the steps stay in order, `0x0008`. That is −79, −73, −58,
+−46 and −82 dB (the top one, −46 against DEFAULT's −2), steps of 3 to 15 dB, inside the window. Saved as `0xA4`, which
+is not BCD either; in the list, in order of value, MIN, DEFAULT, MAX (the item has 3 options, `montar.py`).

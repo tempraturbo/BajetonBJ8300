@@ -5,6 +5,37 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v124 — Nov 5 — the MESSAGES screen's whistle and pop: the loop talks less to the chip (tested)
+
+`BJ8300_BANK_v124.anc` (sha256 `5a36a200…`), left out of the commits like the other test versions. The VERSION item
+still shows V3.2T. **The BJ's APRS reception was not the modem's ceiling.** On the same frequency, with real traffic
+and the same menu settings, the owner's UV-17L, running our firmware with the same routine ported from here, read
+about 9 packets out of 10 and the BJ 1 or 2. The diagnostic versions v116 to v122 (not released) compared the two
+radios' BK4819 registers one by one; v123 put together what helped, and v124 found and fixed the noise. The owner
+tested it: "the hiss stopped".
+
+- **The whistle and the pop.** With RX GAIN at MIN the receive hiss drops, and on the MESSAGES screen a whistle and a
+  "pa pa pa" showed up even with no signal. In a recording by the owner, the whistle is a 500.0 Hz tone with its
+  harmonics (1000, 1500, 2000 and 2500 Hz, right on the APRS tones), and the pop comes every 60 ms. Both come from
+  the screen's loop: it read the modem's interrupt request right after every 2 ms tick, and each read takes 1.36 ms
+  on the BJ, so the BK4819's bus was busy 2/3 of the time, and the modem re-arm while waiting for sync (4 writes)
+  came every ~52 ms. The main screen has no whistle. **Now the loop reads the request every 20 ms** (the alert comes
+  with 4 words, ~53 ms before the FIFO fills) **and re-arms every 100 ms**; the re-arm pop only happens before a
+  packet starts.
+- **The UV's 0x2F in FILTER** (v123). Of the registers that differ between the two, only this one improved the
+  reading: the UV's `F49B` (the chip's default) raises the demodulated audio; the BJ's start-up writes `9890`. FILTER
+  writes it, and FILTER off and leaving the screen put the stock value back.
+- **RX GAIN MIN** (v123), at the owner's request, for testing radios side by side: each stage of DEFAULT halved,
+  −79, −73, −58, −46 and −82 dB. The list is MIN, DEFAULT, MAX; DEFAULT and MAX do not change.
+- **What the diagnostic versions ruled out:** the UV's synthesizer values silence the BJ's receiver (the BJ needs the
+  PLL regulator bypassed and bit 15 of `0x37`); the UV's `0x1D` adds a buzz; `0x2A`, `0x42`, the undocumented analog
+  registers, the AGC window and the RSSI table changed nothing; the receiver gain, the modem gain, the light PWM and
+  CRYSTAL FINE did not affect the pop. The 0 key in those versions went through the states to compare in one flash.
+- **Space.** The APRS transmit sine keeps only its first quarter (17 points; all 64 come out the same, checked) and
+  moved to the spare room in C1. 22 B remain in `.livre`; the stack stays at 740, 620 and 696 B, and MESSAGES' set
+  at 740 of 740. `teste_rx.py` runs the loop with the read every 20 ms without losing a bit.
+  [Section 24](reverse-engineering.md#the-whistle-and-the-pop-of-the-loop-v116-to-v124).
+
 ## Nov 4 — `firmware/releases/` keeps only the current version
 
 The `.anc` files of the earlier versions left the folder, and V3.2T stayed: the released ones (v1.0T, V2.0T, V2.6T,

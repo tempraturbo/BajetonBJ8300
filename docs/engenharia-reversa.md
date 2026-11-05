@@ -2262,6 +2262,51 @@ pilha: interface 740, laço do sinal 620, partida 696, e o set do MESSAGES 728 d
   a marca é uma conta regressiva de 5 (`b[0x14BF1]`): enquanto ela não zera, toda leitura vale "nenhuma"; cada
   leitura sem tecla desconta 1, e qualquer leitura com tecla, a falsa inclusive, volta a 5.
 
+### O apito e o estalo do laço (v116 a v124)
+
+**A comparação com o UV-17L.** Na mesma frequência, com o tráfego real e os mesmos ajustes de menu, o UV-17L do
+dono, com firmware nosso (o mesmo BK4819 e a rotina deste laço portada), lia uns 9 de cada 10 pacotes, e o BJ 1 ou
+2: a conclusão da v99, o teto do modem, estava errada. Os registradores do UV foram lidos pelo console dele com a
+tela MESSAGES aberta, e os do BJ reconstruídos das 154 escritas de `0x01E39D82` (a partida em
+`0x01E5653C..0x01E56794`, os ganchos e o `filtro_rx`). As versões de diagnóstico v116 a v122 os trocavam pelo valor
+do UV, primeiro juntos e depois um por estado da tecla 0:
+
+- **O `0x37`** (TRM do BK4819, seção 12: bits 11 a 8 a tensão dos reguladores ANA, VCO, RF e PLL, 7 a 4 o desvio de
+  cada um, 2 o DSP, 1 o cristal, 0 o bandgap): o BJ grava `9D1F` no RX (`0x01E466D0`, a volta de sintonizar; o TX,
+  `9F1F`), com o regulador do PLL desviado, o de RF em 2,4 V e o bit 15, sem documentação; o UV, `1F0F`. Com o
+  regulador do PLL ligado (`9D0F`, `9C0F`, `9F0F`), sem o bit 15 (`1D1F`) ou com o do UV, o receptor do BJ cala. O
+  RF em 2,7 V (`9F1F`) não muda nada. O `0x1F` e o `0x3E` do UV iam junto na v116, que também calou.
+- **O `0x1D`** do UV (`0000`; o BJ grava `E555`, o código da FI de 4,23 kHz do `0x3D`) põe um zumbido, os harmônicos
+  de uma fundamental de 120 a 165 Hz.
+- **O `0x2F`** do UV (`F49B`, o padrão do chip; a partida do BJ grava `9890` em `0x01E56620`) sobe muito o áudio
+  demodulado, e foi o único que melhorou a leitura. Desde a v123 o FILTER o grava, e o `filtro_rx(0)` devolve o
+  `9890`.
+- O `0x2A`, o `0x42`, o `0x1C`, o `0x2C`, o `0x3A`, o `0x53`, o `0x4A`, o `0x26`, o `0x49` (a janela do AGC) e o `0x7B`
+  (a tabela do RSSI) não mudaram nada. O `0x48` ficou de fora (o BJ o regrava em `0x01E39E20`), e os do squelch e do
+  TX também.
+
+**O apito e o estalo.** Com o `0x2F` do UV, a portadora de qualquer rádio saía com um estalo a cada ~61 ms, que
+nem o RX GAIN, nem o MODEM GAIN, nem o PWM da luz, nem o CRYSTAL FINE (−2000 a +2000) mexiam. Com o RX GAIN em MIN
+(seção 28) o chiado cai, e na tela MESSAGES com o FILTER ligado apareceram, mesmo sem sinal, o estalo e um apito.
+Medidos numa gravação do dono: o apito é um tom de 500,0 Hz com os harmônicos (1000, 1500, 2000 e 2500 Hz) e, em volta
+de cada um, linhas a ±16,7 Hz; o envelope bate a cada 60 ms. Sem o FILTER o apito fica fraco, e na tela principal não
+existe. É o laço: ele lia o 0x0C logo depois de cada tique de 2 ms (o `ESPERA_2MS(1)`), e cada leitura leva 1,36 ms
+no BJ (a do UV, ~0,3 ms), então o barramento do BK4819 ficava ocupado 2/3 do tempo num ritmo de 2 ms; o rearme do
+modem esperando o sync, 4 escritas (5,4 ms), vinha a cada 52 ms mais as escritas, 60 ms. O tráfego vaza para o áudio
+demodulado, e os harmônicos caem em cima dos tons do APRS.
+
+**A correção (v124).** O laço lê o 0x0C a cada 20 ms (`olha`): o aviso de quase cheia vem com 4 palavras, ~53 ms
+antes de a FIFO de 8 palavras encher, e a 1200 bps cada leitura de 4 palavras tira mais do que 20 ms trazem. O rearme
+esperando passa a 100 ms: um preâmbulo de 113 ms ainda pega as duas polaridades, e o estalo dele só acontece antes de
+um pacote começar (recebendo, não há rearme até o fim do quadro do chip). O registro de quem acabou de sincronizar
+(`h.linha`, pelo `0x0B`) passa a ser lido até 20 ms depois do sync, ainda nas flags, e o `hdlc_bit` acha a flag sozinho
+de qualquer jeito. Com o RX GAIN em MIN e o FILTER, o apito some. O `teste_rx.py` roda o laço inteiro assim, sem
+perder bit.
+
+**O espaço.** O seno de 64 pontos do envio (o `dac_bloco`) guarda só o primeiro quarto, 17 pontos (o segundo quarto o
+espelha, e a segunda metade é a primeira negativa; os 64 saem iguais, conferidos um a um), e mora no `.vozes`, na
+sobra do C1. Sobram 22 B no `.livre`; a pilha fica em 740, 620 e 696 B, e o set do MESSAGES em 740 de 740 (o `olha`).
+
 ## 25. A pasta AUDIO: o EXPANDER e a NOISE GATE, e o que é a NR (v79)
 
 **O EXPANDER** é o expansor do áudio de RX do BK4819, o gêmeo do compressor da pasta MIC: abaixo do ponto
@@ -2567,3 +2612,9 @@ chamadores da tela guardavam mais registradores em volta da chamada, o código c
 interface e a do laço do sinal passavam 8 B. Sobram 78 B no `.livre`, 14 no fim da imagem e 70 no `.vozes`. A
 pilha: 740, 620 e 696 B, e o set do MESSAGES a 736 de 740 (o `numero` com vetor pesa mais no caminho da
 decodificação).
+
+**O MIN (v123).** A pedido do dono, para testar rádios lado a lado com bem pouco ganho: em cada degrau do DEFAULT, o
+ajuste de cada estágio (LNA curto, LNA, mixer e PGA) pela metade, o código / 2: `0x0108`, `0x0109`, `0x0169`,
+`0x016B` e, no de baixo, com o LNA curto em 0 para os degraus seguirem em ordem, `0x0008`. São −79, −73, −58, −46 e
+−82 dB (o de cima, −46 contra −2 do DEFAULT), saltos de 3 a 15 dB, dentro da janela. Gravado como `0xA4`, que também
+não é BCD; na lista em ordem de valor, MIN, DEFAULT, MAX (o item tem 3 opções, `montar.py`).
