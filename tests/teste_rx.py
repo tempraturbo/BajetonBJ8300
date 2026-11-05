@@ -150,7 +150,10 @@ def roda(ar, teclas, meu='PY2ABC', ssid=7, faixa_us=15000, flash_antes=None, nom
             saida['T'] = tuple(int(x) for x in l[2:].split())
         elif l.startswith('C '):
             c = [int(x) for x in l[2:].split()]
-            saida['C'] = dict(zip(('marca', 'espaco', 'bad', 'fix', 'transbordou', 'faixas', 'ms', 'luz', 'pos'), c))
+            saida['C'] = dict(zip(('marca', 'espaco', 'bad', 'fix', 'transbordou', 'faixas', 'ms', 'luz', 'pos',
+                                   'vazias'), c))
+            if saida['C']['vazias']:           # v128: o laco nunca le a FIFO vazia (lixo no hdlc_bit)
+                confere(f'{nome}: nenhuma leitura da FIFO vazia', saida['C']['vazias'], 0)
     saida['flash'] = open(depois, 'rb').read()
     return saida
 
@@ -317,5 +320,11 @@ confere('10. a caixa e o set do TO', c,
          'B 1 5 7 8 9 PU2XYZ-9', 'D 8 0 0 0 10 |', 'D 0 0 5 0 11 PY5ZZ|'])
 
 print()
-print('tudo certo' if not falhas else f'{len(falhas)} FALHARAM: ' + ', '.join(falhas))
+modelo = 'aviso so na palavra do limite' if os.environ.get('RX_BORDA') else 'aviso a cada palavra no limite'
+print(f'[{modelo}] ' + ('tudo certo' if not falhas else f'{len(falhas)} FALHARAM: ' + ', '.join(falhas)))
+if not os.environ.get('RX_BORDA'):         # v128: o outro modelo do aviso do chip, que nao se sabe qual e
+    print('\n=== de novo, com o aviso so na palavra que leva a FIFO ao limite ===')
+    falhou = subprocess.run([sys.executable, '-I', os.path.abspath(__file__)],
+                            env=dict(os.environ, RX_BORDA='1')).returncode
+    sys.exit(1 if falhas or falhou else 0)
 sys.exit(1 if falhas else 0)

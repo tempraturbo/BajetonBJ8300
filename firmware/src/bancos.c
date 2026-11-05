@@ -1605,7 +1605,7 @@ __attribute__((noinline)) static void eq_grava(unsigned k)
 #define GANHO_MIN      0xA4
 DADO_NA_LIVRE const char titulo_rx_ganho[] = "RX GAIN";
 DADO_NA_LIVRE const char *const rx_ganho_opcoes[3] = {"MIN", "DEFAULT", "MAX"};
-DADO_NA_LIVRE static const u16 agc_degraus[3][5] = {
+DADO_NAS_VOZES static const u16 agc_degraus[3][5] = {   /* no .vozes desde a v128, pelo espaco */
     {0x0108, 0x0109, 0x0169, 0x016B, 0x0008},   /* MIN: -79, -73, -58, -46 e -82 dB */
     {0x0318, 0x033A, 0x03DB, 0x03DF, 0x0210},   /* o 0x10 a 0x14 da partida: -57, -40, -17, -2 e -71 dB */
     {0x037A, 0x03FB, 0x03FD, 0x03FF, 0x0298}};  /* MAX: -30, -15, -6, 0 e -50 dB */

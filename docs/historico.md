@@ -5,6 +5,45 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v128 — 05/11 — o AGC travado no FILTER e o laço do APRS RX auditado (gravada: o BJ ainda não leu o UV)
+
+`BJ8300_BANK_v128.anc` (sha256 `f3d13be9…`), fora dos commits como as outras de teste: a v125 com o FILTER levando
+o AGC travado e o laço da tela MESSAGES corrigido. Gravada pelo dono: o BJ seguiu sem ler o APRS do UV-17L de
+perto; o teste na rede, lado a lado com o UV, estava em andamento neste commit.
+
+- **O AGC travado no FILTER.** O estalo a cada 60,50 ms que se ouvia com sinal forte, em qualquer tela, era o AGC
+  automático do BK4819 trocando de degrau, e não o rearme da v124 (v126, abaixo). Com o FILTER ligado, o AGC fica
+  fixo no degrau de cima, o mesmo em que ele fica com o sinal fraco da rede; desligado e na saída, volta o de
+  fábrica. A pedido do dono, que testou os estados da v126.
+- **O laço do APRS RX, auditado.** Uma auditoria independente do laço, numa imitação fiel ao rádio, achou um
+  defeito grave das v124 a v127: lendo o aviso do modem a cada 20 ms, o aviso de quase cheia que nascia durante
+  as 4 leituras da FIFO ficava velho, e a verificação seguinte lia a FIFO vazia e jogava lixo no decodificador.
+  O pacote abortava sem nem contar como erro, e o P subia normalmente. Agora o aviso velho sai depois das 4
+  leituras; o rearme e o apagamento de setor só acontecem logo depois de uma leitura sem nada pendente; a
+  polaridade troca a cada 40 ms (era ~120, e um preâmbulo curto se perdia); o apagamento do setor do histórico
+  saiu do meio das palavras do aviso; e um texto longo não passa mais do tamanho do registro.
+- **O teste ficou fiel.** O `teste_rx.py` imita agora o tique de 2 ms, a espera até o tique seguinte e 0,3 ms
+  por acesso ao chip, reprova a leitura da FIFO vazia e roda nos dois jeitos possíveis do aviso do chip. A v125
+  falha 20 verificações nele; a v128 passa com o barramento a 0,1, 0,3 e 1,36 ms por acesso.
+  [Seção 24](engenharia-reversa.md#a-auditoria-do-laço-do-aprs-rx-v128).
+
+## v127 — 05/11 — diagnóstico: os registradores do sintetizador do UV-17L (não lançada)
+
+`BJ8300_BANK_v127_diagnostico.anc` (sha256 `4b5326d1…`): o FILTER já com o AGC travado, e a tecla 0 da MESSAGES
+passando pelo `0x1F`, o `0x3E` e o `0x1E` do UV-17L, separados e juntos, e pelo regulador de RF em 2,7 V. Na rede,
+o `0x1F` do UV deixa o receptor surdo; com os três ele ouve, e nenhum estado decodificou. Esses resultados de
+leitura valem pouco: a v127 ainda tinha o defeito do laço que a v128 corrige.
+[Seção 24](engenharia-reversa.md#os-registradores-do-sintetizador-v127).
+
+## v126 — 05/11 — diagnóstico: o estalo de 60,50 ms é o AGC (não lançada)
+
+`BJ8300_BANK_v126_diagnostico.anc` (sha256 `d97f5a9c…`): a tecla 0 da MESSAGES passando pelo AGC fixo no degrau de
+cima e num do meio, pelo AFC desligado, pelos dois, e pelo `0x7E` e pelo `0x77` do UV-17L. **Com o AGC fixo, o
+estalo some; só com o AFC desligado, não.** Ele vinha do receptor do BJ, com qualquer rádio transmitindo, e não do
+rearme da tela MESSAGES, como a v124 dizia. Nenhum estado fez o BJ ler a rede, mas também aqui o defeito do laço
+(v128) contaminava a leitura. O Morse ficou fora só nela, pelo espaço.
+[Seção 24](engenharia-reversa.md#o-estalo-de-6050-ms-o-agc-automático-v126).
+
 ## v125 — 05/11 — o barramento do BK4819 mais rápido (testada: o rádio funciona igual, e a leitura do APRS não mudou)
 
 `BJ8300_BANK_v125.anc` (sha256 `a50461fc…`), fora dos commits como as outras de teste: a v124 e quatro bytes.

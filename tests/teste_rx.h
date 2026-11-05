@@ -1,10 +1,15 @@
 /* O laco do APRS RX (firmware/src/mensagem.c, aprs_rx_grava) no PC, para o teste_rx.py (v75). Imita o que
  * o laco toca no radio:
- *  - o relogio, em microssegundos (TIQUE_MS anda junto), que cada chamada ao "firmware" adianta um pouco;
+ *  - o relogio, em microssegundos, que cada chamada ao "firmware" adianta um pouco; o TIQUE_MS anda de 2 em 2
+ *    ms, como o tique do TIMER1, e o ESPERA_2MS vai ate o tique seguinte, como o 0x01E36286; cada acesso ao
+ *    BK4819 custa 0,3 ms (o barramento da v125) (v128, da auditoria: com 20 us e o TIQUE de 1 em 1 a imitacao
+ *    escondia a leitura da FIFO vazia das v124 a v127);
  *  - o modem FSK do BK4819 em captura crua, como o mapeamos: armado pelo 0x59, ele so sincroniza quando
  *    os ultimos 16 bits de linha sao o padrao do 0x5A; depois passa 2048 bytes de bits crus pela FIFO de
- *    8 palavras (o primeiro bit no bit 7 da palavra, o nono no 15), avisa de quase cheia com 4 e conta
- *    as palavras que nao couberam (transbordou);
+ *    8 palavras (o primeiro bit no bit 7 da palavra, o nono no 15), avisa de quase cheia com o limite do
+ *    0x5E e conta as palavras que nao couberam (transbordou) e as leituras da FIFO vazia. Como o aviso
+ *    nasce no chip nao se sabe: com RX_BORDA no ambiente, so na palavra que leva a FIFO ao limite; sem,
+ *    a cada palavra com a FIFO no limite ou acima (o teste_rx.py roda os dois);
  *  - os bits do ar, 1200 por segundo, de um arquivo; depois dele, ruido;
  *  - a flash do chip de dados (de 0xD0000 a 0xDFFFF), que so grava de 1 para 0 e apaga por setor;
  *  - o teclado, por um roteiro de intervalos; a luz; e a tela, que gasta um tempo por faixa.
@@ -28,6 +33,8 @@ static unsigned regs[128], armado, capturando, deslocado, palavra, nbits, palavr
 static unsigned fifo[8], fifo_ini, fifo_n, avisos, avisos_lidos;
 static unsigned syncs_modem[2];             /* os syncs que o modem deu, no FE FE e no 01 01 */
 static unsigned transbordou, faixas_desenhadas, tempo_faixa_us = 15000, luz = 1, ultima_posicao, ultimo_num[7];
+static unsigned vazias, borda;              /* as leituras da FIFO vazia; o aviso so na palavra do limite */
+#define CUSTO_REG_US 300u
 static unsigned escritas_58[32], n_58;      /* o que o laco gravou no 0x58 (o modo e o ganho) */
 
 static void modem_bit(unsigned b)
@@ -49,7 +56,7 @@ static void modem_bit(unsigned b)
         transbordou++;
     else
         fifo[(fifo_ini + fifo_n++) & 7] = palavra;
-    if (fifo_n >= 4)
+    if (borda ? fifo_n == (regs[0x5E] & 7) : fifo_n >= (regs[0x5E] & 7))   /* o limite do 0x5E (bits 2:0) */
         avisos |= 0x1000;
     nbits = palavra = 0;
     if (++palavras == 1024) {              /* os 2048 bytes do 0x5D */
@@ -65,7 +72,7 @@ static void anda(unsigned us)
         printf("X o laco nao saiu\n");
         exit(4);
     }
-    TIQUE_MS = (u32)(relogio_us / 1000);
+    TIQUE_MS = (u32)(relogio_us / 2000) * 2;
     while ((unsigned long long)bit_ar * 1000000 / 1200 < relogio_us) {
         modem_bit(bit_ar < ar_n ? ar[bit_ar] : (unsigned)(rand() & 1));
         bit_ar++;
@@ -74,7 +81,7 @@ static void anda(unsigned us)
 
 static void REG_W(unsigned reg, unsigned valor)
 {
-    anda(20);
+    anda(CUSTO_REG_US);
     regs[reg & 127] = valor;
     if (reg == 0x58 && n_58 < 32)
         escritas_58[n_58++] = valor;
@@ -94,7 +101,7 @@ static unsigned REG_R(unsigned reg)
 {
     unsigned w;
 
-    anda(20);
+    anda(CUSTO_REG_US);
     if (reg == 0x0C)
         return avisos != 0;
     if (reg == 0x02)
@@ -102,8 +109,10 @@ static unsigned REG_R(unsigned reg)
     if (reg == 0x0B)
         return 0;
     if (reg == 0x5F) {
-        if (!fifo_n)
+        if (!fifo_n) {
+            vazias++;
             return 0;
+        }
         w = fifo[fifo_ini++ & 7];
         fifo_n--;
         return w;
@@ -119,7 +128,8 @@ static void TOM(unsigned f1, unsigned f2)
 
 static void ESPERA_2MS(unsigned n)
 {
-    anda(n * 2000);
+    while (n--)                            /* ate o tique seguinte, como o 0x01E36286 */
+        anda((unsigned)(2000 - relogio_us % 2000));
 }
 
 /* ---------- a flash do chip de dados ---------- */

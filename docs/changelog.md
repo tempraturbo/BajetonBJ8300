@@ -5,6 +5,45 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v128 — Nov 5 — the AGC locked in FILTER and the APRS RX loop audited (flashed: the BJ still did not read the UV)
+
+`BJ8300_BANK_v128.anc` (sha256 `f3d13be9…`), left out of the commits like the other test versions: v125 with FILTER
+locking the AGC and the MESSAGES screen loop fixed. Flashed by the owner: the BJ still did not read the UV-17L's
+APRS up close; the network test, side by side with the UV, was under way at this commit.
+
+- **The AGC locked in FILTER.** The pop every 60.50 ms heard with a strong signal, on any screen, was the BK4819's
+  automatic AGC switching steps, not v124's re-arm (v126, below). With FILTER on, the AGC stays fixed on the top
+  step, the same one it sits on with the network's weak signals; off and on exit, the factory one comes back. At
+  the owner's request, after he tested v126's states.
+- **The APRS RX loop, audited.** An independent audit of the loop, in a simulation faithful to the radio, found a
+  serious defect in v124 to v127: reading the modem's flag every 20 ms, the almost-full alert born during the 4
+  FIFO reads went stale, and the next check read the FIFO empty and fed garbage to the decoder. The packet
+  aborted without even counting as an error, and P went up as usual. Now the stale alert is cleared after the 4
+  reads; re-arming and the sector erase only happen right after a read with nothing pending; the polarity
+  switches every 40 ms (it was ~120, and a short preamble was lost); the history sector erase left the middle of
+  the alert's words; and a long text no longer runs past the record.
+- **The test became faithful.** `teste_rx.py` now simulates the 2 ms tick, the wait until the next tick and
+  0.3 ms per chip access, fails on an empty FIFO read and runs with both possible behaviors of the chip's alert.
+  v125 fails 20 checks in it; v128 passes with the bus at 0.1, 0.3 and 1.36 ms per access.
+  [Section 24](reverse-engineering.md#the-audit-of-the-aprs-rx-loop-v128).
+
+## v127 — Nov 5 — diagnostic: the UV-17L's synthesizer registers (not released)
+
+`BJ8300_BANK_v127_diagnostico.anc` (sha256 `4b5326d1…`): FILTER already locking the AGC, and the MESSAGES 0 key
+going through the UV-17L's `0x1F`, `0x3E` and `0x1E`, separately and together, and through the RF regulator at
+2.7 V. On the network, the UV's `0x1F` makes the receiver deaf; with all three it hears, and no state decoded.
+These reading results are worth little: v127 still had the loop defect that v128 fixes.
+[Section 24](reverse-engineering.md#the-synthesizer-registers-v127).
+
+## v126 — Nov 5 — diagnostic: the 60.50 ms pop is the AGC (not released)
+
+`BJ8300_BANK_v126_diagnostico.anc` (sha256 `d97f5a9c…`): the MESSAGES 0 key going through the AGC fixed on the top
+step and on a middle one, the AFC off, both, and the UV-17L's `0x7E` and `0x77`. **With the AGC fixed, the pop is
+gone; with the AFC off alone, it is not.** It came from the BJ's receiver, with any radio transmitting, and not
+from the MESSAGES screen's re-arm, as v124 said. No state made the BJ read the network, but here too the loop
+defect (v128) spoiled the reading. Morse was left out only in it, for space.
+[Section 24](reverse-engineering.md#the-6050-ms-pop-the-automatic-agc-v126).
+
 ## v125 — Nov 5 — a faster BK4819 bus (tested: the radio works the same, and APRS reading did not change)
 
 `BJ8300_BANK_v125.anc` (sha256 `a50461fc…`), left out of the commits like the other test versions: v124 plus four

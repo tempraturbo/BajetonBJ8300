@@ -2318,6 +2318,75 @@ voltas, nunca 0 (que daria 2^32); a do começo, a do fim e a da troca de direç�
 SCK até 8 MHz, com 25 ns em alto e em baixo (TRM, tabela 2-1). O `conferir.py` (4w) confere cada sítio e que a
 instrução seguinte é a chamada. No rádio, nada mudou além disso: a leitura do APRS ficou como estava.
 
+### O estalo de 60,50 ms: o AGC automático (v126)
+
+**A correção da v124.** O estalo que se ouvia com a portadora de um rádio colado não era o rearme da tela
+MESSAGES. Numa gravação do dono na tela principal (onde aquele laço nem roda), com uma portadora comum, os estalos
+fortes vêm a cada **60,50 ms**, estáveis dentro de 0,8 ms, do começo ao fim. Numa gravação antiga da MESSAGES, o
+mesmo período atravessa um pacote sem perder o compasso: um período só explica os estalos de antes e de depois, 12
+períodos adiante, com erro de 1,4 ms. Nas gravações de outro Baofeng ouvindo o BJ e o UV-17L, nenhum trem; e o BJ
+estala com qualquer rádio transmitindo. O estalo nasce no receptor do BJ. 60,50 ms são 3 x 2^19 ciclos dos 26 MHz
+do cristal do BK4819 (60,495 ms); os tempos do JieLi são múltiplos de 2 e de 10 ms. O apito de 500 Hz da v124, esse
+sim, era o laço.
+
+**A v126** passou, pela tecla 0 da MESSAGES, pelo AGC fixo (o `0x7E`: bit 15 o modo fixo, bits 14:12 o degrau; a
+partida grava `0x303E`, automático, e nada mais o grava além do espectro, que o guarda e devolve) no degrau de cima
+(`B03E`) e no 2 (`A03E`), pelo AFC desligado (`0x73` bit 4; a fábrica nunca grava o `0x73`), pelos dois juntos, e
+pelo `0x7E` e pelo `0x77` do UV-17L (`32EE` e `88EF`; o BJ grava `CCEF`, o squelch por RSSI e ruído). O dono: os
+estados com o AGC fixo acabam com o estalo, e o do AFC desligado, não. O `0x51` não serve para desligar o detector
+de tom (é a configuração do tom de TX); o de RX roda sempre, em 55,1 Hz sem tom no canal, para cortar a cauda.
+
+**Desde a v128**, o FILTER ligado grava `B03E` no `0x7E` (o AGC fixo no degrau de cima, o mesmo em que ele fica
+com o sinal fraco da rede) e a saída devolve o `303E`. Na placa do BJ, com o PLL sem o regulador interno, cada
+troca de degrau do AGC vira um estalo no FM; no UV-17L, com o regulador, não.
+
+### Os registradores do sintetizador (v127)
+
+O que ainda diferia entre o BJ e o UV-17L, fora do que já foi testado, é do sintetizador e da FI, e só a partida
+grava: o `0x1F` (a bomba de carga do PLL nos bits 3:0; BJ `865A`, UV `5454`), o `0x3E` (BJ `94C6`, UV `A037`) e o
+`0x1E` (BJ `4C58`, UV `4C51`). Na v116 eles foram junto com o `0x37` do UV, que cala o BJ. A v127 os passou pela
+tecla 0, separados e juntos, e com o regulador de RF em 2,7 V (`0x37` = `9F1F`), recalibrando o VCO a cada troca
+(o `0x30` desliga e volta). O `0x1F` do UV sozinho, ou com o `0x3E`, deixa o receptor surdo; com os três, ele ouve.
+Os outros que diferem não pesam no RX: `0x44`, `0x45` e `0x74` (o EQ do TX), `0x46` (o VOX) e `0x4D` a `0x4F` (os
+limiares do squelch). Nenhum estado decodificou a rede, mas isso não prova nada: a v127 ainda tinha o defeito do
+laço da v128.
+
+### A auditoria do laço do APRS RX (v128)
+
+Uma auditoria independente do laço da tela MESSAGES, com uma imitação ajustada ao rádio (o tique de 2 ms, a espera
+até o tique seguinte, o custo de cada acesso ao chip e os dois jeitos possíveis do aviso de quase cheia: a cada
+palavra com a FIFO no limite, ou só na palavra que a leva ao limite), achou:
+
+- **O aviso velho e a FIFO lida vazia (v124 a v127).** O laço zera os avisos (`0x02`) antes de ler as 4 palavras;
+  uma palavra que entra durante as leituras marca um aviso novo. Com o `0x0C` lido a cada 20 ms, a verificação
+  seguinte achava esse aviso e lia 4 com 2 na FIFO: leituras vazias, lixo no `hdlc_bit`, o quadro abortado sem
+  contar como BAD, e a fase travada a captura inteira, com o P contando normalmente. Agora, depois da 4ª leitura,
+  `REG_W(0x02, 0)` e `f |= REG_R(0x02) & 0x2000`: o aviso velho sai e só o fim do quadro do chip fica. O aviso
+  segue com 4 palavras (`0x5E` = `0x0204`): com 2, como uma versão intermediária tentou, a FIFO travaria se o
+  aviso do chip for só na palavra do limite.
+- **O rearme sem conferir o aviso.** O rearme de quem espera rodava até 20 ms depois da última leitura do `0x0C`,
+  e um sync chegado nesse meio era apagado com o pacote. Agora o laço lê o `0x0C` a cada 20 ms e, entre as
+  leituras, só desenha a tela; o rearme sai só no ramo "li o `0x0C` sem aviso".
+- **A polaridade lenta.** Com o rearme só nas leituras, cada polaridade ficava ~120 ms armada, e um preâmbulo
+  mais curto que ~150 ms começado na polaridade errada se perdia. Agora troca a cada 40 ms (a segunda leitura),
+  e um preâmbulo de ~55 ms pega as duas. O UV-17L troca a cada 50.
+- **O apagamento de setor no meio da captura.** Uma rajada que atravessa a troca de setor do histórico fazia o
+  `hist_grava` apagar o outro setor (dezenas de ms) no meio das palavras do aviso, e a FIFO transbordava. Agora o
+  setor se apaga num bloco no fim de cada volta com aviso, com a FIFO recém-lida, e, com o laço parado, logo
+  depois de uma leitura sem aviso.
+- **O texto longo.** Um `/A=` perto do 100º caractere passava do `TEXTO_MAX` sem o 0 do fim (no UV, um buffer
+  maior e o corte). O `guarda` grava o 0 no `TEXTO_MAX`.
+- **Pendentes:** a correção de bit "conserta" para um conteúdo errado cerca de 0,9% dos quadros com dois tons
+  trocados (igual no UV); o filtro de cópias compara o tempo desde a partida, e o histórico sobrevive ao desligar
+  (o UV já guarda a partida no registro); e o tempo real do `APAGA_SETOR` não foi medido.
+
+**O espaço e a pilha.** A tabela dos degraus do RX GAIN foi para o `.vozes`, e a variável que lembrava o BAD e o
+FIX saiu (o laço compara com o `num[5]` e o `num[6]` do último desenho): a pilha do set do MESSAGES ficou em 732 de
+740 B. **O teste.** O `tests/teste_rx.h` imita agora o tique de 2 ms, a espera até o tique seguinte e 0,3 ms por
+acesso, conta a leitura da FIFO vazia (o `teste_rx.py` a reprova) e, com `RX_BORDA` no ambiente, o aviso só na
+palavra do limite; o `teste_rx.py` roda os dois. A v125 falha 20 verificações nessa imitação, com a FIFO vazia em
+quase todo cenário; a v128 passa com 0,1, 0,3 e 1,36 ms por acesso.
+
 ## 25. A pasta AUDIO: o EXPANDER e a NOISE GATE, e o que é a NR (v79)
 
 **O EXPANDER** é o expansor do áudio de RX do BK4819, o gêmeo do compressor da pasta MIC: abaixo do ponto

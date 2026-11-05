@@ -15,7 +15,8 @@
  *   F <0x43> <0x31> <0x28> <0x2B> <0x54> <0x75> no comeco de cada tecla do roteiro
  *   G os mesmos registradores no fim, e quantas vezes o aplica_audio rodou
  *   V <o SAVE na primeira tecla> <o SAVE no fim> (o do menu e 3)
- *   C <syncs marca> <syncs espaco> <BAD> <FIX> <transbordou> <faixas> <ms> <luz> <posicao na tela>
+ *   C <syncs marca> <syncs espaco> <BAD> <FIX> <transbordou> <faixas> <ms> <luz> <posicao na tela> <FIFO lida vazia>
+ * Com RX_BORDA no ambiente, o aviso de quase cheia so nasce na palavra que leva a FIFO ao limite (teste_rx.h).
  *   T <b[0x14BF2], a caixa e a volta> <b[0x14BEF]> <o BEEP PROMPT> <a tecla presa, + 1> (v112; v114) */
 #include "../firmware/src/mensagem.c"
 
@@ -157,6 +158,7 @@ int main(int argc, char **argv)
         return caixa();
     if (argc < 6)
         return 2;
+    borda = getenv("RX_BORDA") != 0;
     texto = le_arquivo(argv[1], &n);
     ar = texto;
     for (i = k = 0; i < n; i++)
@@ -222,8 +224,8 @@ int main(int argc, char **argv)
                fotos[i][5]);
     printf("G %x %x %x %x %x %x %u\n", regs[0x43], regs[0x31], regs[0x28], regs[0x2B], regs[0x54], regs[0x75],
            n_audio);
-    printf("C %u %u %u %u %u %u %u %u %u\n", ultimo_num[3], ultimo_num[4], ultimo_num[5], ultimo_num[6],
-           transbordou, faixas_desenhadas, (unsigned)(relogio_us / 1000), luz, ultima_posicao);
+    printf("C %u %u %u %u %u %u %u %u %u %u\n", ultimo_num[3], ultimo_num[4], ultimo_num[5], ultimo_num[6],
+           transbordou, faixas_desenhadas, (unsigned)(relogio_us / 1000), luz, ultima_posicao, vazias);
     if (argc > 7) {
         FILE *f = fopen(argv[7], "wb");
         fwrite(flash_d, 1, sizeof flash_d, f);

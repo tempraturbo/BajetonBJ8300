@@ -2362,6 +2362,76 @@ would be 2^32); the ones at the start, at the end and at the SDATA direction cha
 8 MHz, with 25 ns high and low (TRM, table 2-1). `conferir.py` (4w) checks each site and that the next instruction is
 the call. On the radio nothing else changed: APRS reading stayed as it was.
 
+### The 60.50 ms pop: the automatic AGC (v126)
+
+**v124's correction.** The pop heard with the carrier of a radio right next to it was not the MESSAGES screen's
+re-arm. In a recording by the owner on the main screen (where that loop does not even run), with a plain carrier,
+the strong pops come every **60.50 ms**, steady within 0.8 ms, from start to end. In an old MESSAGES recording, the
+same period crosses a packet without losing the beat: a single period explains the pops before and after, 12
+periods apart, with an error of 1.4 ms. In the recordings of another Baofeng listening to the BJ and the UV-17L,
+no train; and the BJ pops with any radio transmitting. The pop is born in the BJ's receiver. 60.50 ms is 3 x 2^19
+cycles of the BK4819's 26 MHz crystal (60.495 ms); the JieLi's times are multiples of 2 and 10 ms. v124's 500 Hz
+whistle, on the other hand, was the loop.
+
+**v126** went, through the MESSAGES 0 key, through the fixed AGC (`0x7E`: bit 15 the fixed mode, bits 14:12 the
+step; boot writes `0x303E`, automatic, and nothing else writes it besides the spectrum, which saves and restores
+it) on the top step (`B03E`) and on step 2 (`A03E`), the AFC off (`0x73` bit 4; the factory never writes `0x73`),
+both together, and the UV-17L's `0x7E` and `0x77` (`32EE` and `88EF`; the BJ writes `CCEF`, squelch by RSSI and
+noise). The owner: the states with the fixed AGC end the pop, and the AFC-off one does not. `0x51` cannot turn
+the tone detector off (it is the TX tone setup); the RX one always runs, at 55.1 Hz with no tone on the channel,
+to cut the tail.
+
+**Since v128**, FILTER on writes `B03E` to `0x7E` (the AGC fixed on the top step, the same one it sits on with the
+network's weak signals) and the exit restores `303E`. On the BJ's board, with the PLL without the internal
+regulator, each AGC step change becomes an FM pop; on the UV-17L, with the regulator, it does not.
+
+### The synthesizer registers (v127)
+
+What still differed between the BJ and the UV-17L, apart from what was already tested, belongs to the synthesizer
+and the IF, and only boot writes it: `0x1F` (the PLL charge pump in bits 3:0; BJ `865A`, UV `5454`), `0x3E` (BJ
+`94C6`, UV `A037`) and `0x1E` (BJ `4C58`, UV `4C51`). In v116 they went together with the UV's `0x37`, which
+silences the BJ. v127 went through them on the 0 key, separately and together, and with the RF regulator at 2.7 V
+(`0x37` = `9F1F`), recalibrating the VCO at each change (`0x30` off and back). The UV's `0x1F` alone, or with
+`0x3E`, makes the receiver deaf; with all three, it hears. The others that differ do not weigh on RX: `0x44`,
+`0x45` and `0x74` (the TX EQ), `0x46` (VOX) and `0x4D` to `0x4F` (the squelch thresholds). No state decoded the
+network, but that proves nothing: v127 still had the loop defect of v128.
+
+### The audit of the APRS RX loop (v128)
+
+An independent audit of the MESSAGES screen loop, with a simulation adjusted to the radio (the 2 ms tick, the wait
+until the next tick, the cost of each chip access and both possible behaviors of the almost-full alert: on every
+word with the FIFO at the threshold, or only on the word that brings it to the threshold), found:
+
+- **The stale alert and the empty FIFO read (v124 to v127).** The loop clears the alerts (`0x02`) before reading
+  the 4 words; a word that comes in during the reads sets a new alert. With `0x0C` read every 20 ms, the next
+  check found that alert and read 4 with 2 in the FIFO: empty reads, garbage in `hdlc_bit`, the frame aborted
+  without counting as BAD, and the phase locked for the whole capture, with P counting as usual. Now, after the
+  4th read, `REG_W(0x02, 0)` and `f |= REG_R(0x02) & 0x2000`: the stale alert is cleared and only the chip's
+  frame end stays. The alert keeps 4 words (`0x5E` = `0x0204`): with 2, as an intermediate version tried, the
+  FIFO would lock up if the chip's alert is only on the threshold word.
+- **Re-arming without checking the alert.** The waiting re-arm ran up to 20 ms after the last `0x0C` read, and a
+  sync that arrived in between was erased with the packet. Now the loop reads `0x0C` every 20 ms and, between
+  reads, only draws the screen; the re-arm happens only in the "read `0x0C`, no alert" branch.
+- **The slow polarity.** With re-arming only at reads, each polarity stayed armed ~120 ms, and a preamble shorter
+  than ~150 ms that started in the wrong polarity was lost. Now it switches every 40 ms (the second read), and a
+  ~55 ms preamble catches both. The UV-17L switches every 50.
+- **The sector erase in the middle of a capture.** A burst crossing the history's sector change made
+  `hist_grava` erase the other sector (tens of ms) in the middle of the alert's words, and the FIFO overflowed.
+  Now the sector is erased in a block at the end of each pass with an alert, with the FIFO just read, and, with
+  the loop idle, right after a read with no alert.
+- **The long text.** A `/A=` near the 100th character ran past `TEXTO_MAX` with no ending 0 (on the UV, a larger
+  buffer and the cut). `guarda` writes the 0 at `TEXTO_MAX`.
+- **Pending:** the bit correction "fixes" about 0.9% of frames with two swapped tones into wrong content (the same
+  on the UV); the duplicate filter compares the time since boot, and the history survives power-off (the UV now
+  keeps the boot in the record); and the real time of `APAGA_SETOR` was not measured.
+
+**Space and stack.** The RX GAIN steps table went to `.vozes`, and the variable that remembered BAD and FIX left
+(the loop compares with the last drawing's `num[5]` and `num[6]`): the MESSAGES set's stack ended at 732 of 740 B.
+**The test.** `tests/teste_rx.h` now simulates the 2 ms tick, the wait until the next tick and 0.3 ms per access,
+counts empty FIFO reads (`teste_rx.py` fails on them) and, with `RX_BORDA` in the environment, the alert only on
+the threshold word; `teste_rx.py` runs both. v125 fails 20 checks in this simulation, with the FIFO empty in
+almost every scenario; v128 passes with 0.1, 0.3 and 1.36 ms per access.
+
 ## 25. The AUDIO folder: EXPANDER and NOISE GATE, and what NR is (v79)
 
 **EXPANDER** is the BK4819's RX audio expander, the twin of the MIC folder's compressor: below the 0 dB

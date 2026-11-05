@@ -1772,13 +1772,15 @@ void aprs_caminho_grava(void)
  * audio demodulado - um apito de 500 Hz com os harmonicos (1000, 1500, 2000 e 2500 Hz, em cima dos tons do APRS),
  * medido numa gravacao do dono com o RX GAIN em MIN e o FILTER ligado, que a tela principal nao tem. O rearme
  * esperando o sync (4 escritas, 5,4 ms) dava um estalo a cada ~60 ms. Agora o 0x0C e lido a cada 20 ms (o aviso
- * vem com 4 palavras, ~53 ms antes de a FIFO encher) e o rearme esperando sai a cada 100 ms.
+ * vem com 4 palavras, ~53 ms antes de a FIFO encher) e o rearme esperando sai a cada 100 ms (a cada 40 desde a
+ * v128). O estalo de 60 ms era, na verdade, o AGC automatico (v128, no filtro_rx).
  *
  * A polaridade (v71). Numa flag em NRZI um tom fica 7 bits parado e o outro aparece 1 bit, e qual e qual
  * depende do transmissor. O chip so sincroniza no padrao do 0x5A: com FE FE (parado na marca, 1200 Hz), um
  * WAV com as duas polaridades alternadas so fez sync nas paradas em 1200 Hz, e 95% do trafego real nem
- * mexia no contador (v70). Esperando, o laco troca a cada 100 ms (50 ate a v122) entre FE FE e 01 01 (parado
- * no espaco): um preambulo de 113 ms ja pega as duas.
+ * mexia no contador (v70). Esperando, o laco troca a cada 40 ms entre FE FE e 01 01 (parado no espaco): um
+ * preambulo de ~55 ms ja pega as duas. (Ate a v122, 50 ms; da v124 a v127, ~120 ms, porque o rearme so sai numa
+ * leitura do 0x0C, a cada 20 ms, e um preambulo mais curto que ~150 ms comecado na polaridade errada se perdia.)
  * Sete bits de linha iguais so existem nas flags (o stuffing os corta dentro do quadro), entao nenhum dos
  * dois padroes aparece no meio de um quadro. Depois do sync o chip passa os bits crus do quadro dele
  * inteiro, de 2048 bytes (13,6 s), e o hdlc_bit acha sozinho as flags dos quadros seguintes, de qualquer
@@ -1925,7 +1927,14 @@ void modem_ganho_grava(void)
  * fabrica (9890, que so a partida grava, em 0x01E56620). Dos registradores que diferem entre os dois na tela
  * MESSAGES (o UV le ~9 de cada 10 pacotes na mesma frequencia, o BJ 1 ou 2), foi o unico que melhorou a leitura,
  * testados um por um nas versoes de diagnostico v116 a v120 (nao lancadas): o 0x1D do UV poe um zumbido, o 0x37
- * cala o receptor (o BJ precisa do regulador do PLL desviado, v122) e os outros nao mudaram nada. */
+ * cala o receptor (o BJ precisa do regulador do PLL desviado, v122) e os outros nao mudaram nada.
+ * O AGC travado (v128): o estalo a cada 60,50 ms (3 x 2^19 ciclos dos 26 MHz do cristal do BK4819, com qualquer
+ * radio e em qualquer tela, e que atravessa os pacotes sem perder o compasso) e o AGC automatico trocando de
+ * degrau, que a placa do BJ, com o PLL sem o regulador, ouve. Ligado, o AGC fica fixo no degrau de cima (0x7E bit
+ * 15, o degrau nos bits 14:12: B03E), o mesmo em que ele fica com o sinal fraco da rede; a saida devolve o 303E, que
+ * so a partida grava (o espectro guarda e devolve o 0x7E). Nas v126 e v127 (diagnostico, nao lancadas) o estalo
+ * sumiu com o AGC fixo e nao com o AFC desligado; e nem o AGC, nem o AFC, nem os 0x7E, 0x77, 0x1F, 0x3E e 0x1E do UV
+ * fizeram o BJ ler a rede, que o UV, ao lado, le quase inteira. */
 FIRMWARE(AM_FM, 0x01E440C4);        void AM_FM(unsigned am);      /* 1 AM, o resto FM */
 FIRMWARE(FILTRO, 0x01E4A980);       void FILTRO(unsigned);        /* o 0x43 do espectro: 0 o largo */
 void aplica_audio(void);
@@ -1942,9 +1951,11 @@ __attribute__((noinline)) static void filtro_rx(unsigned liga, unsigned era3)
         REG_W(0x54, 0x935A);               /* os graves do RX em -3 dB */
         REG_W(0x55, 0x2EFF);
         REG_W(0x75, 0xCC35);               /* os agudos do RX em +4 dB */
+        REG_W(0x7E, 0xB03E);               /* o AGC travado no degrau de cima (v128) */
         return;
     }
     AM_FM(era3 >> 16 & 1);
+    REG_W(0x7E, 0x303E);
     REG_W(0x2F, 0x9890);
     REG_W(0x31, era3 >> 16);
     REG_W(0x43, era3 & 0xFFFF);
@@ -2117,6 +2128,7 @@ __attribute__((noinline)) static void guarda(int *hist, unsigned *anel, const u8
         ((u8 *)r)[i] = 0xFF;
     r->usado = USADO;
     r->ambar = aprs_texto(r->texto, q, n, meu, n_meu | (DECODE_APRS == DECODE_OFF ? TEXTO_BRUTO : 0), r->id);
+    r->texto[TEXTO_MAX] = 0;               /* um "/A=" no fim passa do limite (e cai no para, refeito abaixo): v128 */
     for (i = 0; i < 9; i++) {              /* a origem, do comeco do texto ate o "> " */
         if (r->texto[i] == '>')
             k = 1;
@@ -2165,7 +2177,7 @@ void aprs_rx_grava(void)
     char meu[10];
     u16 num[7];                            /* FILTER desligado, posicao, quantos, syncs na marca e no espaco,
                                             * BAD, FIX */
-    unsigned i, f, n, k, w = 0, n_meu = meu_indicativo(meu), ativo = 0, pol = 0, desde = TIQUE_MS, olha = 0;
+    unsigned f, n, k, w = 0, n_meu = meu_indicativo(meu), ativo = 0, pol = 0, desde = TIQUE_MS, olha = 0;
     unsigned pede = 15, modo = PRESO, anel = 0, desde_tecla = 0;   /* o OK que abriu ainda esta apertado */
     /* os registradores (de 16 bits) que a saida devolve, dois por variavel: a pilha do laco esta no limite */
     unsigned era1 = REG_R(0x3F) | REG_R(0x70) << 16, era2 = REG_R(0x72) | REG_R(0x5E) << 16;
@@ -2258,24 +2270,31 @@ void aprs_rx_grava(void)
             continue;
         }
         ESPERA_2MS(1);
-        if (TIQUE_MS - olha < 20u || (olha = TIQUE_MS, !(REG_R(0x0C) & 1))) {   /* o 0x0C a cada 20 ms */
-            if (TIQUE_MS - desde > (ativo ? 300u : 100u)) {
-                /* esperando, a outra polaridade a cada 100 ms; recebendo, a FIFO parou: volta a esperar */
-                pol ^= !ativo;
-                ativo = 0;
-                fsk_rx_arma(pol);
-                desde = TIQUE_MS;
-            } else if (!ativo && (anel & ANEL_SUJO) && hist - (int)ANEL_VELHOS(anel) >= (int)POR_SETOR) {
-                hist = hist_prepara(hist, &anel);   /* o setor encheu: o outro se apaga ja, fora dos bits */
-                topo = 0;
-                modo &= ~ABERTO;
-                pede = 15;
-            } else if (pede && !(modo & ESCURO)) {
-                k = pede & -pede;          /* uma faixa da tela por volta, entre as leituras do modem */
+        /* O 0x0C a cada 20 ms; entre as leituras, so a tela (uma faixa por volta). O rearme e o setor do
+         * historico, so logo depois de uma leitura sem nada pendente (v128): da v124 a v127 o rearme rodava ate
+         * 20 ms depois da ultima leitura, e um sync chegado nesse meio era apagado, com o pacote. */
+        if (TIQUE_MS - olha < 20u) {
+            if (pede && !(modo & ESCURO)) {
+                k = pede & -pede;
                 pede ^= k;
                 RX_MOSTRA(k);
             }
             continue;
+        }
+        olha = TIQUE_MS;
+        if (!(REG_R(0x0C) & 1)) {
+            if (TIQUE_MS - desde > (ativo ? 300u : 30u)) {
+                /* esperando, a outra polaridade a cada 40 ms (a 2a leitura do 0x0C, de 20 em 20; o UV troca a cada
+                 * 50); recebendo, a FIFO parou: volta a esperar */
+                pol ^= !ativo;
+                ativo = 0;
+                fsk_rx_arma(pol);
+                desde = TIQUE_MS;
+                continue;
+            }
+            if (ativo)                     /* recebendo e sem aviso: o setor fica para o fim do proximo */
+                continue;
+            goto setor;
         }
         REG_W(0x02, 0);
         f = REG_R(0x02);
@@ -2288,15 +2307,21 @@ void aprs_rx_grava(void)
             num[3 + pol]++;
             pede |= 8;
         }
-        i = h.ruins + h.consertados;
         if (f & 0x1000) {
             desde = TIQUE_MS;
             /* as 4 palavras bit a bit: o byte baixo primeiro, o bit alto de cada byte primeiro (a ordem do
              * TX do chip, que o TA1JS usou no UV-K5 com o aprs.fi decodificando, e que o beacon da v65
-             * provou) */
+             * provou). Depois da 4a leitura, o aviso que nasceu durante as leituras (a palavra que entrou) e
+             * velho: sem limpa-lo, a proxima leitura achava menos de 4 e lia a FIFO vazia, lixo no hdlc_bit
+             * (v124 a v127, achado da auditoria; v128); so o fim do quadro do chip fica. */
             for (k = 0; k < 64; k++) {
-                if (!(k & 15))
+                if (!(k & 15)) {
                     w = REG_R(0x5F);
+                    if (k == 48) {
+                        REG_W(0x02, 0);
+                        f |= REG_R(0x02) & 0x2000;
+                    }
+                }
                 if ((n = hdlc_bit(&h, w >> (k & 8 ? 23 - (k & 15) : 7 - (k & 15)) & 1))) {
                     int antes = hist;
 
@@ -2322,8 +2347,18 @@ void aprs_rx_grava(void)
             TELA_APRS = VOLTA;             /* volta (v112) */
             break;
         }
-        if (i != h.ruins + h.consertados)
+        if (num[5] != h.ruins || num[6] != h.consertados)   /* o BAD e o FIX mudaram desde o ultimo desenho */
             pede |= 8;
+    setor:
+        /* O setor que recebe encheu: o outro se apaga ja (dezenas de ms) - parado, ou logo depois de um aviso,
+         * com a FIFO recem-lida e a folga inteira (v128: no meio de uma captura o hist_grava o apagava no meio
+         * das palavras do aviso, e a FIFO transbordava). */
+        if ((anel & ANEL_SUJO) && hist - (int)ANEL_VELHOS(anel) >= (int)POR_SETOR) {
+            hist = hist_prepara(hist, &anel);
+            topo = 0;
+            modo &= ~ABERTO;
+            pede = 15;
+        }
     }
     if (TELA_APRS == CAIXA_TO)             /* o # ainda apertado: a caixa abre ja, e a fabrica nao o ve */
         TECLA_PRESA = 5;
