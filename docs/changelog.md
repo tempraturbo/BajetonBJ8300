@@ -5,6 +5,13 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Nov 6 — APRS (SMS) and the menu's bank
+
+The settings group follows the radio's folder: **APRS (SMS)**. **Bank edited by the radio menu** leaves the banks page, where
+it no longer did anything: since v141 the radio's CHANNELS and NAME pick the bank in a list. The header byte stays as it is,
+and the image and the upload do not change. The module stays `bj8300_v3.5TEMPRA.py` until the release. `teste_chirp_real.py`
+checks the new name and that the setting is gone.
+
 ## v143 — Nov 6 — the APRS (SMS) folder
 
 v142 with the APRS folder renamed **APRS (SMS)**, at the owner's request and the same as the UV-17L's. It is still folder

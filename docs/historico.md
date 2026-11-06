@@ -5,6 +5,13 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 06/11 — a APRS (SMS) e o banco do menu
+
+O grupo de ajustes acompanha a pasta do rádio: **APRS (SMS)**. Sai da página dos bancos o **Bank edited by the radio menu**,
+que não fazia mais nada: desde a v141 o CHANNELS e o NAME do rádio escolhem o banco numa lista. O byte do cabeçalho fica como
+está, e a imagem e a gravação não mudam. O módulo segue `bj8300_v3.5TEMPRA.py` até a release. O `teste_chirp_real.py` confere
+o nome novo e que o ajuste saiu.
+
 ## v143 — 06/11 — a pasta APRS (SMS)
 
 A v142 com a pasta APRS renomeada para **APRS (SMS)**, a pedido do dono e igual à do UV-17L. Ela segue sendo a pasta 1, e

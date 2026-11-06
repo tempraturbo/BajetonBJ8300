@@ -1061,7 +1061,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             'WATCH, CH-C and SHOW C are in Settings > VFO A/B/C Channel, with SHOW A and SHOW B\n'
             '(WATCH, CH-C and SHOW C need firmware v46 or later).\n'
             '\n'
-            'The APRS and Morse folders hold the radio\'s callsign, path, messages, speed and\n'
+            'The APRS (SMS) and Morse folders hold the radio\'s callsign, path, messages, speed and\n'
             'tone (writing them needs firmware v110 or later).\n'
             '\n'
             'Keep a copy of your first download before changing anything.')
@@ -1260,9 +1260,9 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         return rs
 
     def _aprs_settings(self):
-        """Settings > APRS: the radio's APRS folder (firmware v65), but MESSAGES, the screen where the
+        """Settings > APRS (SMS): the radio's folder of that name (firmware v65), but MESSAGES, the screen where the
         messages come in and are sent from (V3.2T; until V3.1T, RX, MESSAGE and SEND)."""
-        group = RadioSettingGroup('aprs', 'APRS')
+        group = RadioSettingGroup('aprs', 'APRS (SMS)')
         group.append(self._text_setting(
             'aprs_callsign', 'Callsign', APRS_CALL, CALL_CHARS,
             'The station callsign, as the radio\'s APRS > CALLSIGN: up to 6 letters and digits, in capitals.'))
@@ -1621,7 +1621,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             _WatchStore(self).set_mdf_c(radtel_rt900.MDF_LIST.index(str(setting.value)))
 
     def _bank_settings(self):
-        """Settings > Banks: one block per bank (Name, Channels, Enabled) and the selected bank.
+        """Settings > Banks: one block per bank (Name, Channels, Enabled).
 
         Name and Enabled are only written when they were changed on this page (see the apply
         callbacks), so a rename done meanwhile in the Banks tab is not undone by the value this
@@ -1658,16 +1658,6 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             rs.set_apply_callback(self._apply_bank_enabled, i)
             block.append(rs)
             group.append(block)
-
-        selected = store.selected()
-        options = ['BANK %i%s' % (i + 1, ' (%s)' % store.name(i) if store.name(i) else '')
-                   for i in range(NUM_BANKS)]
-        rs = RadioSetting('bank_selected', 'Bank edited by the radio menu',
-                          RadioSettingValueList(
-                              options, current_index=selected if selected < NUM_BANKS else 0))
-        rs.set_doc('The bank that the radio\'s BANKS > NAME and BANKS > CHANNEL menu items work on.')
-        rs.set_apply_callback(self._apply_bank_selected)
-        group.append(rs)
         return group
 
     def _apply_bank_name(self, setting, bank):
@@ -1677,9 +1667,6 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     def _apply_bank_enabled(self, setting, bank):
         if setting.value.changed():
             _BankStore(self).set_enabled(bank, bool(setting.value))
-
-    def _apply_bank_selected(self, setting):
-        _BankStore(self).select(int(setting.value))   # RadioSettingValueList gives the index
 
 
 class BJ8300VhfUhf(BJ8300):

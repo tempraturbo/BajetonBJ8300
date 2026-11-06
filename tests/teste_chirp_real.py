@@ -227,9 +227,8 @@ def main():
               bool(ajuste['bank_%i_enabled' % i].value)) for i in (1, 2, 3)],
             [('test', '1', True), ('', '0', False), ('bnk', '1', True)])
     confere('5e. Channels e so leitura', ajuste['bank_1_channels'].value.get_mutable(), False)
-    confere('5f. banco do menu com os nomes, e o escolhido da imagem',
-            (ajuste['bank_selected'].value.get_options()[:3], str(ajuste['bank_selected'].value)),
-            (['BANK 1 (test)', 'BANK 2', 'BANK 3 (bnk)'], 'BANK 3 (bnk)'))
+    confere('5f. o banco do menu saiu da pagina: desde a v141 o radio o escolhe na lista',
+            'bank_selected' in ajuste, False)
 
     ajuste['bank_2_name'].value.set_value('REPEATERS')
     aplica(ajustes)
@@ -253,10 +252,6 @@ def main():
     confere('5k. tirar o ultimo canal do banco o desliga sozinho', banco.enabled_mask() & 1, 0)
     aplica(ajustes)                                   # a pagina ainda tem o banco 1 marcado
     confere('5l. e o valor antigo da pagina nao o religa', banco.enabled_mask() & 1, 0)
-
-    ajuste['bank_selected'].value.set_value(ajuste['bank_selected'].value.get_options()[6])
-    aplica(ajustes)
-    confere('5m. escolher o banco 7 grava no cabecalho', banco.selected(), 6)
 
     # 6. o que foi mexido esta mesmo nos bytes da imagem, com marca e soma validas
     crua = radio._mmap.get_packed()
@@ -381,7 +376,7 @@ def main():
     confere('10c. VFO A/B/C Channel e FM/AM/SSB Modulation fora do Specific, no topo',
             [g.get_shortname() for g in aj],
             ['Basic Settings', 'DTMF Settings', 'BJ8300_v3.5TEMPRA Specific', 'VFO A/B/C Channel',
-             'FM/AM/SSB Modulation', 'APRS', 'Morse', 'Banks'])
+             'FM/AM/SSB Modulation', 'APRS (SMS)', 'Morse', 'Banks'])
     abc = aj['abblock']
     confere('10c2. o WATCH e o TRIPLE WATCH primeiro no VFO A/B/C Channel, e um bloco para cada lado',
             (abc.keys()[:2], abc['settings_tdr'].get_shortname(), 'settings_tdr' in aj['spec'],
