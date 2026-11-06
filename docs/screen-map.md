@@ -483,7 +483,7 @@ clear (`0x01E49B1C`), and after every key the engine runs whole (`0x01E4A0FE` en
 `goto 0x01E489E0`). The already-drawn mode (`b[0x14686]`) does not go back to `0xFF` on that path, so
 it cannot tell whether the editor just opened: the detour draws the whole editor on every pass.
 Since v52 there are only `ABC` and `123`, and the editor opens in `ABC`: `#` goes back to 1 instead of
-0 (`0x01E4A5AA`), and the CH-NAME and BANK NAME gets set mode 1. The CH-NAME get measures the name up
+0 (`0x01E4A5AA`), and the CH NAME and BANK NAME gets set mode 1. The CH NAME get measures the name up
 to the first 0 or `0xFF` (CHIRP fills the name with `0xFF`), no longer with the ROM strlen.
 
 **Radio.** The addresses, each one rebuilt from the stock bytes by `conferir.py`'s `4p`:
@@ -540,7 +540,7 @@ main screen's deepest path.
   fakes the RAM with the same addresses;
 - the stack analysis does not follow `call rN`. The menu get/set/exibe routines are called through a
   pointer: the set on OK (`0x01E49996`) at 144 B, the get and exibe in the engine at 296 B. A set
-  that redraws the screen (Modulation's, CH-NAME's through the editor exit `0x01E3C7AA`) falls into
+  that redraws the screen (Modulation's, CH NAME's through the editor exit `0x01E3C7AA`) falls into
   that; measured at the call site, they all stay at up to 652 B, under the stock 740 B.
 
 ## 14. The WATCH views (v42 to v51)
@@ -580,12 +580,12 @@ from the letter:
 
 Each strip has the letter badge, the text its MDF asks for (the name, the frequency or the number)
 and the channel on a chip (`VFO` on the VFO). The third one, the one on neither side, is read from
-the data chip: the channel record, with MDF-C (or MDF-B, when it is B). An empty channel shows as
+the data chip: the channel record, with SHOW C (or SHOW B, when it is B). An empty channel shows as
 `EMPTY CH`. Since v49, a third one on VFO shows its VFO's frequency (read from sector `0xD3000`)
 with `VFO` on the chip. **While receiving**, the strip turns dark amber (`#3b2a0b`, the amber chip's
 background) with the badge and the text in amber (`#fbbf24`). The side out of focus is receiving
 when it has signal, or when dual watch is on it with state 4, and the one receiving is the third
-one when the round-robin is on it. **While transmitting** on the third one (TX-A/B/C, v51: the flag
+one when the round-robin is on it. **While transmitting** on the third one (TX SIDE, v51: the flag
 `b[0x15384]` with bits 7 and 6), it is on side B, in focus, in RAM only: B's screen record holds its
 data, and `watch_tela()` inverts the view (with bit 31, its channel goes to B's card), so the card
 shows its letter, channel, name and red meter, and the strip shows the one that left side B. In v50,
@@ -602,7 +602,7 @@ the end of the deepest path of the screen in TRIPLE, and one more frame went pas
 
 **In the preview**, scenes 33 to 35 are SINGLE (channel receiving, VFO with an offset, and
 transmitting; 33b, an airband AM channel without TX, v81) and 36 to 39 are TRIPLE (A receiving, C receiving, B in focus with A receiving, and C
-in focus); 38c is C on a VFO, 39c TX on C with A in focus before PTT (v51) and 11b the TX-A/B/C
+in focus); 38c is C on a VFO, 39c TX on C with A in focus before PTT (v51) and 11b the TX SIDE
 menu with C in focus (v50).
 
 ## 15. The menu folder window (v53 to v57)

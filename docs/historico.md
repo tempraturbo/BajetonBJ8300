@@ -5,6 +5,17 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V3.6T — 06/11 — o CH MEMORY, os BANKS refeitos, os nomes claros e o TRIPLE WATCH
+
+A v143 virou a **V3.6T**, a pedido do dono: `firmware/releases/BJ8300_BANK_v3.6T.anc` (sha256 `4d695299…`), a v142 aprovada
+no rádio com dois textos que não foram gravados antes do lançamento, o nome da versão no item VERSION e a pasta APRS (SMS).
+O módulo do CHIRP passou a `bj8300_v3.6TEMPRA.py` (modelo `BJ8300_v3.6TEMPRA`), e as imagens salvas com o
+`BJ8300_v3.5TEMPRA` abrem nele (`MODEL_COMPAT`). No README, a V3.6T no alto, os nomes novos nas tabelas e nos passos, uma
+seção do CH MEMORY e dos BANKS, o uso dos bancos no rádio reescrito e uma linha por recurso novo, com 27 telas refeitas e 5
+novas. O orçamento de espaço passou a contar a quinta área, a tabela de menu de fábrica. A pasta de releases troca a V3.5T
+pela V3.6T; a V3.5T segue no release dela no GitHub. Publicada no
+[release V3.6T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.6T), com o módulo do CHIRP, o gravador e o driver do cabo.
+
 ## Driver do CHIRP — 06/11 — a APRS (SMS) e o banco do menu
 
 O grupo de ajustes acompanha a pasta do rádio: **APRS (SMS)**. Sai da página dos bancos o **Bank edited by the radio menu**,

@@ -479,7 +479,7 @@ limpeza de fábrica (`0x01E49B1C`), e depois de cada tecla o motor roda inteiro 
 termina em `goto 0x01E489E0`). O modo já desenhado (`b[0x14686]`) não volta a `0xFF` nesse caminho,
 então não serve para saber se o editor acabou de abrir: o desvio desenha o editor inteiro em toda
 passada. Desde a v52 só há `ABC` e `123`, e o editor abre em `ABC`: a `#` volta ao 1 em vez do 0
-(`0x01E4A5AA`), e o get do CH-NAME e o do BANK NAME põem o modo 1. O get do CH-NAME mede o nome até o
+(`0x01E4A5AA`), e o get do CH NAME e o do BANK NAME põem o modo 1. O get do CH NAME mede o nome até o
 primeiro 0 ou `0xFF` (o CHIRP completa o nome com `0xFF`), e não mais com o strlen da ROM.
 
 **Rádio.** Os endereços, cada um refeito dos bytes de fábrica pela `4p` do `conferir.py`:
@@ -535,7 +535,7 @@ junto da `letra()` o quadro dela crescia, e ela está no fim do caminho mais fun
   com os mesmos endereços;
 - a análise de pilha não segue `call rN`. Os get/set/exibe dos menus são chamados por ponteiro: o
   set no OK (`0x01E49996`) a 144 B, o get e o exibe no motor a 296 B. Um set que redesenha a tela
-  (o do Modulation, o CH-NAME pela saída do editor `0x01E3C7AA`) entra nisso; medidos no ponto da
+  (o do Modulation, o CH NAME pela saída do editor `0x01E3C7AA`) entra nisso; medidos no ponto da
   chamada, todos ficam em até 652 B, abaixo dos 740 B de fábrica.
 
 ## 14. As vistas do WATCH (v42 a v51)
@@ -575,12 +575,12 @@ da letra:
 
 Cada faixa tem o selo da letra, o texto que o MDF dela pede (o nome, a frequência ou o número) e o
 canal numa etiqueta (`VFO` no VFO). A terceira, a que não está em nenhum dos dois lados, é lida do
-chip de dados: o registro do canal, com o MDF-C (ou o MDF-B, quando ela é o B). Canal vazio
+chip de dados: o registro do canal, com o SHOW C (ou o SHOW B, quando ela é o B). Canal vazio
 aparece como `EMPTY CH`. Desde a v49, a terceira em VFO mostra a frequência do VFO dela (lida do
 setor `0xD3000`) com `VFO` na etiqueta. **Recebendo**, a faixa fica em âmbar escuro (`#3b2a0b`, o fundo da
 etiqueta âmbar) com o selo e o texto em âmbar (`#fbbf24`). O lado fora de evidência recebe quando
 tem sinal, ou quando a dupla escuta está nele com o estado em 4, e o que recebe é a terceira quando
-o rodízio está nela. **Transmitindo** na terceira (o TX-A/B/C, v51: a marca `b[0x15384]` com os bits
+o rodízio está nela. **Transmitindo** na terceira (o TX SIDE, v51: a marca `b[0x15384]` com os bits
 7 e 6), ela está no lado B, em evidência, só pela RAM: o registro de tela do B tem os dados dela, e
 o `watch_tela()` inverte a vista (com o bit 31, o canal dela vai para o cartão do B), de modo que o
 cartão mostra a letra, o canal, o nome e o medidor vermelho dela, e a faixa mostra quem saiu do lado
@@ -598,7 +598,7 @@ o fim do caminho mais fundo da tela no TRIPLE, e um quadro a mais passava da pil
 **Na prévia**, as cenas 33 a 35 são o SINGLE (canal recebendo, VFO com deslocamento e
 transmitindo; a 33b, um canal de aviação em AM sem TX, v81) e as 36 a 39 o TRIPLE (o A recebendo, a C recebendo, o B em evidência com o A
 recebendo e a C em evidência); a 38c é a C em VFO, a 39c a TX na C com o A em evidência antes do PTT
-(v51) e a 11b o menu TX-A/B/C com a C em evidência (v50).
+(v51) e a 11b o menu TX SIDE com a C em evidência (v50).
 
 ## 15. A janela de pasta do menu (v53 a v57)
 
