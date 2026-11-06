@@ -7,7 +7,7 @@ causa, porque é isso que evita repetir.
 
 ## V3.6T — 06/11 — o CH MEMORY, os BANKS refeitos, os nomes claros e o TRIPLE WATCH
 
-A v143 virou a **V3.6T**, a pedido do dono: `firmware/releases/BJ8300_BANK_v3.6T.anc` (sha256 `4d695299…`), a v142 aprovada
+A v143 virou a **V3.6T**, a pedido do dono: `firmware/releases/BJ8300_BANK_v3.6T.anc` (sha256 `4d696529…`), a v142 aprovada
 no rádio com dois textos que não foram gravados antes do lançamento, o nome da versão no item VERSION e a pasta APRS (SMS).
 O módulo do CHIRP passou a `bj8300_v3.6TEMPRA.py` (modelo `BJ8300_v3.6TEMPRA`), e as imagens salvas com o
 `BJ8300_v3.5TEMPRA` abrem nele (`MODEL_COMPAT`). No README, a V3.6T no alto, os nomes novos nas tabelas e nos passos, uma

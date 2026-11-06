@@ -7,7 +7,7 @@ its cause, because that is what stops it happening twice.
 
 ## V3.6T — Nov 6 — CH MEMORY, the rebuilt BANKS, clear names and TRIPLE WATCH
 
-v143 became **V3.6T**, at the owner's request: `firmware/releases/BJ8300_BANK_v3.6T.anc` (sha256 `4d695299…`), the v142
+v143 became **V3.6T**, at the owner's request: `firmware/releases/BJ8300_BANK_v3.6T.anc` (sha256 `4d696529…`), the v142
 approved on the radio with two texts that were not flashed before the release, the version name in the VERSION item and the
 APRS (SMS) folder. The CHIRP module became `bj8300_v3.6TEMPRA.py` (model `BJ8300_v3.6TEMPRA`), and images saved with
 `BJ8300_v3.5TEMPRA` open in it (`MODEL_COMPAT`). In the README, V3.6T at the top, the new names in the tables and the steps, a
