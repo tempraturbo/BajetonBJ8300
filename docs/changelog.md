@@ -5,6 +5,32 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v140 — Nov 6 — the channel menu: CH MEMORY, with lists, confirmation and cancelling without saving (in test)
+
+`BJ8300_BANK_v140.anc` (sha256 `dc59c121…`), left out of the commits like the other test versions: V3.5T with the menu
+for saving and naming channels redone at the owner's request, the same as the UV-17L's, to make it obvious. Not flashed
+yet.
+
+- **The names.** The MEMORY folder became **CH MEMORY**, and the items became **CH NAME**, **DELETE** and **SAVE**. The
+  battery SAVE, in the SYSTEM folder, became **BATTERY SAVE**, so there are not two. The folder moves in the alphabetical
+  order: it is number 5, and CHANNEL, DISPLAY, DTMF and KEYS move up one.
+- **The lists.** DELETE and CH NAME only show saved channels, like `102 - PIGAO 3` (with no name, the frequency), and SAVE
+  only free numbers. They all open on the channel of the side in evidence or the nearest in the list, a tie going up, and
+  the arrows wrap around. A typed number goes to the nearest. Holding 3 opens the same SAVE.
+- **The warnings.** In place of an empty list: `NO SAVED CHANNELS`, `MEMORY FULL` and, on CH NAME in VFO,
+  `SAVE CHANNEL FIRST`, where OK goes to SAVE. In VFO CH NAME shows no channel: the highlighted one would not be the tuned
+  one.
+- **Cancelling does not save.** SAVE and CH NAME only write on the editor's OK. EXIT with the box empty, or held, goes back
+  to the list without writing. OK with it blank writes `CH 101`.
+- **DELETE asks.** `DELETE?` with the channel, OK deletes and the list carries on at the nearest, to delete several; EXIT
+  gives up.
+- **Space.** The reserve was opened, the factory menu table, dead since v43: 1,512 B, with the same proof as the voice
+  paths. That leaves 940 B there, 298 B in the paths and 122 B in `.livre`.
+
+[Section 32](reverse-engineering.md#32-the-channel-menu-ch-memory-v140). Of the operating modes (GMRS, Super and the
+others), which the owner asked to check, none locks up the firmware:
+[section 33](reverse-engineering.md#33-the-operating-modes).
+
 ## V3.5T — Nov 6 — SAVE with a name, the labels, MIC GAIN with DEFAULT and the APRS adjustments
 
 v139 became **V3.5T**, a number the owner chose (there was no V3.3T or V3.4T):

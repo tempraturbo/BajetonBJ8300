@@ -92,6 +92,7 @@ SITIOS.append((montar.ROGER_LACO_EM, 'gancho_roger_tons'))
 SITIOS += [(s, 'gancho_envia') for s, _ in montar.REALCE_SITIOS_GANCHO]
 SITIOS += [(s, 'gancho_limpa') for s, _ in montar.LIMPA_SITIOS]
 SITIOS += [(s_, g_) for s_, g_, _ in montar.ENVIA_SITIOS]
+SITIOS += [(s_, montar.SETA_GANCHO[e_]) for s_, e_ in montar.SETAS]              # v140: as setas
 SITIOS += [(s_, d_) for s_, _, d_, _, _, _ in getattr(montar, 'MENU_DESVIOS', ())]   # v53: o EXIT dos grupos
 SITIOS.append((montar.PONTEIRO_EM, 'menu_abre'))                                     # v53: a entrada do menu
 extra = {}

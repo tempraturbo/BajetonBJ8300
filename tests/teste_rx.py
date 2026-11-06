@@ -292,7 +292,7 @@ confere('10. de volta, o FILTER como estava (desligado), o bipe de volta e o est
 
 
 def roda_modo(modo):
-    r = subprocess.run([exe, modo], capture_output=True, text=True, timeout=60)
+    r = subprocess.run([exe, modo], capture_output=True, text=True, errors='replace', timeout=60)
     if r.returncode:
         sys.exit(f'o teste {modo} falhou ({r.returncode}):\n{r.stdout}\n{r.stderr}')
     return [l.split(' ') for l in r.stdout.splitlines()]
@@ -328,6 +328,46 @@ confere('10. a caixa e o set do TO', c,
         ['B 0 0 0 0 0 ', 'B 1 5 7 0 37 ', 'D 12 65 8 6 8 PU2XYZ-9|Ola 73', 'B 1 5 7 0 37 ', 'D 8 0 8 0 9 PU2XYZ-9|',
          'B 1 5 7 8 9 PU2XYZ-9', 'D 8 0 0 0 10 |', 'D 0 0 5 0 11 PY5ZZ|',
          'B 1 0 7 0 6 ', 'B 1 0 7 0 6 ', 'I 1 PY2ABC', 'B 1 5 7 0 37 ', 'D 8 0 5 3 12 PY5ZZ|Ola'])
+
+# 12. as listas de canais (v140): so os salvos ou so os livres, o mais perto ao abrir, as setas dando a volta; o SAVE e
+# o CH NAME so gravam no OK do editor, com "CH 101" em branco; o DELETE pergunta, e em VFO o CH NAME nao mostra canal
+c = [' '.join(l) for l in roda_modo('canais')]
+for k, (nome, esperado) in enumerate((
+        ('abre no mais perto', 'L [006 - BF888-06] [103 - PIGAO 3] [104 - 144.62500] 102 4'),
+        ('a seta anda na lista', 'L [103 - PIGAO 3] [104 - 144.62500] [002 - BF888-02] 103 4'),
+        ('e da a volta', 'L [104 - 144.62500] [002 - BF888-02] [006 - BF888-06] 1 4'),
+        ('a seta de volta', 'L [103 - PIGAO 3] [104 - 144.62500] [002 - BF888-02] 103 4'),
+        ('o numero digitado vale pelo mais perto', 'L [002 - BF888-02] [006 - BF888-06] [103 - PIGAO 3] 50 4'),
+        ('o SAVE so nos livres', 'L [100] [101] [102] 100 4'),
+        ('a seta pula os ocupados', 'L [102] [105] [106] 104 4'),
+        ('no GMRS, os 30 primeiros fora', 'L [960] [031] [032] 0 4'),
+        ('o SAVE abre o editor, com o canal no titulo', 'L [100] [101] [102] 100 4'),
+        ('', 'A 1 7 CH 101'),
+        ('o EXIT do editor volta a lista', 'C 1 4'),
+        ('sem gravar', 'S SAVE 0'),
+        ('o OK em branco grava CH 101', 'N CH 101'),
+        ('', 'F 0 4'),
+        ('com nome', 'N TESTE'),
+        ('so espacos valem como em branco', 'N CH 106'),
+        ('o CH NAME em VFO nao mostra canal', 'V 1 ---'),
+        ('o CH NAME abre no canal', 'L [101 - CH 101] [103 - PIGAO 3] [104 - 144.62500] 102 4'),
+        ('com o nome no editor', 'E PIGAO 3 CH 103'),
+        ('o nome novo', 'N NOVO'),
+        ('o cru do canal fica', 'R 25'),
+        ('o EXIT do CH NAME volta a lista', 'X 1'),
+        ('sem mexer no nome', 'N NOVO'),
+        ('em branco, CH 103', 'N CH 103'),
+        ('o DELETE abre no canal', 'L [101 - CH 101] [103 - CH 103] [104 - 144.62500] 102 4'),
+        ('e pergunta, sem apagar', 'P 8 1'),
+        ('o EXIT da pergunta volta a lista', 'Q 1 4'),
+        ('o OK apaga e segue no mais perto', 'D 103 4 0'),
+        ('com um canal so, so ele', 'L [] [008 - UM] [] 7 4'),
+        ('o ultimo deixa o aviso', 'Z 8 1'),
+        ('a memoria cheia', 'M 1'))):
+    if nome:
+        confere(f'12. {nome}', c[k], esperado)
+    else:
+        confere(f'12. a linha {k}', c[k], esperado)
 
 print()
 modelo = 'aviso so na palavra do limite' if os.environ.get('RX_BORDA') else 'aviso a cada palavra no limite'

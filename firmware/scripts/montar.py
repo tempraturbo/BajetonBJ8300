@@ -120,6 +120,10 @@ CODIFICACOES_FORA = ((0x01E05AD4, bytes.fromhex('87e8e201'), 'a instrucao "if (r
 # docs/engenharia-reversa.md, secao 29; o conferir.py a refaz (2j). Os bytes de fabrica da faixa se conferem
 # pelo sha256 antes de gravar.
 CAMINHOS, CAMINHOS_FIM = 0x01E5AB60, 0x01E5B6E0
+# A reserva (v140): a tabela de menu de fabrica (TABELA), morta desde a v43: o unico acesso a ela era o ponteiro
+# PONTEIRO_EM, que passou ao menu_abre. O .reserva segue as regras do .caminhos, e o conferir.py refaz a varredura nela
+# (2j). O montar le a tabela para os moldes antes de gravar por cima.
+RESERVA, RESERVA_FIM = 0x01E62F98, 0x01E63580
 CAMINHOS_SHA256 = '8080d5e5e38c725b194295fa99e78806369f0dbda4ed50024e4568bba5fc3934'
 CAMINHOS_REMENDOS = ((0x01E60B58, bytes.fromhex('25ace501'), bytes.fromhex('f8b6e501'),
                       'editor 123: o "*" da tecla * no caminho do B0, fora da faixa'),)
@@ -330,7 +334,7 @@ PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 # e o r4 (0, lido em 0x01E4CBC6) a chamada preserva.
 MENU_VAGAS = 96                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ; v112: 95; v113: 96
 TABELA_SIMBOLO = 'menu_tabela'
-TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 524   # v111: o que o menu usa (era 640); v112: 520; v113: 524; item novo pede mais
+TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 528   # v111: o que o menu usa (era 640); v140: 528; v112: 520; v113: 524; item novo pede mais
 R5_R0 = bytes.fromhex('0516')
 
 # v53: os grupos do menu (src/telas.c), um nivel acima dos itens, a pedido do dono. Cada item fica em
@@ -346,12 +350,12 @@ GRUPOS = {
     'DISPLAY': ('ABR', 'BRIGHTNESS', 'MDF-A', 'MDF-B', 'MDF-C', 'MENU EXIT TIME', 'POWER-ON MSG'),
     'DTMF': ('DTMF CODE', 'DTMFST', 'PTT-LT', 'S-CODE'),
     'KEYS': ('AUTOLOCK', 'BEEP PROMPT', 'PF2', 'PF2 LONG PRESS', 'PF3'),
-    'MEMORY': ('CH-NAME', 'DELCH', 'MEMCH'),
+    'CH MEMORY': ('CH NAME', 'DELETE', 'SAVE'),
     'MIC': ('COMPRESSOR', 'MIC AGC', 'MIC GAIN', 'NOISE REDUCTION',    # a NR e do microfone (v80)
             'EQ BASS TX', 'EQ TREBLE TX'),                             # v108
     'REPEATER': ('OFFSET', 'RP-STE', 'RPT-RL', 'SFT-D', 'TONE'),
     'SCAN': ('SC-REV', 'SCAN ADD'),
-    'SYSTEM': ('AL-MOD', 'BLUETOOTH', 'RESET', 'SAVE', 'VERSION'),
+    'SYSTEM': ('AL-MOD', 'BATTERY SAVE', 'BLUETOOTH', 'RESET', 'VERSION'),
     'TONES': ('R-CTCSS', 'R-DCS', 'T-CTCSS', 'T-DCS'),
     'TX': ('ROGER', 'TOT', 'VOX', 'VOX DELAY'),
     'WATCH': ('TTR', 'TX-A/B/C', 'WATCH'),
@@ -360,10 +364,12 @@ ITENS_POR_GRUPO = 8       # o maior grupo (o APRS, v76); a janela de pasta mostr
 # v55: as marcas de cada item (grupo, nome), no menu_textos: SEM_VALOR nao mostra o "L" do valor na
 # janela de pasta (acoes, e a lista dos canais do banco); VARIOS continua editando depois do OK, para
 # marcar varios seguidos, e o EXIT sai (b_menu_marca, tela.c).
-# v138: NOMEIA, depois do OK do MEMCH, abre o editor do nome do canal salvo (memch_nome_abre).
-MARCA_SEM_VALOR, MARCA_VARIOS, MARCA_NOMEIA = 1, 2, 4
+# v138: NOMEIA, depois do OK da lista do SAVE e do CH NAME, abre o editor do nome (lista_editor_abre).
+# v140: LISTA, as listas de canais, com as setas e o EXIT delas (mensagem.c).
+MARCA_SEM_VALOR, MARCA_VARIOS, MARCA_NOMEIA, MARCA_LISTA = 1, 2, 4, 8
 MENU_MARCAS = {('BANKS', 'BANK'): MARCA_VARIOS, ('BANKS', 'CHANNEL'): MARCA_SEM_VALOR | MARCA_VARIOS,
-               ('MEMORY', 'DELCH'): MARCA_SEM_VALOR, ('MEMORY', 'MEMCH'): MARCA_SEM_VALOR | MARCA_NOMEIA,
+               ('CH MEMORY', 'CH NAME'): MARCA_LISTA | MARCA_NOMEIA,
+               ('CH MEMORY', 'DELETE'): MARCA_LISTA | MARCA_VARIOS, ('CH MEMORY', 'SAVE'): MARCA_LISTA | MARCA_NOMEIA,
                ('SYSTEM', 'RESET'): MARCA_SEM_VALOR}
 
 # Como o firmware conta os itens varrendo a tabela ate o item zerado, e a tabela nova ocupa a vaga
@@ -654,6 +660,10 @@ MENU_DESVIOS += ((0x01E49A86, bytes.fromhex('40e0e70c'), 'desvio_menu_marca', 'b
 # tambem no CALIBRATION, de um item so.
 MENU_DESVIOS += ((0x01E4D53C, bytes.fromhex('40e07805'), 'desvio_menu_um', 'b_menu_um', 0x01E4D59A,
                   'menu: EXIT editando num grupo de um item volta a lista do grupo'),)
+# v140: o EXIT das listas de canais, onde o de fabrica fecharia a edicao (0x01E4D4F4, "r0 = 1401"): a pergunta do
+# DELETE e o editor do SAVE e do CH NAME voltam a lista.
+MENU_DESVIOS += ((0x01E4D4F4, bytes.fromhex('40e07905'), 'desvio_exit_lista', 'b_exit_lista', 0x01E4D534,
+                  'menu: EXIT na pergunta e no editor das listas de canais volta a lista'),)
 # v139: o EXIT num item de texto (tipo 7): "r0 = 951" (0x01E4D48A) le o cursor para apagar a letra, sem olhar se
 # o editor esta aberto, e os itens com o cursor no fim do texto pediam um EXIT por letra para voltar. Fora da
 # edicao o desvio segue ao resto do EXIT (0x01E4D4F4), como com o cursor em 0.
@@ -661,7 +671,7 @@ MENU_DESVIOS += ((0x01E4D48A, bytes.fromhex('40e0b703'), 'desvio_exit_apaga', 'b
                   'menu: EXIT fora da edicao nao apaga letra do editor'),)
 MENU_SIMBOLOS = ('menu_abre', 'gancho_menu_ok', 'gancho_menu_digito', 'desvio_menu_sai', 'b_menu_sai',
                  'desvio_menu_marca', 'b_menu_marca', 'desvio_menu_um', 'b_menu_um', 'desvio_exit_apaga',
-                 'b_exit_apaga', 'nome_tamanho', 'nome_para_editor')
+                 'b_exit_apaga', 'desvio_exit_lista', 'b_exit_lista', 'nome_tamanho', 'nome_para_editor')
 # Instrucoes trocadas por uma chamada e nop no resto: na ida do PTT, a leitura do TX-A/B ("r0 = 1279;
 # r0 = b[r4+r0]", 0x01E43F92) vira "call gancho_tx_abc; nop; nop". O r0 que ele devolve e o que o
 # trecho de fabrica testa em seguida (0x01E43F9A); r1..r3 sao escritos antes de lidos, e o r4 (a base
@@ -907,13 +917,30 @@ PRECISA += MENSAGEM
 # v138: o PA no maximo em 90% (bancos.c, gancho_pa): o passo 0 da TX chama 0x01E44526 com o P da calibracao, e
 # e a unica chamada com o P (o fim da TX chama com 0); o gancho limita o P a 229.
 CHAMADAS_LIVRE += ((0x01E478BA, 0x01E44526, 'gancho_pa', 'TX: o bias do PA no maximo 229 (90%)'),)
-# v138: o SAVE como no UV-17L - o set do MEMCH (item 12; de fabrica 0x01E3A906) poe o lado no canal salvo e o nome
-# vazio (memch_grava, bancos.c), e a marca NOMEIA abre o editor do nome no desvio do OK (memch_nome_abre)
-MEMCH_ITEM = 12
-ITENS_MUDADOS[MEMCH_ITEM] = dict(set='memch_grava')
-V138 = ('gancho_pa', 'memch_grava', 'memch_nome_abre')
+V138 = ('gancho_pa',)
 NA_LIVRE += V138
 PRECISA += V138
+# v140: o menu de canais, como no UV-17L (mensagem.c). O CH-NAME, o DELCH e o MEMCH viram listas: numeros com exibicao
+# propria, no tipo 4 do MEMCH e com o maximo de 960 que o motor ja usa nele. Os nomes novos ficam em titulos nossos, e o
+# SAVE da bateria vira BATTERY SAVE, para nao haver dois SAVE. O menu rapido do 3 segurado (a tabela de um item em
+# 0x01E5E5AC) usa as mesmas rotinas. As setas passam pelos ganchos nos quatro sitios de SETAS, que ja trocavam o
+# sentido; as duas rotinas nao se desviam na entrada, porque o "call" relativo do comeco delas nao se refaz em outro
+# lugar.
+SAVE_BATERIA_ITEM, MEMCH_ITEM, DELCH_ITEM = 3, 12, 13
+LISTA_CAMPOS = dict(maximo=960, get='lista_le', exibe='lista_exibe')
+ITENS_MUDADOS[CH_NAME] = dict(LISTA_CAMPOS, flags=0x84, set='chname_grava', nome='titulo_ch_nome', nome_cn='titulo_ch_nome')
+ITENS_MUDADOS[DELCH_ITEM] = dict(LISTA_CAMPOS, set='delete_grava', nome='titulo_apaga', nome_cn='titulo_apaga')
+ITENS_MUDADOS[MEMCH_ITEM] = dict(LISTA_CAMPOS, set='save_grava', nome='titulo_salva', nome_cn='titulo_salva')
+ITENS_MUDADOS[SAVE_BATERIA_ITEM] = dict(nome='titulo_bateria', nome_cn='titulo_bateria')
+TABELA_RAPIDA_SAVE = 0x01E5E5AC
+RAPIDA_SAVE_ERA = bytes.fromhex('84c0031e8ae301')
+RAPIDA_SAVE_CAMPOS = (('get', 'lista_le'), ('set', 'save_grava'), ('nome', 'titulo_salva'), ('exibe', 'lista_exibe'))
+# o CH NAME e o DELETE so estao na nossa tabela de menu; as tres rotinas do menu rapido ficam no .livre, porque ele
+# esta no app.bin de fabrica, e dali nada aponta para os caminhos nem para a reserva
+V140 = ('gancho_seta_mais', 'gancho_seta_menos', 'lista_le', 'lista_exibe', 'save_grava',
+        'titulo_ch_nome', 'titulo_apaga', 'titulo_salva', 'titulo_bateria')
+NA_LIVRE += V140
+PRECISA += V140
 
 # Envio da tela de dois VFOs (gancho_envia, no tela.c). O gancho entra no ENVIO do pedaco para o
 # LCD (envia(), 0x01E3ADBC): se uma rotina de fabrica da tela de dois VFOs chegar la com a tela B
@@ -982,6 +1009,7 @@ SETAS_INVERTIDAS = True
 AVANCA, RETROCEDE = 0x01E49F60, 0x01E49FF4
 SETAS = ((0x01E4D094, AVANCA), (0x01E4D12A, AVANCA),
          (0x01E4D0A4, RETROCEDE), (0x01E4D0AA, RETROCEDE))
+SETA_GANCHO = {AVANCA: 'gancho_seta_menos', RETROCEDE: 'gancho_seta_mais'}   # v140: o de cada sitio, ja invertido
 
 
 def monta_call(origem, destino):
@@ -1048,6 +1076,8 @@ def itens_da_copia(app):
             for campo, valor in ITENS_MUDADOS.get(quem, {}).items():
                 if campo == 'maximo':
                     struct.pack_into('<H', item, 1, valor)
+                elif campo == 'flags':
+                    item[0] = valor
                 else:
                     struct.pack_into('<I', item, CAMPO[campo], S[valor])
         else:
@@ -1189,6 +1219,7 @@ def main():
     tela = livre_com_menu(tela, tabela, textos)
     vozes = secao_ligada(codigo, '.vozes', VOZES, VOZES_ACEITAS_FIM)
     caminhos = secao_ligada(codigo, '.caminhos', CAMINHOS, CAMINHOS_FIM)
+    reserva = secao_ligada(codigo, '.reserva', RESERVA, RESERVA_FIM)
 
     # Monta a lista de escritas no app.bin e passa pela trava antes de tocar em qualquer byte.
     escritas = [(GANCHO_EM, 4, 'gancho do filtro na partida'), (SCAN_EM, 4, 'gancho do redesenho no scan')]
@@ -1209,7 +1240,9 @@ def main():
                  (SCRAMBLE_EM, len(SCRAMBLE_ANTES), 'scramble: frequencia pelo valor')]
     escritas += [(s, 4, f'gancho do cabo ({p})') for s, p in CABO_SITIOS]
     escritas += [(CAMINHOS, len(caminhos), 'codigo novo no lugar dos caminhos das vozes')]
+    escritas += [(RESERVA, len(reserva), 'codigo novo na tabela de menu de fabrica, morta')]
     escritas += [(s, len(a), f'caminhos: {d}') for s, a, _, d in CAMINHOS_REMENDOS]
+    escritas += [(TABELA_RAPIDA_SAVE + CAMPO[c], 4, f'menu rapido do SAVE: {c}') for c, _ in RAPIDA_SAVE_CAMPOS]
     escritas += [(PONTEIRO_EM, len(PONTEIRO_ANTES), 'ponteiro da tabela de menus, para a faixa livre'),
                  (CONTAGEM_EM, len(CONTAGEM_ANTES), 'quantidade de itens do menu')]
     if SETAS_INVERTIDAS:
@@ -1364,7 +1397,7 @@ def main():
             antes = bytes(app[o:o + 4])
             if antes != monta_call(sitio, era):
                 raise SystemExit(f'{sitio:#x} nao e a chamada esperada para {era:#x}: {antes.hex()}')
-            app[o:o + 4] = monta_call(sitio, RETROCEDE if era == AVANCA else AVANCA)
+            app[o:o + 4] = monta_call(sitio, S[SETA_GANCHO[era]])
         print(f'  setas do menu invertidas em {len(SETAS)} sitios: a de cima passa a subir na lista')
 
     # 4b. envio e limpeza da tela de dois VFOs: as chamadas passam pelos ganchos da tela B
@@ -1448,7 +1481,14 @@ def main():
             raise SystemExit(f'{sitio:#x} ({oque}) nao e o de fabrica, ou o alvo novo nao e "*"')
         app[s:s + len(novo)] = novo
         print(f'  caminhos: {sitio:#x} {antes.hex()} -> {novo.hex()} ({oque})')
+    o_rapida = TABELA_RAPIDA_SAVE - BASE_APP
+    if bytes(app[o_rapida:o_rapida + len(RAPIDA_SAVE_ERA)]) != RAPIDA_SAVE_ERA:
+        raise SystemExit(f'{TABELA_RAPIDA_SAVE:#x} nao e o menu rapido do MEMCH de fabrica')
+    for campo, simbolo in RAPIDA_SAVE_CAMPOS:
+        struct.pack_into('<I', app, o_rapida + CAMPO[campo], S[simbolo])
     app[o:o + len(caminhos)] = caminhos
+    app[RESERVA - BASE_APP:RESERVA - BASE_APP + len(reserva)] = reserva
+    print(f'  .reserva: {len(reserva)} B em {RESERVA:#x} (cabem {RESERVA_FIM - RESERVA})')
     print(f'  .caminhos: {len(caminhos)} B em {CAMINHOS:#x} (cabem {CAMINHOS_FIM - CAMINHOS} no lugar dos '
           f'caminhos das vozes)')
 

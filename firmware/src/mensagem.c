@@ -199,10 +199,12 @@ struct afsk_dac {
 #if defined(TESTE_PC) || defined(TESTE_RX)
 #define NAS_VOZES
 #define NOS_CAMINHOS
+#define NA_RESERVA
 #else
 #define NAS_VOZES  __attribute__((section(".vozes.rodata.mensagem")))   /* a sobra do C1 (o .livre acabou) */
 /* v138: no lugar dos caminhos das vozes (bancos.ld), so o que o nosso codigo chama - nunca o firmware */
 #define NOS_CAMINHOS  __attribute__((section(".caminhos.mensagem")))
+#define NA_RESERVA    __attribute__((section(".reserva.mensagem")))   /* v140: as mesmas regras, na tabela de menu morta */
 #endif
 NAS_VOZES static const short seno17[17] = {
     0, 784, 1561, 2322, 3061, 3771, 4445, 5075, 5657, 6184, 6652, 7055, 7391, 7656, 7846, 7961, 8000};
@@ -775,7 +777,7 @@ static char *extensao(char *p, const u8 **px, const u8 *fim)
 /* Uma posicao em x (sem compressao ou comprimida), com o que vem depois dela: o rumo e a velocidade, o
  * PHG, o tempo (o simbolo _). Devolve 0 se x nao e uma posicao; senao o fim do texto, e em *px onde o
  * comentario comeca. */
-static char *posicao(char *p, const u8 **px, const u8 *fim)
+NA_RESERVA static char *posicao(char *p, const u8 **px, const u8 *fim)
 {
     const u8 *x = *px;
     char *f;
@@ -1738,25 +1740,305 @@ unsigned aprs_caixa_abre(void)
     return 1;
 }
 
-/* O SAVE como no UV-17L (v138, memch_grava no bancos.c): depois do OK do MEMCH, no desvio do OK (b_menu_marca,
- * tela.c, a marca MARCA_NOMEIA), o editor do CH-NAME abre na hora, vazio, no item 0 da pasta MEMORY, com o estado
- * que o OK de fabrica poe ao abrir um editor (0x01E49B20..0x01E49B32: editando, os campos do digitado em 0) e sem
- * o get do CH-NAME, que traria o nome. So com o lado em canal no canal salvo: na recusa de fabrica (os 30
- * primeiros canais protegidos) nada foi gravado. Devolve 1 se abriu. */
-#define ITEM_CH_NAME  0                     /* na pasta MEMORY (conferir.py, 3b) */
-unsigned memch_nome_abre(void)
+/* ---------- o menu de canais, CH MEMORY (v140, como no UV-17L) ----------
+ * CH NAME, DELETE e SAVE sao listas de canais de verdade: so os salvos, ou so os livres no SAVE, com "102 - PIGAO 3"
+ * (o numero, no SAVE), abrindo no canal do lado em evidencia ou no mais perto da lista (no empate, o de numero
+ * maior). O motor de fabrica continua desenhando: o item e um numero com exibicao propria, e o VALOR e o canal.
+ *
+ * - O que muda e o passo: as setas passam pelo lista_seta (gancho_seta_mais e menos, tela.c), que pula o que nao esta
+ *   na lista, dando a volta. O motor pede as linhas em volta do VALOR, e o lista_exibe traduz a distancia em passos
+ *   da lista. O numero digitado (o de fabrica, DIGITO_MENU) vai ao VALOR como veio: lista_perto o acerta no desenho,
+ *   nas setas e no set, e o VALOR fica como esta para o digito seguinte fazer a dezena (0x01E4A29A).
+ * - A lista le o chip, nao os mapas de canais (0x15D8B): eles sao filtrados pelos bancos ligados, e o SAVE mostraria
+ *   como livre um canal ocupado. Sao 4 B por canal, e so ate achar o vizinho.
+ * - No modo GMRS (b[0x153A1] = 165; byte 0xD000 do chip) o MEMCH e o DELCH recusam os canais 1 a 30: o SAVE nao os
+ *   mostra, e o DELETE segue a recusa de fabrica. O CH NAME vale em qualquer canal, como de fabrica.
+ * - O MENU_TIPO diz o passo: 4 a lista, 7 o editor e 8 o aviso ou a pergunta do DELETE (como o VERSION, so leitura: o
+ *   tipo 8 e o que le_menu e gancho_menu_digito ja tratam), o aviso com o VALOR em CANAIS e a pergunta com o canal.
+ *   O VALOR fica no canal durante o editor: as setas nao o mexem (lista_seta) e o digito vai ao texto. O SAVE e o CH
+ *   NAME so gravam no OK do editor, e cancelar volta a lista (lista_cancela), sem nada no chip. */
+#define CANAIS         960u
+#define ITEM_CH_NAME   0                    /* na pasta CH MEMORY (conferir.py, 3b) */
+#define ITEM_DELETE    1
+#define ITEM_SAVE      2
+#define TIPO_LISTA     4                    /* o do item na tabela */
+#define TIPO_EDITOR    7
+#define TIPO_AVISO     8
+#define TABELA_RAPIDA  0x01E5E5ACu          /* o menu rapido do 3 segurado: o SAVE, sozinho */
+#define LINHA_BASE     RAM(u16, 0x00014C18) /* h[716]: editando, o VALOR de que o motor parte */
+#define GRAVADO        RAM(u32, 0x00014C14) /* [357]: fora da edicao, o que o get devolveu */
+#define LINHA_CURSOR   RAM(u8, 0x00014C10)
+#define MODO_LADOS     RAM(u8, 0x00014B86)  /* um nibble por lado, 1 = canal */
+#define LADO_MENU      (RAM(u8, 0x00015E04) != 0)
+#define TITULO_MENU    ((char *)&RAM(u8, 0x00015494))
+FIRMWARE(DELCH_FABRICA, 0x01E3C516);  void DELCH_FABRICA(void);
+FIRMWARE(RECARREGA_LADOS, 0x01E3A812); void RECARREGA_LADOS(void);
+FIRMWARE(GRAVA_CANAL, 0x01E3A2BA);    void GRAVA_CANAL(unsigned, const void *, const void *);   /* 20 B + 12 B */
+FIRMWARE(MOTOR_MENU, 0x01E489E0);     u32 MOTOR_MENU(void);
+FIRMWARE(TEMPO_MENU, 0x01E484F8);     void TEMPO_MENU(void);
+int existe_no_registro(const u8 *p);
+void memch_grava(const char *nome);
+
+NOS_CAMINHOS unsigned lista_item(void)
 {
-    if (RAM(u8, 0x00015E12) != 1 || RAM(u16, 0x00015E3C) != VALOR || (RAM(u8, 0x000153A1) == 165 && VALOR <= 29))
+    return MENU_TABELA == TABELA_RAPIDA ? ITEM_SAVE : MENU_NUMERO;
+}
+
+/* O lado em evidencia esta num canal? O aviso do CH NAME em VFO e o "---" da pasta. */
+NOS_CAMINHOS static unsigned em_canal(void)
+{
+    return (MODO_LADOS >> (LADO_MENU * 4) & 15) == 1;
+}
+
+NOS_CAMINHOS static unsigned na_lista(unsigned n, unsigned item)
+{
+    u8 b[4];
+    unsigned salvo;
+
+    LE_FLASH(n << 5, b, 4);
+    salvo = existe_no_registro(b);
+    return item == ITEM_SAVE ? !salvo && !(RAM(u8, 0x000153A1) == 165 && n < 30) : salvo;
+}
+
+/* O da lista mais perto de n, ele incluido (fora da faixa, parte do 0); CANAIS se a lista esta vazia. */
+NOS_CAMINHOS static unsigned lista_perto(unsigned n, unsigned item)
+{
+    unsigned d;
+
+    if (n >= CANAIS)
+        n = 0;
+    for (d = 0; d < CANAIS; d++) {
+        if (n + d < CANAIS && na_lista(n + d, item))
+            return n + d;
+        if (n >= d && na_lista(n - d, item))
+            return n - d;
+    }
+    return CANAIS;
+}
+
+/* O vizinho na lista, dando a volta; n, se ele esta sozinho nela. */
+NOS_CAMINHOS static unsigned lista_passo(unsigned n, int sentido, unsigned item)
+{
+    unsigned k, c = n;
+
+    for (k = 0; k < CANAIS; k++) {
+        c = sentido > 0 ? (c + 1 == CANAIS ? 0 : c + 1) : (c ? c - 1 : CANAIS - 1);
+        if (na_lista(c, item))
+            return c;
+    }
+    return n;
+}
+
+NOS_CAMINHOS static char *tres_digitos(char *p, unsigned v)
+{
+    p[0] = (char)('0' + v / 100);
+    p[1] = (char)('0' + v / 10 % 10);
+    p[2] = (char)('0' + v % 10);
+    return p + 3;
+}
+
+/* "102 - PIGAO 3"; sem nome, a frequencia; no SAVE, so o numero. */
+NOS_CAMINHOS static char *lista_texto(unsigned n, unsigned item)
+{
+    char *p = tres_digitos(TEXTO, n + 1);
+    u8 b[4];
+    int k = 0;
+
+    if (item != ITEM_SAVE) {
+        *p++ = ' ';
+        *p++ = '-';
+        *p++ = ' ';
+        LE_FLASH((n << 5) + 20, p, 12);
+        while (k < 12 && p[k] && (u8)p[k] != 0xFF)
+            k++;
+        p += k;
+        if (!k) {
+            LE_FLASH(n << 5, b, 4);
+            for (k = 8; k--;) {
+                *p++ = (char)('0' + (b[k >> 1] >> (k & 1 ? 4 : 0) & 15));
+                if (k == 5)
+                    *p++ = '.';
+            }
+        }
+    }
+    *p = 0;
+    return TEXTO;
+}
+
+/* O get: o canal do lado em evidencia (em VFO, o ultimo dele) ou o mais perto da lista. */
+u16 lista_le(void)
+{
+    return (u16)lista_perto(RAM(u16, 0x00015E0C + LADO_MENU * 4), lista_item());
+}
+
+/* O exibe, uma chamada por linha, com a linha no VALOR. Editando, a linha do cursor e a da lista_perto, e as outras a
+ * tantos passos dela quanto o motor pede (com dois na lista, o outro so embaixo; com um, so ele). Na janela da
+ * pasta so vale a marcada, e em VFO o CH NAME nao mostra canal: o da lista nao seria o sintonizado. */
+NA_RESERVA static char *lista_linha(void)
+{
+    unsigned item = lista_item(), a, n, k;
+    int d = 0;
+
+    if (MENU_EDITANDO != 1 && VALOR != GRAVADO)
+        return "";
+    a = lista_perto(MENU_EDITANDO == 1 ? LINHA_BASE : VALOR, item);
+    if (a >= CANAIS || (item == ITEM_CH_NAME && !em_canal()))
+        return "---";
+    if (MENU_EDITANDO == 1)
+        d = (short)(VALOR - LINHA_BASE);
+    n = a;
+    for (k = d < 0 ? -d : d; k--;) {
+        n = lista_passo(n, d, item);
+        if (n == a)
+            return "";
+    }
+    if (d == -1 && n == lista_passo(a, 1, item))
+        return "";
+    return lista_texto(n, item);
+}
+
+char *lista_exibe(void)
+{
+    return lista_linha();
+}
+
+/* O item nao pode abrir agora? Ai abre com o aviso (gancho_menu_ok), no lugar da lista. */
+NOS_CAMINHOS unsigned lista_aviso(void)
+{
+    unsigned item = lista_item();
+
+    return item == ITEM_CH_NAME ? !em_canal() : lista_perto(0, item) >= CANAIS;
+}
+
+/* A seta com a lista aberta: anda so na lista; no editor, no aviso e na pergunta nao faz nada. */
+NOS_CAMINHOS u32 lista_seta(int sentido)
+{
+    unsigned item = lista_item();
+
+    TEMPO_MENU();
+    if (MENU_TIPO == TIPO_LISTA) {
+        VALOR = (u16)lista_passo(lista_perto(VALOR, item), sentido, item);
+        RAM(u16, 0x00014BFE) = 0;           /* o digitado, como as setas de fabrica (0x01E49FE6) */
+        RAM(u32, 0x00014C04) = 0;
+        LINHA_CURSOR = 1;
+    }
+    return MOTOR_MENU();
+}
+
+/* O EXIT na pergunta volta a lista, e no editor vazio (ou segurado) tambem, sem gravar nada. Quem chama redesenha: o
+ * motor aqui dentro passaria do limite da pilha da interface. */
+NOS_CAMINHOS u32 lista_cancela(void)
+{
+    if (MENU_TIPO == TIPO_EDITOR) {
+        unsigned item = lista_item(), k;
+        const char *t = item == ITEM_SAVE ? "SAVE" : "CH NAME";
+
+        editor_fecha();
+        for (k = 0; (TITULO_MENU[k] = t[k]) != 0; k++)
+            ;
+        LINHA_CURSOR = 1;
+    } else if (MENU_TIPO != TIPO_AVISO || VALOR >= CANAIS)
         return 0;
-    MENU_NUMERO = ITEM_CH_NAME;
-    MENU_TIPO = 7;
-    MENU_EDITANDO = 1;
-    VALOR = 0;
+    MENU_TIPO = TIPO_LISTA;
+    TEMPO_MENU();
+    return 1;
+}
+
+/* Depois do set, no desvio do OK (b_menu_marca, tela.c, a marca MARCA_NOMEIA): da lista, abre o editor do canal, com
+ * o estado do OK de fabrica (0x01E49B20..0x01E49B32) e o canal no titulo; o SAVE vazio, o CH NAME com o nome. Do OK
+ * do editor, que ja gravou, devolve 0, e a edicao fecha. */
+NOS_CAMINHOS unsigned lista_editor_abre(void)
+{
+    unsigned n = VALOR, k = 0;
+
+    if (MENU_TIPO == TIPO_EDITOR) {
+        MENU_TIPO = TIPO_LISTA;
+        return 0;
+    }
+    if (lista_item() == ITEM_CH_NAME) {
+        LE_FLASH((n << 5) + 20, TEXTO, 12);
+        while (k < 12 && TEXTO[k] && (u8)TEXTO[k] != 0xFF)
+            k++;
+    }
+    MENU_TIPO = TIPO_EDITOR;
     RAM(u16, 0x00014BFE) = 0;
     RAM(u32, 0x00014C04) = 0;
     RAM(u8, 0x00014C08) = 0;
-    editor_abre("", 0, 12);
+    editor_abre(TEXTO, k, 12);
+    TITULO_MENU[0] = 'C';
+    TITULO_MENU[1] = 'H';
+    TITULO_MENU[2] = ' ';
+    *tres_digitos(TITULO_MENU + 3, n + 1) = 0;
     return 1;
+}
+
+/* O nome do editor, em 12 B, ou "CH 101" com ele em branco (o OK sem nome, so espacos inclusive). */
+NOS_CAMINHOS static void nome_do_editor(char *s, unsigned n)
+{
+    unsigned k, t = editor_texto(s, 12), vazio = 1;
+
+    for (k = 0; k < 12; k++) {
+        if (k >= t)
+            s[k] = 0;
+        else if (s[k] != ' ')
+            vazio = 0;
+    }
+    if (vazio) {
+        s[0] = 'C';
+        s[1] = 'H';
+        s[2] = ' ';
+        *tres_digitos(s + 3, n + 1) = 0;
+        for (k = 6; k < 12; k++)
+            s[k] = 0;
+    }
+}
+
+/* Os sets. Da lista, o CH NAME e o SAVE so firmam o canal (o editor abre no desvio do OK), e o DELETE pergunta; do
+ * editor, gravam; da pergunta, apaga, e a lista segue no mais perto, para apagar varios; sem nenhum, o aviso. */
+NOS_CAMINHOS void chname_grava(void)
+{
+    char nome[12];
+    u8 cru[20];
+    unsigned n = VALOR;
+
+    if (MENU_TIPO != TIPO_EDITOR) {
+        VALOR = (u16)lista_perto(n, ITEM_CH_NAME);
+        return;
+    }
+    nome_do_editor(nome, n);
+    LE_FLASH(n << 5, cru, 20);
+    GRAVA_CANAL(n, cru, nome);
+    RECARREGA_LADOS();
+    editor_fecha();
+}
+
+void save_grava(void)
+{
+    char nome[12];
+
+    if (MENU_TIPO != TIPO_EDITOR) {
+        VALOR = (u16)lista_perto(VALOR, ITEM_SAVE);
+        return;
+    }
+    nome_do_editor(nome, VALOR);
+    memch_grava(nome);
+    editor_fecha();
+}
+
+NOS_CAMINHOS void delete_grava(void)
+{
+    unsigned n = lista_perto(VALOR, ITEM_DELETE);
+
+    if (MENU_TIPO != TIPO_AVISO) {
+        VALOR = (u16)n;
+        MENU_TIPO = TIPO_AVISO;
+        return;
+    }
+    MENU_TIPO = TIPO_LISTA;
+    DELCH_FABRICA();
+    VALOR = (u16)lista_perto(VALOR, ITEM_DELETE);
+    if (VALOR >= CANAIS)
+        MENU_TIPO = TIPO_AVISO;
 }
 
 char *aprs_ind_exibe(void)

@@ -1263,8 +1263,8 @@ B builds it the same way. Digits count from 1, as in the main menu; OK and EXIT 
 the window's two texts at 28 B each, the interface reached 744 B (v56), 4 above stock; they became 12
 and 20 B, and the three roots are back at stock's 740, 620 and 696 B.
 
-**EXIT on text items (v139).** The engine calls the item's `get` whenever it draws outside editing (`0x01E48A00`,
-`call r5` at `0x01E48A74`), so a text item's `get` runs in the list, with the item only highlighted. The factory one
+**EXIT on text items (v139).** The item's `get` runs on every item change outside editing (`0x01E4851E`, `call r1` at
+`0x01E485CA`), so a text item's runs in the list, with the item only highlighted. The factory one
 (`0x01E3C732`) and `nome_le` prepare the text and the length and leave the cursor (`b[0x14A37]`) alone;
 `aprs_texto_le` and `morse_msg_le` go through `editor_abre`, which puts it at the end of the text. But the factory
 EXIT (`0x01E4C7A0`) looks at the item type, 7, and not at whether editing is open (`b[0x14BF9]`): with the cursor off 0
@@ -2896,3 +2896,61 @@ editor empty, on the folder's item 0, with the factory OK's state (`b[0x14BF9]` 
 `b[0x14C08]` = 0). On the factory's refusal (`b[0x153A1]` = 165 protects the first 30 channels) only the factory acts, and
 the editor does not open: `memch_nome_abre` checks that the side really stayed on the saved channel (`b[0x15E12]` = 1 and
 `h[0x15E3C]` = `VALOR`).
+
+## 32. The channel menu, CH MEMORY (v140)
+
+The same as the UV-17L's, built on the factory engine, which keeps drawing. CH NAME, DELETE and SAVE (`mensagem.c`) are
+numbers with their own display, on MEMCH's type 4 and with the maximum of 960; `VALOR` is the channel.
+
+- **The step.** The arrows were already swapped at the four `SETAS` sites, to invert the direction, and now go through
+  `gancho_seta_mais` and `gancho_seta_menos`. With a list open, `lista_seta` skips what is not in it, wrapping around; the
+  rest goes to the factory routines. They are not hooked at the entry: the relative `call` at their start cannot be
+  replayed elsewhere.
+- **The lines.** The engine asks for the three lines with each one's `VALOR` (`0x01E48B2E`) and puts the old one back at
+  the end (`0x01E48C76`). `lista_exibe` turns the distance to `h[0x14C18]` into steps of the list. Outside editing only the
+  marked line counts (`[0x14C14]`), which becomes the folder window's value.
+- **The typed number.** It goes to `VALOR` as it came, through `DIGITO_MENU`, and `lista_perto` corrects it in the drawing,
+  the arrows and the set. `VALOR` stays as it is because the factory only adds the next digit with `VALOR + 1` equal to the
+  running total (`0x01E4A29A`).
+- **The chip, not the maps.** The channel maps (`0x15D8B`) are filtered by the enabled banks, and SAVE would show a taken
+  channel as free. The list reads each channel's 4 B from the chip, with the boot criterion, and only until it finds the
+  neighbour.
+- **The item's step is in `MENU_TIPO`:** 4 the list, 7 the editor and 8 the warning or the question (VERSION's read-only
+  type, which `le_menu` and `gancho_menu_digito` already handle), the warning with `VALOR` at 960 and the question with the
+  channel.
+- **Only the editor's OK writes.** After the set, in the OK hook, the `MARCA_NOMEIA` mark calls `lista_editor_abre`. `VALOR`
+  stays on the channel during the editor: no type 7 routine reads it. On the editor's OK, SAVE calls `memch_grava` with the
+  name and `salva_menu` writes; CH NAME reads the channel's 20 B and writes through `0x01E3A2BA`, which writes any channel
+  without relying on the side's shadow, and reloads the sides. EXIT goes through `desvio_exit_lista` at `0x01E4D4F4`: the
+  question and the editor return to the list and carry on to EXIT's own redraw (`0x01E4D534`).
+- **The quick menu of holding 3** is a one-item table at `0x01E5E5AC`: it now points to the same routines, which is why they
+  stay in `.livre`.
+
+**The stack.** The interface stays at 740 B. Three things took care: EXIT's redraw stays on the factory path; the question
+uses type 8, because a new type grew `gancho_menu_digito`'s frame; and the warning draws in the medium font.
+
+**The reserve.** The factory menu table (`0x01E62F98..0x01E63580`, 1,512 B) has been dead since v43, and `.reserva` follows
+the rules of section 29's `.caminhos`, with the `2j` sweep covering both ranges. The only values falling in it are false:
+`cN ff` plus 32 bits is a register immediate, and `0x0001E630` and `0x0001E634`, RAM addresses, read one byte early look
+like `0x01E630FF`.
+
+## 33. The operating modes
+
+Byte `0xD000` of the data chip (`b[0x153A1]`, read at boot) picks the regional mode. It is CHIRP's *Radio Operating Mode*
+option, and boot changes it with PTT and a key held.
+
+| Value | In CHIRP | Key with PTT | What changes |
+|---|---|---|---|
+| `0xFF`, `0x00` | Default, Factory | code 5 (EXIT) sets `0x00` | the normal bands |
+| `0xA5` | GMRS | code 2 (OK) | channels 1 to 30 reserved, with the 22 FRS/GMRS frequencies in the table at `0x01E61210`, and TX restrictions |
+| `0x56` | Super | code 15 | open bands from 18 to 999 MHz |
+| `0x55` | 144-146/430-440 | code 7 | amateur TX bands, from a 16 B table |
+| `0xAA` | not listed | code 8 | another 16 B band table |
+
+Changed by the keys, the firmware writes the byte, shows the mode's name on a card (`0x01E55FC0`) and stops there, until
+power-off. That ending is the factory's, not a lockup. Through CHIRP the mode only applies on the next boot, with no card.
+
+**The modified firmware does not depend on this byte.** The routines that read it are the factory's and stay in place, none
+was replaced whole, and sector `0xD000` holds nothing of ours (the banks and the rest start at `0xC1000`). The channel lists
+handle GMRS: SAVE does not show channels 1 to 30, and DELETE follows the factory refusal. Checked in the disassembly, not on
+the radio.

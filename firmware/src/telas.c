@@ -122,6 +122,7 @@ static unsigned copia_ram(char *s, u32 a, unsigned n)
 #define FORA              0xFF                   /* menu_nivel(): uma tabela que nao e a nossa (os rapidos) */
 #define MARCA_SEM_VALOR   1                      /* as marcas de cada item (v55, montar.py MENU_MARCAS) */
 #define MARCA_VARIOS      2
+#define MARCA_LISTA       8                      /* v140: lista de canais, com as setas e o EXIT dela */
 #define MARCA_NOMEIA      4                      /* v138: o MEMCH abre o editor do nome depois do OK */
 #define RADIO_FM_AM       0x01E61168u            /* as tabelas do menu do radio (0x01E49026) */
 #define RADIO_SSB         (RADIO_FM_AM + 532)
@@ -195,6 +196,18 @@ static unsigned menu_nivel(void)
     return FORA;
 }
 
+/* As marcas do item do menu (v55); no menu rapido do SAVE (v140, o 3 segurado), as do SAVE da pasta. */
+#define TABELA_RAPIDA 0x01E5E5ACu
+unsigned lista_item(void);
+static unsigned marcas_do_item(void)
+{
+    unsigned n = menu_nivel();
+
+    if (MENU_TABELA == TABELA_RAPIDA)
+        return MARCA_LISTA | MARCA_NOMEIA;
+    return n == 0 || n >= RADIO ? 0 : MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO);
+}
+
 /* A janela de pasta (v55): escolhendo o grupo, e escolhendo o item dentro dele ou no menu do radio -
  * tudo menos o item aberto (editando) e as tabelas que nao sao as nossas. */
 static unsigned menu_pasta(void)
@@ -205,7 +218,7 @@ static unsigned menu_pasta(void)
 }
 
 struct menu_b {
-    u8 numero, cursor, editando, editor, nivel, pasta;
+    u8 numero, cursor, editando, editor, nivel, pasta, lista;
 };
 
 #define TOPO_MENU   56
@@ -231,6 +244,7 @@ static void le_menu(struct menu_b *m)
     m->editor = menu_editor();
     m->nivel = menu_nivel();
     m->pasta = menu_pasta();
+    m->lista = MENU_EDITANDO == 1 && (marcas_do_item() & MARCA_LISTA);
 }
 
 /* A letra do menu (v56), um pouco maior que a media para ler melhor: as colunas do medio, a linha do
@@ -302,6 +316,31 @@ static const char *const modos_editor[2] = {"ABC", "123"};
  * telas_faixa). */
 #define CAIXA_Y0    TOPO_MENU
 
+/* A lista de canais sem lista (v140): o aviso, ou a pergunta do DELETE com a linha do cursor, que o motor montou.
+ * Na letra media: o texto_menu passa 8 B do limite da pilha da interface. */
+#ifndef PREVIA
+__attribute__((section(".reserva.tela")))
+#endif
+SEPARADA static void aviso_cena(void)
+{
+    static const char *const avisos[3] = {"SAVE CHANNEL FIRST", "NO SAVED CHANNELS", "MEMORY FULL"};
+    unsigned y = TOPO_MENU + 22, item = lista_item();
+    char s[28];
+
+    pinta(3, y, 157, y + 34, COR_VERDE);
+    pinta(4, y + 1, 156, y + 33, COR_CARTAO);
+    if (RAM(u16, 0x00014BFC) >= 960) {
+        texto_medio(10, y + 13, avisos[item], 142, COR_BRANCO);
+        if (item == 0)
+            texto(156 - largura("OK SAVE  EXIT BACK", 1), y + 38, "OK SAVE  EXIT BACK", 1, COR_CINZA);
+        return;
+    }
+    texto_medio(10, y + 5, "DELETE?", 142, COR_TEXTO_AMBAR);
+    copia_ram(s, MENU_LINHAS + MENU_CURSOR * 27, 27);
+    texto_medio(10, y + 20, s[0] == ' ' || s[0] == 2 ? s + 2 : s, 142, COR_BRANCO);
+    texto(156 - largura("OK YES  EXIT NO", 1), y + 38, "OK YES  EXIT NO", 1, COR_CINZA);
+}
+
 /* O item aberto: o titulo e as tres linhas do menu, na letra do menu, ou o editor de nome (a barra e o
  * resumo sao desenhados pela cena_telas, ao lado). */
 SEPARADA static void menu_cena(const struct menu_b *m)
@@ -337,8 +376,13 @@ SEPARADA static void menu_cena(const struct menu_b *m)
             editor_cena();
         return;
     }
+    if (m->lista && MENU_TIPO == 8) {
+        if (NA_JANELA(TOPO_MENU + 22, TOPO_MENU + 70))
+            aviso_cena();
+        return;
+    }
     /* as tres linhas: a do cursor num cartao (borda verde editando), o valor gravado com o ponto, a
-     * opcao ligada em verde */
+     * opcao ligada em verde; nas listas de canais (v140), sem o ponto, e a mesma letra com nome curto ou longo */
     for (r = 0; r < 3; r++) {
         unsigned y = TOPO_MENU + 19 + r * 18, cor = COR_CINZA, salvo, p, n;
 
@@ -358,12 +402,15 @@ SEPARADA static void menu_cena(const struct menu_b *m)
             s[n - 1] = 0;
             cor = COR_TEXTO_AMBAR;
         }
-        if (salvo) {
+        if (salvo && !m->lista) {
             pinta(9, y + 6, 14, y + 11, COR_VERDE);
             pinta(10, y + 5, 13, y + 12, COR_VERDE);
             pinta(8, y + 7, 15, y + 10, COR_VERDE);
         }
-        texto_menu(20, y + 4, s + p, 126, cor);
+        if (m->lista && lista_item() != 2)
+            texto_medio(8, y + 5, s + p, 138, cor);
+        else
+            texto_menu(m->lista ? 8 : 20, y + 4, s + p, 126, cor);
         if (r == m->cursor && m->editando)
             texto(148, y + 5, ICONE_SETAS, 1, COR_VERDE);
     }

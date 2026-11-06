@@ -1243,8 +1243,8 @@ igual. Os números contam de 1, como no principal; o OK e o EXIT ficam os de fá
 dois textos da janela em 28 B cada, a interface ia a 744 B (v56), 4 acima da de fábrica; eles ficaram
 com 12 e 20 B, e as três raízes voltaram aos 740, 620 e 696 B de fábrica.
 
-**O EXIT nos itens de texto (v139).** O motor chama o `get` do item sempre que desenha fora da edição
-(`0x01E48A00`, `call r5` em `0x01E48A74`), então o `get` de um item de texto roda na lista, com o item só marcado.
+**O EXIT nos itens de texto (v139).** O `get` do item roda a cada troca de item fora da edição (`0x01E4851E`, `call r1`
+em `0x01E485CA`), então o de um item de texto roda na lista, com o item só marcado.
 O de fábrica (`0x01E3C732`) e o `nome_le` preparam o texto e o tamanho e deixam o cursor (`b[0x14A37]`) como está; o
 `aprs_texto_le` e o `morse_msg_le` passam pelo `editor_abre`, que o põe no fim do texto. Só que o EXIT de fábrica
 (`0x01E4C7A0`) olha o tipo do item, 7, e não se a edição está aberta (`b[0x14BF9]`): com o cursor fora de 0 ele apaga a
@@ -2846,3 +2846,59 @@ marca `MARCA_NOMEIA` faz o `b_menu_marca` chamar o `memch_nome_abre`, que abre o
 pasta, com o estado de fábrica do OK (`b[0x14BF9]` = 1, `h[0x14BFE]` = 0, `[0x14C04]` = 0, `b[0x14C08]` = 0). Na recusa
 de fábrica (`b[0x153A1]` = 165 protege os 30 primeiros canais) só a fábrica age, e o editor não abre: o
 `memch_nome_abre` confere se o lado ficou mesmo no canal salvo (`b[0x15E12]` = 1 e `h[0x15E3C]` = `VALOR`).
+
+## 32. O menu de canais, CH MEMORY (v140)
+
+O mesmo do UV-17L, feito sobre o motor de fábrica, que continua desenhando. O CH NAME, o DELETE e o SAVE (`mensagem.c`)
+são números com exibição própria, no tipo 4 do MEMCH e com o máximo de 960; o `VALOR` é o canal.
+
+- **O passo.** As setas já eram trocadas nos quatro sítios de `SETAS`, para inverter o sentido, e agora passam pelos
+  `gancho_seta_mais` e `gancho_seta_menos`. Com uma lista aberta, `lista_seta` pula o que não está nela, dando a volta;
+  o resto vai às rotinas de fábrica. Elas não se desviam na entrada: o `call` relativo do começo não se refaz em outro
+  lugar.
+- **As linhas.** O motor pede as três linhas com o `VALOR` de cada uma (`0x01E48B2E`) e devolve o de antes no fim
+  (`0x01E48C76`). O `lista_exibe` traduz a distância até `h[0x14C18]` em passos da lista. Fora da edição só vale a linha
+  marcada (`[0x14C14]`), que vira o valor da janela de pasta.
+- **O digitado.** O número vai ao `VALOR` como veio, pelo `DIGITO_MENU`, e o `lista_perto` o acerta no desenho, nas setas
+  e no set. O `VALOR` fica como está porque a fábrica só soma o dígito seguinte com `VALOR + 1` igual ao acumulado
+  (`0x01E4A29A`).
+- **O chip, não os mapas.** Os mapas de canais (`0x15D8B`) são filtrados pelos bancos ligados, e o SAVE mostraria como
+  livre um canal ocupado. A lista lê os 4 B de cada canal no chip, com o critério da partida, e só até achar o vizinho.
+- **O passo do item está no `MENU_TIPO`:** 4 a lista, 7 o editor e 8 o aviso ou a pergunta (o tipo só leitura do VERSION,
+  que o `le_menu` e o `gancho_menu_digito` já tratam), o aviso com o `VALOR` em 960 e a pergunta com o canal.
+- **Só o OK do editor grava.** Depois do set, no desvio do OK, a marca `MARCA_NOMEIA` chama o `lista_editor_abre`. O
+  `VALOR` fica no canal durante o editor: nenhuma rotina do tipo 7 o lê. No OK do editor, o SAVE chama o `memch_grava`
+  com o nome, e o `salva_menu` grava; o CH NAME lê os 20 B do canal e grava pelo `0x01E3A2BA`, que escreve qualquer canal,
+  sem depender da sombra do lado, e relê os lados. O EXIT passa pelo `desvio_exit_lista` em `0x01E4D4F4`: a pergunta e o
+  editor voltam à lista e seguem ao redesenho do próprio EXIT (`0x01E4D534`).
+- **O menu rápido do 3 segurado** é uma tabela de um item em `0x01E5E5AC`: ela passa a apontar para as mesmas rotinas, que
+  por isso ficam no `.livre`.
+
+**A pilha.** A interface segue nos 740 B. Três coisas pediram cuidado: o redesenho do EXIT fica no caminho de fábrica; a
+pergunta usa o tipo 8, porque um tipo novo crescia o quadro do `gancho_menu_digito`; e o aviso desenha na letra média.
+
+**A reserva.** A tabela de menu de fábrica (`0x01E62F98..0x01E63580`, 1.512 B) está morta desde a v43, e o `.reserva` segue
+as regras do `.caminhos` da seção 29, com a varredura `2j` valendo para as duas faixas. Os únicos valores que caem nela são
+falsos: `cN ff` mais 32 bits é o imediato de um registrador, e `0x0001E630` e `0x0001E634`, endereços de RAM, lidos um byte
+antes parecem `0x01E630FF`.
+
+## 33. Os modos de operação
+
+O byte `0xD000` do chip de dados (`b[0x153A1]`, lido na partida) escolhe o modo regional. É a opção *Radio Operating
+Mode* do CHIRP, e a partida o troca segurando o PTT e uma tecla.
+
+| Valor | No CHIRP | Tecla com o PTT | O que muda |
+|---|---|---|---|
+| `0xFF`, `0x00` | Default, Factory | código 5 (EXIT) põe `0x00` | as faixas normais |
+| `0xA5` | GMRS | código 2 (OK) | canais 1 a 30 reservados, com as 22 frequências FRS/GMRS na tabela `0x01E61210`, e restrições de TX |
+| `0x56` | Super | código 15 | faixas abertas de 18 a 999 MHz |
+| `0x55` | 144-146/430-440 | código 7 | faixas de TX dos radioamadores, de uma tabela de 16 B |
+| `0xAA` | não listado | código 8 | outra tabela de 16 B de faixas |
+
+Trocado pelas teclas, o firmware grava o byte, mostra o nome do modo num cartão (`0x01E55FC0`) e para ali, até desligar.
+Esse fim é de fábrica, e não um travamento. Pelo CHIRP o modo só vale na partida seguinte, sem cartão.
+
+**O firmware modificado não depende desse byte.** As rotinas que o leem são de fábrica e seguem no lugar, nenhuma foi
+trocada inteira, e o setor `0xD000` não guarda nada nosso (os bancos e o resto ficam de `0xC1000` em diante). As listas de
+canais tratam o GMRS: o SAVE não mostra os canais 1 a 30, e o DELETE segue a recusa de fábrica. Conferido no desmontado,
+não no rádio.

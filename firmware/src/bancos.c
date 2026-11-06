@@ -408,7 +408,7 @@ void grava_registro(u32 endereco, void *buf, unsigned tam)
  * primeiro e 0xFF ou se o quarto e 0, decodifica os 4 bytes em BCD do mais significativo para o
  * menos e so aceita o canal se VALIDA_FREQ devolver 1. O bit 0x04 do byte 15 e o "entra na busca".
  */
-static int existe_no_registro(const u8 *p)
+int existe_no_registro(const u8 *p)
 {
     u32 f = 0;
     unsigned i = 4;
@@ -1223,29 +1223,22 @@ NA_LIVRE_COD static void poe_no_b(unsigned em_vfo, unsigned canal, const u8 *vfo
     SALVA_AJUSTES();
 }
 
-/* ---------- o SAVE como no UV-17L (v138) ----------
- * O MEMCH (item 12, set de fabrica 0x01E3A906) grava no canal VALOR o lado em evidencia - em canal, os 20 B do
- * canal cru e o nome do registro de tela; em VFO, os 20 B montados do VFO e o nome que o canal de destino ja
- * tinha - e recarrega os dois lados pelo nibble do modo de cada um (MODO_LADOS). Aqui, antes, o nibble do lado
- * em evidencia vai a canal, para o lado ficar no canal salvo tambem vindo do VFO; e depois o nome do registro
- * de tela vai a vazio: o salva_menu, logo depois do set, grava o canal sem nome, como o UV-17L, e o desvio do OK
- * abre o editor do CH-NAME vazio (memch_nome_abre, mensagem.c). Na recusa de fabrica (b[0x153A1] = 165 protege os
- * 30 primeiros canais: ela avisa e nao grava) so a fabrica age. */
+/* ---------- o SAVE como no UV-17L (v138; o nome, v140) ----------
+ * O MEMCH (set de fabrica 0x01E3A906) grava no canal VALOR o lado em evidencia - em canal, os 20 B do canal cru e o
+ * nome do registro de tela; em VFO, os 20 B montados do VFO e o nome que o canal de destino ja tinha - e recarrega
+ * os dois lados pelo nibble do modo de cada um (MODO_LADOS). Aqui, antes, o nibble do lado em evidencia vai a canal,
+ * para o lado ficar no canal salvo tambem vindo do VFO; e depois o nome do registro de tela vira o do editor: o
+ * salva_menu, logo depois do set, grava o canal com ele. So o OK do editor chega aqui (save_grava, mensagem.c). */
 FIRMWARE(MEMCH_FABRICA, 0x01E3A906);   void MEMCH_FABRICA(void);
-#define CANAIS_PROTEGIDOS  (*(volatile u8 *)0x000153A1)
 
-NA_LIVRE_COD void memch_grava(void)
+NA_LIVRE_COD void memch_grava(const char *nome)
 {
     unsigned lado = LADO_B != 0, k;
 
-    if (CANAIS_PROTEGIDOS == 165 && VALOR <= 29) {
-        MEMCH_FABRICA();
-        return;
-    }
     MODO_LADOS = (MODO_LADOS & ~(15u << lado * 4)) | 1u << lado * 4;
     MEMCH_FABRICA();
     for (k = 0; k < 12; k++)
-        ((volatile u8 *)0x00014DD3)[lado * 31 + k] = 0;
+        ((volatile u8 *)0x00014DD3)[lado * 31 + k] = nome[k];
 }
 
 /* B -> C: guarda o modo, o canal e o VFO do B e poe os da C. Sem o setor dos VFOs (a primeira vez), a C
@@ -1396,6 +1389,10 @@ __asm__(".section .livre.bancos.text,\"ax\"\n"
 #define MIC_DEFAULT    3u
 #define MIC_CAL        0xF210u                                /* o ganho de fabrica, no chip de dados */
 DADO_NA_LIVRE const char titulo_mic[] = "MIC GAIN";
+DADO_NA_LIVRE const char titulo_ch_nome[] = "CH NAME";      /* v140: os nomes do menu de canais e da bateria */
+DADO_NA_LIVRE const char titulo_apaga[] = "DELETE";
+DADO_NA_LIVRE const char titulo_salva[] = "SAVE";
+DADO_NA_LIVRE const char titulo_bateria[] = "BATTERY SAVE";
 DADO_NA_LIVRE const char *const mic_opcoes[3] = {"HIGH", "MID", "LOW"};
 DADO_NA_LIVRE static const u8 mic_ganho[3] = {31, 25, 19};   /* o topo, -3 dB e -6 dB */
 DADO_NA_LIVRE static const char mic_padrao[] = "DEFAULT";

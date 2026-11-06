@@ -183,6 +183,11 @@ unsigned previa_item_flags(u32 t, unsigned i)
     return t == RADIO_FM_AM || t == RADIO_SSB ? previa_radio_tipos[i] : 0;
 }
 
+unsigned lista_item(void)
+{
+    return memoria[0x14BFA];                /* na pasta CH MEMORY, o item diz a lista */
+}
+
 unsigned previa_menu_marcas(unsigned p)
 {
     return menu_previa_marcas[p];
@@ -655,12 +660,70 @@ int main(int argc, char **argv)
 
         BASE_TELAS();
         memoria[0x1533D] = 1;
-        strcpy((char *)&memoria[0x15494], "CH-NAME");
-        menu_no("MEMORY", "CH-NAME");
+        strcpy((char *)&memoria[0x15494], "CH NAME");
+        menu_no("CH MEMORY", "CH NAME");
         memoria[0x14C00] = 7;
         LINHA(0, 0, "BF888-01");
         telas_b(1, 0);
         grava("20-menu-ch-name");
+
+        /* v140: as listas de canais. O DELETE abre no canal do lado, o SAVE so nos numeros livres; a pergunta do
+         * DELETE, e os avisos no lugar da lista */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "DELETE");
+        menu_no("CH MEMORY", "DELETE");
+        memoria[0x14C00] = 4;
+        LINHA(0, 1, "003 - BF888-03");
+        LINHA(1, 2, "103 - RPT BRAGANCA");
+        LINHA(2, 1, "200 - SBST RADIO");
+        memoria[0x14C10] = 1;
+        memoria[0x14BF9] = 1;
+        telas_b(1, 0);
+        grava("20b-delete-lista");
+        memoria[0x14C00] = 8;
+        telas_b(1, 0);
+        grava("20c-delete-pergunta");
+        memoria[0x14BFC] = 960 & 255;
+        memoria[0x14BFD] = 960 >> 8;
+        telas_b(1, 0);
+        grava("20d-delete-sem-canais");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "SAVE");
+        menu_no("CH MEMORY", "SAVE");
+        memoria[0x14C00] = 4;
+        LINHA(0, 1, "102");
+        LINHA(1, 2, "104");
+        LINHA(2, 1, "105");
+        memoria[0x14C10] = 1;
+        memoria[0x14BF9] = 1;
+        telas_b(1, 0);
+        grava("20e-save-lista");
+        memoria[0x14C00] = 8;
+        memoria[0x14BFC] = 960 & 255;
+        memoria[0x14BFD] = 960 >> 8;
+        telas_b(1, 0);
+        grava("20f-save-memoria-cheia");
+
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "CH NAME");
+        menu_no("CH MEMORY", "CH NAME");
+        memoria[0x14C00] = 8;
+        memoria[0x14BFC] = 960 & 255;
+        memoria[0x14BFD] = 960 >> 8;
+        memoria[0x14BF9] = 1;
+        telas_b(1, 0);
+        grava("20g-ch-name-em-vfo");
+        memoria[0x14C00] = 7;
+        strcpy((char *)&memoria[0x15494], "CH 104");
+        digitando("");
+        memoria[0x14A36] = 12;
+        memoria[0x14A38] = 1;
+        telas_b(1, 0);
+        grava("20h-editor-do-canal");
 
         /* o editor de nome (tipo 7 editando): o texto em 0x14A3A, o tamanho em b[0x14A35], o maximo
          * em b[0x14A36] e o modo em b[0x14A38] (1 = ABC); um nome curto em 2x e um longo no medio */
@@ -676,8 +739,8 @@ int main(int argc, char **argv)
         telas_b(1, 0);
         grava("27-editor-de-nome");
         /* v138: o SAVE abre o editor do CH-NAME vazio, no canal salvo */
-        strcpy((char *)&memoria[0x15494], "CH-NAME");
-        menu_no("MEMORY", "CH-NAME");
+        strcpy((char *)&memoria[0x15494], "CH NAME");
+        menu_no("CH MEMORY", "CH NAME");
         memoria[0x14C00] = 7;
         digitando("");
         memoria[0x14A36] = 12;

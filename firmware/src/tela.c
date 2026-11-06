@@ -1136,7 +1136,7 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e zero no resto, e o
  * montar so escreve neles se achar exatamente isso. */
 const unsigned char menu_tabela[96 * 28] __attribute__((aligned(4))) = {0xFF};   /* v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN */
-const unsigned char menu_textos[524] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v113) */
+const unsigned char menu_textos[528] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v113) */
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
  * O mapa do motor de menus esta no telas.c, junto do desenho. O que muda o nivel faz o mesmo que as
@@ -1148,6 +1148,14 @@ FIRMWARE(ITEM_MUDOU, 0x01E4851E);  void ITEM_MUDOU(void);         /* no tipo 3 (
 FIRMWARE(OK_MENU, 0x01E49996);     u32 OK_MENU(void);
 FIRMWARE(DIGITO_MENU, 0x01E4A0FE); u32 DIGITO_MENU(unsigned);
 FIRMWARE(BIPE, 0x01E38B4C);        void BIPE(unsigned);
+
+/* As listas de canais (v140, mensagem.c). */
+u32 lista_seta(int sentido);
+u32 lista_cancela(void);
+unsigned lista_aviso(void);
+unsigned lista_editor_abre(void);
+FIRMWARE(SETA_MAIS, 0x01E49F60);   u32 SETA_MAIS(void);
+FIRMWARE(SETA_MENOS, 0x01E49FF4);  u32 SETA_MENOS(void);
 
 /* Poe no menu o item i da tabela t, de n itens. */
 static void menu_vai(u32 t, unsigned n, unsigned i)
@@ -1188,6 +1196,27 @@ u32 gancho_menu_ok(void)
         menu_vai(MENU_BASE + menu_inicio(g) * TAM_ITEM, MENU_ITENS(g), 0);
         return MOTOR_MENU();
     }
+    /* as listas de canais (v140): o que nao pode abrir agora abre com o aviso do motivo. Nele, o OK do CH NAME leva
+     * ao SAVE, e o resto volta a pasta; no menu rapido do SAVE, so o EXIT sai, como num menu de um item */
+    if (marcas_do_item() & MARCA_LISTA) {
+        if (MENU_TIPO == 8) {
+            if (RAM(u16, 0x00014BFC) < 960)     /* a pergunta do DELETE: o OK de fabrica chama o set */
+                return OK_MENU();
+            if (n >= RADIO)
+                return 0;
+            MENU_EDITANDO = 0;
+            menu_vai(MENU_TABELA, MENU_CONTA, g ? g : 2);
+            if (g)
+                return MOTOR_MENU();
+        }
+        if (MENU_EDITANDO != 1 && lista_aviso()) {
+            TEMPO_MENU();
+            MENU_EDITANDO = 1;
+            MENU_TIPO = 8;
+            RAM(u16, 0x00014BFC) = 960;
+            return MOTOR_MENU();
+        }
+    }
     if (n >= RADIO || MENU_TIPO != 8)     /* o radio e os menus rapidos: o OK de fabrica */
         return OK_MENU();
     if (MENU_EDITANDO == 1)
@@ -1216,11 +1245,12 @@ u32 b_menu_sai(void)
  * em 1 fecha o menu inteiro (0x01E4D566), como num menu rapido de um item. Num grupo (o CALIBRATION
  * tem um item so, v59) devolve 1, e o desvio segue ao bipe do EXIT (0x01E4D59A), por onde o de fabrica
  * passa com mais de um item: a edicao fecha e a lista do grupo fica. */
+static unsigned na_lista_aberta(void);
 u32 b_menu_um(void)
 {
     unsigned n = menu_nivel();
 
-    return n != 0 && n < RADIO;
+    return (n != 0 && n < RADIO) || na_lista_aberta();   /* v140: a lista segue aberta, no menu rapido tambem */
 }
 
 /* No EXIT num item de texto (tipo 7), antes de apagar a letra atras do cursor (0x01E4D48A, desvio_exit_apaga): o
@@ -1234,6 +1264,31 @@ u32 b_exit_apaga(void)
     return MENU_EDITANDO != 1;
 }
 
+/* As setas (as quatro chamadas de 0x01E49F60 e 0x01E49FF4, na interface): com uma lista de canais aberta, andam so
+ * nela; o resto, como de fabrica. */
+static unsigned na_lista_aberta(void)
+{
+    return MENU_EDITANDO == 1 && (marcas_do_item() & MARCA_LISTA);
+}
+
+u32 gancho_seta_mais(void)
+{
+    return na_lista_aberta() ? lista_seta(1) : SETA_MAIS();
+}
+
+u32 gancho_seta_menos(void)
+{
+    return na_lista_aberta() ? lista_seta(-1) : SETA_MENOS();
+}
+
+/* No EXIT, onde o de fabrica decide cancelar a edicao (0x01E4D4F4): a pergunta do DELETE e o editor do SAVE e do CH
+ * NAME voltam a lista, e o resto segue. Devolve 1 quando voltou: o desvio vai ao redesenho do proprio EXIT
+ * (0x01E4D534), que passa pelo desvio_menu_um e pelo bipe, na pilha de fabrica. */
+u32 b_exit_lista(void)
+{
+    return na_lista_aberta() && lista_cancela();
+}
+
 /* Depois do set, no OK editando (0x01E49A86, onde o firmware zera o estado da recepcao, b[0x15367], e
  * fecha a edicao; so com o menu aberto, b[0x1533D] = 1): o que a saida do menu grava vai para o chip ja
  * aqui (v101, salva_menu, bancos.c), para nada se perder com o radio desligado de menu aberto. E nos
@@ -1244,15 +1299,13 @@ u32 b_exit_apaga(void)
  * segue do mesmo jeito: o redesenho e o da caixa. */
 void salva_menu(void);
 unsigned aprs_caixa_abre(void);
-unsigned memch_nome_abre(void);
 u32 b_menu_marca(void)
 {
-    unsigned n = menu_nivel(), m;
+    unsigned m = marcas_do_item();
 
     salva_menu();
-    m = n == 0 || n >= RADIO ? 0 : MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO);
-    /* depois do SAVE (MARCA_NOMEIA, v138), o editor do nome do canal salvo, vazio, como no UV-17L */
-    if (aprs_caixa_abre() || ((m & MARCA_NOMEIA) && memch_nome_abre())) {
+    /* da lista do SAVE e do CH NAME (MARCA_NOMEIA), o editor do nome, como no UV-17L */
+    if (aprs_caixa_abre() || ((m & MARCA_NOMEIA) && lista_editor_abre())) {
         ESTADO_RX = 0;
         return 1;
     }
@@ -2010,6 +2063,9 @@ DESVIO_MEIO(desvio_menu_um, b_menu_um, 0x01E4D540, 0x01E4D59A, "0x40, 0xe0, 0x78
 /* O EXIT num item de texto: "r0 = 951" (0x01E4D48A) le o cursor para apagar a letra; fora da edicao segue ao
  * resto do EXIT (0x01E4D4F4), como com o cursor em 0. */
 DESVIO_MEIO(desvio_exit_apaga, b_exit_apaga, 0x01E4D48E, 0x01E4D4F4, "0x40, 0xe0, 0xb7, 0x03");
+/* O EXIT onde o de fabrica fecharia a edicao: "r0 = 1401" (0x01E4D4F4) le se ela esta aberta; nas listas de canais a
+ * pergunta e o editor voltam a lista, e o desvio segue ao redesenho do EXIT (0x01E4D534, v140). */
+DESVIO_MEIO(desvio_exit_lista, b_exit_lista, 0x01E4D4F8, 0x01E4D534, "0x40, 0xe0, 0x79, 0x05");
 
 /* 0x01E44C68 de fabrica, chamada como rotina: os bytes que o desvio cobre e a volta. O rets que o
  * primeiro deles empilha e o de quem chamou esta, entao a de fabrica volta para la. */

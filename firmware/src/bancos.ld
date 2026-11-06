@@ -53,6 +53,7 @@ MEMORY
     livre (rx) : ORIGIN = 0x01E257E0, LENGTH = 38884
     vozes (rx) : ORIGIN = 0x01E797A0, LENGTH = 0x1BF50
     caminhos (rx) : ORIGIN = 0x01E5AB60, LENGTH = 2944
+    reserva (rx) : ORIGIN = 0x01E62F98, LENGTH = 1512   /* a tabela de menu de fabrica, morta desde a v43 (v140) */
 }
 
 SECTIONS
@@ -76,6 +77,9 @@ SECTIONS
     .caminhos : {
         *(.caminhos*)
     } > caminhos
+    .reserva : {
+        *(.reserva*)
+    } > reserva
 
     /DISCARD/ : { *(.comment) *(.note*) *(.debug*) }
 }

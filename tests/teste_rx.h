@@ -134,9 +134,12 @@ static void ESPERA_2MS(unsigned n)
 
 /* ---------- a flash do chip de dados ---------- */
 static u8 flash_d[0x10000];
+static u8 flash_canais[0x8000];            /* v140: os 960 canais, 0x0000..0x77FF, para as listas */
 
 static u8 *flash_em(u32 a, unsigned n)
 {
+    if (a + n <= sizeof flash_canais)
+        return flash_canais + a;
     if (a < 0xD0000 || a + n > 0xE0000) {
         printf("X flash fora: %x\n", (unsigned)a);
         exit(3);
@@ -248,6 +251,24 @@ static void LUZ_ABR(void) {}
 static void INICIO_TX(void) {}
 static void FIM_TX(void) {}
 static void GERADOR(unsigned x) { (void)x; }
+/* As listas de canais (v140): o que as rotinas de fabrica fazem no chip, com o VALOR como no radio. */
+#define VALOR_TESTE (*(volatile u16 *)(ram_pc + 0x14BFC))
+static int existe_no_registro(const u8 *p) { return p[0] != 0xFF && p[3] != 0; }
+static void DELCH_FABRICA(void) { memset(flash_canais + (VALOR_TESTE << 5), 0xFF, 32); }
+static void GRAVA_CANAL(unsigned n, const void *cru, const void *nome)
+{
+    memcpy(flash_canais + (n << 5), cru, 20);
+    memcpy(flash_canais + (n << 5) + 20, nome, 12);
+}
+static void memch_grava(const char *nome)
+{
+    static const u8 vfo[20] = {0x00, 0x25, 0x46, 0x14};
+
+    GRAVA_CANAL(VALOR_TESTE, vfo, nome);
+}
+static void RECARREGA_LADOS(void) {}
+static u32 MOTOR_MENU(void) { return 0; }
+static void TEMPO_MENU(void) {}
 static void AUDIO_TX(unsigned x) { (void)x; }
 static void AF(unsigned x) { (void)x; }
 static void PEDE_AMPLI(unsigned x) { (void)x; }

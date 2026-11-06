@@ -96,9 +96,11 @@ tabela_esperada, textos_esperados = montar.monta_menu(app_velho, blob, tela)
 # v43: a tabela do menu mora no vetor menu_tabela do .livre, e desde a v53 os textos dos grupos no
 # menu_textos - o que vai a flash e o .livre com os dois
 tela_gravada = montar.livre_com_menu(tela, tabela_esperada, textos_esperados)
+reserva_em, reserva = montar.codigo_ligado(elf, '.reserva')     # v140: na tabela de menu de fabrica, morta
 caminhos_em, caminhos = montar.codigo_ligado(elf, '.caminhos')   # v138: no lugar dos caminhos das vozes
 blocos = [('codigo', montar.ENDERECO_CODIGO, blob), ('tela B', livre_em, tela_gravada),
           ('caminhos', caminhos_em, caminhos),
+          ('reserva', reserva_em, reserva),
           ('tabela', montar.S[montar.TABELA_SIMBOLO], tabela_esperada),
           ('textos dos grupos', montar.S[montar.TEXTOS_SIMBOLO], textos_esperados)]
 for nome, endereco, esperado in blocos:
@@ -132,14 +134,15 @@ no_texto = lambda a: montar.ENDERECO_CODIGO <= a < fim_codigo
 nas_vozes = lambda a: vozes_em <= a < fim_vozes
 na_livre = lambda a: livre_em <= a < fim_livre
 # v138: no .caminhos so o que o nosso codigo chama ou le - nenhuma das rotinas que o firmware chama (PRECISA)
-nos_caminhos = lambda a: caminhos_em <= a < caminhos_em + len(caminhos)
+nos_caminhos = lambda a: caminhos_em <= a < caminhos_em + len(caminhos) or reserva_em <= a < reserva_em + len(reserva)
 fora = {n: a for n, a in montar.S.items()
         if not no_texto(a) and not nas_vozes(a) and not na_livre(a) and not nos_caminhos(a)}
 trocados = sorted(n for n in montar.PRECISA if nas_vozes(montar.S[n]) != (n in montar.NAS_VOZES)
                   or na_livre(montar.S[n]) != (n in montar.NA_LIVRE) or nos_caminhos(montar.S[n]))
 lugares = (vozes_em == montar.VOZES and fim_vozes <= montar.VOZES_ACEITAS_FIM
            and livre_em == montar.LIVRE and fim_livre <= montar.LIVRE_FIM
-           and caminhos_em == montar.CAMINHOS and caminhos_em + len(caminhos) <= montar.CAMINHOS_FIM)
+           and caminhos_em == montar.CAMINHOS and caminhos_em + len(caminhos) <= montar.CAMINHOS_FIM
+           and reserva_em == montar.RESERVA and reserva_em + len(reserva) <= montar.RESERVA_FIM)
 print(f'2b. simbolos dentro de {montar.ENDERECO_CODIGO:#x}..{fim_codigo:#x}, {vozes_em:#x}..{fim_vozes:#x} '
       f'(ate o fim do C1, {montar.VOZES_ACEITAS_FIM:#x}) ou {livre_em:#x}..{fim_livre:#x} (a faixa do G.729 '
       f'e do MP3 vai ate {montar.LIVRE_FIM:#x}); nas vozes so os {len(montar.NAS_VOZES)} do espectro, na '
@@ -184,7 +187,7 @@ sitios_livre = ({s for s, _ in montar.REALCE_SITIOS_GANCHO} | {s for s, _ in mon
                | {e for e, _, _, _, _ in montar.TELA_DESVIOS} | {s for s, _, _, _ in montar.ESPECTRO_B_CHAMADAS}
                | {e for e, _, _, _ in montar.ESPECTRO_B_FUNCOES}
                | {s for s, _, _, _ in montar.CHAMADAS_LIVRE + montar.GOTOS_LIVRE + montar.CHAMADAS_NO_LUGAR}
-               | {s for s, _, _, _, _, _ in montar.MENU_DESVIOS}
+               | {s for s, _, _, _, _, _ in montar.MENU_DESVIOS} | {s for s, _ in montar.SETAS}
                | {montar.PONTEIRO_EM})   # v53: call menu_abre
 imagens = []
 for e in entradas:
@@ -414,26 +417,37 @@ if hashlib.sha256(bytes(app_velho[o:o + montar.CAMINHOS_FIM - montar.CAMINHOS]))
     problemas.append('a faixa de fabrica nao e a dos caminhos das vozes')
 if bytes(app[o:o + len(caminhos)]) != caminhos:
     problemas.append('.caminhos ausente do app.bin no lugar dos caminhos das vozes')
+if bytes(app[montar.RESERVA - montar.BASE_APP:montar.RESERVA - montar.BASE_APP + len(reserva)]) != reserva:
+    problemas.append('.reserva ausente do app.bin na tabela de menu de fabrica')
 for sitio, _, novo, oque in montar.VOZES_REMENDOS:
     s = sitio - montar.BASE_APP
     if sitio in (0x01E40628, 0x01E55ABE) and bytes(app[s:s + len(novo)]) != novo:
         problemas.append(f'o remendo das vozes em {sitio:#x} ({oque}) nao esta no lugar')
 star = {}
+# v140: o menu rapido do 3 segurado usa as mesmas rotinas do SAVE da pasta
+o_r = montar.TABELA_RAPIDA_SAVE - montar.BASE_APP
+if bytes(app_velho[o_r:o_r + len(montar.RAPIDA_SAVE_ERA)]) != montar.RAPIDA_SAVE_ERA:
+    problemas.append('o menu rapido do MEMCH de fabrica nao e o esperado')
+for campo, simbolo in montar.RAPIDA_SAVE_CAMPOS:
+    if struct.unpack_from('<I', app, o_r + montar.CAMPO[campo])[0] != montar.S[simbolo]:
+        problemas.append(f'o menu rapido do SAVE: {campo} nao aponta para {simbolo}')
 for sitio, antes, novo, oque in montar.CAMINHOS_REMENDOS:
     s, alvo = sitio - montar.BASE_APP, int.from_bytes(novo, 'little') - montar.BASE_APP
     if bytes(app_velho[s:s + 4]) != antes or bytes(app[s:s + 4]) != novo or bytes(app[alvo:alvo + 2]) != b'*\0':
         problemas.append(f'{sitio:#x} ({oque}): {antes.hex()} -> {novo.hex()} nao conferiu')
     star[sitio] = antes
-dentro_c = lambda a: montar.CAMINHOS <= a < montar.CAMINHOS_FIM
+dentro_c = lambda a: montar.CAMINHOS <= a < montar.CAMINHOS_FIM or montar.RESERVA <= a < montar.RESERVA_FIM
 morto = lambda a: any(i <= a and a + 4 <= f for i, f, _ in montar.CAMINHOS_MORTOS)
 excecoes_c = 0
 for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
     for o in range(0, len(binario) - 3):
         onde = montar.BASE_APP + o
-        if dentro_c(onde) or (binario is app and na_livre(onde)):
+        if dentro_c(onde) or (binario is app and (na_livre(onde) or no_texto(onde))):
             continue
         v = struct.unpack_from('<I', binario, o)[0]
-        if dentro_c(v & ~1):
+        # v140: "cN ff" + 32 bits e o imediato de um registrador (o 0x0001E630 e o 0x0001E634, enderecos de RAM): lido
+        # um byte antes, o ff e os tres bytes de baixo dele caem na reserva sem ser ponteiro
+        if dentro_c(v & ~1) and not (o and binario[o] == 0xFF and binario[o - 1] & 0xF0 == 0xC0 and binario[o + 4] == 0):
             if morto(onde) and binario[o:o + 4] == app_velho[o:o + 4]:
                 excecoes_c += 1
             elif binario is app_velho and star.get(onde) == bytes(binario[o:o + 4]):
@@ -480,6 +494,8 @@ def com_mudancas(i):
     for campo, valor in montar.ITENS_MUDADOS.get(i, {}).items():
         if campo == 'maximo':
             struct.pack_into('<H', item, 1, valor)
+        elif campo == 'flags':
+            item[0] = valor
         else:
             struct.pack_into('<I', item, montar.CAMPO[campo], montar.S[valor])
     return bytes(item)
@@ -572,8 +588,8 @@ for g in range(grupos):
         problemas.append(f'{nome}: os textos {filhos} nao sao os do montar')
     # v112: a caixa e a volta da tela MESSAGES acham o item pela posicao (mensagem.c, ITEM_MESSAGES e ITEM_TO)
     # v138: e o CALLSIGN, que o # pede antes da caixa quando falta o indicativo (ITEM_CALLSIGN)
-    if nome == 'MEMORY' and filhos[0:1] != ['CH-NAME']:   # v138: o SAVE abre o editor no item 0 (ITEM_CH_NAME)
-        problemas.append(f'MEMORY: o CH-NAME fora da posicao 0 que o SAVE usa: {filhos}')
+    if nome == 'CH MEMORY' and filhos != ['CH NAME', 'DELETE', 'SAVE']:   # v140: o item diz a lista (lista_item)
+        problemas.append(f'CH MEMORY: os itens fora das posicoes 0, 1 e 2 que a lista usa: {filhos}')
     if nome == 'APRS' and filhos[0:1] + filhos[2:3] + filhos[5:6] != ['CALLSIGN', 'MESSAGES', 'TO']:
         problemas.append(f'APRS: o CALLSIGN, o MESSAGES e o TO fora das posicoes 0, 2 e 5 que a tela usa: {filhos}')
     print(f'3b. {g + 1:2d} {nome:9s} ' + ', '.join(f + ('*' * bool(m)) for f, m in zip(filhos, marcas)))
@@ -610,8 +626,7 @@ if montar.SETAS_INVERTIDAS:
     trocadas = 0
     for sitio, era in montar.SETAS:
         o = sitio - montar.BASE_APP
-        outra = montar.RETROCEDE if era == montar.AVANCA else montar.AVANCA
-        if bytes(app[o:o + 4]) == montar.monta_call(sitio, outra):
+        if bytes(app[o:o + 4]) == montar.monta_call(sitio, montar.S[montar.SETA_GANCHO[era]]):
             trocadas += 1
     print(f'   setas invertidas: {trocadas}/{len(montar.SETAS)} sitios')
     if trocadas != len(montar.SETAS):
@@ -1196,7 +1211,10 @@ previsto += previsto_tela
 previsto += [(montar.LIVRE, montar.LIVRE + len(tela) - 1, 'tela B no lugar do G.729 e do MP3')]
 previsto += [(r, r + 3, f'tipo do {d} no registro') for r, _, _, d in montar.DECODIFICADORES]
 # v138: o .caminhos no lugar dos caminhos das vozes, e o "*" do editor que sai de la
+previsto += [(montar.RESERVA, montar.RESERVA + len(reserva) - 1, 'codigo novo na tabela de menu de fabrica, morta')]
 previsto += [(montar.CAMINHOS, montar.CAMINHOS + len(caminhos) - 1, 'codigo novo no lugar dos caminhos das vozes')]
+previsto += [(montar.TABELA_RAPIDA_SAVE + montar.CAMPO[c_], montar.TABELA_RAPIDA_SAVE + montar.CAMPO[c_] + 3,
+              'menu rapido do SAVE: ' + c_) for c_, _ in montar.RAPIDA_SAVE_CAMPOS]
 previsto += [(s_, s_ + len(a_) - 1, 'caminhos: ' + d_) for s_, a_, _, d_ in montar.CAMINHOS_REMENDOS]
 
 previsto += [(s, s + 3, f'gancho do cabo ({p})') for s, p in montar.CABO_SITIOS]

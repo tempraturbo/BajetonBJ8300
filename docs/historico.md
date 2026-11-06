@@ -5,6 +5,28 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v140 — 06/11 — o menu de canais: CH MEMORY, com listas, confirmação e cancelar sem salvar (em teste)
+
+`BJ8300_BANK_v140.anc` (sha256 `dc59c121…`), fora dos commits como as outras de teste: a V3.5T com o menu de salvar e
+nomear canais refeito a pedido do dono, igual ao do UV-17L, para ficar óbvio. Ainda não foi gravada.
+
+- **Os nomes.** A pasta MEMORY virou **CH MEMORY**, e os itens viraram **CH NAME**, **DELETE** e **SAVE**. O SAVE da
+  bateria, na pasta SYSTEM, virou **BATTERY SAVE**, para não haver dois. A pasta muda de lugar na ordem alfabética: é a
+  5, e CHANNEL, DISPLAY, DTMF e KEYS andam uma casa.
+- **As listas.** O DELETE e o CH NAME só mostram canais salvos, como `102 - PIGAO 3` (sem nome, a frequência), e o SAVE
+  só números livres. Todas abrem no canal do lado em evidência ou no mais perto da lista, com o empate para cima, e as
+  setas dão a volta. O número digitado vai ao mais perto. O 3 segurado abre o mesmo SAVE.
+- **Os avisos.** No lugar da lista vazia: `NO SAVED CHANNELS`, `MEMORY FULL` e, no CH NAME em VFO, `SAVE CHANNEL FIRST`,
+  em que o OK leva ao SAVE. Em VFO o CH NAME não mostra canal nenhum: o marcado não seria o sintonizado.
+- **Cancelar não salva.** O SAVE e o CH NAME só gravam no OK do editor. O EXIT com a caixa vazia, ou segurado, volta à
+  lista sem gravar. O OK em branco grava `CH 101`.
+- **O DELETE pergunta.** `DELETE?` com o canal, OK apaga e a lista segue no mais perto, para apagar vários; EXIT desiste.
+- **O espaço.** Abriu-se a reserva, a tabela de menu de fábrica, morta desde a v43: 1.512 B, com a mesma prova dos
+  caminhos das vozes. Sobram 940 B nela, 298 B nos caminhos e 122 B no `.livre`.
+
+[Seção 32](engenharia-reversa.md#32-o-menu-de-canais-ch-memory-v140). Dos modos de operação (GMRS, Super e os outros),
+que o dono pediu para conferir, nenhum trava o firmware: [seção 33](engenharia-reversa.md#33-os-modos-de-operação).
+
 ## V3.5T — 06/11 — o SAVE com nome, as etiquetas, o MIC GAIN com DEFAULT e os ajustes do APRS
 
 A v139 virou a **V3.5T**, número escolhido pelo dono (não houve V3.3T nem V3.4T):
