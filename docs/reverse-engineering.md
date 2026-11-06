@@ -1051,8 +1051,8 @@ mode 0.
 **The TDR rule**, the owner's: in SINGLE dual watch is off, and only the frequency shown receives.
 WATCH set to SINGLE clears TDR, the TDR item's setter (item 7, `tdr_grava` instead of
 `0x01E3957C`) keeps it at 0, and power-up clears it again. In DUAL and TRIPLE, on listens to all of
-them, and off only to the one in focus. On the top bar, the watch when on shows as **DR** in DUAL and **TR**
-in TRIPLE (up to v82, DW in both).
+them, and off only to the one in focus. On the top bar, the watch when on shows as **DW** in DUAL and **TW**
+in TRIPLE (up to v82, DW in both; v83 to v141, DR and TR).
 
 **Only A in SINGLE (v78)**, at the owner's request: SINGLE always shows and listens to A, and the A/B key
 does not go to B or C. Up to v77 it swapped the sides in SINGLE too, and the screen then showed B.

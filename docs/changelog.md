@@ -5,6 +5,13 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v142 — Nov 6 — TRIPLE WATCH, and DW and TW on the bar (in test)
+
+`BJ8300_BANK_v142.anc` (sha256 `32fa87ad…`), left out of the commits like the other test versions: v141 with two names
+corrected, at the owner's request and the same as the UV-17L's. The DUAL RX item, which is the watch over all sides, becomes
+**TRIPLE WATCH**, on the quick menu too, and the top bar shows **DW** in DUAL and **TW** in TRIPLE instead of DR and TR. Not
+flashed yet.
+
 ## v141 — Nov 6 — BANKS shaped like CH MEMORY, the mode warnings and the clear names (in test)
 
 `BJ8300_BANK_v141.anc` (sha256 `8a78cc20…`), left out of the commits like the other test versions: v140 with the BANKS

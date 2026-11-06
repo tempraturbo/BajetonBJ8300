@@ -358,18 +358,18 @@ GRUPOS = {
     'SYSTEM': ('ALARM MODE', 'BATTERY SAVE', 'BLUETOOTH', 'RESET', 'VERSION'),
     'TONES': ('RX CTCSS', 'RX DCS', 'TX CTCSS', 'TX DCS'),
     'TX': ('ROGER', 'TX TIMEOUT', 'VOX', 'VOX DELAY'),
-    'WATCH': ('DUAL RX', 'TX SIDE', 'WATCH'),
+    'WATCH': ('TRIPLE WATCH', 'TX SIDE', 'WATCH'),
 }
 # v141: os nomes claros, os mesmos do UV-17L, no lugar dos de fabrica: o indice do item e o simbolo do nome novo
 # (bancos.c), que o GRUPOS lista. RAPIDA_NOMES: os menus rapidos que mostram um deles, a tabela e o simbolo.
-RENOMES = {0: 'nome_squelch', 2: 'nome_tx_power', 5: 'nome_bandwidth', 6: 'nome_backlight', 7: 'nome_dual_rx',
+RENOMES = {0: 'nome_squelch', 2: 'nome_tx_power', 5: 'nome_bandwidth', 6: 'nome_backlight', 7: 'nome_triple_watch',
            8: 'nome_key_beep', 9: 'nome_tx_timeout', 14: 'nome_rx_ctcss', 15: 'nome_rx_dcs', 16: 'nome_tx_ctcss',
            17: 'nome_tx_dcs', 23: 'nome_busy_lock', 24: 'nome_scan_resume', 26: 'nome_pf2_long', 29: 'nome_tx_shift',
            31: 'nome_dtmf_group', 33: 'nome_dtmf_sidetone', 36: 'nome_tone_burst', 37: 'nome_dtmf_delay',
            40: 'nome_rpt_tail_cut', 41: 'nome_rpt_tail_delay', 42: 'nome_show_a', 43: 'nome_show_b',
            45: 'nome_tail_cut', 46: 'nome_alarm_mode'}
 RAPIDA_NOMES = ((0x01E5E574, 'nome_scan_resume'), (0x01E5E61C, 'nome_tx_power'), (0x01E5E654, 'nome_squelch'),
-                (0x01E5E68C, 'nome_dual_rx'), (0x01E5E6C4, 'nome_tx_ctcss'), (0x01E5E6FC, 'nome_tx_shift'))
+                (0x01E5E68C, 'nome_triple_watch'), (0x01E5E6C4, 'nome_tx_ctcss'), (0x01E5E6FC, 'nome_tx_shift'))
 ITENS_POR_GRUPO = 8       # o maior grupo (o APRS, v76); a janela de pasta mostra 6 linhas e rola o resto (telas.c, pasta_cena)
 # v55: as marcas de cada item (grupo, nome), no menu_textos: SEM_VALOR nao mostra o "L" do valor na
 # janela de pasta (acoes, e a lista dos canais do banco); VARIOS continua editando depois do OK, para

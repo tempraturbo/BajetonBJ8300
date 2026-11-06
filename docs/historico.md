@@ -5,6 +5,12 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v142 — 06/11 — TRIPLE WATCH, e DW e TW na barra (em teste)
+
+`BJ8300_BANK_v142.anc` (sha256 `32fa87ad…`), fora dos commits como as outras de teste: a v141 com dois nomes acertados, a
+pedido do dono e iguais aos do UV-17L. O item DUAL RX, que é a escuta de todos os lados, passa a **TRIPLE WATCH**, também
+no menu rápido, e a barra de cima mostra **DW** no DUAL e **TW** no TRIPLE, no lugar de DR e TR. Ainda não foi gravada.
+
 ## v141 — 06/11 — os BANKS no molde do CH MEMORY, os avisos de modo e os nomes claros (em teste)
 
 `BJ8300_BANK_v141.anc` (sha256 `8a78cc20…`), fora dos commits como as outras de teste: a v140 com a pasta BANKS refeita,

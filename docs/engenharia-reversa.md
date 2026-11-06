@@ -1035,8 +1035,8 @@ troca de fábrica. No rodízio, a C em VFO entra com os 32 B dela no VFO corrent
 **A regra do TDR**, do dono: no SINGLE a dupla escuta fica desligada, e só a frequência mostrada
 recebe. O WATCH em SINGLE zera o TDR, o set do item TDR (o 7, `tdr_grava` no lugar de
 `0x01E3957C`) o mantém em 0, e a partida o zera de novo. No DUAL e no TRIPLE, ligada escuta todas,
-e desligada só a que está em evidência. Na barra de cima, a escuta ligada aparece como **DR** no DUAL e
-**TR** no TRIPLE (até a v82, DW nos dois).
+e desligada só a que está em evidência. Na barra de cima, a escuta ligada aparece como **DW** no DUAL e
+**TW** no TRIPLE (até a v82, DW nos dois; da v83 à v141, DR e TR).
 
 **Só o A no SINGLE (v78)**, a pedido do dono: o SINGLE mostra e escuta sempre o A, e a tecla A/B não leva
 ao B nem à C. Até a v77 ela trocava os lados também no SINGLE, e a tela passava a mostrar o B.
