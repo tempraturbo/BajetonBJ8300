@@ -383,10 +383,10 @@ def main():
             ['Basic Settings', 'DTMF Settings', 'BJ8300_v3.5TEMPRA Specific', 'VFO A/B/C Channel',
              'FM/AM/SSB Modulation', 'APRS', 'Morse', 'Banks'])
     abc = aj['abblock']
-    confere('10c2. o WATCH e o TTR primeiro no VFO A/B/C Channel, e um bloco para cada lado',
+    confere('10c2. o WATCH e o TRIPLE WATCH primeiro no VFO A/B/C Channel, e um bloco para cada lado',
             (abc.keys()[:2], abc['settings_tdr'].get_shortname(), 'settings_tdr' in aj['spec'],
              [k for k, e in abc.items() if isinstance(e, settings.RadioSettingSubGroup)]),
-            (['watch_mode', 'settings_tdr'], 'TTR (Transmitter Triple Receiver)', False,
+            (['watch_mode', 'settings_tdr'], 'TRIPLE WATCH', False,
              ['achannel', 'bchannel', 'cchannel']))
     # o NOISE REDUCTION: o cabo entrega o 0x9000 da RAM (0x01E43A94), e o item do radio guarda em
     # b[0x14BDE] (get 0x01E3D0E0), que la cai em 0x9032 - e nao em 0x9031, onde a base o le
@@ -411,7 +411,7 @@ def main():
              [abc[b].values()[1].get_shortname() for b in ('achannel', 'bchannel', 'cchannel')],
              sorted(s.get_name() for s in aj.walk() if 'mdf' in s.get_name())),
             (['settings_mdfa', 'settings_mdfb', 'watch_mdf_c'],
-             ['Memory Display Format %s (MDF-%s)' % (x, x) for x in 'ABC'],
+             ['Memory Display Format %s (SHOW %s)' % (x, x) for x in 'ABC'],
              ['settings_mdfa', 'settings_mdfb', 'watch_mdf_c']))
     muda_watch(r, watch_mode='TRIPLE', watch_channel_c=5, watch_mdf_c='Frequency')
     bloco = bytes(r._mmap[bj.WATCH_BASE:bj.VFC_BASE])
@@ -500,10 +500,10 @@ def main():
     aj = r.get_settings()
     abc = aj['abblock']
     tx = {s.get_name(): s for s in aj.walk()}['settings_dualtx']
-    confere('10s. TX-A/B/C no VFO A/B/C Channel, logo depois do TTR, com as 4 opcoes',
+    confere('10s. TX SIDE no VFO A/B/C Channel, logo depois do TRIPLE WATCH, com as 4 opcoes',
             (abc.keys()[abc.keys().index('settings_tdr') + 1], tx.get_shortname(),
              list(tx.value.get_options())),
-            ('settings_dualtx', 'TX-A/B/C', ['Off', 'A', 'B', 'C']))
+            ('settings_dualtx', 'TX SIDE', ['Off', 'A', 'B', 'C']))
     r._mmap[0x9013] = bytes([0xFC])                 # os 6 bits de cima, do driver de base, ficam
     aj = r.get_settings()
     {s.get_name(): s for s in aj.walk()}['settings_dualtx'].value.set_value('C')

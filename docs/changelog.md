@@ -5,6 +5,12 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Nov 6 — the radio's names
+
+The module's labels and help texts follow the radio's menu: TRIPLE WATCH (TTR), TX SIDE (TX-A/B/C), SHOW A, B and C (MDF-A,
+B and C) and DTMF GROUP (S-CODE). The image and the upload do not change, and the module stays `bj8300_v3.5TEMPRA.py` until
+the release. `teste_chirp_real.py` checks the new labels.
+
 ## v142 — Nov 6 — TRIPLE WATCH, and DW and TW on the bar (in test)
 
 `BJ8300_BANK_v142.anc` (sha256 `32fa87ad…`), left out of the commits like the other test versions: v141 with two names

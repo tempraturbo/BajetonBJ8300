@@ -598,7 +598,7 @@ class _BankCableMixin(object):
         self._write_extended(WATCH_SECTOR, data)
         if self._read_extended(WATCH_SECTOR) != data:
             raise errors.RadioError(
-                'The radio did not keep WATCH, CH-C and MDF-C: they need the BJ8300_BANK firmware '
+                'The radio did not keep WATCH, CH-C and SHOW C: they need the BJ8300_BANK firmware '
                 'v46 or later. Channels, settings and banks were written.')
 
     def _read_vfc(self):
@@ -950,13 +950,13 @@ def _light_pwm_setting(value):
     return rs
 
 
-TXABC_OPTIONS = ['Off', 'A', 'B', 'C']                  # the radio's TX-A/B/C item (0x9013, 2 bits)
+TXABC_OPTIONS = ['Off', 'A', 'B', 'C']                  # the radio's TX SIDE item (0x9013, 2 bits)
 
 
 def _txabc_setting(value):
-    rs = MemSetting('settings.dualtx', 'TX-A/B/C', RadioSettingValueList(
+    rs = MemSetting('settings.dualtx', 'TX SIDE', RadioSettingValueList(
         TXABC_OPTIONS, current_index=int(value) if int(value) < 4 else 0))
-    rs.set_doc('With TTR on, the side PTT transmits on: A, B or C (C only in TRIPLE). Off: the one '
+    rs.set_doc('With TRIPLE WATCH on, the side PTT transmits on: A, B or C (C only in TRIPLE). Off: the one '
                'in focus. C needs firmware V2.6T or later; on earlier firmware leave it on Off, A '
                'or B.')
     return rs
@@ -1058,8 +1058,8 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             'many banks as you like. Double-click a bank\'s column header to rename it. Each\n'
             'bank\'s name, channel count and on/off switch are also in Settings > Banks.\n'
             '\n'
-            'WATCH, CH-C and MDF-C are in Settings > VFO A/B/C Channel, with MDF-A and MDF-B\n'
-            '(WATCH, CH-C and MDF-C need firmware v46 or later).\n'
+            'WATCH, CH-C and SHOW C are in Settings > VFO A/B/C Channel, with SHOW A and SHOW B\n'
+            '(WATCH, CH-C and SHOW C need firmware v46 or later).\n'
             '\n'
             'The APRS and Morse folders hold the radio\'s callsign, path, messages, speed and\n'
             'tone (writing them needs firmware v110 or later).\n'
@@ -1324,13 +1324,13 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         if ttr is None:
             LOG.warning('TDR setting not found in the base class')
         else:
-            ttr.set_shortname('TTR (Transmitter Triple Receiver)')     # the radio's TDR menu item
+            ttr.set_shortname('TRIPLE WATCH')     # the stock TDR menu item
             ttr.set_doc('On: the radio listens to every frequency on the screen, each for the same '
                         'time (A and B in DUAL; A, B and C in TRIPLE). Off: only the one in focus. '
                         'In SINGLE it stays off (the upload turns it off).')
             _put(abc, ttr, after='watch_mode')
-        # TX-A/B/C (firmware v50): the stock TX-A/B (0x9013) gets C, as the radio's menu item; it
-        # only works with TTR on, so it comes right after it
+        # TX SIDE (firmware v50): the stock TX-A/B (0x9013) gets C, as the radio's menu item; it
+        # only works with TRIPLE WATCH on, so it comes right after it
         if _take(settings, 'settings_dualtx') is None:
             LOG.warning('TX-A/B setting not found in the base class')
         else:
@@ -1342,7 +1342,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
                 LOG.warning('VFO %s Channel or MDF-%s not found in the base class', side.upper(),
                             side.upper())
                 continue
-            mdf.set_shortname('Memory Display Format %s (MDF-%s)' % (side.upper(), side.upper()))
+            mdf.set_shortname('Memory Display Format %s (SHOW %s)' % (side.upper(), side.upper()))
             _put(block, mdf, after='settings_vfomr' + side)
         # VFO C (firmware v49) has the same options as A and B, plus CH-C. While C is on side B in
         # the radio, its work mode and VFO live in B's slots, and the VFO C block keeps B's own:
@@ -1477,7 +1477,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
                   'Set %s Band TX frequency offset value.'),
             field('sftd', 'Offset Direction', lst(self._offset_list, int(shown.sftd)),
                   lambda vfo, s: setattr(vfo, 'sftd', int(s.value)), 'Set %s Band TX frequency offset direction.'),
-            field('scode', 'S-CODE', lst(self._scode_list, int(shown.scode)),
+            field('scode', 'DTMF GROUP', lst(self._scode_list, int(shown.scode)),
                   lambda vfo, s: setattr(vfo, 'scode', int(s.value)), 'Set the %s Band DTMF code ID to use for PTT ID.'),
             field('scramble', 'Scramble',
                   lst(SCRAMBLE_OPTIONS, SCRAMBLE_VALUES.index(nibble if nibble in SCRAMBLE_VALUES else 1)),
@@ -1494,10 +1494,10 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         rs = RadioSetting('watch_mode', 'Watch (WATCH)', RadioSettingValueList(
             WATCH_OPTIONS, current_index=WATCH_VALUES.index(store.mode())))
         rs.set_doc('How many frequencies the main screen shows. SINGLE: only the one in focus, full '
-                   'screen, and dual watch stays off (the upload turns TDR off). DUAL: A and B, as '
+                   'screen, and the watch stays off (the upload turns TRIPLE WATCH off). DUAL: A and B, as '
                    'stock. TRIPLE: A, B and a third one, C (VFO C Channel, below); the A/B key '
-                   'goes A, B, C. In DUAL and TRIPLE, TDR on listens to all of them, each for the '
-                   'same time, and TDR off only to the one in focus. Needs firmware v46 or later.')
+                   'goes A, B, C. In DUAL and TRIPLE, TRIPLE WATCH on listens to all of them, each for '
+                   'the same time, and off only to the one in focus. Needs firmware v46 or later.')
         rs.set_apply_callback(self._apply_watch_mode)
         return rs
 
@@ -1602,9 +1602,9 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             '(64) between Low and Mid. Needs firmware v80 or later.', codes=NOISE_GATE_CODES)
 
     def _mdf_c_setting(self, store):
-        rs = RadioSetting('watch_mdf_c', 'Memory Display Format C (MDF-C)', RadioSettingValueList(
+        rs = RadioSetting('watch_mdf_c', 'Memory Display Format C (SHOW C)', RadioSettingValueList(
             radtel_rt900.MDF_LIST, current_index=store.mdf_c()))
-        rs.set_doc('How C is shown in TRIPLE, like MDF-A and MDF-B.')
+        rs.set_doc('How C is shown in TRIPLE, like SHOW A and SHOW B.')
         rs.set_apply_callback(self._apply_watch_mdf_c)
         return rs
 
