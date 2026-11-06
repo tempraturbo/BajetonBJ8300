@@ -1,4 +1,4 @@
-# Bajeton BJ-8300 — firmware V3.2T: a folder menu, triple watch, APRS and Morse, EQ, an S-meter, a new screen, channel banks and CHIRP driver
+# Bajeton BJ-8300 — firmware V3.5T: a folder menu, triple watch, APRS and Morse, EQ, an S-meter, a new screen, channel banks and CHIRP driver
 
 <p align="center">
   <a href="README.md"><img src="docs/imagens/botao-portugues.svg" alt="Versão em português" height="56"></a>
@@ -13,31 +13,35 @@ the menu, an expander and noise gate on receive, the receiver gain, crystal fine
 a dedicated **CHIRP driver**. The "T" in the version stands for **Tempra**.
 
 > [!TIP]
-> ## 🎉 V3.2T — the APRS MESSAGES screen and RX GAIN
+> ## 🎉 V3.5T — SAVE with a name, the labels, MIC GAIN with DEFAULT and the APRS adjustments
 >
-> **[⬇️ Download V3.2T from the Releases page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.2T)**
+> **[⬇️ Download V3.5T from the Releases page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.5T)**
 >
 > | Release file | What it is for |
 > |---|---|
-> | `BJ8300_BANK_v3.2T.anc` | the firmware, to flash into the radio |
-> | `bj8300_v3.2TEMPRA.py` | the CHIRP module for this firmware |
+> | `BJ8300_BANK_v3.5T.anc` | the firmware, to flash into the radio |
+> | `bj8300_v3.5TEMPRA.py` | the CHIRP module for this firmware |
 > | `BinTalk-V1.1.zip` | the flasher (BinTe ANC Bootloader) |
 > | `CH340-driver.zip` | the driver for the USB programming cable |
 >
-> V3.2T is V3.1T with:
+> V3.5T is V3.2T with:
 >
-> - the **MESSAGES** screen in place of the APRS folder's RX, MESSAGE and SEND: messages come in and go out
->   from it. **#** opens the **MESSAGE TO SEND** box over it, always empty, and OK sends at once; **holding #**
->   opens the **TO** box, with the saved destination. After sending, or on cancelling, the screen comes back
->   by itself ([see below](#-the-aprs-messages-screen-in-v32t));
-> - the footer with **P**, the total of syncs, in place of S, B and F, and with the sending keys;
-> - **RX GAIN** in the CALIBRATION folder: **DEFAULT**, the stock one, or **MAX**, with the receiver's AGC
->   steps higher (0, −6, −15, −30 and −50 dB, against the stock −2, −17, −40, −57 and −71 dB);
-> - the CHIRP module without the APRS message field, which is now typed on the screen.
+> - **SAVE** that opens the name editor right away, empty, and leaves the side on the saved channel, also coming from
+>   the VFO;
+> - the **TX tone** label: in red while transmitting, and none with no TX tone;
+> - the **AIR** label on the airband, from 108 to 135.99999 MHz;
+> - **MIC GAIN** with **DEFAULT**, the radio's own calibration, in value order among the levels, on the radio and in
+>   CHIRP;
+> - a **90% cap** on the power amplifier's bias, at every power;
+> - on **APRS**: with no CALLSIGN, `#` asks for the callsign first and nothing goes on air without a packet; a message to
+>   another station shows without the number at the end; the same packet comes in again after turning the radio back on;
+> - the **OK that saves the channel right away**, which on V3.5T only saved on leaving the menu;
+> - **a single EXIT** to get back from text items, which took one press per letter.
 >
-> V3.2T is v115, flashed and tested on the radio. To flash it: [step by step](#-how-to-flash-the-firmware-step-by-step).
+> V3.5T is v139, flashed and tested on the radio, with the version name in the VERSION item. To flash it: [step by step](#-how-to-flash-the-firmware-step-by-step).
 > For CHIRP: [step by step](#-how-to-use-chirp-with-this-firmware). The earlier releases are still
-> available: [V3.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.1T), with RX, MESSAGE and SEND apart and without RX GAIN, [V3.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.0T), without the EQ in CHIRP and APRS RX's key 0, [V2.9T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.9T), without APRS, Morse, the EQ and the S-meter, [V2.8T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.8T), the folder menu without the MIC folder, [V2.7T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.7T), the same menu with the 3rd item's background half drawn, [V2.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), with
+> available: [V3.2T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.2T), with the MESSAGES screen and without MIC GAIN DEFAULT, [V3.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.1T), with RX, MESSAGE and SEND apart and without RX GAIN, [V3.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.0T), without the EQ in CHIRP,
+> [V2.9T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.9T), without APRS and Morse, [V2.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), with
 > triple watch and the menu as a single list, [V2.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.0T),
 > with the new screen and without WATCH, and [v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T),
 > with the stock screen.
@@ -49,7 +53,7 @@ helps the next version come out.
 
 ## 📁 A new menu: everything in folders
 
-The stock menu is a queue of more than 50 items. Since V2.7T they sit in folders by topic (**17 in V3.2T**), in
+The stock menu is a queue of more than 50 items. Since V2.7T they sit in folders by topic (**17 in V3.5T**), in
 alphabetical order, in a window that shows what is inside each one before you open it.
 
 | | | |
@@ -169,14 +173,14 @@ this before.
 The images come from the PC preview ([firmware/previa/](firmware/previa/)), which runs the same
 drawing code that goes into the radio.
 
-## ✨ What changed from the stock V0.12 to V3.2T
+## ✨ What changed from the stock V0.12 to V3.5T
 
 ### 🆕 New features
 
 | Feature | &#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;Screen&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199; |
 |---|:---:|
 | 📁 **A menu in folders**<ul><li>The menu items sit in **17 folders** by topic, in alphabetical order, in an amber window.</li><li>The window shows each folder's items and, inside it, the value of the item under the cursor, scrolling when the list does not fit.</li><li>**OK** on an item opens it for editing straight away, and saving or cancelling goes back to the folder.</li><li>The radio menu (FM/AM/SSB) uses the same window ([see above](#-a-new-menu-everything-in-folders)).</li></ul> | <img src="docs/imagens/tela-menu-pastas.png" alt="Folder menu" width="300"> |
-| 📨 **APRS**<ul><li>New **APRS** folder: CALLSIGN, SSID, PATH (WIDE1-1, WIDE1-1,WIDE2-1 or none), TO, DECODE and the **MESSAGES** screen, where messages come in and go out from ([see above](#-the-aprs-messages-screen-in-v32t)).</li><li>**Sending:** **#** opens the message box (up to 37 characters), and OK sends it to TO (empty, a status) in AX.25. **Holding #** opens the TO box. After sending, the screen comes back by itself.</li><li>The 1200 bps AFSK is generated in the radio and fed into the microphone input, like a sound-card TNC: APRSdroid and TNCs read it.</li><li>**FILTER:** the screen opens with FM, the wide filter, no scramble or compressor, bass at −3 dB, treble at +4 dB and SAVE off. Key 0 turns it off to compare, and everything goes back to the menu's settings on leaving.</li><li>**Receiving:** the message, position, weather, objects and Mic-E decoded (or as they came, with DECODE OFF), the ack of what arrives for your callsign, a history and the count of syncs (P).</li><li>Receiving uses the radio chip's modem, which only gets a packet that arrives without errors: it catches fewer than a TNC.</li></ul> | <img src="docs/imagens/tela-aprs-caixa-mensagem.png" alt="The MESSAGES screen with the message box" width="300"> |
+| 📨 **APRS**<ul><li>New **APRS** folder: CALLSIGN, SSID, PATH (WIDE1-1, WIDE1-1,WIDE2-1 or none), TO, DECODE and the **MESSAGES** screen, where messages come in and go out from ([see above](#-the-aprs-messages-screen-in-v32t)).</li><li>**Sending:** **#** opens the message box (up to 37 characters), and OK sends it to TO (empty, a status) in AX.25. **Holding #** opens the TO box. After sending, the screen comes back by itself.</li><li>With no **CALLSIGN** saved, **#** asks for the callsign first, and nothing goes on air without a packet.</li><li>The 1200 bps AFSK is generated in the radio and fed into the microphone input, like a sound-card TNC: APRSdroid and TNCs read it.</li><li>**FILTER:** the screen opens with FM, the wide filter, no scramble or compressor, bass at −3 dB, treble at +4 dB and SAVE off. Key 0 turns it off to compare, and everything goes back to the menu's settings on leaving.</li><li>**Receiving:** the message, position, weather, objects and Mic-E decoded (or as they came, with DECODE OFF), the ack of what arrives for your callsign, a history and the count of syncs (P).</li><li>Receiving uses the radio chip's modem, which only gets a packet that arrives without errors: it catches fewer than a TNC.</li></ul> | <img src="docs/imagens/tela-aprs-caixa-mensagem.png" alt="The MESSAGES screen with the message box" width="300"> |
 | 📻 **Morse**<ul><li>New **MORSE** folder: MESSAGE (up to 37 characters), SEND, SPEED (5 to 40 wpm) and TONE (400 to 1200 Hz).</li><li>It goes out in FM through the tone generator, like the roger; PTT or any key stops it.</li><li>The message text editor goes up to 37 characters, on two lines when one is not enough.</li></ul> | <img src="docs/imagens/tela-morse.png" alt="MORSE SPEED" width="300"> |
 | 🎚️ **EQ**<ul><li>**EQ BASS** and **EQ TREBLE** in the AUDIO folder (what you hear) and in MIC (what you transmit).</li><li>Bass from −3 to +4 dB and treble from −1 to +4 dB, through the radio chip's own equalizer.</li><li>DEFAULT is the stock one. CHIRP sets them too.</li></ul> | <img src="docs/imagens/tela-eq.png" alt="EQ BASS" width="300"> |
 | 📶 **S-meter**<ul><li>Each side's meter became a **24-segment** S-meter: 2 per S from S1 to S9 and 1 per 10 dB above, up to S9+60.</li><li>The S written next to it: green up to S3, yellow up to S8 and red from S9 up.</li><li>S1 starts at each band's hiss, by the factory calibration, and it reads 4 times a second.</li><li>In SINGLE, in DUAL (on the compact side too) and in TRIPLE (on the receiving strip, in place of the channel).</li><li>While transmitting it shows the microphone level, with MIC.</li></ul> | <img src="docs/imagens/tela-barra-s.png" alt="S-meter" width="300"> |
@@ -184,10 +188,16 @@ drawing code that goes into the radio.
 | 🔺 **WATCH: SINGLE, DUAL and TRIPLE**<ul><li>New menu item.</li><li>**SINGLE** shows only side A, full screen (the A/B key does not switch): the frequency in large type, a wide bar and, with an offset, the transmit frequency below (the watch stays off).</li><li>**DUAL** is the usual A/B.</li><li>**TRIPLE** adds a third side, C, and the watch goes through all three ([see above](#-triple-the-bj-8300-listening-to-three-frequencies)).</li></ul> | <img src="docs/imagens/tela-single.png" alt="SINGLE" width="300"> |
 | 📡 **Side C**<ul><li>A full side, on a VFO or a channel, with the same options as A and B.</li><li>The A/B key goes A → B → C → A, and with C in focus it transmits and changes like the others, channel included.</li><li>New menu item: `MDF-C` (how its strip shows: name, frequency or channel).</li></ul> | <img src="docs/imagens/tela-triple-c.png" alt="C in focus" width="300"> |
 | 📤 **TX-A/B/C**<ul><li>The stock `TX-A/B` (which side PTT transmits on with the watch on) becomes `TX-A/B/C`: OFF, A, B and C.</li><li>In TRIPLE, on C, C comes into focus while PTT is pressed, as A and B do, even though it is outside the two sides.</li><li>On release everything goes back as it was, saving nothing.</li></ul> | <img src="docs/imagens/tela-menu-txabc.png" alt="TX-A/B/C" width="300"> |
-| 🎙️ **MIC folder**<ul><li>**MIC GAIN** with three levels: **HIGH** (31, one step above the 30 the factory calibration had on the test radio), **MID** (25) and **LOW** (19).</li><li>TX audio **COMPRESSOR** (OFF, LOW, MID and HIGH: 1.33:1, 2:1 and 4:1), which the chip has and the factory left off.</li><li>**MIC AGC**: ON, the stock one, or OFF.</li><li>**NOISE REDUCTION** with levels: OFF, LOW, MID, DEFAULT and HIGH; DEFAULT is the stock ON.</li><li>The transmit EQ.</li></ul> | <img src="docs/imagens/tela-menu-mic.png" alt="MIC folder" width="300"> |
+| 🎙️ **MIC folder**<ul><li>**MIC GAIN** with **HIGH** (31), **MID** (25), **LOW** (19) and **DEFAULT**, the radio's own calibration, in value order among them.</li><li>TX audio **COMPRESSOR** (OFF, LOW, MID and HIGH: 1.33:1, 2:1 and 4:1), which the chip has and the factory left off.</li><li>**MIC AGC**: ON, the stock one, or OFF.</li><li>**NOISE REDUCTION** with levels: OFF, LOW, MID, DEFAULT and HIGH; DEFAULT is the stock ON.</li><li>The transmit EQ.</li></ul> | <img src="docs/imagens/tela-menu-mic.png" alt="MIC folder" width="300"> |
 | 🎯 **CALIBRATION folder**<ul><li>**CRYSTAL FINE**: crystal fine tuning, from −2000 to +2000 Hz at 435.5 MHz, in 10 Hz steps, proportional to the frequency and added to the factory calibration.</li><li>**LIGHT PWM**: the frequency of the PWM that dims the light (240 Hz to 25 kHz), to take the interference away from a receiver held nearby.</li><li>**MODEM GAIN**: the gain of the modem the MESSAGES screen uses.</li><li>**RX GAIN**: the receiver's five AGC steps, at **DEFAULT** (the stock ones: −2, −17, −40, −57 and −71 dB, from the weakest signal to the strongest) or **MAX** (0, −6, −15, −30 and −50 dB), with more gain on every step; the top one is already the chip's maximum.</li></ul> | <img src="docs/imagens/tela-calibration.png" alt="CALIBRATION folder" width="300"> |
 | 🔆 **BRIGHTNESS**<ul><li>In the DISPLAY folder: the screen light at 100% (the stock one), 60%, 35%, 20% or 10%, by PWM.</li><li>At 100% and with the light off the pin stays as stock, with no PWM.</li></ul> | <img src="docs/imagens/tela-brilho.png" alt="BRIGHTNESS" width="300"> |
 | 📡 **Who is receiving, with the menu open**<ul><li>Receiving with the menu open, the top bar shows, in an amber box, the side's letter (A, B or C) and its name, frequency or channel, as its MDF asks.</li><li>The box goes away when the signal ends.</li></ul> | <img src="docs/imagens/tela-menu-recebendo.png" alt="Who is receiving in the menu" width="300"> |
+| 🏷️ **TX tone label**<ul><li>While transmitting, the label shows the TX tone in red, CT or DCS.</li><li>With no TX tone it disappears, even with a tone on RX.</li></ul> | <img src="docs/imagens/tela-tom-tx.png" alt="CT in red, transmitting" width="300"> |
+| ✈️ **AIR label**<ul><li>From 108 to 135.99999 MHz, next to AM.</li></ul> | <img src="docs/imagens/tela-air.png" alt="The AIR label" width="300"> |
+| 🎚️ **MIC GAIN with DEFAULT**<ul><li>**DEFAULT** is the radio's own factory calibration.</li><li>It goes in value order among the levels, on the radio and in CHIRP: on the test radio, HIGH 31, DEFAULT 30, MID 25 and LOW 19.</li></ul> | <img src="docs/imagens/tela-menu-mic-gain.png" alt="MIC GAIN with DEFAULT" width="300"> |
+| 🆔 **CALLSIGN before sending**<ul><li>With no callsign saved, the MESSAGES screen's **#** opens CALLSIGN in the same box.</li><li>Once saved, it opens the message box.</li><li>Nothing goes on air without a packet.</li></ul> | <img src="docs/imagens/tela-aprs-caixa-callsign.png" alt="The CALLSIGN box" width="300"> |
+| 💾 **SAVE that asks for the name**<ul><li>After saving to a channel, the name editor opens empty.</li><li>The side stays on the saved channel, also coming from the VFO.</li></ul> | <img src="docs/imagens/tela-save-nome.png" alt="The name editor after SAVE" width="300"> |
+| 🔋 **90% PA cap**<ul><li>No bias of the power amplifier goes above 229, 90% of 255, at every power.</li><li>On the test radio only VHF and UHF H change. It caps the bias, not the watts.</li></ul> | |
 | 🚫 **NO TX**<ul><li>A channel saved with no TX frequency (the way CHIRP saves a listen-only channel) shows NO TX in red.</li><li>In SINGLE, in place of the TX line; in DUAL and TRIPLE, on the labels.</li></ul> | <img src="docs/imagens/tela-sem-tx.png" alt="NO TX" width="300"> |
 | ⌨️ **Text editor**<ul><li>In BANKS NAME, CH-NAME, the Morse message and the APRS boxes.</li><li>**Holding EXIT** (0.6 s) leaves without saving.</li><li>**Key 0** starts at the space and brings `- / = + @ ( ) * #`, which no key reached, for the SSID and the messages.</li><li>Messages go up to 37 characters, on two lines.</li></ul> | <img src="docs/imagens/tela-editor.png" alt="Message editor" width="300"> |
 | 🖥️ **A new screen across the radio**<ul><li>Every screen was redrawn ([see above](#-the-new-look)).</li><li>The main one: the side in focus in a card with the big frequency and the S-meter, coloured power, modulation and tone labels, and a top bar with only what is on.</li><li>The menus and the name editor, the FM/AM/SSB radio, QT scan, DTMF, the spectrum and the voltage at power-up.</li></ul> | <img src="docs/imagens/tela-inicio.png" alt="Main screen" width="300"> |
@@ -230,11 +240,11 @@ a font of its own:
 | 🟩 **The side in focus stands out** | The active side sits in a green-bordered card, with the big frequency and the S-meter; the other one is compact |
 | 📻 **FM/AM/SSB radio** | Switching modulation became ~2.5 s faster, and the saved settings (step, bandwidth, LNA, BFO and the memories) are checked on entry and on each switch: a value outside the menu limits goes back to the default |
 | ↕️ **Menu arrows swapped** | The up arrow now moves up the list, instead of stepping the value |
-| 🔤 **English texts revised** | 25 strings fixed and made consistent (e.g. `VOICEPRI` → `ENCRYPT`), `TDR` became `TTR` (Transmitter Triple Receiver), because with TRIPLE the watch is triple, and `TX-A/B` became `TX-A/B/C`. The `VERSION` menu shows `Firmware: V3.2T` |
+| 🔤 **English texts revised** | 25 strings fixed and made consistent (e.g. `VOICEPRI` → `ENCRYPT`), `TDR` became `TTR` (Transmitter Triple Receiver), because with TRIPLE the watch is triple, and `TX-A/B` became `TX-A/B/C`. The `VERSION` menu shows `Firmware: V3.5T` |
 
 ### 🐞 Fixes
 
-| V0.12 problem | In V3.2T |
+| V0.12 problem | In V3.5T |
 |---|---|
 | Menu settings only reached the chip when the menu closed: switched off with it open, whatever had changed was lost | Every OK saves right away |
 | The signal meter had 5 steps and was already full on a weak signal (between −117 and −96 dBm) | The S-meter, from the hiss (S1) to S9+60 |
@@ -286,8 +296,8 @@ the firmware does not even start, but it has **never been tested**.
 You need a Windows PC and the radio's **USB programming cable** (the CH340 one, the same the stock
 CPS uses).
 
-**1. Download the files.** From the [V3.2T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.2T),
-download `BJ8300_BANK_v3.2T.anc`, `BinTalk-V1.1.zip` and, if Windows does not recognise the cable
+**1. Download the files.** From the [V3.5T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.5T),
+download `BJ8300_BANK_v3.5T.anc`, `BinTalk-V1.1.zip` and, if Windows does not recognise the cable
 yet, `CH340-driver.zip`. Unzip them. (The same files are in the repository, under
 `firmware/releases/`, `tools/anc-bootloader/` and `tools/ch340-driver/`.)
 
@@ -302,7 +312,7 @@ Close any program that uses the COM port first (CHIRP, CPS).
 
 <p align="center"><img src="docs/imagens/gravador.png" alt="The BinTalk V1.1 flasher window" width="300"></p>
 
-- In the top field, click **`...`** and pick `BJ8300_BANK_v3.2T.anc`.
+- In the top field, click **`...`** and pick `BJ8300_BANK_v3.5T.anc`.
 - **Port:** the cable's COM port (from step 2).
 - **Baudrate:** **115200** (the default).
 
@@ -313,7 +323,7 @@ it on **while holding PTT2 + the shortcut key**, until `UPDATE` shows on the scr
 `Update 3%` → `Jump To Loader` → `Progress 100%` → `Finish`. Do not unplug anything halfway.
 
 **6. Check.** Turn the radio off and on. The menu opens on the folders, and `SYSTEM` → `VERSION`
-should show `Firmware: V3.2T`.
+should show `Firmware: V3.5T`.
 
 **If you get `Retry1..5 / Failure!`:** turn the radio off, make sure no other program holds the
 COM port, go back to step 4 and try again.
@@ -323,9 +333,9 @@ COM port, go back to step 4 and try again.
 ## 📻 How to use CHIRP with this firmware
 
 > [!CAUTION]
-> **With V3.2T, use only the `bj8300_v3.2TEMPRA.py` module from this release.** It replaces the
+> **With V3.5T, use only the `bj8300_v3.5TEMPRA.py` module from this release.** It replaces the
 > earlier ones (from `bj8300_v1.0TEMPRA.py` to `bj8300_v3.1TEMPRA.py`). The model in CHIRP is now
-> **Bajeton → `BJ8300_v3.2TEMPRA`** (up to V2.8T it was under Baojie), and a `.img` image saved with an
+> **Bajeton → `BJ8300_v3.5TEMPRA`** (up to V2.8T it was under Baojie), and a `.img` image saved with an
 > older module opens in it as usual. The earlier releases have their own module in each release.
 >
 > - **Do not use CHIRP's stock models** that serve the stock BJ-8300 (**Bajeton BJ7800** and
@@ -349,7 +359,7 @@ CHIRP**. The mode stays on from then on.
 
 **3. Load the module (every time you open CHIRP).** Menu **File** → **Load Module...** (it only
 shows up in developer mode). CHIRP warns that loading a module is dangerous: click **Yes** and pick
-`bj8300_v3.2TEMPRA.py`. The window turns **red** and the title shows `CHIRP **Module Loaded**`:
+`bj8300_v3.5TEMPRA.py`. The window turns **red** and the title shows `CHIRP **Module Loaded**`:
 that is the sign the module is loaded. Closing CHIRP unloads it, so next time it has to be loaded
 again.
 
@@ -360,13 +370,13 @@ again.
 |---|---|
 | **Port** | the cable's COM port |
 | **Vendor** | **Bajeton** |
-| **Model** | **BJ8300_v3.2TEMPRA** (not BJ7800, the stock model) |
+| **Model** | **BJ8300_v3.5TEMPRA** (not BJ7800, the stock model) |
 
 CHIRP shows the *"Experimental driver"* notice, with the module's instructions: click **Yes**, then
 **OK** to read.
 
 > [!NOTE]
-> If `BJ8300_v3.2TEMPRA` is not listed under **Bajeton**, the module is not loaded: go back to step 3.
+> If `BJ8300_v3.5TEMPRA` is not listed under **Bajeton**, the module is not loaded: go back to step 3.
 
 **5. Edit.** On the right you get the list of the radio's parts:
 
@@ -374,9 +384,9 @@ CHIRP shows the *"Experimental driver"* notice, with the module's instructions: 
   properties are here.
 - **Banks (VHF/UHF):** one column per bank; tick which banks each channel is in. To rename a
   bank, **double-click its column header**.
-- **Settings:** the radio settings, with the 4-option roger and, in **BJ8300_v3.2TEMPRA Specific**,
+- **Settings:** the radio settings, with the 4-option roger and, in **BJ8300_v3.5TEMPRA Specific**,
   right after Noise reduction, **Expander**, **Noise gate**, **De-emphasis**, **EQ bass (RX)** and **EQ treble
-  (RX)**, **Mic Gain** (HIGH, MID or LOW), **Compressor**, **Mic AGC**, **EQ bass (TX)** and **EQ treble (TX)**,
+  (RX)**, **Mic Gain** (with DEFAULT, in the radio's order), **Compressor**, **Mic AGC**, **EQ bass (TX)** and **EQ treble (TX)**,
   **Crystal fine** (in Hz, at 435.5 MHz), **Brightness**, **Light PWM** and **Modem gain**.
 - **Settings → APRS and Settings → Morse:** the APRS callsign, SSID, PATH, destination and DECODE, and the
   Morse message, speed and tone. The APRS message is typed on the MESSAGES screen since V3.2T. Writing APRS and Morse needs V3.0T, and the EQ, V3.1T.
@@ -438,7 +448,7 @@ next.
 
 ## How the CHIRP driver works
 
-The file is [chirp/bj8300_v3.2TEMPRA.py](chirp/bj8300_v3.2TEMPRA.py). The name is deliberate: it
+The file is [chirp/bj8300_v3.5TEMPRA.py](chirp/bj8300_v3.5TEMPRA.py). The name is deliberate: it
 only works with **this** firmware, so nobody with a stock BJ-8300 uses it by mistake. It derives
 from CHIRP's `radtel_rt900.py`, which already handles this radio as part of the RT-920/BJ7800
 family, and adds:
@@ -457,7 +467,8 @@ family, and adds:
 - **Noise reduction** read and written at the byte the radio uses (`0x9032`; the base driver uses
   `0x9031`), and **VFO A's Voice Privacy**, which the base driver did not write.
 - **Mic Gain** at byte `0x9033` of the settings block, the same one the radio's MIC GAIN item uses
-  (0 HIGH, 1 MID, 2 LOW; the radio reads any other value as HIGH), and **TX-A/B/C** in TX-A/B's 2 bits
+  (0 HIGH, 1 MID, 2 LOW, 3 DEFAULT; the radio reads any other value as DEFAULT), with the list in the radio's order, which
+  comes from the calibration in the image, and **TX-A/B/C** in TX-A/B's 2 bits
   (`0x9013`), with C (3).
 - **No zones:** every upload writes **Full Channel** (`0x9028` = 1), because zone mode is still in
   the firmware and, without the menu item, the radio would have no way out of it — in zone mode
@@ -485,12 +496,14 @@ that was checked by hand with the tools in `tools/cabo/`.
 
 ## Older releases
 
-All in [firmware/releases/](firmware/releases/). The full story, with what broke and why, is in
-the [changelog](docs/changelog.md).
+The latest one is in [firmware/releases/](firmware/releases/). The released ones are on the
+[Releases page](https://github.com/tempraturbo/BajetonBJ8300/releases), and all of them, test versions included, in the
+git history. The full story, with what broke and why, is in the [changelog](docs/changelog.md).
 
 | File | Status |
 |---|---|
-| `BJ8300_BANK_v3.2T.anc` | **stable, the recommended one** — v115: V3.1T + the MESSAGES screen in place of APRS's RX, MESSAGE and SEND (`#` opens the message box and held `#` the TO one, and the screen comes back by itself after sending), the footer with P and RX GAIN in CALIBRATION; use it with the CHIRP driver from the same release |
+| `BJ8300_BANK_v3.5T.anc` | **stable, the recommended one** — v139: V3.5T + SAVE that asks for the name, the TX tone and AIR labels, MIC GAIN with DEFAULT, the 90% PA cap, CALLSIGN before sending, the OK that saves the channel and a single EXIT on text items; use with the CHIRP driver from the same release |
+| `BJ8300_BANK_v3.2T.anc` | previous stable — v115: V3.1T + the MESSAGES screen in place of APRS's RX, MESSAGE and SEND (`#` opens the message box and held `#` the TO one, and the screen comes back by itself after sending), the footer with P and RX GAIN in CALIBRATION; use it with the CHIRP driver from the same release |
 | `BJ8300_BANK_v3.1T.anc` | previous stable — v111: V3.0T + the EQ in CHIRP (which V3.0T reset to DEFAULT on every cable upload), APRS RX with the FILTER setting the bass to −3 dB, the treble to +4 dB and SAVE off, key 0 turning the FILTER on and off, the footer with S, B and F, MORE below the message and the firmware cleanup; use it with the CHIRP driver from the same release |
 | `BJ8300_BANK_v3.0T.anc` | previous stable — v110: V2.9T + the APRS folder (sending through the microphone input, receiving with the FILTER, the history and the ack) and MORSE, the bass and treble EQ on receive and transmit, the 24-segment S-meter, the AUDIO folder (EXPANDER, NOISE GATE and DE-EMPHASIS), NOISE REDUCTION with levels, LIGHT PWM, MODEM GAIN, NO TX and every setting saved on OK; use it with the CHIRP driver from the same release |
 | `BJ8300_BANK_v2.9T.anc` | previous stable — v64: V2.8T + the MIC folder (COMPRESSOR, MIC AGC and MIC GAIN, which left TX), the CALIBRATION folder with CRYSTAL FINE, BRIGHTNESS in DISPLAY, who is receiving on the top bar with the menu open (without the old block over the menu) and the CHIRP driver under Bajeton; use with the CHIRP driver from the same release |
@@ -593,16 +606,17 @@ checks the sha256 of the compiler's five files; to use another copy of the compi
   an address, with the arguments), `fluxo.py` (the paths inside a routine) and `escritas.py` (who
   reads or writes a RAM address).
 
-**Space budget:** the new code lives in three places, all at the same address in the 6 images:
+**Space budget:** the new code lives in four places, all at the same address in the 6 images:
 
-- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (V3.2T uses 3246);
+- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (V3.5T uses 3070);
 - **the space that was the voices'**, with the spectrum, but only inside the files C0 and C1
-  (1066 bytes, of which V3.2T uses 996), because the radio's loader refuses an image that changes
+  (1066 bytes, of which V3.5T uses 1060), because the radio's loader refuses an image that changes
   more voice files;
 - **the place of the G.729 and MP3 decoders**, inside `app.bin`, with the B screens, WATCH, TRIPLE,
-  the folder menu, APRS and the menu table (38884 bytes, of which V3.2T uses 38878).
+  the folder menu, APRS and the menu table (38884 bytes, of which V3.5T uses 38326);
+- **the voice paths**, in `app.bin`, only with what our code calls (2944 bytes, of which V3.5T uses 1676).
 
-The menu table has lived in that last place since v43, in a 96-slot array (V3.2T uses all 96: the 17
+The menu table has lived in that last place since v43, in a 96-slot array (V3.5T uses all 96: the 17
 folders and the 79 items); the original, with 54, is left intact. [docs/reverse-engineering.md](docs/reverse-engineering.md)
 explains how to measure it, where space was already saved and why these places are safe.
 
@@ -624,7 +638,7 @@ firmware/
   original/     BJ8300_V0.12.anc — stock firmware
   releases/     .anc files ready to flash
   build.sh      compiles, builds and checks
-chirp/          CHIRP driver (bj8300_v3.2TEMPRA.py)
+chirp/          CHIRP driver (bj8300_v3.5TEMPRA.py)
 tools/
   jl-toolchain-2.5.3/  the JieLi compiler (the 5 executables the build uses)
   anc-bootloader/  BinTe ANC Bootloader flasher (BinTalk V1.1)

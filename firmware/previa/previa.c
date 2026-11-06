@@ -543,6 +543,19 @@ int main(int argc, char **argv)
         telas_b(1, 0);
         grava("9-menu-roger");
 
+        /* v138: o MIC GAIN com o DEFAULT em ordem de valor, como no radio de teste (a calibracao em 30) */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "MIC GAIN");
+        menu_no("MIC", "MIC GAIN");
+        LINHA(0, 1, "HIGH");
+        LINHA(1, 2, "DEFAULT");
+        LINHA(2, 1, "MID");
+        memoria[0x14C10] = 1;
+        memoria[0x14BF9] = 1;
+        telas_b(1, 0);
+        grava("9c-menu-mic-gain");
+
         /* v111: o SCRAMBLE com as 8 frequencias, no 3300 Hz (o 3400 Hz e o ON de fabrica) */
         BASE_TELAS();
         memoria[0x1533D] = 1;
@@ -662,6 +675,17 @@ int main(int argc, char **argv)
         memoria[0x14A38] = 1;
         telas_b(1, 0);
         grava("27-editor-de-nome");
+        /* v138: o SAVE abre o editor do CH-NAME vazio, no canal salvo */
+        strcpy((char *)&memoria[0x15494], "CH-NAME");
+        menu_no("MEMORY", "CH-NAME");
+        memoria[0x14C00] = 7;
+        digitando("");
+        memoria[0x14A36] = 12;
+        telas_b(1, 0);
+        grava("27b-editor-depois-do-save");
+        strcpy((char *)&memoria[0x15494], "NAME");
+        menu_no("BANKS", "NAME");
+        memoria[0x14C00] = 7;
         digitando("REPETIDORA 2");
         memoria[0x14A38] = 2;              /* 123: a tecla # so alterna ABC e 123 (v52) */
         telas_b(1, 0);

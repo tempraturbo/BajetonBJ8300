@@ -5,6 +5,17 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V3.5T — Nov 6 — SAVE with a name, the labels, MIC GAIN with DEFAULT and the APRS adjustments
+
+v139 became **V3.5T**, a number the owner chose (there was no V3.3T or V3.4T):
+`firmware/releases/BJ8300_BANK_v3.5T.anc` (sha256 `22ea6752…`), v139 as flashed and approved on the radio with the
+version name in the VERSION item. The CHIRP module became `bj8300_v3.5TEMPRA.py` (model `BJ8300_v3.5TEMPRA`), and images
+saved with `BJ8300_v3.2TEMPRA` open in it (`MODEL_COMPAT`). In the README, V3.5T at the top, one row per new feature in
+the table of what changed since V0.12, with the new screens for the TX tone, AIR, MIC GAIN, CALLSIGN and SAVE (the
+preview gained scenes 9c and 27b), and the two airband screens, which now show AIR. The releases folder swaps V3.2T for
+V3.5T; V3.2T stays in its GitHub release. Published in the
+[V3.5T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.5T), with the CHIRP module, the flasher and the cable driver.
+
 ## CHIRP driver — Nov 6 — Mic Gain with DEFAULT
 
 Mic Gain gains v138's DEFAULT, the radio's own calibration, in the same order the radio shows: the list comes from the
