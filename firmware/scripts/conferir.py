@@ -594,7 +594,7 @@ for g in range(grupos):
         problemas.append('CH MEMORY: nao e mais o grupo 5, o do OK do SAVE CHANNEL FIRST (GRUPO_CH_MEMORY, tela.c)')
     if nome == 'CH MEMORY' and filhos != ['CH NAME', 'DELETE', 'SAVE']:   # v140: o item diz a lista (lista_item)
         problemas.append(f'CH MEMORY: os itens fora das posicoes 0, 1 e 2 que a lista usa: {filhos}')
-    if nome == 'APRS' and filhos[0:1] + filhos[2:3] + filhos[5:6] != ['CALLSIGN', 'MESSAGES', 'TO']:
+    if nome == 'APRS (SMS)' and filhos[0:1] + filhos[2:3] + filhos[5:6] != ['CALLSIGN', 'MESSAGES', 'TO']:
         problemas.append(f'APRS: o CALLSIGN, o MESSAGES e o TO fora das posicoes 0, 2 e 5 que a tela usa: {filhos}')
     print(f'3b. {g + 1:2d} {nome:9s} ' + ', '.join(f + ('*' * bool(m)) for f, m in zip(filhos, marcas)))
     vistos += [bytes(tab[(p + i) * T:(p + i + 1) * T]) for i in range(n)]

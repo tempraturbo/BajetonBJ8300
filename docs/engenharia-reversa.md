@@ -2936,3 +2936,30 @@ pela posição na pasta (o `conferir.py`, 3b, confere a ordem). Nas listas de ba
 
 No Bluetooth, no NOISE REDUCTION, no LIGHT PWM e no RPT TAIL DELAY não há paridade: são do hardware ou de funções que o UV-17L
 não tem. O PTT-ID é o contrário: só o UV tem.
+
+## 35. Os nomes do menu desde a v141
+
+As seções anteriores usam o nome de cada item na época delas. Do lado de cá da v141, valem os da coluna da direita, iguais aos do
+UV-17L. Os itens seguem em ordem alfabética, então vários mudaram de número na pasta.
+
+| Até a V3.5T | Desde a V3.6T |
+|---|---|
+| Pasta APRS | APRS (SMS) (v143) |
+| Pasta MEMORY: CH-NAME, DELCH, MEMCH | CH MEMORY: CH NAME, DELETE, SAVE (v140) |
+| BANKS: BANK, CHANNEL | ACTIVE, CHANNELS |
+| SQL, STE | SQUELCH, TAIL CUT |
+| BCL, TXP, W/N | BUSY LOCK, TX POWER, BANDWIDTH |
+| ABR, MDF-A, MDF-B, MDF-C | BACKLIGHT TIME, SHOW A, SHOW B, SHOW C |
+| DTMFST, PTT-LT, S-CODE | DTMF SIDETONE, DTMF DELAY, DTMF GROUP |
+| BEEP PROMPT, PF2 LONG PRESS | KEY BEEP, PF2 LONG |
+| RP-STE, RPT-RL, SFT-D, TONE | RPT TAIL CUT, RPT TAIL DELAY, TX SHIFT, TONE BURST |
+| SC-REV | SCAN RESUME |
+| AL-MOD, SAVE (da SYSTEM) | ALARM MODE, BATTERY SAVE |
+| R-CTCSS, R-DCS, T-CTCSS, T-DCS | RX CTCSS, RX DCS, TX CTCSS, TX DCS |
+| TOT | TX TIMEOUT |
+| TTR, TX-A/B/C | TRIPLE WATCH (v142), TX SIDE |
+
+A pasta dos grupos não tem texto próprio: o nome é a chave do `GRUPOS` do `montar.py`, gravada no `menu_textos`, e por isso o
+`APRS (SMS)` passou a ser a chave também no `MENU_MARCAS`, no `conferir.py` e na prévia. O vetor foi a 536 B na v143 (eram 528),
+múltiplo de 4 porque as listas de ponteiros que ele guarda ficam alinhadas, e sobram 34 B no `.livre`. A posição da pasta não muda,
+porque `APRS (SMS)` continua antes de `AUDIO` na ordem alfabética.

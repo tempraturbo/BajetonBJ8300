@@ -2990,3 +2990,30 @@ chip stays in `bancos.c`: `banco_liga`, `banco_canal` and `banco_nomeia`.
 
 Bluetooth, NOISE REDUCTION, LIGHT PWM and RPT TAIL DELAY have no parity: they belong to hardware or functions the UV-17L does
 not have. PTT-ID is the opposite: only the UV has it.
+
+## 35. The menu names since v141
+
+The earlier sections use each item's name at the time. From v141 on, the names in the right-hand column apply, the same as the
+UV-17L's. The items stay in alphabetical order, so several changed number inside their folder.
+
+| Up to V3.5T | Since V3.6T |
+|---|---|
+| APRS folder | APRS (SMS) (v143) |
+| MEMORY folder: CH-NAME, DELCH, MEMCH | CH MEMORY: CH NAME, DELETE, SAVE (v140) |
+| BANKS: BANK, CHANNEL | ACTIVE, CHANNELS |
+| SQL, STE | SQUELCH, TAIL CUT |
+| BCL, TXP, W/N | BUSY LOCK, TX POWER, BANDWIDTH |
+| ABR, MDF-A, MDF-B, MDF-C | BACKLIGHT TIME, SHOW A, SHOW B, SHOW C |
+| DTMFST, PTT-LT, S-CODE | DTMF SIDETONE, DTMF DELAY, DTMF GROUP |
+| BEEP PROMPT, PF2 LONG PRESS | KEY BEEP, PF2 LONG |
+| RP-STE, RPT-RL, SFT-D, TONE | RPT TAIL CUT, RPT TAIL DELAY, TX SHIFT, TONE BURST |
+| SC-REV | SCAN RESUME |
+| AL-MOD, SAVE (in SYSTEM) | ALARM MODE, BATTERY SAVE |
+| R-CTCSS, R-DCS, T-CTCSS, T-DCS | RX CTCSS, RX DCS, TX CTCSS, TX DCS |
+| TOT | TX TIMEOUT |
+| TTR, TX-A/B/C | TRIPLE WATCH (v142), TX SIDE |
+
+A folder has no text of its own: its name is the key in `montar.py`'s `GRUPOS`, written to `menu_textos`, so `APRS (SMS)` also
+became the key in `MENU_MARCAS`, in `conferir.py` and in the preview. The vector grew to 536 B in v143 (it was 528), a multiple of
+4 because the pointer lists it holds stay aligned, and 34 B remain in `.livre`. The folder keeps its place, because `APRS (SMS)`
+still sorts before `AUDIO`.

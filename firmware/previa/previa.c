@@ -1024,10 +1024,10 @@ int main(int argc, char **argv)
          * duas linhas) e a tela do APRS RX, com uma mensagem para o meu indicativo em ambar */
         BASE_TELAS();
         memoria[0x1533D] = 1;
-        menu_em(NOS_GRUPOS, grupo("APRS"));
+        menu_em(NOS_GRUPOS, grupo("APRS (SMS)"));
         telas_b(1, 0);
         grava("59-menu-grupos-aprs");
-        menu_no("APRS", "CALLSIGN");     /* o texto exibido (v83) */
+        menu_no("APRS (SMS)", "CALLSIGN");     /* o texto exibido (v83) */
         LINHA(0, 0, "PY2ABC");
         telas_b(1, 0);
         grava("59b-menu-aprs-callsign");

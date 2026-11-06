@@ -1136,7 +1136,7 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e zero no resto, e o
  * montar so escreve neles se achar exatamente isso. */
 const unsigned char menu_tabela[96 * 28] __attribute__((aligned(4))) = {0xFF};   /* v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN */
-const unsigned char menu_textos[528] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v113) */
+const unsigned char menu_textos[536] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v143) */
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
  * O mapa do motor de menus esta no telas.c, junto do desenho. O que muda o nivel faz o mesmo que as

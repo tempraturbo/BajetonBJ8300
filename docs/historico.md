@@ -5,22 +5,30 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v143 — 06/11 — a pasta APRS (SMS)
+
+A v142 com a pasta APRS renomeada para **APRS (SMS)**, a pedido do dono e igual à do UV-17L. Ela segue sendo a pasta 1, e
+os itens não mudam. O nome maior pediu mais 8 B no `menu_textos`, que vai a 536 B dentro da folga do `.livre`. A prévia
+mostra o nome inteiro na lista e com a pasta aberta. É uma troca de texto sobre a v142 aprovada, e não foi gravada à parte.
+[Seção 35](engenharia-reversa.md#35-os-nomes-do-menu-desde-a-v141).
+
 ## Driver do CHIRP — 06/11 — os nomes do rádio
 
 Os rótulos e os textos de ajuda do módulo acompanham o menu do rádio: TRIPLE WATCH (TTR), TX SIDE (TX-A/B/C), SHOW A, B e C
 (MDF-A, B e C) e DTMF GROUP (S-CODE). A imagem e a gravação não mudam, e o módulo segue `bj8300_v3.5TEMPRA.py` até a
 release. O `teste_chirp_real.py` confere os rótulos novos.
 
-## v142 — 06/11 — TRIPLE WATCH, e DW e TW na barra (em teste)
+## v142 — 06/11 — TRIPLE WATCH, e DW e TW na barra (gravada e aprovada)
 
 `BJ8300_BANK_v142.anc` (sha256 `32fa87ad…`), fora dos commits como as outras de teste: a v141 com dois nomes acertados, a
 pedido do dono e iguais aos do UV-17L. O item DUAL RX, que é a escuta de todos os lados, passa a **TRIPLE WATCH**, também
-no menu rápido, e a barra de cima mostra **DW** no DUAL e **TW** no TRIPLE, no lugar de DR e TR. Ainda não foi gravada.
+no menu rápido, e a barra de cima mostra **DW** no DUAL e **TW** no TRIPLE, no lugar de DR e TR. O dono a aprovou no rádio,
+e com ela as novidades da v140 e da v141, que não foram gravadas sozinhas.
 
-## v141 — 06/11 — os BANKS no molde do CH MEMORY, os avisos de modo e os nomes claros (em teste)
+## v141 — 06/11 — os BANKS no molde do CH MEMORY, os avisos de modo e os nomes claros (aprovada na v142)
 
 `BJ8300_BANK_v141.anc` (sha256 `8a78cc20…`), fora dos commits como as outras de teste: a v140 com a pasta BANKS refeita,
-igual à do UV-17L, com o que faltava para os dois rádios funcionarem igual. Ainda não foi gravada.
+igual à do UV-17L, com o que faltava para os dois rádios funcionarem igual. Foi ao rádio dentro da v142.
 
 - **ACTIVE** (era BANK). A lista dos 16 bancos, como `01 - REPETIDORAS`, com o ligado em âmbar. O OK liga e desliga na hora
   e a lista fica, para mexer em vários. Banco sem canais não liga: aparece `BANK EMPTY`, e a lista volta nele. Na pasta,
@@ -48,10 +56,10 @@ igual à do UV-17L, com o que faltava para os dois rádios funcionarem igual. Ai
 
 Detalhes na [seção 34](engenharia-reversa.md#34-os-banks-e-os-avisos-de-modo-v141).
 
-## v140 — 06/11 — o menu de canais: CH MEMORY, com listas, confirmação e cancelar sem salvar (em teste)
+## v140 — 06/11 — o menu de canais: CH MEMORY, com listas, confirmação e cancelar sem salvar (aprovada na v142)
 
 `BJ8300_BANK_v140.anc` (sha256 `dc59c121…`), fora dos commits como as outras de teste: a V3.5T com o menu de salvar e
-nomear canais refeito a pedido do dono, igual ao do UV-17L, para ficar óbvio. Ainda não foi gravada.
+nomear canais refeito a pedido do dono, igual ao do UV-17L, para ficar óbvio. Foi ao rádio dentro da v142.
 
 - **Os nomes.** A pasta MEMORY virou **CH MEMORY**, e os itens viraram **CH NAME**, **DELETE** e **SAVE**. O SAVE da
   bateria, na pasta SYSTEM, virou **BATTERY SAVE**, para não haver dois. A pasta muda de lugar na ordem alfabética: é a

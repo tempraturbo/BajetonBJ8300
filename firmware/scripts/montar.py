@@ -334,7 +334,7 @@ PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 # e o r4 (0, lido em 0x01E4CBC6) a chamada preserva.
 MENU_VAGAS = 96                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ; v112: 95; v113: 96
 TABELA_SIMBOLO = 'menu_tabela'
-TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 528   # v111: o que o menu usa (era 640); v140: 528; v112: 520; v113: 524; item novo pede mais
+TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 536   # v111: o que o menu usa (era 640); v143: 536; v140: 528; v112: 520; v113: 524; item novo pede mais
 R5_R0 = bytes.fromhex('0516')
 
 # v53: os grupos do menu (src/telas.c), um nivel acima dos itens, a pedido do dono. Cada item fica em
@@ -855,8 +855,8 @@ LUZ_PWM = ('luz_pwm_le', 'luz_pwm_grava', 'titulo_luz_pwm', 'luz_pwm_opcoes')
 NA_LIVRE += LUZ_PWM
 PRECISA += LUZ_PWM
 GRUPOS['MORSE'] = ('MORSE MESSAGE', 'MORSE SEND', 'MORSE SPEED', 'MORSE TONE')
-GRUPOS['APRS'] = ('APRS CALLSIGN', 'APRS DECODE', 'APRS MESSAGES', 'APRS PATH', 'APRS SSID', 'APRS TO')
-MENU_MARCAS.update({('MORSE', 'MORSE SEND'): MARCA_SEM_VALOR, ('APRS', 'APRS MESSAGES'): MARCA_SEM_VALOR})
+GRUPOS['APRS (SMS)'] = ('APRS CALLSIGN', 'APRS DECODE', 'APRS MESSAGES', 'APRS PATH', 'APRS SSID', 'APRS TO')
+MENU_MARCAS.update({('MORSE', 'MORSE SEND'): MARCA_SEM_VALOR, ('APRS (SMS)', 'APRS MESSAGES'): MARCA_SEM_VALOR})
 CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o envio armado liga a TX'),
                    (0x01E46D8C, 0x01E44604, 'gancho_fim_tx', 'Morse e APRS: o conteudo no lugar do roger'),
                    (0x01E46CCE, 0x01E19DCC, 'texto15', 'editor: a copia do texto na piscada, ate 24'),

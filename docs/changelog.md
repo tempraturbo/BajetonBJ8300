@@ -5,23 +5,32 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v143 — Nov 6 — the APRS (SMS) folder
+
+v142 with the APRS folder renamed **APRS (SMS)**, at the owner's request and the same as the UV-17L's. It is still folder
+1, and its items do not change. The longer name took 8 more bytes in `menu_textos`, which grows to 536 B within the room
+left in `.livre`. The preview shows the whole name in the list and with the folder open. It is a text change on top of the
+approved v142, and was not flashed on its own.
+[Section 35](reverse-engineering.md#35-the-menu-names-since-v141).
+
 ## CHIRP driver — Nov 6 — the radio's names
 
 The module's labels and help texts follow the radio's menu: TRIPLE WATCH (TTR), TX SIDE (TX-A/B/C), SHOW A, B and C (MDF-A,
 B and C) and DTMF GROUP (S-CODE). The image and the upload do not change, and the module stays `bj8300_v3.5TEMPRA.py` until
 the release. `teste_chirp_real.py` checks the new labels.
 
-## v142 — Nov 6 — TRIPLE WATCH, and DW and TW on the bar (in test)
+## v142 — Nov 6 — TRIPLE WATCH, and DW and TW on the bar (flashed and approved)
 
 `BJ8300_BANK_v142.anc` (sha256 `32fa87ad…`), left out of the commits like the other test versions: v141 with two names
 corrected, at the owner's request and the same as the UV-17L's. The DUAL RX item, which is the watch over all sides, becomes
-**TRIPLE WATCH**, on the quick menu too, and the top bar shows **DW** in DUAL and **TW** in TRIPLE instead of DR and TR. Not
-flashed yet.
+**TRIPLE WATCH**, on the quick menu too, and the top bar shows **DW** in DUAL and **TW** in TRIPLE instead of DR and TR. The
+owner approved it on the radio, and with it the changes of v140 and v141, which were not flashed on their own.
 
-## v141 — Nov 6 — BANKS shaped like CH MEMORY, the mode warnings and the clear names (in test)
+## v141 — Nov 6 — BANKS shaped like CH MEMORY, the mode warnings and the clear names (approved in v142)
 
 `BJ8300_BANK_v141.anc` (sha256 `8a78cc20…`), left out of the commits like the other test versions: v140 with the BANKS
-folder rebuilt, the same as the UV-17L's, with what was missing for both radios to work alike. Not flashed yet.
+folder rebuilt, the same as the UV-17L's, with what was missing for both radios to work alike. It reached the radio inside
+v142.
 
 - **ACTIVE** (was BANK). The list of the 16 banks, like `01 - REPEATERS`, with the enabled ones in amber. OK turns a bank on
   or off at once and the list stays, to change several. A bank with no channels does not turn on: `BANK EMPTY` shows, and the
@@ -49,7 +58,7 @@ folder rebuilt, the same as the UV-17L's, with what was missing for both radios 
 
 Details in [section 34](reverse-engineering.md#34-banks-and-the-mode-warnings-v141).
 
-## v140 — Nov 6 — the channel menu: CH MEMORY, with lists, confirmation and cancelling without saving (in test)
+## v140 — Nov 6 — the channel menu: CH MEMORY, with lists, confirmation and cancelling without saving (approved in v142)
 
 `BJ8300_BANK_v140.anc` (sha256 `dc59c121…`), left out of the commits like the other test versions: V3.5T with the menu
 for saving and naming channels redone at the owner's request, the same as the UV-17L's, to make it obvious. Not flashed
