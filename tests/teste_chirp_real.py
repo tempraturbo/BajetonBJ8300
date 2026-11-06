@@ -476,12 +476,25 @@ def main():
             'e do EQ do RX, em HIGH com o byte em 0', (spec.keys()[i + 1:i + 7], mic.get_shortname(), str(mic.value)),
             (['expander', 'noise_gate', 'deemphasis', 'eq_rx_bass', 'eq_rx_treble', 'settings_unknown_9033'],
              'Mic Gain', 'HIGH'))
+    # v138: o DEFAULT (a calibracao do proprio radio, 0xF210 na imagem) entra em ordem de valor entre os niveis
+    cal = r._mmap[0xF210][0] & 0x1F
+    ordem = [n for n, g in (('HIGH', 31), ('MID', 25), ('LOW', 19)) if g > cal]
+    ordem += ['DEFAULT'] + [n for n, g in (('HIGH', 31), ('MID', 25), ('LOW', 19)) if g <= cal]
+    confere(f'10p2. a lista do Mic Gain na ordem do radio, com a calibracao {cal} da imagem',
+            list(mic.value.get_options()), ordem)
+    r30 = bj.BJ8300(imagem())
+    r30._mmap[0xF210] = bytes([30])                 # a calibracao do radio do dono
+    confere('10p3. com a calibracao 30: HIGH, DEFAULT, MID, LOW',
+            list(ajuste_de(r30, 'settings_unknown_9033').value.get_options()), ['HIGH', 'DEFAULT', 'MID', 'LOW'])
     mic.value.set_value('LOW')
     aj.apply_to(r._memobj)
     confere('10q. LOW grava 2 em 0x9033', r._mmap[0x9033], bytes([2]))
+    mic.value.set_value('DEFAULT')
+    aj.apply_to(r._memobj)
+    confere('10q2. DEFAULT grava 3 em 0x9033 (v138)', r._mmap[0x9033], bytes([3]))
     r._mmap[0x9033] = bytes([7])
-    confere('10r. valor fora da faixa le HIGH, como o firmware',
-            str(ajuste_de(r, 'settings_unknown_9033').value), 'HIGH')
+    confere('10r. valor fora da faixa le DEFAULT, como o firmware (v138)',
+            str(ajuste_de(r, 'settings_unknown_9033').value), 'DEFAULT')
     # 10s. TX-A/B/C (firmware v50): o TX-A/B de fabrica (0x9013, 2 bits) com o C, logo depois do TTR
     r = bj.BJ8300(imagem())
     aj = r.get_settings()

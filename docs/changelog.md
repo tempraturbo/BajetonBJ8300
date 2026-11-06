@@ -5,6 +5,14 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Nov 6 — Mic Gain with DEFAULT
+
+Mic Gain gains v138's DEFAULT, the radio's own calibration, in the same order the radio shows: the list comes from the
+calibration in the image (the byte at `0xF210`), with DEFAULT in value order among the levels, and the setting stores
+the code, not the position (`_MicGainSetting`). A code outside the list, like RESET's 171, shows as DEFAULT. On firmware
+older than v138, DEFAULT counts as HIGH. The module stays `bj8300_v3.2TEMPRA.py` until the release (its name changes in
+that commit). `teste_chirp_real.py` checks the list with calibration 30 and the stored code.
+
 ## v139 — Nov 6 — v138's round without the new beep, and a single EXIT on text items (flashed and approved)
 
 `BJ8300_BANK_v139.anc` (sha256 `0aa0f360…`), left out of the commits like the other test versions: v138 without the

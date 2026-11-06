@@ -5,6 +5,14 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 06/11 — o Mic Gain com o DEFAULT
+
+O Mic Gain ganha o DEFAULT da v138, a calibração do próprio rádio, na mesma ordem que o rádio mostra: a lista sai da
+calibração da imagem (o byte `0xF210`), com o DEFAULT em ordem de valor entre os níveis, e o ajuste grava o código,
+não a posição (`_MicGainSetting`). Um código fora da lista, como o 171 do RESET, aparece como DEFAULT. Numa firmware
+anterior à v138, o DEFAULT vale HIGH. O módulo segue `bj8300_v3.2TEMPRA.py` até a release (ele muda de nome no commit
+dela). O `teste_chirp_real.py` confere a lista com a calibração 30 e o código gravado.
+
 ## v139 — 06/11 — a rodada da v138 sem o bipe novo, e um EXIT só nos itens de texto (gravada e aprovada)
 
 `BJ8300_BANK_v139.anc` (sha256 `0aa0f360…`), fora dos commits como as outras de teste: a v138 sem o bipe novo e com

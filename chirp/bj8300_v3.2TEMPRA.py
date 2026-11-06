@@ -760,16 +760,43 @@ def _roger_setting(old, roger):
     return rs
 
 
-MIC_GAIN_OPTIONS = ['HIGH', 'MID', 'LOW']              # the radio's MIC GAIN item, 0 = HIGH
+# The radio's MIC GAIN item: codes 0, 1 and 2 are HIGH, MID and LOW (31, 25 and 19 in the radio chip's
+# microphone gain); code 3 (firmware v138 on) is DEFAULT, the factory calibration of the radio itself (the
+# byte at 0xF210, 30 on the test radio), and so is any code outside the list (the 171 a RESET leaves, 0xFF).
+# The radio lists DEFAULT in value order between the levels - ties go first -, so the order depends on the
+# radio: the setting builds the same list from the calibration in the image and stores the code.
+MIC_GAIN_LEVELS = (('HIGH', 31), ('MID', 25), ('LOW', 19))
+MIC_GAIN_CAL = 0xF210                                  # the factory microphone gain, in the image
+MIC_GAIN_DEFAULT = 3
 
 
-def _mic_gain_setting(level):
-    rs = MemSetting('settings.unknown_9033', 'Mic Gain', RadioSettingValueList(
-        MIC_GAIN_OPTIONS, current_index=int(level) if int(level) < 3 else 0))
+def _mic_gain_order(calibration):
+    """The radio's list and the code of each line: DEFAULT after the levels above the calibration."""
+    d = sum(gain > (calibration & 0x1F) for _, gain in MIC_GAIN_LEVELS)
+    names = [name for name, _ in MIC_GAIN_LEVELS]
+    return names[:d] + ['DEFAULT'] + names[d:], [0, 1, 2][:d] + [MIC_GAIN_DEFAULT] + [0, 1, 2][d:]
+
+
+class _MicGainSetting(MemSetting):
+    """MIC GAIN in the radio's order: it stores the code, not the list position."""
+
+    codes = [0, 1, 2, MIC_GAIN_DEFAULT]
+
+    def apply_to_memobj(self, memobj):
+        memobj.settings.unknown_9033 = self.codes[int(self.value)]
+
+
+def _mic_gain_setting(level, calibration):
+    names, codes = _mic_gain_order(calibration)
+    level = int(level)
+    rs = _MicGainSetting('settings.unknown_9033', 'Mic Gain', RadioSettingValueList(
+        names, current_index=codes.index(level if level < MIC_GAIN_DEFAULT else MIC_GAIN_DEFAULT)))
+    rs.codes = codes
     rs.set_doc('Microphone sensitivity, as the radio\'s MIC GAIN item: HIGH, MID and LOW put 31, 25 '
-               'and 19 in the radio chip\'s microphone gain (the factory calibration had 30 on the '
-               'test radio). Needs firmware v49 or later; earlier firmware uses the factory '
-               'calibration and ignores this.')
+               'and 19 in the radio chip\'s microphone gain; DEFAULT keeps this radio\'s factory '
+               'calibration (%d), listed in value order like the radio does. Needs firmware v49 or '
+               'later, and v138 or later for DEFAULT (earlier firmware takes it as HIGH).'
+               % (calibration & 0x1F))
     return rs
 
 
@@ -1168,7 +1195,9 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
                                                ('0 dB', "the factory's own level, below -1 dB"))
         _put(parent, rx_bass, after='deemphasis')
         _put(parent, rx_treble, after='eq_rx_bass')
-        _put(parent, _mic_gain_setting(self._memobj.settings.unknown_9033), after='eq_rx_treble')
+        _put(parent, _mic_gain_setting(self._memobj.settings.unknown_9033,
+                                       bytes(self._mmap[MIC_GAIN_CAL:MIC_GAIN_CAL + 1])[0]),
+             after='eq_rx_treble')
         # COMPRESSOR, MIC AGC and CRYSTAL FINE (firmware v59) right after it, in the same block
         _put(parent, _compressor_setting(self._memobj.settings.unknown_9035), after='settings_unknown_9033')
         _put(parent, _mic_agc_setting(self._memobj.settings.unknown_9036), after='settings_unknown_9035')
