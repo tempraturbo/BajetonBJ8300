@@ -301,6 +301,82 @@ static int canais_teste(void)
         MENU_NUMERO = ITEM_SAVE;
         printf("M %u\n", lista_aviso());
     }
+
+    /* os BANKS (v141). O ACTIVE: na pasta, quantos ligados; a lista abre no primeiro, o OK liga na hora e o ligado
+     * vem com o LIGADO; banco sem canal nao liga, e o aviso volta a ele */
+    memset(flash_canais, 0xFF, sizeof flash_canais);
+    poe_canal(1, "BF888-02");
+    poe_canal(102, "PIGAO 3");
+    banco_canal(0, 102);
+    banco_canal(1, 500);                    /* o 501 nao existe: nao conta */
+    marcas_teste = MARCA_LISTA | MARCA_BANKS;
+    RAM(u16, 0x00015E0C) = 100;
+    MENU_NUMERO = 0;
+    MENU_EDITANDO = 0;
+    VALOR = 0;
+    GRAVADO = 0;
+    printf("W %u [%s]\n", lista_aviso(), lista_exibe());
+    abre_lista(0);
+    ativo_grava();
+    tela_lista();
+    MENU_EDITANDO = 0;
+    VALOR = 0;
+    printf("W [%s]\n", lista_exibe());
+    abre_lista(0);
+    lista_seta(1);
+    ativo_grava();
+    printf("B %u %u %u\n", MENU_TIPO, VALOR, ligados_teste);
+    printf("C %u %u %u\n", lista_cancela(), MENU_TIPO, VALOR);
+    VALOR = 50;                             /* o numero digitado vale pelo mais perto: o 16 */
+    tela_lista();
+
+    /* o CHANNELS: o banco, depois os canais salvos a partir do que esta em uso; o OK poe e tira, e o EXIT volta */
+    abre_lista(1);
+    canais_grava();
+    printf("T %s %u %u\n", TITULO_MENU, VALOR, BANCO_ABERTO);
+    tela_lista();
+    canais_grava();
+    tela_lista();
+    lista_seta(1);
+    canais_grava();
+    tela_lista();
+    printf("C %u %u %u %s\n", lista_cancela(), MENU_TIPO, VALOR, TITULO_MENU);
+    printf("Y %u %u\n", lista_cancela(), BANCO_ABERTO);
+
+    /* o NAME: sem nome, o editor abre vazio; o titulo diz qual; cancelar nao grava; em branco volta ao de fabrica */
+    abre_lista(2);
+    nome_grava();
+    printf("A %u %u %s\n", lista_editor_abre(), EDITOR_TAM, TITULO_MENU);
+    printf("C %u %u %s\n", lista_cancela(), MENU_TIPO, TITULO_MENU);
+    nome_grava();
+    lista_editor_abre();
+    digita_nome("REPETIDORAS");
+    nome_grava();
+    printf("F %u %u\n", lista_editor_abre(), MENU_TIPO);
+    tela_lista();
+    nome_grava();
+    lista_editor_abre();
+    printf("E %.*s %s\n", EDITOR_TAM, EDITOR_TEXTO, TITULO_MENU);
+    digita_nome("   ");
+    nome_grava();
+    lista_editor_abre();
+    tela_lista();
+
+    /* sem canal salvo, o CHANNELS avisa; o que so vale num modo, no outro abre com o aviso */
+    memset(flash_canais, 0xFF, sizeof flash_canais);
+    MENU_NUMERO = 1;
+    printf("H %u\n", lista_aviso());
+    MENU_NUMERO = 0;
+    printf("H %u\n", lista_aviso());
+    marcas_teste = MARCA_VFO;
+    MODO_LADOS = 1;
+    printf("H %u\n", lista_aviso());
+    MODO_LADOS = 0;
+    printf("H %u\n", lista_aviso());
+    marcas_teste = MARCA_CANAL;
+    printf("H %u\n", lista_aviso());
+    MODO_LADOS = 1;
+    printf("H %u\n", lista_aviso());
     return 0;
 }
 

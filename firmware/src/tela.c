@@ -1149,7 +1149,7 @@ FIRMWARE(OK_MENU, 0x01E49996);     u32 OK_MENU(void);
 FIRMWARE(DIGITO_MENU, 0x01E4A0FE); u32 DIGITO_MENU(unsigned);
 FIRMWARE(BIPE, 0x01E38B4C);        void BIPE(unsigned);
 
-/* As listas de canais (v140, mensagem.c). */
+/* As listas de canais (v140) e dos bancos (v141), de mensagem.c. */
 u32 lista_seta(int sentido);
 u32 lista_cancela(void);
 unsigned lista_aviso(void);
@@ -1187,33 +1187,47 @@ u32 menu_abre(void)
  * para leitura - a edicao ligada, que a tela B desenha sem cursor -, aberto o OK nao faz nada, e o
  * EXIT de fabrica o fecha (cancela a edicao, 0x01E4D500). Devolve o que o motor deixa em r0, como o
  * de fabrica (o bipe, 0x01E4D59C), ou 0, o bipe de tecla sem funcao. */
-u32 gancho_menu_ok(void)
-{
-    unsigned g = MENU_NUMERO, n = menu_nivel();
+/* O OK num item. O que nao pode abrir agora abre com o aviso do motivo (v140, lista_aviso), o VALOR no aviso e o cursor
+ * na linha 0: o motor nao pede nenhuma linha, e o VALOR acima do maximo nao vira opcao fora da tabela (0x01E48B6A).
+ * No aviso, o OK do SAVE CHANNEL FIRST leva ao SAVE, o do aviso de dentro da lista volta a ela e o resto volta a pasta;
+ * no menu rapido do SAVE, so o EXIT sai, como num menu de um item. A pergunta do DELETE e do set, no OK de fabrica. */
+#define GRUPO_CH_MEMORY 4              /* conferir.py, 3b */
 
-    if (n == 0) {
-        TEMPO_MENU();
-        menu_vai(MENU_BASE + menu_inicio(g) * TAM_ITEM, MENU_ITENS(g), 0);
-        return MOTOR_MENU();
-    }
-    /* as listas de canais (v140): o que nao pode abrir agora abre com o aviso do motivo. Nele, o OK do CH NAME leva
-     * ao SAVE, e o resto volta a pasta; no menu rapido do SAVE, so o EXIT sai, como num menu de um item */
-    if (marcas_do_item() & MARCA_LISTA) {
-        if (MENU_TIPO == 8) {
-            if (RAM(u16, 0x00014BFC) < 960)     /* a pergunta do DELETE: o OK de fabrica chama o set */
+/* Sair do aviso para a pasta, no item: o ITEM_MUDOU refaz a base das linhas, que o VALOR do aviso sujou (no EXIT de
+ * fabrica o item ficaria sem o "L" ate andar na pasta). */
+__attribute__((section(".reserva.tela"))) static void menu_aviso_sai(void)
+{
+    MENU_EDITANDO = 0;
+    menu_vai(MENU_TABELA, MENU_CONTA, MENU_NUMERO);
+}
+
+__attribute__((section(".reserva.tela"))) static u32 menu_ok_item(void)
+{
+    unsigned n, a;
+
+de_novo:
+    n = menu_nivel();
+    if (marcas_do_item() & MARCAS_AVISO) {
+        a = RAM(u16, 0x00014BFC);
+        if (MENU_EDITANDO == 1 && MENU_TIPO == 8) {
+            if (a < 960)
                 return OK_MENU();
+            if (lista_cancela())
+                return MOTOR_MENU();
             if (n >= RADIO)
                 return 0;
-            MENU_EDITANDO = 0;
-            menu_vai(MENU_TABELA, MENU_CONTA, g ? g : 2);
-            if (g)
+            menu_aviso_sai();
+            if (a != 960)
                 return MOTOR_MENU();
+            menu_vai(MENU_BASE + menu_inicio(GRUPO_CH_MEMORY) * TAM_ITEM, MENU_ITENS(GRUPO_CH_MEMORY), 2);
+            goto de_novo;
         }
-        if (MENU_EDITANDO != 1 && lista_aviso()) {
+        if (MENU_EDITANDO != 1 && (a = lista_aviso()) != 0) {
             TEMPO_MENU();
             MENU_EDITANDO = 1;
             MENU_TIPO = 8;
-            RAM(u16, 0x00014BFC) = 960;
+            MENU_CURSOR = 0;
+            RAM(u16, 0x00014BFC) = (u16)a;
             return MOTOR_MENU();
         }
     }
@@ -1224,6 +1238,18 @@ u32 gancho_menu_ok(void)
     TEMPO_MENU();
     MENU_EDITANDO = 1;
     return MOTOR_MENU();
+}
+
+u32 gancho_menu_ok(void)
+{
+    unsigned g = MENU_NUMERO, n = menu_nivel();
+
+    if (n == 0) {
+        TEMPO_MENU();
+        menu_vai(MENU_BASE + menu_inicio(g) * TAM_ITEM, MENU_ITENS(g), 0);
+        return MOTOR_MENU();
+    }
+    return menu_ok_item();
 }
 
 /* No caminho do EXIT fora da edicao (0x01E4D54A, que fecharia o menu; desvio_menu_sai): dentro de um
@@ -1245,7 +1271,6 @@ u32 b_menu_sai(void)
  * em 1 fecha o menu inteiro (0x01E4D566), como num menu rapido de um item. Num grupo (o CALIBRATION
  * tem um item so, v59) devolve 1, e o desvio segue ao bipe do EXIT (0x01E4D59A), por onde o de fabrica
  * passa com mais de um item: a edicao fecha e a lista do grupo fica. */
-static unsigned na_lista_aberta(void);
 u32 b_menu_um(void)
 {
     unsigned n = menu_nivel();
@@ -1264,13 +1289,17 @@ u32 b_exit_apaga(void)
     return MENU_EDITANDO != 1;
 }
 
-/* As setas (as quatro chamadas de 0x01E49F60 e 0x01E49FF4, na interface): com uma lista de canais aberta, andam so
- * nela; o resto, como de fabrica. */
-static unsigned na_lista_aberta(void)
+/* O redesenho no fim do OK (0x01E49C7C): na lista, o cursor fica na linha do meio, com o anterior em cima e o proximo
+ * embaixo, como no UV-17L; o de fabrica, ao abrir, o poe na ultima linha. */
+u32 gancho_menu_redesenha(void)
 {
-    return MENU_EDITANDO == 1 && (marcas_do_item() & MARCA_LISTA);
+    if (na_lista_aberta() && MENU_TIPO == 4)
+        MENU_CURSOR = 1;
+    return MOTOR_MENU();
 }
 
+/* As setas (as quatro chamadas de 0x01E49F60 e 0x01E49FF4, na interface): com uma lista de canais aberta, andam so
+ * nela; o resto, como de fabrica. */
 u32 gancho_seta_mais(void)
 {
     return na_lista_aberta() ? lista_seta(1) : SETA_MAIS();
@@ -1281,18 +1310,25 @@ u32 gancho_seta_menos(void)
     return na_lista_aberta() ? lista_seta(-1) : SETA_MENOS();
 }
 
-/* No EXIT, onde o de fabrica decide cancelar a edicao (0x01E4D4F4): a pergunta do DELETE e o editor do SAVE e do CH
- * NAME voltam a lista, e o resto segue. Devolve 1 quando voltou: o desvio vai ao redesenho do proprio EXIT
+/* No EXIT, onde o de fabrica decide cancelar a edicao (0x01E4D4F4): a pergunta do DELETE e o editor do SAVE, do CH
+ * NAME e do NAME voltam a lista, os canais de um banco voltam aos bancos, e o resto segue. Devolve 1 quando voltou: o desvio vai ao redesenho do proprio EXIT
  * (0x01E4D534), que passa pelo desvio_menu_um e pelo bipe, na pilha de fabrica. */
 u32 b_exit_lista(void)
 {
-    return na_lista_aberta() && lista_cancela();
+    if (!na_lista_aberta())
+        return 0;
+    if (lista_cancela())
+        return 1;
+    if (MENU_TIPO != 8)
+        return 0;
+    menu_aviso_sai();
+    return 1;
 }
 
 /* Depois do set, no OK editando (0x01E49A86, onde o firmware zera o estado da recepcao, b[0x15367], e
  * fecha a edicao; so com o menu aberto, b[0x1533D] = 1): o que a saida do menu grava vai para o chip ja
  * aqui (v101, salva_menu, bancos.c), para nada se perder com o radio desligado de menu aberto. E nos
- * itens de marcar varios (MARCA_VARIOS: o BANK e o CHANNEL dos BANKS, v55) a edicao continua. So o
+ * itens de marcar varios (MARCA_VARIOS: o ACTIVE e o CHANNELS dos BANKS, v55) a edicao continua. So o
  * estado da recepcao vai a 0 - sintoniza de novo, como o de fabrica faz depois de mudar o ajuste - e o
  * desvio segue para o redesenho e a volta (0x01E49C7C). O EXIT sai: cada OK ja gravou. Depois do laco da
  * tela MESSAGES que saiu pelo # (v112), a caixa abre no editor (aprs_caixa_abre, mensagem.c), e o desvio

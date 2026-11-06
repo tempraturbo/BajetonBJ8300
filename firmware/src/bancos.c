@@ -454,12 +454,11 @@ static void reconstroi_mapas(void)
 
 /* Deixa nos mapas a intersecao entre o que existe e os bancos ligados. Com reconstruir != 0,
  * remonta os mapas antes (obrigatorio fora da partida, onde eles podem estar filtrados).
- * Devolve 1 se filtrou - e o liga/desliga do BANK usa essa resposta para nao deixar ligado um
- * banco que nao filtra nada, caso em que o radio fica mostrando tudo em vez de ficar sem canal.
+ * Banco ligado sem canal nao deixa o radio sem canais: sem nada a vista, ele mostra tudo.
  * A uniao fica na pilha e cada mapa entra em pedacos: nada de buffer grande emprestado (o do
  * firmware e a memoria de video). Quem chama poe o radio num canal que ainda vale (revalida_lados
  * ou REVALIDA), depois desta voltar: separada, a uniao nao fica na pilha durante a recarga. */
-__attribute__((noinline)) static int aplica_filtro(int reconstruir)
+__attribute__((noinline)) static void aplica_filtro(int reconstruir)
 {
     u8 uniao[TAM_MAPA], pedaco[TAM_PEDACO];
     struct cabeca c;
@@ -504,7 +503,6 @@ __attribute__((noinline)) static int aplica_filtro(int reconstruir)
     ZONAS_EXISTE = (u16)existe;
     ZONAS_EXISTE2 = (u16)existe;
     ZONAS_BUSCA = (u16)busca;
-    return tem != 0;
 }
 
 /* Poe os dois lados num canal que ainda vale, depois de o filtro mudar: sem isto, o lado fora de
@@ -547,7 +545,7 @@ NA_LIVRE_COD static void zera_envio(void)
 {
     *(volatile u8 *)0x00014BEF = 0;
     *(volatile u16 *)0x00014BF0 = 0;      /* o envio e o EXIT segurado (mensagem.c, gancho_teclas) */
-    *(volatile u8 *)0x00014BF2 = 0;
+    *(volatile u16 *)0x00014BF2 = 0;      /* e, v141, o banco aberto no CHANNELS (mensagem.c) */
 }
 
 void gancho_partida(void)
@@ -870,7 +868,7 @@ void roger_grava(void)
  * O WATCH em SINGLE a desliga, o set do TDR a mantem em 0 enquanto for SINGLE, e a partida a zera
  * de novo, para o caso de um upload do CHIRP a ter religado. */
 DADO_NA_LIVRE const char titulo_watch[] = "WATCH";
-DADO_NA_LIVRE const char titulo_mdf_c[] = "MDF-C";
+DADO_NA_LIVRE const char titulo_mdf_c[] = "SHOW C";
 DADO_NA_LIVRE const char *const watch_opcoes[3] = {"SINGLE", "DUAL", "TRIPLE"};
 DADO_NA_LIVRE static const u8 watch_valor[3] = {WATCH_SINGLE, WATCH_DUAL, WATCH_TRIPLE};   /* posicao no menu -> modo */
 DADO_NA_LIVRE static const u8 watch_posicao[3] = {1, 0, 2};                                /* modo -> posicao no menu */
@@ -1981,7 +1979,7 @@ NA_LIVRE_COD void gancho_luz(unsigned acende)
  *    fabrica se foi ela que o tirou de evidencia; sem a marca, a destroca de fabrica. O firmware zera a
  *    marca logo depois delas, e a partida tambem (0x01E56B3A). */
 #define TX_ABC         (*(volatile u8 *)0x00014B7F)
-DADO_NA_LIVRE const char titulo_txabc[] = "TX-A/B/C";
+DADO_NA_LIVRE const char titulo_txabc[] = "TX SIDE";
 DADO_NA_LIVRE const char *const txabc_opcoes[4] = {"OFF", "A", "B", "C"};
 
 NA_LIVRE_COD unsigned gancho_tx_abc(void)
@@ -2180,14 +2178,40 @@ NA_LIVRE_COD void nome_para_editor(char *destino, const char *nome, unsigned tam
 }
 
 /* ---------- textos ---------- */
-const char titulo_bank[] = "BANK";
-const char titulo_nome[] = "NAME";            /* dentro do grupo BANKS (v53): BANK, CHANNEL e NAME */
-const char titulo_canal[] = "CHANNEL";
+/* v141: os nomes claros do menu, os mesmos do UV-17L (RENOMES, montar.py). Os que os menus rapidos tambem mostram ficam
+ * no .livre: o app.bin de fabrica nao aponta para fora dele. */
+DADO_NA_LIVRE const char nome_squelch[] = "SQUELCH";
+DADO_NA_LIVRE const char nome_tx_power[] = "TX POWER";
+DADO_NA_LIVRE const char nome_tx_shift[] = "TX SHIFT";
+DADO_NA_LIVRE const char nome_tx_ctcss[] = "TX CTCSS";
+DADO_NA_LIVRE const char nome_scan_resume[] = "SCAN RESUME";
+DADO_NA_LIVRE const char nome_dual_rx[] = "DUAL RX";
+const char nome_tail_cut[] = "TAIL CUT";
+const char nome_busy_lock[] = "BUSY LOCK";
+const char nome_bandwidth[] = "BANDWIDTH";
+const char nome_backlight[] = "BACKLIGHT TIME";
+const char nome_show_a[] = "SHOW A";
+const char nome_show_b[] = "SHOW B";
+const char nome_dtmf_sidetone[] = "DTMF SIDETONE";
+const char nome_dtmf_delay[] = "DTMF DELAY";
+const char nome_dtmf_group[] = "DTMF GROUP";
+const char nome_key_beep[] = "KEY BEEP";
+const char nome_pf2_long[] = "PF2 LONG";
+const char nome_rpt_tail_cut[] = "RPT TAIL CUT";
+const char nome_rpt_tail_delay[] = "RPT TAIL DELAY";
+const char nome_tone_burst[] = "TONE BURST";
+const char nome_alarm_mode[] = "ALARM MODE";
+const char nome_rx_ctcss[] = "RX CTCSS";
+const char nome_rx_dcs[] = "RX DCS";
+const char nome_tx_dcs[] = "TX DCS";
+const char nome_tx_timeout[] = "TX TIMEOUT";
+const char titulo_ativo[] = "ACTIVE";
+const char titulo_canais[] = "CHANNELS";
+const char titulo_nome[] = "NAME";            /* dentro do grupo BANKS (v53) */
 
 /* Le o nome do banco para o destino (TAM_NOME+1 bytes), com zero do fim do nome ao fim do buffer, e
- * devolve quantas letras tem; fica vazio se o banco ainda nao tem nome. Quem precisa de um padrao
- * visivel e so o editor, que poe "BANK n". */
-static unsigned le_nome(unsigned n, char *destino)
+ * devolve quantas letras tem; fica vazio se o banco ainda nao tem nome. */
+unsigned le_nome(unsigned n, char *destino)
 {
     unsigned tam;
 
@@ -2197,145 +2221,126 @@ static unsigned le_nome(unsigned n, char *destino)
     return tam;
 }
 
-/* ---------- item BANK: escolhe o banco e liga/desliga (flags 0x80) ---------- */
+/* ---------- os itens dos BANKS (v141) ----------
+ * No molde das listas de canais, iguais aos do UV-17L: as listas, as setas e o EXIT sao os de mensagem.c, que chama
+ * daqui o que mexe no chip. O ACTIVE liga e desliga, o CHANNELS escolhe um banco e passa aos canais salvos, em que o
+ * OK poe e tira, e o NAME abre o editor. Cada OK grava na hora. O "escolhido" da cabeca fica como esta: o CHIRP o le. */
 
-char *bank_exibe(void)
+/* "BANK 01": o nome do banco sem nome, e o titulo do editor. */
+void banco_padrao(unsigned n, char *s)
+{
+    SPRINTF(s, "BANK %d%d", (n + 1) / 10, (n + 1) % 10);
+}
+
+void banco_nome(unsigned n, char *s)
+{
+    if (!le_nome(n, s))
+        banco_padrao(n, s);
+}
+
+/* A linha da lista: "01 - REPETIDORAS". No ACTIVE, o ligado leva o LIGADO no fim (telas.c), que a pinta de ambar. */
+char *banco_texto(unsigned n, unsigned ativo)
 {
     struct cabeca c;
     char nome[TAM_NOME + 1];
-    unsigned n = VALOR;
 
-    le_cabeca(&c);                         /* o motor so chama exibe() com valor < maximo */
-    le_nome(n, nome);
-    SPRINTF(TEXTO, "%d %s", n + 1, nome);  /* banco sem nome mostra so o numero */
-    /* Ligado: um byte 0x01 no fim (LIGADO no telas.c), que a tela B nao escreve e usa para pintar a
-     * linha de ambar, no lugar do " ON" de ate a v37. Quem mostra a lista e so a tela B: a piscada de
-     * fabrica do menu nao chega mais ao LCD (gancho_menu_pisca, v38). */
-    if ((c.ativos >> n) & 1)
+    le_cabeca(&c);
+    banco_nome(n, nome);
+    SPRINTF(TEXTO, "%d%d - ", (n + 1) / 10, (n + 1) % 10);
+    acrescenta(TEXTO, nome);
+    if (ativo && (c.ativos >> n & 1))
         acrescenta(TEXTO, "\x01");
     return TEXTO;
 }
 
-u16 bank_le(void)
+/* Na pasta, embaixo do ACTIVE. */
+char *banco_resumo(void)
 {
     struct cabeca c;
+    unsigned m, k = 0;
 
     le_cabeca(&c);
-    return c.escolhido;
-}
-
-void bank_grava(void)
-{
-    struct cabeca c;
-    unsigned n = VALOR;
-    u16 bit;
-
-    if (n >= NUM_BANCOS)
-        return;
-    le_cabeca(&c);
-    bit = (u16)(1u << n);
-    c.escolhido = (u8)n;                   /* o OK sempre escolhe o banco para os outros dois itens */
-    c.ativos = (u16)(c.ativos ^ bit);      /* liga ou desliga */
-    grava_cabeca(&c);
-    if (!aplica_filtro(1) && (c.ativos & bit)) {
-        c.ativos = (u16)(c.ativos & ~bit); /* ligou um banco que nao filtra nada: desfaz */
-        grava_cabeca(&c);
-        aplica_filtro(0);
-    }
-    revalida_lados();
-}
-
-/* ---------- item BANK NAME: usa o editor de texto do firmware (flags 0x07) ---------- */
-
-char *nome_exibe(void)
-{
-    struct cabeca c;
-
-    le_cabeca(&c);
-    le_nome(c.escolhido, TEXTO);
+    for (m = c.ativos; m; m &= m - 1)
+        k++;
+    if (!k)
+        return "ALL CHANNELS";
+    SPRINTF(TEXTO, "%d ON", k);
     return TEXTO;
 }
 
-/* Chamado quando o item e aberto: prepara o editor com o nome de hoje, como o CH-NAME faz. */
-u16 nome_le(void)
+unsigned banco_tem(unsigned b, unsigned canal)
 {
-    struct cabeca c;
+    u8 mapa;
 
-    le_cabeca(&c);
-    EDITOR_TAM_MAX = TAM_NOME;
-    EDITOR_MARCA = 0xAA;
-    EDITOR_POS = 0;
-    EDITOR_MODO = MODO_ABC;
-    EDITOR_TAM = le_nome(c.escolhido, (char *)EDITOR_TEXTO);   /* banco sem nome abre o editor vazio */
+    LE_FLASH(POS_MAPA(b) + (canal >> 3), &mapa, 1);
+    return mapa >> (canal & 7) & 1;
+}
+
+/* Com os mapas sem filtro: algum canal que existe esta no banco? */
+static unsigned banco_tem_canal(unsigned b)
+{
+    u8 pedaco[TAM_PEDACO];
+    unsigned off, i;
+
+    for (off = 0; off < TAM_MAPA; off += TAM_PEDACO) {
+        LE_FLASH(POS_MAPA(b) + off, pedaco, sizeof(pedaco));
+        for (i = 0; i < sizeof(pedaco); i++)
+            if (pedaco[i] & MAPA_EXISTE[off + i])
+                return 1;
+    }
     return 0;
 }
 
-/* O nome do editor no banco escolhido. Separada do nome_grava (v38): a estrutura do banco sai da
- * pilha antes da saida do editor, que redesenha a tela inteira - a tela B desde a v35, mais funda que
- * a de fabrica. Junto, o set passava do que o firmware de fabrica usa de pilha no mesmo lugar. */
-__attribute__((noinline)) static void grava_nome_do_editor(void)
+/* O OK do ACTIVE: troca o banco; sem canais, ele nao liga, e devolve 0. */
+unsigned banco_liga(unsigned n)
 {
     struct cabeca c;
+    unsigned bit = 1u << n, muda;
+
+    le_cabeca(&c);
+    reconstroi_mapas();
+    muda = (c.ativos & bit) || banco_tem_canal(n);
+    if (muda) {
+        c.ativos = (u16)(c.ativos ^ bit);
+        grava_cabeca(&c);
+    }
+    aplica_filtro(0);
+    revalida_lados();
+    return muda;
+}
+
+/* Depois de apagar um canal: pode ter sido o ultimo a vista. */
+void banco_refiltra(void)
+{
+    aplica_filtro(1);
+    revalida_lados();
+}
+
+/* O OK na lista de um banco: poe ou tira o canal, e ele entra ou sai da navegacao na hora. */
+void banco_canal(unsigned k, unsigned canal)
+{
+    struct banco b;
+
+    le_banco(k, &b);
+    b.canais[canal >> 3] ^= (u8)(1u << (canal & 7));
+    grava_banco(k, &b);
+    banco_refiltra();
+}
+
+/* O nome do editor; em branco, o banco volta ao de fabrica (le_nome). Separada do set (v38): a estrutura do banco
+ * sai da pilha antes da saida do editor, que redesenha a tela inteira. */
+__attribute__((noinline)) void banco_nomeia(unsigned n)
+{
     struct banco b;
     unsigned i, tam = EDITOR_TAM;
 
     if (tam > TAM_NOME)
         tam = TAM_NOME;
-    le_cabeca(&c);
-    le_banco(c.escolhido, &b);
+    le_banco(n, &b);
     zera(b.nome, TAM_NOME);
     for (i = 0; i < tam; i++)
         b.nome[i] = EDITOR_TEXTO[i];
-    grava_banco(c.escolhido, &b);
-}
-
-void nome_grava(void)
-{
-    grava_nome_do_editor();
-    /* Sair do editor e o que o CH-NAME faz no fim do set dele (0x01E3C822): sem estas duas
-     * chamadas o estado do editor fica ligado e o cabecalho do menu continua mostrando o "abc" do
-     * teclado em vez do canal, em todos os itens, ate sair e entrar no menu de novo. */
-    LIMPA(2);
-    SAI_DO_EDITOR();
-}
-
-/* ---------- item BANK CH: percorre os canais e marca (flags 0x80, max 960) ---------- */
-
-char *canal_exibe(void)
-{
-    struct cabeca c;
-    unsigned canal = VALOR;
-    u8 mapa = 0;
-
-    le_cabeca(&c);                         /* idem: o maximo do item ja limita o canal */
-    LE_FLASH(POS_MAPA(c.escolhido) + (canal >> 3), &mapa, 1);
-    SPRINTF(TEXTO, "%d-%d", c.escolhido + 1, canal + 1);   /* banco escolhido - canal */
-    if (!canal_existe(canal))
-        acrescenta(TEXTO, " -");                           /* canal vazio na memoria */
-    if ((mapa >> (canal & 7)) & 1)
-        acrescenta(TEXTO, "\x01");  /* esta neste banco: a tela B pinta de ambar (LIGADO, telas.c) */
-    return TEXTO;
-}
-
-u16 canal_le(void)
-{
-    return CANAL_ATUAL;                    /* o motor zera o que passar do maximo */
-}
-
-void canal_grava(void)
-{
-    struct cabeca c;
-    struct banco b;
-    unsigned canal = VALOR;
-
-    if (canal >= NUM_CANAIS)
-        return;
-    le_cabeca(&c);
-    le_banco(c.escolhido, &b);
-    b.canais[canal >> 3] ^= (u8)(1u << (canal & 7));
-    grava_banco(c.escolhido, &b);
-    aplica_filtro(1);                      /* entra ou sai da navegacao na hora */
-    revalida_lados();
+    grava_banco(n, &b);
 }
 
 /* ---------- o carimbo do fim da imagem (v47) ----------

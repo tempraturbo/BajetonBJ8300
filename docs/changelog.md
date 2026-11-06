@@ -5,6 +5,37 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v141 — Nov 6 — BANKS shaped like CH MEMORY, the mode warnings and the clear names (in test)
+
+`BJ8300_BANK_v141.anc` (sha256 `8a78cc20…`), left out of the commits like the other test versions: v140 with the BANKS
+folder rebuilt, the same as the UV-17L's, with what was missing for both radios to work alike. Not flashed yet.
+
+- **ACTIVE** (was BANK). The list of the 16 banks, like `01 - REPEATERS`, with the enabled ones in amber. OK turns a bank on
+  or off at once and the list stays, to change several. A bank with no channels does not turn on: `BANK EMPTY` shows, and the
+  list returns to it. In the folder, under the item, `2 ON` or `ALL CHANNELS`.
+- **CHANNELS** (was CHANNEL). First you pick the bank; then come only the saved channels, like `102 - PIGAO 3`, starting from
+  the one in use, with the bank's channels in amber and the bank's name in the title. OK adds and removes at once. EXIT goes
+  back to the banks, and again to the folder. With no saved channel, `NO SAVED CHANNELS`.
+- **NAME.** The bank list opens the editor, empty if the bank has no name and with `BANK 01` in the title. OK saves; blank,
+  or spaces only, returns the bank to its factory name; cancelling saves nothing.
+- **An empty bank does not hide the channels.** With nothing in view, the radio shows them all, on both radios. Deleting the
+  last channel in view redoes the filter.
+- **The mode warnings, which only the UV had.** TX SHIFT and OFFSET on a channel open with `VFO ONLY`, and SCAN ADD on VFO
+  with `SAVE CHANNEL FIRST`, where OK goes to SAVE. From the factory, one only gave the error beep and the other did nothing.
+  In the folder, under them, `VFO` or `CHANNEL`.
+- **Lists open with the cursor in the middle**, with the previous above and the next below: from the factory it opened on
+  the last row, and only went to the middle on the first arrow.
+- **Key 3 held with the memory full** opens on `MEMORY FULL`. The quick menu already ended in the factory OK; now it goes
+  through its hook.
+- **The clear names**, the same on both radios: SQUELCH (SQL), TAIL CUT (STE), BUSY LOCK (BCL), TX POWER (TXP), BANDWIDTH
+  (W/N), BACKLIGHT TIME (ABR), SHOW A, B and C (MDF-A, B and C), DTMF SIDETONE (DTMFST), DTMF DELAY (PTT-LT), DTMF GROUP
+  (S-CODE), KEY BEEP (BEEP PROMPT), PF2 LONG (PF2 LONG PRESS), RPT TAIL CUT (RP-STE), RPT TAIL DELAY (RPT-RL), TX SHIFT
+  (SFT-D), TONE BURST (TONE), SCAN RESUME (SC-REV), ALARM MODE (AL-MOD), RX and TX CTCSS and DCS (R- and T-), TX TIMEOUT
+  (TOT), DUAL RX (TTR) and TX SIDE (TX-A/B/C). Items stay in alphabetical order, so several change number in their folder.
+  The quick menus show the same names.
+
+Details in [section 34](reverse-engineering.md#34-banks-and-the-mode-warnings-v141).
+
 ## v140 — Nov 6 — the channel menu: CH MEMORY, with lists, confirmation and cancelling without saving (in test)
 
 `BJ8300_BANK_v140.anc` (sha256 `dc59c121…`), left out of the commits like the other test versions: V3.5T with the menu

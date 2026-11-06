@@ -2954,3 +2954,39 @@ power-off. That ending is the factory's, not a lockup. Through CHIRP the mode on
 was replaced whole, and sector `0xD000` holds nothing of ours (the banks and the rest start at `0xC1000`). The channel lists
 handle GMRS: SAVE does not show channels 1 to 30, and DELETE follows the factory refusal. Checked in the disassembly, not on
 the radio.
+
+## 34. BANKS and the mode warnings (v141)
+
+The three BANKS items are lists of the same engine as section 32, in type 4 (`FLAGS_LISTA`, `0x84`) with a maximum of 960:
+`lista_le`, `lista_exibe` and the arrows are the same, and `lista_item` now returns four more lists through the
+`MARCA_BANKS` mark: `ITEM_NO_BANCO`, the saved channels of the open bank, and `ITEM_ACTIVE`, `ITEM_ESCOLHE` and `ITEM_NOME`,
+the 16 banks, by their position in the folder (`conferir.py`, 3b, checks the order). On bank lists, `na_lista` is just
+`n < 16`, so `lista_perto` and `lista_passo` do not change, and a typed number past it lands on bank 16. What touches the
+chip stays in `bancos.c`: `banco_liga`, `banco_canal` and `banco_nomeia`.
+
+- **The open bank.** `b[0x14BF3]` (`BANCO_ABERTO`, setting `0x9047`, free by the sweep) holds the bank + 1 in CHANNELS.
+  `lista_aviso`, which only runs when an item opens, clears it, and so does `zera_envio`, at boot and on settings. The title
+  is written straight to `0x15494`, which the engine only copies outside editing.
+- **The warning inside the list.** `VALOR` says which warning it is: 960 `SAVE CHANNEL FIRST`, 961 `NO SAVED CHANNELS`, 962
+  `MEMORY FULL`, 963 `VFO ONLY`, and 976 plus the bank `BANK EMPTY`. That last one carries the bank, which is why OK and EXIT
+  return to it with no extra state (`lista_cancela`).
+- **Why the cursor goes to 0 on a warning.** The engine's line loop, for an item with no display routine of its own, reads
+  `opcoes[line]` without checking the maximum on the lines above the base (`0x01E48B6A`). With `VALOR` at 963 and the cursor on
+  line 1, SFT-D would read a pointer outside the table. With the cursor on line 0 there is no line above, and the ones below
+  stop at the maximum (`0x01E48BDE`).
+- **Leaving the warning.** The factory EXIT restores `VALOR` and the type (`0x01E4D50A..0x01E4D51C`), but not the line base,
+  `h[0x14C18]`, which editing filled with the warning; the item would lose its "L" until moving in the folder. So
+  `b_exit_lista` and the warning's OK go through `menu_vai`, whose `ITEM_MUDOU` redoes it.
+- **The cursor in the middle.** The factory OK computes the cursor line as `min(value, 2)` (`0x01E49C5E..0x01E49C72`), and the
+  list opened with the channel on the last line. The engine call at the end of OK (`0x01E49C7C`) goes through
+  `gancho_menu_redesenha`, which sets it to 1 with a list open. It is the same call `desvio_menu_marca` returns to, and it
+  covers the OK that keeps the list.
+- **The quick menu.** The quick menu routine (`0x01E4B3A0`) already ends in a `goto` to the factory OK (`0x01E4B412`), with the
+  frame undone: that is why the item opens directly. That `goto` now goes to `gancho_menu_ok`, and SAVE with the memory full
+  opens on the warning. `pilha.py` now treats `GOTOS_LIVRE` like factory `goto`s, without adding the caller's frame.
+- **The names.** `RENOMES` in `montar.py` goes into `ITENS_MUDADOS`, with the factory item index and the new name's symbol. The
+  six that the quick menus also show (`RAPIDA_NOMES`) stay in `.livre`, because the factory app.bin does not point from there
+  to the paths or the reserve.
+
+Bluetooth, NOISE REDUCTION, LIGHT PWM and RPT TAIL DELAY have no parity: they belong to hardware or functions the UV-17L does
+not have. PTT-ID is the opposite: only the UV has it.

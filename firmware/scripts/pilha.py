@@ -87,7 +87,7 @@ SITIOS.append((montar.ESPECTRO_EM, 'gancho_tecla_espectro'))
 SITIOS += [(s, gn) for s, _, gn, _ in montar.ESPECTRO_CHAMADAS]
 SITIOS += [(s, gn) for s, _, gn, _ in getattr(montar, 'ESPECTRO_B_CHAMADAS', ())]
 if hasattr(montar, 'DW_TROCA_EM'):
-    SITIOS += [(s_, g_) for s_, _, g_, _ in getattr(montar, "CHAMADAS_LIVRE", montar.TRIPLE_CHAMADAS) + getattr(montar, "GOTOS_LIVRE", ()) + getattr(montar, "CHAMADAS_NO_LUGAR", ())]
+    SITIOS += [(s_, g_) for s_, _, g_, _ in getattr(montar, "CHAMADAS_LIVRE", montar.TRIPLE_CHAMADAS) + getattr(montar, "CHAMADAS_NO_LUGAR", ())]
 SITIOS.append((montar.ROGER_LACO_EM, 'gancho_roger_tons'))
 SITIOS += [(s, 'gancho_envia') for s, _ in montar.REALCE_SITIOS_GANCHO]
 SITIOS += [(s, 'gancho_limpa') for s, _ in montar.LIMPA_SITIOS]
@@ -98,6 +98,9 @@ SITIOS.append((montar.PONTEIRO_EM, 'menu_abre'))                                
 extra = {}
 for s, gn in SITIOS:
     extra.setdefault(rotina_de(s), set()).add(gn)
+extra_goto = {}                     # os GOTOS_LIVRE saem com o quadro desfeito, como os gotos de fabrica
+for s, _, gn, _ in getattr(montar, 'GOTOS_LIVRE', ()):
+    extra_goto.setdefault(rotina_de(s), set()).add(gn)
 
 memo_f, memo_n = {}, {}
 
@@ -117,6 +120,8 @@ def fab(r, pilha=frozenset(), mexido=True):
     if mexido:
         for gn in extra.get(r, ()):
             melhor = max(melhor, nosso(gn))
+        for gn in extra_goto.get(r, ()):
+            melhor = max(melhor, nosso(gn) - qf.get(r, 0))
     v = qf.get(r, 0) + melhor
     if mexido and r in DESVIOS:
         v = max(v, nosso(DESVIOS[r]))

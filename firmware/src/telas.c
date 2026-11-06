@@ -124,6 +124,10 @@ static unsigned copia_ram(char *s, u32 a, unsigned n)
 #define MARCA_VARIOS      2
 #define MARCA_LISTA       8                      /* v140: lista de canais, com as setas e o EXIT dela */
 #define MARCA_NOMEIA      4                      /* v138: o MEMCH abre o editor do nome depois do OK */
+#define MARCA_BANKS       16                     /* v141: da pasta BANKS (lista_item, mensagem.c) */
+#define MARCA_VFO         32                     /* v141: so vale no VFO, e no canal abre com o aviso */
+#define MARCA_CANAL       64                     /* v141: so vale no canal, e no VFO abre com o aviso */
+#define MARCAS_AVISO      (MARCA_LISTA | MARCA_VFO | MARCA_CANAL)
 #define RADIO_FM_AM       0x01E61168u            /* as tabelas do menu do radio (0x01E49026) */
 #define RADIO_SSB         (RADIO_FM_AM + 532)
 
@@ -199,13 +203,22 @@ static unsigned menu_nivel(void)
 /* As marcas do item do menu (v55); no menu rapido do SAVE (v140, o 3 segurado), as do SAVE da pasta. */
 #define TABELA_RAPIDA 0x01E5E5ACu
 unsigned lista_item(void);
-static unsigned marcas_do_item(void)
+unsigned em_canal(void);
+unsigned marcas_do_item(void)
 {
     unsigned n = menu_nivel();
 
     if (MENU_TABELA == TABELA_RAPIDA)
         return MARCA_LISTA | MARCA_NOMEIA;
     return n == 0 || n >= RADIO ? 0 : MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO);
+}
+
+/* Uma lista aberta, ou o aviso no lugar de um item que so vale num modo: as setas e o EXIT sao os das listas. */
+static unsigned na_lista_aberta(void)
+{
+    unsigned m = marcas_do_item();
+
+    return MENU_EDITANDO == 1 && ((m & MARCA_LISTA) || ((m & MARCAS_AVISO) && MENU_TIPO == 8));
 }
 
 /* A janela de pasta (v55): escolhendo o grupo, e escolhendo o item dentro dele ou no menu do radio -
@@ -223,7 +236,7 @@ struct menu_b {
 
 #define TOPO_MENU   56
 #define TOPO_EDITOR (TOPO_MENU + 21)
-#define LIGADO      0x01        /* no fim da opcao: ela esta ligada (BANK e CHANNEL dos BANKS, bancos.c) - sai em ambar */
+#define LIGADO      0x01        /* no fim da opcao: ela esta ligada (ACTIVE e CHANNELS dos BANKS, bancos.c) - sai em ambar */
 
 /* O editor de nome: tipo 7 editando (o motor de menus vai para 0x01E48DAC em vez do titulo e das
  * linhas). Desde a v38 tambem na tela B (os ganchos dele estao no tela.c). */
@@ -244,7 +257,7 @@ static void le_menu(struct menu_b *m)
     m->editor = menu_editor();
     m->nivel = menu_nivel();
     m->pasta = menu_pasta();
-    m->lista = MENU_EDITANDO == 1 && (marcas_do_item() & MARCA_LISTA);
+    m->lista = na_lista_aberta();
 }
 
 /* A letra do menu (v56), um pouco maior que a media para ler melhor: as colunas do medio, a linha do
@@ -316,22 +329,23 @@ static const char *const modos_editor[2] = {"ABC", "123"};
  * telas_faixa). */
 #define CAIXA_Y0    TOPO_MENU
 
-/* A lista de canais sem lista (v140): o aviso, ou a pergunta do DELETE com a linha do cursor, que o motor montou.
+/* A lista sem lista (v140): o aviso, pelo VALOR (mensagem.c), ou a pergunta do DELETE com a linha do cursor, que o motor montou.
  * Na letra media: o texto_menu passa 8 B do limite da pilha da interface. */
 #ifndef PREVIA
 __attribute__((section(".reserva.tela")))
 #endif
 SEPARADA static void aviso_cena(void)
 {
-    static const char *const avisos[3] = {"SAVE CHANNEL FIRST", "NO SAVED CHANNELS", "MEMORY FULL"};
-    unsigned y = TOPO_MENU + 22, item = lista_item();
+    static const char *const avisos[5] = {"SAVE CHANNEL FIRST", "NO SAVED CHANNELS", "MEMORY FULL", "VFO ONLY",
+                                          "BANK EMPTY"};
+    unsigned y = TOPO_MENU + 22, a = RAM(u16, 0x00014BFC);
     char s[28];
 
     pinta(3, y, 157, y + 34, COR_VERDE);
     pinta(4, y + 1, 156, y + 33, COR_CARTAO);
-    if (RAM(u16, 0x00014BFC) >= 960) {
-        texto_medio(10, y + 13, avisos[item], 142, COR_BRANCO);
-        if (item == 0)
+    if (a >= 960) {
+        texto_medio(10, y + 13, avisos[a >= 976 ? 4 : a - 960], 142, COR_BRANCO);
+        if (a == 960)
             texto(156 - largura("OK SAVE  EXIT BACK", 1), y + 38, "OK SAVE  EXIT BACK", 1, COR_CINZA);
         return;
     }
@@ -483,10 +497,15 @@ SEPARADA static void pasta_cena(const struct menu_b *m)
     u32 t = escolhendo ? MENU_TABELA : MENU_BASE + menu_inicio(g) * TAM_ITEM;
     unsigned n = escolhendo ? MENU_CONTA : MENU_ITENS(g), valor = 0, linhas, inicio = 0, k, i, x, y;
     char s[12], v[VALOR_MAX + 1];           /* s: numeros, "RADIO " e a banda, o nome da memoria do radio */
+    const char *modo = 0;                   /* v141: no "L" do que so vale num modo, qual */
 
     if (escolhendo && (radio ? (ITEM_FLAGS(t, cursor) & 0x0F) != 4
                              : !(MENU_MARCAS((t - MENU_BASE) / TAM_ITEM + cursor) & MARCA_SEM_VALOR)))
         valor = valor_do_cursor(v) != 0;   /* sem "L": as acoes (no radio, a memoria) */
+    if (valor && !radio) {
+        k = MENU_MARCAS((t - MENU_BASE) / TAM_ITEM + cursor);
+        modo = k & MARCA_VFO && em_canal() ? "VFO" : k & MARCA_CANAL && !em_canal() ? "CHANNEL" : 0;
+    }
     linhas = n + valor;
     if (escolhendo && linhas > JANELA_LINHAS && cursor + valor >= JANELA_LINHAS)
         inicio = cursor + valor - (JANELA_LINHAS - 1);    /* escolhendo o grupo, do comeco (v57) */
@@ -519,7 +538,7 @@ SEPARADA static void pasta_cena(const struct menu_b *m)
         if (valor && l == cursor + 1) {           /* o "L": o valor, que o cursor nao seleciona */
             pinta(13, y - 2, 14, y + 5, COR_VERDE);
             pinta(13, y + 5, 18, y + 6, COR_VERDE);
-            texto_menu(21, y, v, 138 - 21, COR_VERDE);
+            texto_menu(21, y, modo ? modo : v, 138 - 21, COR_VERDE);
             continue;
         }
         i = l - (valor && l > cursor);

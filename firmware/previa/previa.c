@@ -183,9 +183,17 @@ unsigned previa_item_flags(u32 t, unsigned i)
     return t == RADIO_FM_AM || t == RADIO_SSB ? previa_radio_tipos[i] : 0;
 }
 
+unsigned marcas_do_item(void);
 unsigned lista_item(void)
 {
-    return memoria[0x14BFA];                /* na pasta CH MEMORY, o item diz a lista */
+    /* na pasta CH MEMORY, o item diz a lista; a da pasta BANKS vem depois (mensagem.c) */
+    return memoria[0x14BFA] + (marcas_do_item() & 16 ? 4 : 0);
+}
+
+static unsigned previa_canal = 1;       /* o lado em evidencia em canal: o aviso do que so vale no VFO */
+unsigned em_canal(void)
+{
+    return previa_canal;
 }
 
 unsigned previa_menu_marcas(unsigned p)
@@ -576,8 +584,8 @@ int main(int argc, char **argv)
 
         BASE_TELAS();
         memoria[0x1533D] = 1;
-        strcpy((char *)&memoria[0x15494], "SQL");
-        menu_no("AUDIO", "SQL");
+        strcpy((char *)&memoria[0x15494], "SQUELCH");
+        menu_no("AUDIO", "SQUELCH");
         LINHA(0, 2, "1");
         LINHA(1, 1, "2");
         LINHA(2, 1, "3");
@@ -605,8 +613,8 @@ int main(int argc, char **argv)
         previa_vista = 3;
         memoria[0x15E04] = 1;
         memoria[0x1533D] = 1;
-        strcpy((char *)&memoria[0x15494], "TX-A/B/C");
-        menu_no("WATCH", "TX-A/B/C");
+        strcpy((char *)&memoria[0x15494], "TX SIDE");
+        menu_no("WATCH", "TX SIDE");
         LINHA(0, 1, "B");
         LINHA(1, 2, "C");
         LINHA(2, 1, "OFF");
@@ -632,21 +640,81 @@ int main(int argc, char **argv)
         telas_b(1, 0);
         grava("29-menu-ssbmemch");
 
-        /* o BANK (bancos.c, bank_exibe): o banco ligado vem com o byte 0x01 no fim */
+        /* o ACTIVE (v141): o banco ligado vem com o byte 0x01 no fim (bancos.c, banco_texto) */
         BASE_TELAS();
         memoria[0x1533D] = 1;
-        strcpy((char *)&memoria[0x15494], "BANK");
-        menu_no("BANKS", "BANK");
-        memoria[0x14C00] = 0;
-        LINHA(0, 2, "1 BAOFENG\x01");
-        LINHA(1, 1, "2 MOTOROLA");
-        LINHA(2, 1, "3 ESPECIAL\x01");
+        strcpy((char *)&memoria[0x15494], "ACTIVE");
+        menu_no("BANKS", "ACTIVE");
+        memoria[0x14C00] = 4;
+        LINHA(0, 1, "16 - BANK 16");
+        LINHA(1, 1, "01 - REPETIDORAS\x01");
+        LINHA(2, 1, "02 - BANK 02");
         memoria[0x14C10] = 1;
         memoria[0x14BF9] = 1;
         telas_b(1, 0);
-        grava("18-menu-bank");
+        grava("18-active-ligados");
+        memoria[0x14C00] = 8;
+        memoria[0x14BFC] = (976 + 1) & 255;
+        memoria[0x14BFD] = (976 + 1) >> 8;
+        telas_b(1, 0);
+        grava("18b-active-banco-vazio");
+        memoria[0x14BFC] = 0;
+        memoria[0x14BFD] = 0;
 
-        /* o BANK NAME e o CH-NAME (tipo 7): uma linha so, sem marcador, e o cursor do motor parado em
+        /* o CHANNELS: a escolha do banco e os canais dele, com o titulo no nome do banco */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "CHANNELS");
+        menu_no("BANKS", "CHANNELS");
+        memoria[0x14C00] = 4;
+        LINHA(0, 1, "16 - BANK 16");
+        LINHA(1, 1, "01 - REPETIDORAS");
+        LINHA(2, 1, "02 - BANK 02");
+        memoria[0x14C10] = 1;
+        memoria[0x14BF9] = 1;
+        telas_b(1, 0);
+        grava("18c-channels-escolhe");
+        strcpy((char *)&memoria[0x15494], "REPETIDORAS");
+        LINHA(0, 1, "003 - BF888-03");
+        LINHA(1, 1, "103 - RPT BRAGANCA\x01");
+        LINHA(2, 1, "200 - SBST RADIO");
+        telas_b(1, 0);
+        grava("18d-channels-do-banco");
+
+        /* os avisos de VFO e canal (v141), na pasta o modo no lugar do valor */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "TX SHIFT");
+        menu_no("REPEATER", "TX SHIFT");
+        memoria[0x14C00] = 8;
+        memoria[0x14BF9] = 1;
+        memoria[0x14BFC] = 963 & 255;
+        memoria[0x14BFD] = 963 >> 8;
+        telas_b(1, 0);
+        grava("18e-sft-d-em-canal");
+        memoria[0x14BFC] = 0;
+        memoria[0x14BFD] = 0;
+        memoria[0x14BF9] = 0;
+        memoria[0x14C00] = 0;
+        LINHA(0, 2, "OFF");
+        telas_b(1, 0);
+        grava("18f-sft-d-na-pasta");
+        previa_canal = 0;
+        strcpy((char *)&memoria[0x15494], "SCAN ADD");
+        menu_no("SCAN", "SCAN ADD");
+        telas_b(1, 0);
+        grava("18g-scan-add-na-pasta");
+        memoria[0x14C00] = 8;
+        memoria[0x14BF9] = 1;
+        memoria[0x14BFC] = 960 & 255;
+        memoria[0x14BFD] = 960 >> 8;
+        telas_b(1, 0);
+        grava("18h-scan-add-em-vfo");
+        previa_canal = 1;
+        memoria[0x14BFC] = 0;
+        memoria[0x14BFD] = 0;
+
+        /* o NAME e o CH-NAME (tipo 7): uma linha so, sem marcador, e o cursor do motor parado em
          * outra linha (o tipo 7 nao mexe nele) */
         BASE_TELAS();
         memoria[0x1533D] = 1;
@@ -802,7 +870,7 @@ int main(int argc, char **argv)
         LINHA(2, 0, "");
         telas_b(1, 0);
         grava("45-menu-item-rola-para-baixo");
-        menu_no("CHANNEL", "W/N");
+        menu_no("CHANNEL", "BANDWIDTH");
         LINHA(0, 1, "WIDE");
         LINHA(1, 2, "NARROW");
         telas_b(1, 0);

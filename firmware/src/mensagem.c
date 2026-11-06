@@ -1051,7 +1051,8 @@ int texto15(char *d, const char *formato, const char *s)
     return i;
 }
 
-/* Sair do editor como o CH-NAME no fim do set dele (o nome_grava do bancos.c faz o mesmo). */
+/* Sair do editor como o CH-NAME no fim do set dele (0x01E3C822): sem isto o editor fica ligado, e o cabecalho do menu
+ * mostra o "abc" do teclado em todos os itens, ate sair e entrar no menu de novo. */
 static void editor_fecha(void)
 {
     LIMPA(2);
@@ -1756,11 +1757,27 @@ unsigned aprs_caixa_abre(void)
  * - O MENU_TIPO diz o passo: 4 a lista, 7 o editor e 8 o aviso ou a pergunta do DELETE (como o VERSION, so leitura: o
  *   tipo 8 e o que le_menu e gancho_menu_digito ja tratam), o aviso com o VALOR em CANAIS e a pergunta com o canal.
  *   O VALOR fica no canal durante o editor: as setas nao o mexem (lista_seta) e o digito vai ao texto. O SAVE e o CH
- *   NAME so gravam no OK do editor, e cancelar volta a lista (lista_cancela), sem nada no chip. */
+ *   NAME so gravam no OK do editor, e cancelar volta a lista (lista_cancela), sem nada no chip.
+ * - Os BANKS (v141) sao mais quatro listas: as dos 16 bancos (o ACTIVE, a escolha do CHANNELS e o NAME) e a dos canais
+ *   salvos do banco aberto. O que e do chip esta no bancos.c. */
 #define CANAIS         960u
 #define ITEM_CH_NAME   0                    /* na pasta CH MEMORY (conferir.py, 3b) */
 #define ITEM_DELETE    1
 #define ITEM_SAVE      2
+#define ITEM_NO_BANCO  3                    /* os salvos, com os do banco aberto em ambar */
+#define ITEM_ACTIVE    4                    /* daqui em diante, pela ordem da pasta BANKS (3b), os 16 bancos */
+#define ITEM_ESCOLHE   5
+#define ITEM_NOME      6
+#define BANCOS         16u
+#define AVISO_SALVE    CANAIS               /* o VALOR no aviso (aviso_cena, telas.c) */
+#define AVISO_VAZIO    (CANAIS + 1)
+#define AVISO_CHEIA    (CANAIS + 2)
+#define AVISO_VFO      (CANAIS + 3)
+#define AVISO_BANCO    (CANAIS + 16)        /* mais o banco: o aviso dentro da lista, que volta a ele */
+#define MARCA_LISTA    8                    /* as marcas do item (telas.c) */
+#define MARCA_BANKS    16
+#define MARCA_VFO      32
+#define MARCA_CANAL    64
 #define TIPO_LISTA     4                    /* o do item na tabela */
 #define TIPO_EDITOR    7
 #define TIPO_AVISO     8
@@ -1771,6 +1788,7 @@ unsigned aprs_caixa_abre(void)
 #define MODO_LADOS     RAM(u8, 0x00014B86)  /* um nibble por lado, 1 = canal */
 #define LADO_MENU      (RAM(u8, 0x00015E04) != 0)
 #define TITULO_MENU    ((char *)&RAM(u8, 0x00015494))
+#define BANCO_ABERTO   RAM(u8, 0x00014BF3)  /* no CHANNELS, o banco aberto + 1; 0 escolhendo */
 FIRMWARE(DELCH_FABRICA, 0x01E3C516);  void DELCH_FABRICA(void);
 FIRMWARE(RECARREGA_LADOS, 0x01E3A812); void RECARREGA_LADOS(void);
 FIRMWARE(GRAVA_CANAL, 0x01E3A2BA);    void GRAVA_CANAL(unsigned, const void *, const void *);   /* 20 B + 12 B */
@@ -1778,14 +1796,29 @@ FIRMWARE(MOTOR_MENU, 0x01E489E0);     u32 MOTOR_MENU(void);
 FIRMWARE(TEMPO_MENU, 0x01E484F8);     void TEMPO_MENU(void);
 int existe_no_registro(const u8 *p);
 void memch_grava(const char *nome);
+unsigned marcas_do_item(void);
+void banco_padrao(unsigned n, char *s);
+void banco_nome(unsigned n, char *s);
+char *banco_texto(unsigned n, unsigned ativo);
+char *banco_resumo(void);
+unsigned banco_tem(unsigned b, unsigned canal);
+unsigned banco_liga(unsigned n);
+void banco_refiltra(void);
+void banco_canal(unsigned k, unsigned canal);
+void banco_nomeia(unsigned n);
+unsigned le_nome(unsigned n, char *destino);
 
 NOS_CAMINHOS unsigned lista_item(void)
 {
-    return MENU_TABELA == TABELA_RAPIDA ? ITEM_SAVE : MENU_NUMERO;
+    if (MENU_TABELA == TABELA_RAPIDA)
+        return ITEM_SAVE;
+    if (!(marcas_do_item() & MARCA_BANKS))
+        return MENU_NUMERO;
+    return BANCO_ABERTO && MENU_NUMERO == ITEM_ESCOLHE - ITEM_ACTIVE ? ITEM_NO_BANCO : ITEM_ACTIVE + MENU_NUMERO;
 }
 
 /* O lado em evidencia esta num canal? O aviso do CH NAME em VFO e o "---" da pasta. */
-NOS_CAMINHOS static unsigned em_canal(void)
+NOS_CAMINHOS unsigned em_canal(void)
 {
     return (MODO_LADOS >> (LADO_MENU * 4) & 15) == 1;
 }
@@ -1795,6 +1828,8 @@ NOS_CAMINHOS static unsigned na_lista(unsigned n, unsigned item)
     u8 b[4];
     unsigned salvo;
 
+    if (item > ITEM_NO_BANCO)
+        return n < BANCOS;
     LE_FLASH(n << 5, b, 4);
     salvo = existe_no_registro(b);
     return item == ITEM_SAVE ? !salvo && !(RAM(u8, 0x000153A1) == 165 && n < 30) : salvo;
@@ -1837,13 +1872,16 @@ NOS_CAMINHOS static char *tres_digitos(char *p, unsigned v)
     return p + 3;
 }
 
-/* "102 - PIGAO 3"; sem nome, a frequencia; no SAVE, so o numero. */
+/* "102 - PIGAO 3"; sem nome, a frequencia; no SAVE, so o numero. O do banco aberto, com o LIGADO no fim (telas.c). */
 NOS_CAMINHOS static char *lista_texto(unsigned n, unsigned item)
 {
-    char *p = tres_digitos(TEXTO, n + 1);
+    char *p;
     u8 b[4];
     int k = 0;
 
+    if (item > ITEM_NO_BANCO)
+        return banco_texto(n, item == ITEM_ACTIVE);
+    p = tres_digitos(TEXTO, n + 1);
     if (item != ITEM_SAVE) {
         *p++ = ' ';
         *p++ = '-';
@@ -1861,19 +1899,29 @@ NOS_CAMINHOS static char *lista_texto(unsigned n, unsigned item)
             }
         }
     }
+    if (item == ITEM_NO_BANCO && banco_tem(BANCO_ABERTO - 1u, n))
+        *p++ = 1;
     *p = 0;
     return TEXTO;
 }
 
-/* O get: o canal do lado em evidencia (em VFO, o ultimo dele) ou o mais perto da lista. */
+/* O get: o canal do lado em evidencia (em VFO, o ultimo dele) ou o mais perto da lista; os bancos abrem no primeiro. */
+NOS_CAMINHOS static unsigned lista_inicio(void)
+{
+    unsigned item = lista_item();
+
+    return item > ITEM_NO_BANCO ? 0 : lista_perto(RAM(u16, 0x00015E0C + LADO_MENU * 4), item);
+}
+
 u16 lista_le(void)
 {
-    return (u16)lista_perto(RAM(u16, 0x00015E0C + LADO_MENU * 4), lista_item());
+    return (u16)lista_inicio();
 }
 
 /* O exibe, uma chamada por linha, com a linha no VALOR. Editando, a linha do cursor e a da lista_perto, e as outras a
  * tantos passos dela quanto o motor pede (com dois na lista, o outro so embaixo; com um, so ele). Na janela da
- * pasta so vale a marcada, e em VFO o CH NAME nao mostra canal: o da lista nao seria o sintonizado. */
+ * pasta so vale a marcada, e em VFO o CH NAME nao mostra canal: o da lista nao seria o sintonizado. O ACTIVE mostra
+ * quantos estao ligados. */
 NA_RESERVA static char *lista_linha(void)
 {
     unsigned item = lista_item(), a, n, k;
@@ -1881,6 +1929,8 @@ NA_RESERVA static char *lista_linha(void)
 
     if (MENU_EDITANDO != 1 && VALOR != GRAVADO)
         return "";
+    if (MENU_EDITANDO != 1 && item > ITEM_NO_BANCO)
+        return banco_resumo();
     a = lista_perto(MENU_EDITANDO == 1 ? LINHA_BASE : VALOR, item);
     if (a >= CANAIS || (item == ITEM_CH_NAME && !em_canal()))
         return "---";
@@ -1902,12 +1952,23 @@ char *lista_exibe(void)
     return lista_linha();
 }
 
-/* O item nao pode abrir agora? Ai abre com o aviso (gancho_menu_ok), no lugar da lista. */
-NOS_CAMINHOS unsigned lista_aviso(void)
+/* O item nao pode abrir agora? Devolve o aviso com que ele abre (menu_ok_item, tela.c), ou 0: o que so vale num modo,
+ * como no UV-17L, e a lista vazia. Abrir e tambem o que fecha o banco que tenha ficado aberto. */
+NA_RESERVA unsigned lista_aviso(void)
 {
-    unsigned item = lista_item();
+    unsigned m = marcas_do_item(), item;
 
-    return item == ITEM_CH_NAME ? !em_canal() : lista_perto(0, item) >= CANAIS;
+    if (m & MARCA_VFO)
+        return em_canal() ? AVISO_VFO : 0;
+    if (m & MARCA_CANAL)
+        return em_canal() ? 0 : AVISO_SALVE;
+    BANCO_ABERTO = 0;
+    item = lista_item();
+    if (item == ITEM_CH_NAME)
+        return em_canal() ? 0 : AVISO_SALVE;
+    if (lista_perto(0, item == ITEM_ESCOLHE ? ITEM_DELETE : item) < CANAIS)
+        return 0;
+    return item == ITEM_SAVE ? AVISO_CHEIA : AVISO_VAZIO;
 }
 
 /* A seta com a lista aberta: anda so na lista; no editor, no aviso e na pergunta nao faz nada. */
@@ -1925,37 +1986,55 @@ NOS_CAMINHOS u32 lista_seta(int sentido)
     return MOTOR_MENU();
 }
 
-/* O EXIT na pergunta volta a lista, e no editor vazio (ou segurado) tambem, sem gravar nada. Quem chama redesenha: o
- * motor aqui dentro passaria do limite da pilha da interface. */
-NOS_CAMINHOS u32 lista_cancela(void)
+NA_RESERVA static void lista_titulo(const char *t)
+{
+    unsigned k;
+
+    for (k = 0; (TITULO_MENU[k] = t[k]) != 0; k++)
+        ;
+}
+
+/* O EXIT na pergunta e no aviso de dentro da lista volta a lista, e no editor vazio (ou segurado) tambem, sem gravar
+ * nada; nos canais de um banco, volta aos bancos, nele. O aviso de abertura e a lista sem banco aberto ficam para o
+ * EXIT de fabrica. Quem chama redesenha: o motor aqui dentro passaria do limite da pilha da interface. */
+NA_RESERVA u32 lista_cancela(void)
 {
     if (MENU_TIPO == TIPO_EDITOR) {
-        unsigned item = lista_item(), k;
-        const char *t = item == ITEM_SAVE ? "SAVE" : "CH NAME";
+        unsigned item = lista_item();
 
         editor_fecha();
-        for (k = 0; (TITULO_MENU[k] = t[k]) != 0; k++)
-            ;
-        LINHA_CURSOR = 1;
-    } else if (MENU_TIPO != TIPO_AVISO || VALOR >= CANAIS)
+        lista_titulo(item == ITEM_SAVE ? "SAVE" : item == ITEM_NOME ? "NAME" : "CH NAME");
+    } else if (MENU_TIPO == TIPO_LISTA) {
+        if (!BANCO_ABERTO)
+            return 0;
+        VALOR = BANCO_ABERTO - 1u;
+        BANCO_ABERTO = 0;
+        lista_titulo("CHANNELS");
+    } else if (MENU_TIPO != TIPO_AVISO || (VALOR >= CANAIS && VALOR < AVISO_BANCO))
         return 0;
+    else if (VALOR >= AVISO_BANCO)
+        VALOR -= AVISO_BANCO;
+    LINHA_CURSOR = 1;
     MENU_TIPO = TIPO_LISTA;
     TEMPO_MENU();
     return 1;
 }
 
 /* Depois do set, no desvio do OK (b_menu_marca, tela.c, a marca MARCA_NOMEIA): da lista, abre o editor do canal, com
- * o estado do OK de fabrica (0x01E49B20..0x01E49B32) e o canal no titulo; o SAVE vazio, o CH NAME com o nome. Do OK
- * do editor, que ja gravou, devolve 0, e a edicao fecha. */
+ * o estado do OK de fabrica (0x01E49B20..0x01E49B32) e o canal no titulo; o SAVE vazio, o CH NAME com o nome; o NAME
+ * com o nome dado, vazio se o banco nao tem, e o nome de fabrica no titulo. Do OK do editor, que ja gravou, devolve
+ * 0, e a edicao fecha. */
 NOS_CAMINHOS unsigned lista_editor_abre(void)
 {
-    unsigned n = VALOR, k = 0;
+    unsigned n = VALOR, k = 0, item = lista_item();
 
     if (MENU_TIPO == TIPO_EDITOR) {
         MENU_TIPO = TIPO_LISTA;
         return 0;
     }
-    if (lista_item() == ITEM_CH_NAME) {
+    if (item == ITEM_NOME)
+        k = le_nome(n, TEXTO);
+    else if (item == ITEM_CH_NAME) {
         LE_FLASH((n << 5) + 20, TEXTO, 12);
         while (k < 12 && TEXTO[k] && (u8)TEXTO[k] != 0xFF)
             k++;
@@ -1965,6 +2044,10 @@ NOS_CAMINHOS unsigned lista_editor_abre(void)
     RAM(u32, 0x00014C04) = 0;
     RAM(u8, 0x00014C08) = 0;
     editor_abre(TEXTO, k, 12);
+    if (item == ITEM_NOME) {
+        banco_padrao(n, TITULO_MENU);
+        return 1;
+    }
     TITULO_MENU[0] = 'C';
     TITULO_MENU[1] = 'H';
     TITULO_MENU[2] = ' ';
@@ -2036,9 +2119,50 @@ NOS_CAMINHOS void delete_grava(void)
     }
     MENU_TIPO = TIPO_LISTA;
     DELCH_FABRICA();
+    banco_refiltra();
     VALOR = (u16)lista_perto(VALOR, ITEM_DELETE);
-    if (VALOR >= CANAIS)
+    if (VALOR >= CANAIS) {
+        VALOR = AVISO_VAZIO;
         MENU_TIPO = TIPO_AVISO;
+    }
+}
+
+/* Os sets dos BANKS. Na lista, o numero digitado vale pelo mais perto, como nas de canais. */
+NA_RESERVA void ativo_grava(void)
+{
+    unsigned n = lista_perto(VALOR, ITEM_ACTIVE);
+
+    VALOR = (u16)n;
+    if (!banco_liga(n)) {
+        MENU_TIPO = TIPO_AVISO;
+        LINHA_CURSOR = 0;
+        VALOR = (u16)(AVISO_BANCO + n);
+    }
+}
+
+NA_RESERVA void canais_grava(void)
+{
+    unsigned n;
+
+    if (BANCO_ABERTO) {
+        VALOR = (u16)lista_perto(VALOR, ITEM_NO_BANCO);
+        banco_canal(BANCO_ABERTO - 1u, VALOR);
+        return;
+    }
+    n = lista_perto(VALOR, ITEM_ESCOLHE);
+    BANCO_ABERTO = (u8)(n + 1);
+    banco_nome(n, TITULO_MENU);
+    VALOR = (u16)lista_inicio();
+}
+
+NA_RESERVA void nome_grava(void)
+{
+    if (MENU_TIPO != TIPO_EDITOR) {
+        VALOR = (u16)lista_perto(VALOR, ITEM_NOME);
+        return;
+    }
+    banco_nomeia(VALOR);
+    editor_fecha();
 }
 
 char *aprs_ind_exibe(void)

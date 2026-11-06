@@ -588,6 +588,10 @@ for g in range(grupos):
         problemas.append(f'{nome}: os textos {filhos} nao sao os do montar')
     # v112: a caixa e a volta da tela MESSAGES acham o item pela posicao (mensagem.c, ITEM_MESSAGES e ITEM_TO)
     # v138: e o CALLSIGN, que o # pede antes da caixa quando falta o indicativo (ITEM_CALLSIGN)
+    if nome == 'BANKS' and filhos != ['ACTIVE', 'CHANNELS', 'NAME']:      # v141: idem
+        problemas.append(f'BANKS: os itens fora das posicoes 0, 1 e 2 que a lista usa: {filhos}')
+    if nome == 'CH MEMORY' and g != 4:                                    # v141: GRUPO_CH_MEMORY, o tela.c
+        problemas.append('CH MEMORY: nao e mais o grupo 5, o do OK do SAVE CHANNEL FIRST (GRUPO_CH_MEMORY, tela.c)')
     if nome == 'CH MEMORY' and filhos != ['CH NAME', 'DELETE', 'SAVE']:   # v140: o item diz a lista (lista_item)
         problemas.append(f'CH MEMORY: os itens fora das posicoes 0, 1 e 2 que a lista usa: {filhos}')
     if nome == 'APRS' and filhos[0:1] + filhos[2:3] + filhos[5:6] != ['CALLSIGN', 'MESSAGES', 'TO']:
@@ -1215,6 +1219,8 @@ previsto += [(montar.RESERVA, montar.RESERVA + len(reserva) - 1, 'codigo novo na
 previsto += [(montar.CAMINHOS, montar.CAMINHOS + len(caminhos) - 1, 'codigo novo no lugar dos caminhos das vozes')]
 previsto += [(montar.TABELA_RAPIDA_SAVE + montar.CAMPO[c_], montar.TABELA_RAPIDA_SAVE + montar.CAMPO[c_] + 3,
               'menu rapido do SAVE: ' + c_) for c_, _ in montar.RAPIDA_SAVE_CAMPOS]
+previsto += [(t_ + montar.CAMPO[c_], t_ + montar.CAMPO[c_] + 3, 'menu rapido: o nome claro ' + s_)
+             for t_, s_ in montar.RAPIDA_NOMES for c_ in ('nome', 'nome_cn')]
 previsto += [(s_, s_ + len(a_) - 1, 'caminhos: ' + d_) for s_, a_, _, d_ in montar.CAMINHOS_REMENDOS]
 
 previsto += [(s, s + 3, f'gancho do cabo ({p})') for s, p in montar.CABO_SITIOS]

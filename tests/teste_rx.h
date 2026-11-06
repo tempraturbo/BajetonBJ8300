@@ -266,6 +266,69 @@ static void memch_grava(const char *nome)
 
     GRAVA_CANAL(VALOR_TESTE, vfo, nome);
 }
+/* Os BANKS (v141): o que o bancos.c faz no chip, aqui em memoria. */
+static unsigned marcas_teste;
+static u16 ligados_teste;
+static u8 bancos_teste[16][120];
+static char nomes_teste[16][13];
+static unsigned marcas_do_item(void) { return marcas_teste; }
+static void banco_padrao(unsigned n, char *s) { sprintf(s, "BANK %02u", n + 1); }
+static unsigned le_nome(unsigned n, char *d)
+{
+    unsigned t = (u8)nomes_teste[n][0] <= ' ' ? 0 : (unsigned)strlen(nomes_teste[n]);
+
+    memcpy(d, nomes_teste[n], t);
+    d[t] = 0;
+    return t;
+}
+static void banco_nome(unsigned n, char *s)
+{
+    if (!le_nome(n, s))
+        banco_padrao(n, s);
+}
+static char *banco_texto(unsigned n, unsigned ativo)
+{
+    char *t = (char *)(ram_pc + 0x129B0), nome[13];
+
+    banco_nome(n, nome);
+    sprintf(t, "%02u - %s%s", n + 1, nome, ativo && (ligados_teste >> n & 1) ? "\x01" : "");
+    return t;
+}
+static char *banco_resumo(void)
+{
+    char *t = (char *)(ram_pc + 0x129B0);
+    unsigned m, k = 0;
+
+    for (m = ligados_teste; m; m &= m - 1)
+        k++;
+    if (!k)
+        return "ALL CHANNELS";
+    sprintf(t, "%u ON", k);
+    return t;
+}
+static unsigned banco_tem(unsigned b, unsigned canal) { return bancos_teste[b][canal >> 3] >> (canal & 7) & 1; }
+static unsigned banco_liga(unsigned n)
+{
+    unsigned k;
+
+    if (!(ligados_teste >> n & 1)) {
+        for (k = 0; k < 960 && !(banco_tem(n, k) && existe_no_registro(flash_canais + (k << 5))); k++)
+            ;
+        if (k == 960)
+            return 0;
+    }
+    ligados_teste ^= (u16)(1u << n);
+    return 1;
+}
+static void banco_refiltra(void) {}
+static void banco_canal(unsigned b, unsigned canal) { bancos_teste[b][canal >> 3] ^= (u8)(1u << (canal & 7)); }
+static void banco_nomeia(unsigned n)
+{
+    unsigned t = *(volatile u8 *)(ram_pc + 0x14A35);
+
+    memcpy(nomes_teste[n], (char *)(ram_pc + 0x14A3A), t);
+    nomes_teste[n][t] = 0;
+}
 static void RECARREGA_LADOS(void) {}
 static u32 MOTOR_MENU(void) { return 0; }
 static void TEMPO_MENU(void) {}

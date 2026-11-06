@@ -2902,3 +2902,37 @@ Esse fim é de fábrica, e não um travamento. Pelo CHIRP o modo só vale na par
 trocada inteira, e o setor `0xD000` não guarda nada nosso (os bancos e o resto ficam de `0xC1000` em diante). As listas de
 canais tratam o GMRS: o SAVE não mostra os canais 1 a 30, e o DELETE segue a recusa de fábrica. Conferido no desmontado,
 não no rádio.
+
+## 34. Os BANKS e os avisos de modo (v141)
+
+Os três itens dos BANKS são listas do mesmo motor da seção 32, no tipo 4 (`FLAGS_LISTA`, `0x84`) e com o máximo de 960: o
+`lista_le`, o `lista_exibe` e as setas são os mesmos, e o `lista_item` passa a devolver mais quatro listas pela marca
+`MARCA_BANKS`: `ITEM_NO_BANCO`, os canais salvos do banco aberto, e `ITEM_ACTIVE`, `ITEM_ESCOLHE` e `ITEM_NOME`, os 16 bancos,
+pela posição na pasta (o `conferir.py`, 3b, confere a ordem). Nas listas de bancos, o `na_lista` é só `n < 16`, de modo que o
+`lista_perto` e o `lista_passo` não mudam, e o número digitado cai no banco 16 se passar dele. O que mexe no chip fica no
+`bancos.c`: `banco_liga`, `banco_canal` e `banco_nomeia`.
+
+- **O banco aberto.** `b[0x14BF3]` (`BANCO_ABERTO`, o `0x9047` dos ajustes, livre pela varredura) guarda o banco + 1 no
+  CHANNELS. O `lista_aviso`, que só roda ao abrir o item, o zera, e o `zera_envio` também, na partida e nos ajustes. O título
+  é escrito direto em `0x15494`, que o motor só copia fora da edição.
+- **O aviso dentro da lista.** O `VALOR` diz qual é o aviso: 960 `SAVE CHANNEL FIRST`, 961 `NO SAVED CHANNELS`, 962 `MEMORY
+  FULL`, 963 `VFO ONLY`, e 976 mais o banco `BANK EMPTY`. Este último carrega o banco, e por isso o OK e o EXIT voltam a ele
+  sem nenhum estado a mais (`lista_cancela`).
+- **Por que o cursor vai a 0 no aviso.** O laço das linhas do motor, para item sem exibição própria, lê `opcoes[linha]` sem
+  olhar o máximo nas linhas acima da base (`0x01E48B6A`). Com o `VALOR` em 963 e o cursor na linha 1, o SFT-D leria um
+  ponteiro fora da tabela. Com o cursor na linha 0 não há linha acima, e as de baixo param no máximo (`0x01E48BDE`).
+- **A saída do aviso.** O EXIT de fábrica devolve o `VALOR` e o tipo (`0x01E4D50A..0x01E4D51C`), mas não a base das linhas,
+  `h[0x14C18]`, que a edição encheu com o aviso; o item ficaria sem o "L" até andar na pasta. Por isso o `b_exit_lista` e o OK
+  do aviso passam pelo `menu_vai`, cujo `ITEM_MUDOU` a refaz.
+- **O cursor no meio.** O OK de fábrica calcula a linha do cursor como `min(valor, 2)` (`0x01E49C5E..0x01E49C72`), e a lista
+  abria com o canal na última linha. A chamada do motor no fim do OK (`0x01E49C7C`) passa pelo `gancho_menu_redesenha`, que a
+  põe em 1 com a lista aberta. É a mesma chamada a que o `desvio_menu_marca` volta, e cobre o OK que mantém a lista.
+- **O menu rápido.** A rotina dos menus rápidos (`0x01E4B3A0`) já termina em `goto` para o OK de fábrica (`0x01E4B412`), com o
+  quadro desfeito: por isso o item abre direto. O `goto` agora vai ao `gancho_menu_ok`, e o SAVE com a memória cheia abre no
+  aviso. O `pilha.py` passou a tratar os `GOTOS_LIVRE` como os `goto` de fábrica, sem somar o quadro de quem os faz.
+- **Os nomes.** O `RENOMES` do `montar.py` entra no `ITENS_MUDADOS`, com o índice do item de fábrica e o símbolo do nome novo.
+  Os seis que os menus rápidos também mostram (`RAPIDA_NOMES`) ficam no `.livre`, porque dali o app.bin de fábrica não aponta
+  para os caminhos nem para a reserva.
+
+No Bluetooth, no NOISE REDUCTION, no LIGHT PWM e no RPT TAIL DELAY não há paridade: são do hardware ou de funções que o UV-17L
+não tem. O PTT-ID é o contrário: só o UV tem.

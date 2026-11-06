@@ -5,6 +5,37 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v141 — 06/11 — os BANKS no molde do CH MEMORY, os avisos de modo e os nomes claros (em teste)
+
+`BJ8300_BANK_v141.anc` (sha256 `8a78cc20…`), fora dos commits como as outras de teste: a v140 com a pasta BANKS refeita,
+igual à do UV-17L, com o que faltava para os dois rádios funcionarem igual. Ainda não foi gravada.
+
+- **ACTIVE** (era BANK). A lista dos 16 bancos, como `01 - REPETIDORAS`, com o ligado em âmbar. O OK liga e desliga na hora
+  e a lista fica, para mexer em vários. Banco sem canais não liga: aparece `BANK EMPTY`, e a lista volta nele. Na pasta,
+  embaixo do item, `2 ON` ou `ALL CHANNELS`.
+- **CHANNELS** (era CHANNEL). Primeiro se escolhe o banco; depois vêm só os canais salvos, como `102 - PIGAO 3`, a partir do
+  que está em uso, com os do banco em âmbar e o nome do banco no título. O OK põe e tira, na hora. O EXIT volta aos bancos,
+  e de novo à pasta. Sem nenhum canal salvo, `NO SAVED CHANNELS`.
+- **NAME.** A lista dos bancos abre o editor, vazio se o banco não tem nome e com `BANK 01` no título. O OK grava; em branco,
+  ou só com espaços, o banco volta ao nome de fábrica; cancelar não grava.
+- **Banco vazio não some com os canais.** Sem nada à vista, o rádio mostra todos, nos dois rádios. Apagar o último canal à
+  vista refaz o filtro.
+- **Os avisos de modo, que só o UV tinha.** O TX SHIFT e o OFFSET em canal abrem com `VFO ONLY`, e o SCAN ADD em VFO com
+  `SAVE CHANNEL FIRST`, em que o OK leva ao SAVE. De fábrica, um dava só o bipe de erro e o outro não fazia nada. Na pasta,
+  embaixo deles, `VFO` ou `CHANNEL`.
+- **As listas abrem com o cursor no meio**, com o anterior em cima e o próximo embaixo: de fábrica ele abria na última
+  linha, e só ia ao meio na primeira seta.
+- **O 3 segurado com a memória cheia** abre em `MEMORY FULL`. O menu rápido já terminava no OK de fábrica; agora passa pelo
+  gancho dele.
+- **Os nomes claros**, os mesmos nos dois rádios: SQUELCH (SQL), TAIL CUT (STE), BUSY LOCK (BCL), TX POWER (TXP), BANDWIDTH
+  (W/N), BACKLIGHT TIME (ABR), SHOW A, B e C (MDF-A, B e C), DTMF SIDETONE (DTMFST), DTMF DELAY (PTT-LT), DTMF GROUP (S-CODE),
+  KEY BEEP (BEEP PROMPT), PF2 LONG (PF2 LONG PRESS), RPT TAIL CUT (RP-STE), RPT TAIL DELAY (RPT-RL), TX SHIFT (SFT-D), TONE
+  BURST (TONE), SCAN RESUME (SC-REV), ALARM MODE (AL-MOD), RX e TX CTCSS e DCS (R- e T-), TX TIMEOUT (TOT), DUAL RX (TTR) e TX
+  SIDE (TX-A/B/C). Os itens seguem em ordem alfabética, então vários mudam de número na pasta. Os menus rápidos mostram os
+  mesmos nomes.
+
+Detalhes na [seção 34](engenharia-reversa.md#34-os-banks-e-os-avisos-de-modo-v141).
+
 ## v140 — 06/11 — o menu de canais: CH MEMORY, com listas, confirmação e cancelar sem salvar (em teste)
 
 `BJ8300_BANK_v140.anc` (sha256 `dc59c121…`), fora dos commits como as outras de teste: a V3.5T com o menu de salvar e
