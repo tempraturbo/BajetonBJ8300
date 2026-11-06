@@ -322,7 +322,7 @@ for origem, info, meu, esperado in (
         ('PY2ARS-14', '!2318.07S/04635.59W#REDE APRS-SP-C', 'PY2ABC-7',
          (0, 'PY2ARS-14: 23 18.07S 046 35.59W DIGI REDE APRS-SP-C')),
         ('PU2XYZ-9', ':PY2ABC-7 :Ola tudo bem?{12', 'PY2ABC-7', (1, 'PU2XYZ-9> Ola tudo bem?')),
-        ('PU2XYZ-9', ':PY5ZZZ   :Bom dia{3', 'PY2ABC-7', (0, 'PU2XYZ-9>PY5ZZZ: Bom dia{3')),
+        ('PU2XYZ-9', ':PY5ZZZ   :Bom dia{3', 'PY2ABC-7', (0, 'PU2XYZ-9>PY5ZZZ: Bom dia')),
         ('PU2XYZ-9', ':PY2ABC-7 :ack12', 'PY2ABC-7', (1, 'PU2XYZ-9> ACK 12')),
         ('PY2ABC', '>BJ-8300 V2.9T', 'PY2ABC', (0, 'PY2ABC: >BJ-8300 V2.9T')),
         ('PY2MOV-9', '@092345z2318.07S/04635.59W>Movel', '', (0, 'PY2MOV-9: 23 18.07S 046 35.59W CAR Movel')),

@@ -122,6 +122,7 @@ static unsigned copia_ram(char *s, u32 a, unsigned n)
 #define FORA              0xFF                   /* menu_nivel(): uma tabela que nao e a nossa (os rapidos) */
 #define MARCA_SEM_VALOR   1                      /* as marcas de cada item (v55, montar.py MENU_MARCAS) */
 #define MARCA_VARIOS      2
+#define MARCA_NOMEIA      4                      /* v138: o MEMCH abre o editor do nome depois do OK */
 #define RADIO_FM_AM       0x01E61168u            /* as tabelas do menu do radio (0x01E49026) */
 #define RADIO_SSB         (RADIO_FM_AM + 532)
 
@@ -316,7 +317,8 @@ SEPARADA static void menu_cena(const struct menu_b *m)
         if (m->editor && EDITOR_MODO - 1u < 2)
             x1 = etiqueta(156, TOPO_MENU + 3, modos_editor[EDITOR_MODO - 1], COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 1) - 3;
         if (CAIXA_APRS) {                  /* a caixa da tela MESSAGES (v112): o titulo dela, sem o numero */
-            junta(s, CAIXA_APRS == 1 ? "MESSAGE TO SEND" : "TO");
+            /* v138: sem indicativo, o # abre antes o CALLSIGN (o item 0 da pasta APRS) */
+            junta(s, CAIXA_APRS != 1 ? "TO" : MENU_NUMERO ? "MESSAGE TO SEND" : "CALLSIGN");
         } else {
             if (m->nivel == FORA)
                 numero(s, m->numero, 2);

@@ -124,6 +124,21 @@ static int caixa(void)
     TELA_APRS = 0;                         /* o TO da pasta, fora da caixa */
     digita("py5zz");
     grava_mostra();
+    /* sem indicativo (v138): o # pede o CALLSIGN (o item 0); vazio pede de novo, gravado abre a da mensagem; e a
+     * mensagem sem indicativo nao arma o envio */
+    a->tam_ind = 0;
+    TELA_APRS = CAIXA_MSG;
+    caixa_mostra(aprs_caixa_abre());
+    digita("");
+    aprs_ind_grava();
+    caixa_mostra(aprs_caixa_abre());
+    digita("py2abc");
+    aprs_ind_grava();
+    printf("I %u %.*s\n", TELA_APRS, a->tam_ind, a->ind);
+    caixa_mostra(aprs_caixa_abre());
+    a->tam_ind = 0;
+    digita("Ola");
+    grava_mostra();
     return 0;
 }
 

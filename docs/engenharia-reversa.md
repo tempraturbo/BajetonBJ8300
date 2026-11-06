@@ -1124,8 +1124,7 @@ e depois a 31, e a diferença ouvida (18 → 31: "mudou bastante") combina com e
 põem **31, 25 e 19** em `b[0x706C]`. O nível fica em `b[0x14BDF]`, o `0x9033` do bloco de ajustes
 (gravado com eles por `0x01E3AB36` e servido pelo cabo da RAM, seção 4). Nada no firmware lê ou
 grava esse byte fora das cópias do bloco, conferido no desmontado inteiro. A tabela de ajustes
-padrão o deixa em 171, e qualquer valor acima de 2 vale HIGH (`mic_le`). Quem põe o ganho é o
-`aplica_mic`, chamado:
+padrão o deixa em 171. Quem põe o ganho é o `aplica_mic`, chamado:
 
 - na partida, pelo `gancho_partida`, que roda depois da cópia da calibração (todo caminho até ele
   passa por `0x01E561CC`): o MIC GAIN substitui o `0xF210`, que fica intacto no chip;
@@ -1140,10 +1139,18 @@ padrão o deixa em 171, e qualquer valor acima de 2 vale HIGH (`mic_le`). Quem p
 `0x01E43A50` byte a byte, os de fábrica antes e os do gancho depois. O `gancho_ajustes` usa 296 B de
 pilha no ponto mais fundo, abaixo dos 740 B de fábrica da interface.
 
-## 20. A potência de TX (mapa, só leitura)
+**O DEFAULT (v138).** Um quarto valor, o código 3: a calibração do próprio rádio, relida do `0xF210` do chip (a
+cópia do `b[0x706C]` o MIC GAIN troca). Qualquer código fora da lista, como o 171 do RESET ou o 0xFF, também vale
+DEFAULT, a pedido do dono. Na lista ele entra em ordem de valor entre os níveis, antes no empate: no rádio de teste,
+HIGH 31, DEFAULT 30, MID 25, LOW 19. Como a posição muda de rádio para rádio, o item é um número com exibição própria,
+como o CRYSTAL FINE: `mic_d` conta os níveis acima da calibração, `mic_le` e `mic_exibe` usam essa conta, e o
+`mic_grava` guarda o código, não a posição. O CHIRP monta a mesma lista com a calibração da imagem. O `aplica_audio`,
+que a tela MESSAGES chama com a pilha no limite, só escreve os níveis; o `LE_FLASH` do DEFAULT fica no `aplica_mic`.
 
-Mapeada a pedido do dono para saber se o H e o L ficam dentro dos limites; nada disso é mudado pelo
-firmware modificado.
+## 20. A potência de TX
+
+Mapeada a pedido do dono para saber se o H e o L ficam dentro dos limites. Até a v137 nada disso era mudado pelo
+firmware modificado; desde a v138 há o teto do fim da seção.
 
 - **O registrador.** `0x01E44526(bias)` escreve o `0x36` do chip de rádio: com bias 0 (o fim da TX,
   `0x01E44810`) põe 127; senão, `(bias << 8) | ganho`, com o ganho por nível na tabela
@@ -1166,6 +1173,10 @@ firmware modificado.
 - **No rádio de teste** (calibração lida pelo cabo): H entre 218 e 250, M entre 186 e 201, L entre
   158 e 166, num bias de 0 a 255 (255 só nos degraus que o índice nunca alcança). O firmware não
   sabe quantos watts isso dá: a saída em W depende do amplificador e só um wattímetro mede.
+- **O teto (v138).** A pedido do dono, nenhum bias passa de 229, 90% de 255, em nenhuma potência: o `gancho_pa`
+  entra na única chamada com o bias (`0x01E478BA`, para `0x01E44526`, o único escritor do `0x36`) e devolve
+  `min(bias, 229)`. No rádio de teste só o H de UHF (250) e o de VHF (234 a 245) mudam. É o teto da tensão de
+  polarização, não de watts: quanto cai na saída só um wattímetro diz.
 
 ## 21. O menu em pastas (v53 a v57)
 
@@ -1231,6 +1242,17 @@ igual. Os números contam de 1, como no principal; o OK e o EXIT ficam os de fá
 **A pilha.** A janela de pasta é desenhada pelo envio do título, no fundo do motor de menus. Com os
 dois textos da janela em 28 B cada, a interface ia a 744 B (v56), 4 acima da de fábrica; eles ficaram
 com 12 e 20 B, e as três raízes voltaram aos 740, 620 e 696 B de fábrica.
+
+**O EXIT nos itens de texto (v139).** O motor chama o `get` do item sempre que desenha fora da edição
+(`0x01E48A00`, `call r5` em `0x01E48A74`), então o `get` de um item de texto roda na lista, com o item só marcado.
+O de fábrica (`0x01E3C732`) e o `nome_le` preparam o texto e o tamanho e deixam o cursor (`b[0x14A37]`) como está; o
+`aprs_texto_le` e o `morse_msg_le` passam pelo `editor_abre`, que o põe no fim do texto. Só que o EXIT de fábrica
+(`0x01E4C7A0`) olha o tipo do item, 7, e não se a edição está aberta (`b[0x14BF9]`): com o cursor fora de 0 ele apaga a
+letra atrás dele (`0x01E4D486`) e só com o cursor em 0 segue a saída (`0x01E4D4F4`). Na lista, cada toque tirava uma
+letra da cópia do editor, sem nada na tela: o CALLSIGN de 6 letras pedia 7 EXIT. O texto gravado nunca mudou, porque
+a cópia vem do chip a cada desenho. O `desvio_exit_apaga`, em `0x01E4D48A`, manda para a saída quando a edição não
+está aberta, e isso cobre o CALLSIGN, o TO, o MESSAGE do MORSE e um cursor que sobre de outra edição no CH-NAME e no
+NAME. As setas e os dígitos já olhavam a edição (`0x01E49F7C`, `gancho_menu_digito`).
 
 ## 22. A pasta MIC, o CRYSTAL FINE e o menu recebendo (v59)
 
@@ -2238,8 +2260,7 @@ pilha: interface 740, laço do sinal 620, partida 696, e o set do MESSAGES 728 d
 - **O som mudo na volta.** Com o SQL aberto, depois da caixa do TO ou do EXIT que cancela a tela voltava sem
   som até a próxima volta por uma transmissão. O laço da tela para o laço do sinal, e o áudio do chip e o
   amplificador só voltam quando a recepção entra no estado 4 (`0x01E47E0A`, o áudio; `0x01E47E1A`, o pedido do
-  amplificador): o OK que fecha a edição sintoniza de novo (`b[0x15367]` = 0, `0x01E49A86`), e o bipe da tecla
-  toca pelo gerador de tom do chip, com o fim dele no laço da interface (`0x01E4B68C..0x01E4B70E`). A tela abria
+  amplificador): o OK que fecha a edição sintoniza de novo (`b[0x15367]` = 0, `0x01E49A86`). A tela abria
   antes de tudo isso assentar; depois da transmissão a volta já esperava o fim da TX e passava por mais OKs. Agora
   a volta só aperta com nenhum bipe tocando (`b[0x14924]`) e a recepção fora da sintonia (o estado 2 ou mais), e
   fica um ciclo parada antes do primeiro OK; o EXIT que cancela também sintoniza de novo, como o OK de fábrica.
@@ -2386,6 +2407,47 @@ FIX saiu (o laço compara com o `num[5]` e o `num[6]` do último desenho): a pil
 acesso, conta a leitura da FIFO vazia (o `teste_rx.py` a reprova) e, com `RX_BORDA` no ambiente, o aviso só na
 palavra do limite; o `teste_rx.py` roda os dois. A v125 falha 20 verificações nessa imitação, com a FIFO vazia em
 quase todo cenário; a v128 passa com 0,1, 0,3 e 1,36 ms por acesso.
+
+### A captura crua: por que o BJ lê mal o UV-17L (v129 a v136)
+
+Medir na rede dava um número por rodada: as estações variam, as amostras eram pequenas, e o que parecia melhora de
+uma versão era ruído. As versões de diagnóstico mudaram a pergunta para o que o modem entrega de fato. A v132 parou de
+decodificar: cada sync vira um registro no histórico com as 50 primeiras palavras cruas da FIFO (800 bits de linha,
+com a polaridade e a hora), e o histórico se lê pelo cabo (`R` estendido de 24 bits em `0xD6000..0xD7FFF`). A v133
+dispara na linha parada, o que a portadora muda do UV faz, e a v134 grava 20 registros seguidos, 13,3 s quase contínuos.
+A v135 e a v136 passam por estados na tecla 0 e guardam só os trechos com menos de 320 trocas em 799, porque o chiado
+puro fica perto de 390.
+
+- **Os bits crus trazem quadros do UV perfeitos**, com o FCS certo, e o firmware os decodifica quando os recebe de
+  volta num teste no PC. O decodificador não é o problema, e o preâmbulo de 40 flags chega sem erro.
+- **Os que falham têm o demodulador puxando para um tom**: as flags saem 6:2 em vez de 7:1 num ponto qualquer do
+  quadro e, no pior trecho, a linha fica presa ~130 ms. Não é áudio sumindo nem a gravação na flash, que caiu no meio
+  de um quadro perfeito. O sintoma é o de uma deriva de frequência do receptor.
+- **O placar por estado**, por pacote: FILTER 5/18, FILTER desligado 1/6, AFC desligado 0/6, filtro de DC do RX
+  desligado 3/7 (e um quase), tela apagada 1/5, `0x1F` com a bomba de carga no máximo (`0x865F`) 1/5, no mínimo
+  (`0x8653`) 1/5, regulador do cristal da Beken (`0xA65A`) 0/5. O bit 1 do `0x0C` também não segue o squelch na tela
+  MESSAGES (v130), mesmo no SQL 1, e o **P** conta sobretudo syncs falsos no chiado.
+
+**A conclusão** é o limite da placa: o PLL do BK4819 sem regulador próprio, o que já aparecia no `0x37`, que a placa
+do BJ pede com o LDO do PLL em bypass ([O apito e o estalo do laço](#o-apito-e-o-estalo-do-laço-v116-a-v124)). A saída que sobra é um demodulador
+AFSK por software, mas o áudio de RX não chega ao JieLi: as entradas analógicas PA0 e PA1 estão livres e pediriam um
+fio soldado. Da investigação ficaram na v137 as duas ajudas baratas: o FILTER com o filtro de DC do RX desligado
+(`0x7E` = `0xB038`) e a tela parada 2 s depois de cada sync (`sync_em`).
+
+### As cópias entre partidas, o `{nn` e o CALLSIGN (v138)
+
+- **A sessão.** O `registro_igual` só descarta a cópia dos últimos 30 s, mas a hora do registro é o `TIQUE_MS`, o tempo
+  desde a partida: um registro de outra partida com a hora um pouco menor bloqueava o mesmo pacote. O registro guarda a
+  sessão em que entrou no `sobra[0]`, e como a comparação é do registro inteiro, a cópia só cai dentro da mesma
+  sessão. A sessão é a do último registro mais 1 numa entrada nova; na volta da caixa ou do ack ela continua, para a
+  cópia do digipeater depois do ack seguir descartada. Ela vai nos bits 23:16 do modo, e o `num[1]` serve de buffer,
+  porque a pilha do laço está no limite. Custou 188 B, e por isso só coube na v138.
+- **O `{nn`.** Na mensagem para outra estação, o `aprs_texto` para no `{`, como já fazia na mensagem para mim. O `{`
+  não existe na fonte e aparecia como `?`.
+- **O CALLSIGN antes.** Sem indicativo, o `quadro_aprs` não monta pacote, e o envio armado subia só a portadora. O
+  `aprs_dest_grava` só arma com indicativo, e o `aprs_caixa_abre`, sem ele, abre o editor do CALLSIGN (o item 0) na
+  mesma caixa: o `aprs_ind_grava`, com a caixa da mensagem pedida, grava sem fechar o editor, e o desvio do OK chama
+  o `aprs_caixa_abre` de novo, que agora abre a mensagem. Vazio, o CALLSIGN pede de novo; o EXIT volta à tela.
 
 ## 25. A pasta AUDIO: o EXPANDER e a NOISE GATE, e o que é a NR (v79)
 
@@ -2553,10 +2615,10 @@ NOISE GATE continua no `0x9031`, onde o driver do CHIRP a lê. Os outros bytes c
 conferência fica: os valores que o menu permite cabem nos limites.
 
 **A gravação no OK (v101).** A fábrica só grava ao fechar o menu (`0x01E3C29C`), e só com o modo de tela no
-menu (`b[0x1533D]` = 1): o log `0x9000` e o lado do menu. Com ele em canal (`b[0x15212]` = 1, que
-`0x01E3A4D0` põe com o número do canal em `h[0x1583C]`), o canal (`0x01E3AC0A`, com o número mais a zona
-`b[0x15215]` × 64 na navegação por zona, e os 31 B do lado em `0x14DD3 + lado × 31`); em VFO, o VFO do lado
-(`0x01E3A4FE`, `b[0x15204]`). Desligado com o menu aberto, mesmo numa pasta, o que mudou se perdia. O
+menu (`b[0x1533D]` = 1): o log `0x9000` e o lado do menu. Com ele em canal (`b[0x15E12]` = 1, que
+`0x01E3A4D0` põe com o número do canal em `h[0x15E3C]`), o canal (`0x01E3AC0A`, com o número mais a zona
+`b[0x15E15]` × 64 na navegação por zona, e os 31 B do lado em `0x14DD3 + lado × 31`); em VFO, o VFO do lado
+(`0x01E3A4FE`, `b[0x15E04]`). Desligado com o menu aberto, mesmo numa pasta, o que mudou se perdia. O
 `salva_menu` (`bancos.c`) faz o mesmo, na mesma ordem (`0x01E3C2B0..0x01E3C30E`), a cada OK que confirma uma
 edição: ele roda no `b_menu_marca`, que o desvio da v55 já chamava depois do set (`0x01E49A86`), e o firmware só
 chega ali com o menu aberto. Todo tipo de item passa por ali, o editor de texto inclusive (o OK dele também é
@@ -2573,6 +2635,13 @@ Onde cada item do menu grava (os get e set da tabela montada, conferidos no desm
 
 O SEND do APRS e do Morse (`0x9044`; até a v110, `0x903A`) a partida zera de propósito, para nada transmitir
 sozinho.
+
+**O canal no OK (v138).** Da v101 à v137 o `salva_menu` lia esses quatro endereços com a base errada (`0x15204`,
+`0x15212`, `0x15215`, `0x1583C`; a de fábrica é `0x14680`, `0x01E3C29C`), e o canal só ia ao chip na saída do menu.
+O `SALVA_CANAL` compara os 20 B com a sombra `0x15E44`, mas o nome com a sombra `0x15E58`, e regravaria o setor de 4 KB
+a cada OK: por isso o `salva_menu` compara antes com os 32 B do chip e só chama a gravação quando algo mudou. O DELCH e
+o RESET ficam certos: o DELCH move o lado para o canal válido seguinte e recarrega os dois lados
+(`0x01E3C5D6..0x01E3C6C4`), e o RESET reinicia o rádio (nada zera o `b[0x1533E]` entre o apagamento e `0x01E3E256`).
 
 ## 27. O equalizador e o medidor S (v108 a v110)
 
@@ -2698,3 +2767,82 @@ ajuste de cada estágio (LNA curto, LNA, mixer e PGA) pela metade, o código / 2
 `0x016B` e, no de baixo, com o LNA curto em 0 para os degraus seguirem em ordem, `0x0008`. São −79, −73, −58, −46 e
 −82 dB (o de cima, −46 contra −2 do DEFAULT), saltos de 3 a 15 dB, dentro da janela. Gravado como `0xA4`, que também
 não é BCD; na lista em ordem de valor, MIN, DEFAULT, MAX (o item tem 3 opções, `montar.py`).
+
+## 29. O espaço dos caminhos das vozes (v138)
+
+**O chinês não dá espaço.** Os textos chineses dos menus somam 1.040 B, em pedaços de até 40 B colados aos ingleses,
+e os glifos ficam no chip de dados, no meio das fontes ASCII de 12 e 16 px que a tela em inglês usa. Nada ali se apaga
+com proveito.
+
+**A faixa.** Os 114 nomes `mnt/sdfile/res/tone/C0.*` a `E67.*`, em `0x01E5AB5E..0x01E5B6E0`, morreram com as vozes
+(v30). De `0x01E5AB60` (alinhado) até antes do caminho do B0 são 2.944 B, a seção `.caminhos`.
+
+- **A tabela de caminhos** (`0x01E5E8FC`) só é lida em `0x01E40634`, depois do remendo `0x01E40628`, que tira da fila
+  todo número de voz. As entradas 0 a 117 estão mortas, e continuam lá.
+- **O caminho do C16** (o imediato em `0x01E55AD0`) fica no trecho que o remendo `0x01E55ABE` pula.
+- **A varredura** procurou, em toda a imagem, valores de 32 bits em todo deslocamento, par e ímpar, porque ponteiro de
+  tabela compactada fica em endereço ímpar, além de `call` e `goto` de 4 bytes da flash e da cópia da RAM. Achou um
+  único valor vivo: o `*` da tecla * do editor no modo 123 (`0x01E60B58`, `25 ac e5 01`), que reaproveitava o fim do
+  `C10.*`. Ele foi para o `*` do B0 (`f8 b6 e5 01`), que fica.
+- **A exceção com cara de ponteiro**: os bytes `87 e8 e2 01` em `0x01E05AD4` são a instrução `if (r0 != r7) goto -60`.
+
+**As regras.** O `.caminhos` só guarda o que o nosso código chama ou lê; nenhum símbolo que o firmware chama entra ali,
+e nenhum desvio de fábrica aponta para lá. O `montar.py` confere o sha256 dos bytes de fábrica antes de gravar, e o
+`conferir.py` refaz a varredura (`2j`), no de fábrica e no novo, com as exceções valendo só com os bytes exatos. Dois
+testes negativos provaram que ela pega o erro: com a faixa um byte maior, ela acusa a entrada `0x01E5EAD4`, e sem a
+exceção do `*`, o `0x01E60B58`.
+
+**O que mora lá:** o `aprs_texto`, com o `mic_e` dentro, e 1,2 KB livres. Sobram de reserva, sem uso, as entradas
+mortas `0x01E5E8FC..0x01E5EAD4` (472 B) e a tabela de menu de fábrica `0x01E62F98..0x01E63580` (1.512 B), morta desde a
+v43.
+
+## 30. O bipe das teclas (mapa; o bipe pelo BK4819 saiu na v139)
+
+**O de fábrica.** O bipe é um arquivo `.sin` da JieLi, tocado pelo DAC da JieLi, e não pelo BK4819.
+
+- `BIPE(n)` (`0x01E38B4C`) põe o bipe na fila `0x14924`: `[0]` ativa, `[1]` tocando, `[2]` quantos, `[3]` 134 + n.
+  Recusa em TX (`b[0x1533C]` = 1), em alarme (`b[0x14950]`) e com o BEEP PROMPT desligado (`b[0x14B72]` = 0). O PTT não
+  transmite com bipe tocando (`0x01E43F42`).
+- A fila é servida por `0x01E405E2`, chamada em `0x01E4B83E`, `0x01E4B93E`, `0x01E4D5A0` e pelo `0x01E40694`, que
+  enfileira e serve de uma vez.
+- Para tocar, `0x01E4060C` põe o `0x30` em 0 (`0x01E3FF3E`(0)), toca o caminho 118 + n, marca `[1]` e pede o
+  amplificador 14 ms depois de o seno começar (`0x01E39E2C`(3)). O fim assíncrono (`0x01E3FCF6`) solta o pedido (4).
+- O fechamento (`0x01E40666`) zera `[0]`, segura a leitura do squelch (`h[0x1534F]` = 8) e religa o RX por `0x0200` e
+  `0xBFF1` no `0x30`. Cada troca do `0x30` desliga e liga o DAC de áudio do BK4819.
+- `0x01E39E2C` guarda seis pedidos do amplificador: ímpar pede, par solta, e ele só desliga com os seis soltos (5 e 6 o
+  áudio do RX, 3 e 4 o `.sin`, 9 e 10 o gerador de tom do BK4819).
+
+| Bipe | Hz e pontos (a 16 kHz) | Chamadas |
+|---|---|---|
+| B0 | 1500/600 | 12 |
+| B1 | 450/390, 750/1000 | 11 |
+| B2 | 750, depois 450 | 6 |
+| B3 | 590/500, 700/1000 | 1 |
+| B4 | 1400, silêncio, 1400 | nenhuma |
+| B5 | 700/382, 590/900 | 2 |
+| B6 | 930/600, 700/1100 | 6 |
+| B7 | 930/10 (0,6 ms) | 3 |
+
+**Uma correção.** O trecho `0x01E4B68C..0x01E4B70E`, que a seção 24 e um comentário do `mensagem.c` davam como o bipe,
+é o envio de DTMF.
+
+**O bipe pelo BK4819 (v138, desfeito na v139).** No UV-17L o estalo saiu com o RX ligado e o tom pela saída de "tom no
+RX" (`0x47` em 2), com rampa no ganho. A v138 fez o mesmo por um desvio na entrada da fila, nas telas 0, 1, 3 e 5 e com
+o bit 9 e o bit 0 do `0x30` ligados: a frequência primeiro, o amplificador com o tom mudo (pedido 9), 4 a 6 ms, rampa de 4
+passos, o amplificador solto antes de o tom parar, e o volume dos tons locais de fábrica (`0x48` = `0xB0A3`). No rádio
+o dono achou o estalo até pior, e o código saiu. A causa não foi achada. Duas pistas para quem retomar: o menu aberto
+pela tela do rádio também é a tela 1, e o áudio do Si473x não passa pelo BK4819; e com o amplificador já ligado, com o
+SQL aberto, a troca da saída de áudio para o tom e a volta dão um degrau.
+
+## 31. O SAVE que já pede o nome (v138)
+
+O MEMCH (item 12 da tabela, set de fábrica `0x01E3A906`) grava no canal `VALOR` o lado em evidência: em canal, os 20 B
+do canal cru e o nome do registro de tela; em VFO, os 20 B montados do VFO e o nome que o canal de destino já tinha.
+Depois recarrega os dois lados pelo nibble do modo de cada um (`b[0x14B86]`).
+
+O `memch_grava` põe antes o nibble do lado em evidência em canal, para o lado ficar no canal salvo também vindo do VFO,
+e depois zera o nome do registro de tela. O `salva_menu`, logo depois do set, grava o canal sem nome, como o UV-17L, e a
+marca `MARCA_NOMEIA` faz o `b_menu_marca` chamar o `memch_nome_abre`, que abre o editor do CH-NAME vazio, no item 0 da
+pasta, com o estado de fábrica do OK (`b[0x14BF9]` = 1, `h[0x14BFE]` = 0, `[0x14C04]` = 0, `b[0x14C08]` = 0). Na recusa
+de fábrica (`b[0x153A1]` = 165 protege os 30 primeiros canais) só a fábrica age, e o editor não abre: o
+`memch_nome_abre` confere se o lado ficou mesmo no canal salvo (`b[0x15E12]` = 1 e `h[0x15E3C]` = `VALOR`).

@@ -5,6 +5,76 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v139 — 06/11 — a rodada da v138 sem o bipe novo, e um EXIT só nos itens de texto (gravada e aprovada)
+
+`BJ8300_BANK_v139.anc` (sha256 `0aa0f360…`), fora dos commits como as outras de teste: a v138 sem o bipe novo e com
+um conserto que o dono achou testando.
+
+- **O bipe voltou a ser o de fábrica.** Com o bipe novo da v138, o dono achou o estalo até pior, e ele saiu inteiro:
+  a fila, o desvio e o teste. A causa não foi achada. O mapa do bipe, que continua valendo, está na
+  [seção 30](engenharia-reversa.md#30-o-bipe-das-teclas-mapa-o-bipe-pelo-bk4819-saiu-na-v139).
+- **Um EXIT só nos itens de texto.** Na pasta APRS, o CALLSIGN de 6 letras pedia 7 EXIT para voltar ao menu. O `get`
+  do item roda na lista, com o item só marcado, e deixava o cursor do editor no fim do texto, e o EXIT de fábrica
+  apaga a letra atrás do cursor sem olhar se o editor está aberto. Cada toque tirava uma letra da cópia do editor,
+  sem nada na tela, até ela zerar; o gravado nunca mudou. O mesmo valia para o TO, o MESSAGE do MORSE e, com o
+  cursor sobrando de uma edição, o CH-NAME e o NAME. Agora o EXIT só apaga letra com o editor aberto
+  ([seção 21](engenharia-reversa.md#21-o-menu-em-pastas-v53-a-v57)).
+- **O espaço.** O `mic_e` foi para os caminhos das vozes, o que deixa 558 B livres no `.livre` e cerca de 1,2 KB
+  nos caminhos.
+
+## v138 — 06/11 — a rodada de ajustes pedida pelo dono, com o bipe pelo BK4819 (gravada: o bipe voltou atrás na v139)
+
+`BJ8300_BANK_v138.anc` (sha256 `7ae44879…`), fora dos commits como as outras de teste: a v137 com os itens que
+esperavam espaço.
+
+- **O espaço.** Tirar os textos chineses não libera nada que sirva: são 1.040 B em pedaços de até 40 B, colados aos
+  ingleses, e os glifos ficam no chip de dados, no meio das fontes ASCII que a tela usa. O espaço veio dos caminhos
+  das vozes, mortos desde a v30: 2.944 B novos, com a prova de que nada vivo lê a faixa
+  ([seção 29](engenharia-reversa.md#29-o-espaço-dos-caminhos-das-vozes-v138)).
+- **As cópias entre partidas.** A hora do registro é o tempo desde a partida, e um pacote de outra partida com a
+  hora parecida bloqueava o mesmo pacote. O registro guarda agora a sessão em que entrou, como no UV-17L.
+- **O `?25`.** A mensagem para outra estação aparece sem o `{nn` do número; o `{` nem existe na fonte.
+- **O tom de TX.** Transmitindo, a etiqueta é a do tom de TX, em vermelho, e some sem tom de TX. Era a do RX, por
+  engano.
+- **O SAVE como no UV-17L.** Depois de salvar em canal, o editor do nome abre vazio, e o lado fica no canal salvo
+  também vindo do VFO ([seção 31](engenharia-reversa.md#31-o-save-que-já-pede-o-nome-v138)).
+- **A etiqueta AIR** de 108 a 135,99999 MHz, ao lado do AM.
+- **O teto do PA.** Nenhum bias passa de 229, 90% de 255, em nenhuma potência
+  ([seção 20](engenharia-reversa.md#20-a-potência-de-tx)).
+- **O MIC GAIN com DEFAULT**, a calibração do próprio rádio, em ordem de valor entre os níveis; código fora da lista
+  vale DEFAULT ([seção 19](engenharia-reversa.md#19-o-ganho-do-microfone-e-o-mic-gain-v49)).
+- **Nada vai ao ar sem indicativo.** Sem CALLSIGN gravado, o `#` da tela MESSAGES pede o CALLSIGN antes, e gravado
+  abre a caixa da mensagem. Até aqui o envio subia só a portadora.
+- **O OK que grava o canal.** Da v101 à v137 o `salva_menu` lia quatro endereços de outra base, e o canal só ia ao
+  chip na saída do menu, como na V0.12. Agora ele compara com o chip e grava na hora
+  ([seção 26](engenharia-reversa.md#26-os-ajustes-que-se-perdiam-a-noise-gate-e-a-gravação-no-ok-v100-e-v101)).
+- **O bipe das teclas pelo BK4819**, o remédio do UV-17L, saiu na v139.
+
+Testes: o `teste_rx.py` ganhou as cópias entre partidas (e falha sem a sessão) e o CALLSIGN antes da caixa.
+
+## v137 — 06/11 — o FILTER sem o filtro de DC do RX e a tela parada 2 s (testada junto com a v138)
+
+`BJ8300_BANK_v137.anc` (sha256 `7cd704a1…`), fora dos commits: a v128 com as duas ajudas baratas que sobraram da
+investigação abaixo. O FILTER desliga o filtro de DC do RX (`0x7E` = `0xB038`), o melhor placar das medições, e a
+tela espera 2 s depois de cada sync para desenhar. Nenhuma das duas muda o limite.
+
+## v129 a v136 — 05 e 06/11 — diagnósticos: por que o BJ lê mal o UV-17L (não lançadas)
+
+Oito versões de diagnóstico, fora dos commits, para sair das amostras pequenas na rede, em que cada rodada dava um
+número. A v132 parou de decodificar e passou a gravar no histórico os bits crus da FIFO, lidos depois pelo cabo; a
+v133 e a v134 estenderam a captura até virar quase contínua; a v135 e a v136 compararam estados na tecla 0, com
+textos enviados pelo UV-17L de outro cômodo.
+
+- **O modem do BJ entrega quadros do UV perfeitos**, em 20 a 50% dos envios, e o firmware decodifica esses bits.
+  O decodificador está certo.
+- **Os que falham têm o demodulador puxando para um tom**, num ponto qualquer do quadro: flags 6:2 em vez de 7:1 e,
+  no pior trecho, a linha presa ~130 ms.
+- **Nada do que o firmware alcança muda o placar:** FILTER 5/18, FILTER desligado 1/6, AFC desligado 0/6, DC do RX
+  desligado 3/7, tela apagada 1/5, bomba de carga no máximo 1/5, no mínimo 1/5, regulador do cristal 0/5.
+
+A conclusão é o limite da placa, com o PLL sem regulador próprio. Um demodulador por software pediria um fio soldado,
+porque o áudio de RX não chega ao JieLi. [Seção 24](engenharia-reversa.md#a-captura-crua-por-que-o-bj-lê-mal-o-uv-17l-v129-a-v136).
+
 ## v128 — 05/11 — o AGC travado no FILTER e o laço do APRS RX auditado (gravada: o BJ ainda não leu o UV)
 
 `BJ8300_BANK_v128.anc` (sha256 `f3d13be9…`), fora dos commits como as outras de teste: a v125 com o FILTER levando

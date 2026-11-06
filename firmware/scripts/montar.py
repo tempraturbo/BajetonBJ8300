@@ -26,6 +26,7 @@ checar o combo PTT2+atalho, ou que fazem o modo UPDATE funcionar. Elas sao o cam
 recuperacao pelo cabo: se um firmware ruim quebrasse esse caminho, o radio so voltaria abrindo o
 aparelho. Os limites foram lidos no Ghidra e estao em PROTEGIDAS.
 """
+import hashlib
 import os
 import struct
 import sys
@@ -107,6 +108,25 @@ TAM_REGISTRO = 68
 # Bytes de fora da faixa que, lidos como 32 bits, caem dentro dela sem serem ponteiro: (endereco,
 # bytes, o que e). O conferir.py exige os bytes exatos, para a excecao nao esconder ponteiro nenhum.
 CODIFICACOES_FORA = ((0x01E05AD4, bytes.fromhex('87e8e201'), 'a instrucao "if (r0 != r7) goto -60"'),)
+
+# Os caminhos das vozes (v138): os 114 nomes "mnt/sdfile/res/tone/C0.*" a "E67.*" (0x01E5AB5E..0x01E5B6E0)
+# ficaram mortos com as vozes (v30): a tabela de caminhos (0x01E5E8FC) so e lida em 0x01E40634, depois do
+# remendo 0x01E40628 que tira da fila todo numero de voz, e o caminho do C16 (o imediato em 0x01E55AD0) fica
+# no trecho que o remendo 0x01E55ABE pula. De CAMINHOS (alinhado) ate antes do caminho do B0 mora o
+# .caminhos: so o que o NOSSO codigo chama ou le (nenhum simbolo de PRECISA), sem desvio de fabrica para la.
+# A varredura (valor de 32 bits em todo deslocamento, par e impar; call/goto de 4 bytes da flash e da copia
+# da RAM) achou um unico valor vivo apontando para dentro: o "*" da tecla * do editor no modo 123
+# (0x01E60B58), que reaproveitava o fim do "C10.*"; ele vai para o "*" do B0 (0x01E5B6F8), que fica. Prova em
+# docs/engenharia-reversa.md, secao 29; o conferir.py a refaz (2j). Os bytes de fabrica da faixa se conferem
+# pelo sha256 antes de gravar.
+CAMINHOS, CAMINHOS_FIM = 0x01E5AB60, 0x01E5B6E0
+CAMINHOS_SHA256 = '8080d5e5e38c725b194295fa99e78806369f0dbda4ed50024e4568bba5fc3934'
+CAMINHOS_REMENDOS = ((0x01E60B58, bytes.fromhex('25ace501'), bytes.fromhex('f8b6e501'),
+                      'editor 123: o "*" da tecla * no caminho do B0, fora da faixa'),)
+# Os valores de fora que caem na faixa e estao mortos (inicio, fim, o que e): o conferir.py exige os bytes de
+# fabrica e os remendos das vozes que os matam.
+CAMINHOS_MORTOS = ((0x01E5E8FC, 0x01E5EAD4, 'entradas 0..117 da tabela de caminhos, que a fila nao le mais'),
+                   (0x01E55AD0, 0x01E55AD6, 'o caminho do C16 no main, no trecho que o remendo pula'))
 
 # A tela principal B (v35, src/tela.c): treze rotinas de fabrica que desenham a tela de dois VFOs
 # ganham um desvio de 4 bytes na entrada (goto para o desvio_* do tela.c, na faixa .livre). O
@@ -212,7 +232,7 @@ PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho
            'roger_le', 'roger_grava', 'roger_opcoes', 'gancho_roger_tons',
            'watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
            'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'menu_tabela', 'gancho_troca_dw',
-           'gancho_volta_dw', 'gancho_ab', 'gancho_menu_fecha', 'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic',
+           'gancho_volta_dw', 'gancho_ab', 'gancho_menu_fecha', 'gancho_luz', 'mic_le', 'mic_grava', 'mic_exibe', 'titulo_mic',
            'gancho_ajustes', 'gancho_tx_abc', 'gancho_tx_desarma', 'gancho_tx_volta', 'titulo_txabc', 'txabc_opcoes',
            'scramble_le', 'scramble_grava', 'scramble_freqs', 'scramble_valor', 'scramble_posicao',
            'scramble_opcoes', 'bank_exibe', 'bank_le', 'bank_grava', 'nome_exibe', 'nome_le', 'nome_grava',
@@ -340,9 +360,10 @@ ITENS_POR_GRUPO = 8       # o maior grupo (o APRS, v76); a janela de pasta mostr
 # v55: as marcas de cada item (grupo, nome), no menu_textos: SEM_VALOR nao mostra o "L" do valor na
 # janela de pasta (acoes, e a lista dos canais do banco); VARIOS continua editando depois do OK, para
 # marcar varios seguidos, e o EXIT sai (b_menu_marca, tela.c).
-MARCA_SEM_VALOR, MARCA_VARIOS = 1, 2
+# v138: NOMEIA, depois do OK do MEMCH, abre o editor do nome do canal salvo (memch_nome_abre).
+MARCA_SEM_VALOR, MARCA_VARIOS, MARCA_NOMEIA = 1, 2, 4
 MENU_MARCAS = {('BANKS', 'BANK'): MARCA_VARIOS, ('BANKS', 'CHANNEL'): MARCA_SEM_VALOR | MARCA_VARIOS,
-               ('MEMORY', 'DELCH'): MARCA_SEM_VALOR, ('MEMORY', 'MEMCH'): MARCA_SEM_VALOR,
+               ('MEMORY', 'DELCH'): MARCA_SEM_VALOR, ('MEMORY', 'MEMCH'): MARCA_SEM_VALOR | MARCA_NOMEIA,
                ('SYSTEM', 'RESET'): MARCA_SEM_VALOR}
 
 # Como o firmware conta os itens varrendo a tabela ate o item zerado, e a tabela nova ocupa a vaga
@@ -436,9 +457,10 @@ ITENS_MUDADOS[NR_ITEM] = dict(maximo=5, get='nr_menu_le', set='nr_grava', exibe=
                               opcoes_cn='nr_opcoes')
 ITENS_DEPOIS = {MDF_B_ITEM: [dict(nome='MDF-C', molde=MDF_A_ITEM, flags=None, maximo=3,
                                   get='mdf_c_le', set='mdf_c_grava', titulo='titulo_mdf_c')],
-                NR_ITEM: [dict(nome='MIC GAIN', molde=TDR_ITEM, flags=0, maximo=3, get='mic_le',
-                               set='mic_grava', titulo='titulo_mic', exibe='mic_opcoes',
-                               opcoes_cn='mic_opcoes'),
+                # v138: o MIC GAIN com o DEFAULT (a calibracao) em ordem de valor: um numero com exibicao
+                # propria, como o CRYSTAL FINE, porque a posicao do DEFAULT muda de radio para radio
+                NR_ITEM: [dict(nome='MIC GAIN', molde=ZONE, flags=FLAGS_NUMERO, maximo=4, get='mic_le',
+                               set='mic_grava', titulo='titulo_mic', exibe='mic_exibe'),
                           # v59: o resto da pasta MIC, duas listas como o MIC GAIN, e o ajuste do
                           # cristal, um numero com exibicao propria (401 linhas, de -2000 a +2000 Hz)
                           # como o BANK
@@ -632,9 +654,14 @@ MENU_DESVIOS += ((0x01E49A86, bytes.fromhex('40e0e70c'), 'desvio_menu_marca', 'b
 # tambem no CALIBRATION, de um item so.
 MENU_DESVIOS += ((0x01E4D53C, bytes.fromhex('40e07805'), 'desvio_menu_um', 'b_menu_um', 0x01E4D59A,
                   'menu: EXIT editando num grupo de um item volta a lista do grupo'),)
+# v139: o EXIT num item de texto (tipo 7): "r0 = 951" (0x01E4D48A) le o cursor para apagar a letra, sem olhar se
+# o editor esta aberto, e os itens com o cursor no fim do texto pediam um EXIT por letra para voltar. Fora da
+# edicao o desvio segue ao resto do EXIT (0x01E4D4F4), como com o cursor em 0.
+MENU_DESVIOS += ((0x01E4D48A, bytes.fromhex('40e0b703'), 'desvio_exit_apaga', 'b_exit_apaga', 0x01E4D4F4,
+                  'menu: EXIT fora da edicao nao apaga letra do editor'),)
 MENU_SIMBOLOS = ('menu_abre', 'gancho_menu_ok', 'gancho_menu_digito', 'desvio_menu_sai', 'b_menu_sai',
-                 'desvio_menu_marca', 'b_menu_marca', 'desvio_menu_um', 'b_menu_um', 'nome_tamanho',
-                 'nome_para_editor')
+                 'desvio_menu_marca', 'b_menu_marca', 'desvio_menu_um', 'b_menu_um', 'desvio_exit_apaga',
+                 'b_exit_apaga', 'nome_tamanho', 'nome_para_editor')
 # Instrucoes trocadas por uma chamada e nop no resto: na ida do PTT, a leitura do TX-A/B ("r0 = 1279;
 # r0 = b[r4+r0]", 0x01E43F92) vira "call gancho_tx_abc; nop; nop". O r0 que ele devolve e o que o
 # trecho de fabrica testa em seguida (0x01E43F9A); r1..r3 sao escritos antes de lidos, e o r4 (a base
@@ -725,7 +752,7 @@ PRECISA += MENU_SIMBOLOS
 # v44: o WATCH e o TRIPLE do bancos.c tambem moram no .livre (a area do fim da imagem nao os cabia)
 NA_LIVRE += ('watch_le', 'watch_grava', 'watch_opcoes', 'titulo_watch', 'tdr_grava',
              'mdf_c_le', 'mdf_c_grava', 'titulo_mdf_c', 'gancho_troca_dw', 'gancho_volta_dw', 'gancho_ab',
-             'gancho_menu_fecha', 'gancho_luz', 'mic_le', 'mic_grava', 'mic_opcoes', 'titulo_mic', 'gancho_ajustes',
+             'gancho_menu_fecha', 'gancho_luz', 'mic_le', 'mic_grava', 'mic_exibe', 'titulo_mic', 'gancho_ajustes',
              'gancho_tx_abc', 'gancho_tx_desarma', 'gancho_tx_volta', 'titulo_txabc', 'txabc_opcoes')
 # v59: a pasta MIC e a CALIBRATION, no .livre como o MIC GAIN
 MIC_CAL = ('compressor_le', 'compressor_grava', 'compressor_opcoes', 'titulo_compressor', 'agc_le',
@@ -876,6 +903,17 @@ MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'ganc
             'aprs_decode_le', 'aprs_decode_grava', 'titulo_aprs_decode', 'aprs_decode_opcoes')
 NA_LIVRE += MENSAGEM
 PRECISA += MENSAGEM
+
+# v138: o PA no maximo em 90% (bancos.c, gancho_pa): o passo 0 da TX chama 0x01E44526 com o P da calibracao, e
+# e a unica chamada com o P (o fim da TX chama com 0); o gancho limita o P a 229.
+CHAMADAS_LIVRE += ((0x01E478BA, 0x01E44526, 'gancho_pa', 'TX: o bias do PA no maximo 229 (90%)'),)
+# v138: o SAVE como no UV-17L - o set do MEMCH (item 12; de fabrica 0x01E3A906) poe o lado no canal salvo e o nome
+# vazio (memch_grava, bancos.c), e a marca NOMEIA abre o editor do nome no desvio do OK (memch_nome_abre)
+MEMCH_ITEM = 12
+ITENS_MUDADOS[MEMCH_ITEM] = dict(set='memch_grava')
+V138 = ('gancho_pa', 'memch_grava', 'memch_nome_abre')
+NA_LIVRE += V138
+PRECISA += V138
 
 # Envio da tela de dois VFOs (gancho_envia, no tela.c). O gancho entra no ENVIO do pedaco para o
 # LCD (envia(), 0x01E3ADBC): se uma rotina de fabrica da tela de dois VFOs chegar la com a tela B
@@ -1150,6 +1188,7 @@ def main():
     tabela, textos = monta_menu(app, blob, tela)
     tela = livre_com_menu(tela, tabela, textos)
     vozes = secao_ligada(codigo, '.vozes', VOZES, VOZES_ACEITAS_FIM)
+    caminhos = secao_ligada(codigo, '.caminhos', CAMINHOS, CAMINHOS_FIM)
 
     # Monta a lista de escritas no app.bin e passa pela trava antes de tocar em qualquer byte.
     escritas = [(GANCHO_EM, 4, 'gancho do filtro na partida'), (SCAN_EM, 4, 'gancho do redesenho no scan')]
@@ -1169,6 +1208,8 @@ def main():
                  (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
                  (SCRAMBLE_EM, len(SCRAMBLE_ANTES), 'scramble: frequencia pelo valor')]
     escritas += [(s, 4, f'gancho do cabo ({p})') for s, p in CABO_SITIOS]
+    escritas += [(CAMINHOS, len(caminhos), 'codigo novo no lugar dos caminhos das vozes')]
+    escritas += [(s, len(a), f'caminhos: {d}') for s, a, _, d in CAMINHOS_REMENDOS]
     escritas += [(PONTEIRO_EM, len(PONTEIRO_ANTES), 'ponteiro da tabela de menus, para a faixa livre'),
                  (CONTAGEM_EM, len(CONTAGEM_ANTES), 'quantidade de itens do menu')]
     if SETAS_INVERTIDAS:
@@ -1391,6 +1432,25 @@ def main():
     o = LIVRE - BASE_APP
     app[o:o + len(tela)] = tela
     print(f'  tela B: {len(tela)} B em {LIVRE:#x} (cabem {LIVRE_FIM - LIVRE} no lugar do G.729 e do MP3)')
+
+    # 4b4. o .caminhos no lugar dos caminhos das vozes (v138): a faixa tem de ser a de fabrica, os remendos que
+    # matam os valores que caem nela tem de estar no lugar, e o "*" do editor sai dela antes
+    o = CAMINHOS - BASE_APP
+    if hashlib.sha256(bytes(app[o:o + CAMINHOS_FIM - CAMINHOS])).hexdigest() != CAMINHOS_SHA256:
+        raise SystemExit(f'{CAMINHOS:#x}..{CAMINHOS_FIM:#x} nao sao os caminhos das vozes de fabrica')
+    for sitio, _, novo, oque in VOZES_REMENDOS:
+        if sitio in (0x01E40628, 0x01E55ABE) and bytes(app[sitio - BASE_APP:sitio - BASE_APP + len(novo)]) != novo:
+            raise SystemExit(f'o remendo das vozes em {sitio:#x} ({oque}) nao esta no lugar')
+    for sitio, antes, novo, oque in CAMINHOS_REMENDOS:
+        s = sitio - BASE_APP
+        alvo = int.from_bytes(novo, 'little') - BASE_APP
+        if bytes(app[s:s + len(antes)]) != antes or bytes(app[alvo:alvo + 2]) != b'*\0':
+            raise SystemExit(f'{sitio:#x} ({oque}) nao e o de fabrica, ou o alvo novo nao e "*"')
+        app[s:s + len(novo)] = novo
+        print(f'  caminhos: {sitio:#x} {antes.hex()} -> {novo.hex()} ({oque})')
+    app[o:o + len(caminhos)] = caminhos
+    print(f'  .caminhos: {len(caminhos)} B em {CAMINHOS:#x} (cabem {CAMINHOS_FIM - CAMINHOS} no lugar dos '
+          f'caminhos das vozes)')
 
     # 5. revisao dos textos em ingles
     for endereco, velho, texto in TEXTOS:

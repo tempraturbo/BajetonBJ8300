@@ -221,6 +221,14 @@ s = roda(ar_com((1.0, transmissao([quadro('PU2EEE-5', '>novo')]))), sai_em(3.0),
 confere('5. com o 0xD7000 ocupado por outra coisa, nada e gravado nele nem no 0xD6000',
         (s['H'], s['flash'][0x7000:0x7004], s['flash'][0x6000:0x6004]), (-1, b'XYZW', b'\xff' * 4))
 
+# 5. entre partidas (v138): a hora e o ms desde a partida, entao o mesmo pacote 2 s depois da hora gravada, em outra
+# partida, parece a copia de 2 s atras; ele entra, uma vez, e dentro da mesma partida a copia nao entra
+igual = transmissao([quadro('PU2FFF-5', '>igual')])
+s = roda(ar_com((1.0, igual), (3.0, igual)), sai_em(5.0), nome='partida1')
+confere('5. a copia dentro da mesma partida nao entra', s['H'], 1)
+s = roda(ar_com((3.0, igual), (5.0, igual)), sai_em(7.0), flash_antes=s['flash'], nome='partida2')
+confere('5. o mesmo pacote em outra partida entra, uma vez', (s['H'], s['R'].count(s['R'][0])), (2, 2))
+
 # 7. as teclas, com 5 quadros no historico
 partes = [(1.0, transmissao([quadro('PU2F-1', f'>t{j}') for j in range(5)]))]
 s = roda(ar_com(*partes), [(3.0, 3.1, 'ESTRELA'), (4.0, 4.1, 'EXIT')] + sai_em(7.0), nome='estrela')
@@ -313,11 +321,13 @@ confere('10. a tecla presa: nada passa ate 5 leituras soltas seguidas, nem a lei
 
 # a caixa: abre no TO (item 5, tipo 7), a da mensagem vazia ate 37 e a do TO com o gravado ate 9; o OK da
 # mensagem a grava com o numero seguinte e arma o envio ('A'), vazia nao arma; o TO em branco se grava; fora da
-# caixa, o TO da pasta como sempre (maiusculas)
+# caixa, o TO da pasta como sempre (maiusculas); sem indicativo, o # pede o CALLSIGN (o item 0) e so depois a
+# caixa, e nada vai ao ar sem ele (v138)
 c = [' '.join(l) for l in roda_modo('caixa')]
 confere('10. a caixa e o set do TO', c,
         ['B 0 0 0 0 0 ', 'B 1 5 7 0 37 ', 'D 12 65 8 6 8 PU2XYZ-9|Ola 73', 'B 1 5 7 0 37 ', 'D 8 0 8 0 9 PU2XYZ-9|',
-         'B 1 5 7 8 9 PU2XYZ-9', 'D 8 0 0 0 10 |', 'D 0 0 5 0 11 PY5ZZ|'])
+         'B 1 5 7 8 9 PU2XYZ-9', 'D 8 0 0 0 10 |', 'D 0 0 5 0 11 PY5ZZ|',
+         'B 1 0 7 0 6 ', 'B 1 0 7 0 6 ', 'I 1 PY2ABC', 'B 1 5 7 0 37 ', 'D 8 0 5 3 12 PY5ZZ|Ola'])
 
 print()
 modelo = 'aviso so na palavra do limite' if os.environ.get('RX_BORDA') else 'aviso a cada palavra no limite'

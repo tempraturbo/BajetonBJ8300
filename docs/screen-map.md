@@ -303,6 +303,7 @@ Mapped on 2026-10-25 in the stock disassembly, for screen B (section 12). Global
 | RX frequency | u32 at +0 | in 10 Hz; `%03d.%05d` with /100000 |
 | tone type | `b[+4]` | 0 none, 1 CT, other DCS |
 | TX frequency | u32 at +5 | the one the big line shows while transmitting (`0x01E40FE6`) |
+| TX tone type | `b[+9]` | like `+4`. The factory writes it and nothing reads it; screen B uses it while transmitting, since v138: the red label, or none with no tone |
 | shift | `b[+10]` | 1 "+", 2 "−". Decoding takes it by comparing TX with RX: on a channel without TX (CHIRP writes `0xFFFFFFFF`, which the BCD conversion turns into 166666665, 1666.66665 MHz) it comes out "+". Since v81, TX above 999.99999 MHz counts as "no TX", without the "+", and a red **NO TX** shows: in SINGLE in place of the TX line, in DUAL, TRIPLE and the menu summary on the chip row, after AM (v82) |
 | bandwidth | `b[+11]` | non-zero: "N" |
 | AM | `b[+12]` | 1 = AM, from 18 to 999.99999 MHz; 108 to 135.99999 MHz is always AM (`0x01E3B438..0x01E3B47E`) |

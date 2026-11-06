@@ -313,8 +313,26 @@ int main(int argc, char **argv)
     lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
     memoria[0x14DC4 + 10] = 1;         /* + */
     memoria[0x14685] = 2;              /* transmitindo */
+    memoria[0x14DC4 + 9] = 1;          /* CT na TX: a etiqueta em vermelho (v138) */
     tela_b();
     grava("5-transmitindo");
+
+    /* v138: com tom so no RX, a etiqueta some na TX */
+    limpa();
+    lado(0, 14612500, 14672500, "REPETIDORA", 25, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    memoria[0x14DC4 + 10] = 1;         /* + */
+    memoria[0x14DC4 + 4] = 1;          /* CT so no RX */
+    memoria[0x14685] = 2;              /* transmitindo */
+    tela_b();
+    grava("5b-tx-sem-tom");
+
+    /* v138: a faixa aerea, de 108 a 135,99999 MHz, com a etiqueta AIR */
+    limpa();
+    lado(0, 11810000, 11810000, "APP SP", 30, 1, 0);
+    lado(1, 46256250, 46256250, "BF888-10", 10, 0, 2);
+    tela_b();
+    grava("5c-air");
 
     limpa();
     lado(0, 14552500, 14552500, "", 0, 1, 0);
@@ -906,11 +924,20 @@ int main(int argc, char **argv)
             memoria[0x14BF2] = 1;
             memoria[0x14C00] = 7;
             memoria[0x14BF9] = 1;
+            memoria[0x14BFA] = 5;          /* o item TO: no CALLSIGN, o titulo e outro (v138) */
             digitando("OLA, TUDO BEM? 73");
             memoria[0x14A36] = 37;
             memoria[0x14A38] = 1;
             caixa_b();
             grava("62d-aprs-caixa-mensagem");
+            /* v138: sem indicativo, o # pede o CALLSIGN na mesma caixa, e gravado abre a da mensagem */
+            tela_aprs(0x8000, 0x8080, 0, num, 15);
+            memoria[0x14BFA] = 0;
+            digitando("PY2ABC");
+            memoria[0x14A36] = 6;
+            caixa_b();
+            grava("62f-aprs-caixa-callsign");
+            memoria[0x14BFA] = 5;
             tela_aprs(0x8000, 0x8080, 0, num, 15);
             memoria[0x14BF2] = 2;
             digitando("PU2XYZ-9");

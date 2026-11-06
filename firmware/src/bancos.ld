@@ -39,12 +39,20 @@
  * alem do registro dos decodificadores, cujo tipo o montar.py zera nos dois (prova em
  * docs/engenharia-reversa.md, secao 16). O tela.o inteiro (a tela principal B) mora ali. Ele nao
  * pode ter .data nem .bss (nao ha RAM nossa): o conferir.py confere. Desde a v65 o mensagem.o (o
- * Morse e o APRS) mora ali tambem, com a mesma regra. */
+ * Morse e o APRS) mora ali tambem, com a mesma regra.
+ *
+ * Os caminhos das vozes (v138): os nomes "mnt/sdfile/res/tone/C0.*" a "E67.*" (0x01E5AB5E..0x01E5B6E0), mortos
+ * desde a v30 (a fila de sons sai antes de ler a tabela de caminhos, e o C16 do main nao toca). De 0x01E5AB60
+ * (alinhado) ate antes do 0x01E5B6E0 (o caminho do B0, vivo, comeca logo depois) mora o .caminhos: so codigo e
+ * dado que o NOSSO codigo usa - nenhuma rotina que o firmware chama -, sem .data nem .bss. O unico valor vivo
+ * que apontava para dentro (o "*" do editor no modo 123) passa para o "*" do B0. Prova em
+ * docs/engenharia-reversa.md, secao 29; o conferir.py a refaz (2j). */
 MEMORY
 {
     novo (rx) : ORIGIN = 0x01E96124, LENGTH = 3260
     livre (rx) : ORIGIN = 0x01E257E0, LENGTH = 38884
     vozes (rx) : ORIGIN = 0x01E797A0, LENGTH = 0x1BF50
+    caminhos (rx) : ORIGIN = 0x01E5AB60, LENGTH = 2944
 }
 
 SECTIONS
@@ -64,6 +72,10 @@ SECTIONS
     .vozes : {
         *(.vozes*)
     } > vozes
+
+    .caminhos : {
+        *(.caminhos*)
+    } > caminhos
 
     /DISCARD/ : { *(.comment) *(.note*) *(.debug*) }
 }

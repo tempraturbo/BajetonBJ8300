@@ -905,18 +905,25 @@ NA_LIVRE_COD u16 watch_le(void)
  * A fabrica so grava os ajustes do menu ao fecha-lo, em 0x01E3C29C, com o modo de tela no menu: o log
  * 0x9000 (0x01E3AB36) e o lado do menu, o canal (0x01E3AC0A) ou o VFO (0x01E3A4FE). Desligado com o menu
  * aberto, o que mudou se perdia. Aqui vai o mesmo, na mesma ordem, no OK que confirma cada edicao
- * (b_menu_marca, tela.c, depois do set): 0x01E3C2B0..0x01E3C30E. O lado do menu em canal (b[0x15212] = 1,
- * posto com o canal em h[0x1583C] por 0x01E3A4D0) grava o canal - na zona (MODO_ZONA 0), o numero mais a
- * zona do menu (b[0x15215]) x 64 -, com os 31 B do lado em 0x14DD3 + lado x 31; senao, o VFO do lado
- * (b[0x15204]). As tres rotinas comparam com o que esta no chip e so gravam o que mudou. */
-#define MENU_LADO      (*(volatile u8 *)0x00015204)
-#define MENU_EM_CANAL  (*(volatile u8 *)0x00015212)
-#define MENU_ZONA      (*(volatile u8 *)0x00015215)
-#define MENU_CANAL     (*(volatile u16 *)0x0001583C)
+ * (b_menu_marca, tela.c, depois do set): 0x01E3C2B0..0x01E3C30E, todos sobre a base r4 = 0x14680. O lado em
+ * evidencia em canal (b[0x15E12] = 1) grava o canal h[0x15E3C] - na zona (MODO_ZONA 0), o numero mais a zona
+ * (b[0x15E15]) x 64 -, com o nome dos 31 B do lado em 0x14DD3 + lado x 31; senao, o VFO do lado (b[0x15E04]).
+ * Da v101 a v137 os quatro enderecos saiam de outra base (0x15204, 0x15212, 0x15215, 0x1583C - um objeto do SDK):
+ * quase sempre caia no SALVA_VFO de um lado lido do lixo (achado no mapa do SAVE, v138). O SALVA_VFO e o
+ * SALVA_AJUSTES comparam com o chip e so gravam o que mudou; o SALVA_CANAL compara o registro cru com o chip,
+ * mas o nome com a sombra 0x15E58, e com o canal certo regravaria o setor de 4 KB a cada OK: o salva_menu
+ * confere ele mesmo os 32 B do chip antes. */
+#define MENU_LADO      (*(volatile u8 *)0x00015E04)
+#define MENU_EM_CANAL  (*(volatile u8 *)0x00015E12)
+#define MENU_ZONA      (*(volatile u8 *)0x00015E15)
+#define MENU_CANAL     (*(volatile u16 *)0x00015E3C)
+#define CANAL_CRU      ((const u8 *)0x00015E44)   /* os 20 B do canal em evidencia, como no chip */
 
 NA_LIVRE_COD void salva_menu(void)
 {
-    unsigned n;
+    u8 b[32];
+    const u8 *nome;
+    unsigned n, k;
 
     SALVA_AJUSTES();
     if (MENU_EM_CANAL != 1) {
@@ -926,7 +933,26 @@ NA_LIVRE_COD void salva_menu(void)
     n = MENU_CANAL;
     if (MODO_ZONA == 0)
         n = (u16)(n + (MENU_ZONA << 6));
-    SALVA_CANAL(n, (const u8 *)0x00014DD3 + MENU_LADO * 31);
+    nome = (const u8 *)0x00014DD3 + MENU_LADO * 31;
+    LE_FLASH(n << 5, b, 32);
+    for (k = 0; k < 32 && b[k] == (k < 20 ? CANAL_CRU[k] : nome[k - 20]); k++)
+        ;
+    if (k < 32)                            /* o chip ainda nao tem este canal com este nome */
+        SALVA_CANAL(n, nome);
+}
+
+/* ---------- o PA no maximo em 90% (v138) ----------
+ * O 0x36 do BK4819 e (P << 8) | ganho: o P e o bias do PA (0 = 0 V a 255 = 3,2 V), da calibracao de cada faixa e
+ * nivel (0xF000..0xF0BF, copiada na partida para 0x707C). A unica escrita e 0x01E44526, chamada com o P so no
+ * passo 0 da TX (0x01E478BA; o fim da TX a chama com 0, o PA desligado), e toda TX passa por ali: o PTT, o Morse
+ * e o APRS, o DTMF e o roger. O gancho limita o P a 229 (90% de 255, pedido do dono); no radio dele so mudam o H
+ * de UHF (250) e o de VHF (234 a 245). Limita a tensao do bias, nao a potencia: so o wattimetro diz quanto caiu. */
+FIRMWARE(PA_FABRICA, 0x01E44526);   void PA_FABRICA(unsigned);
+#define PA_MAXIMO  229u
+
+NA_LIVRE_COD void gancho_pa(unsigned bias)
+{
+    PA_FABRICA(bias < PA_MAXIMO ? bias : PA_MAXIMO);
 }
 
 NA_LIVRE_COD void watch_grava(void)
@@ -1197,6 +1223,31 @@ NA_LIVRE_COD static void poe_no_b(unsigned em_vfo, unsigned canal, const u8 *vfo
     SALVA_AJUSTES();
 }
 
+/* ---------- o SAVE como no UV-17L (v138) ----------
+ * O MEMCH (item 12, set de fabrica 0x01E3A906) grava no canal VALOR o lado em evidencia - em canal, os 20 B do
+ * canal cru e o nome do registro de tela; em VFO, os 20 B montados do VFO e o nome que o canal de destino ja
+ * tinha - e recarrega os dois lados pelo nibble do modo de cada um (MODO_LADOS). Aqui, antes, o nibble do lado
+ * em evidencia vai a canal, para o lado ficar no canal salvo tambem vindo do VFO; e depois o nome do registro
+ * de tela vai a vazio: o salva_menu, logo depois do set, grava o canal sem nome, como o UV-17L, e o desvio do OK
+ * abre o editor do CH-NAME vazio (memch_nome_abre, mensagem.c). Na recusa de fabrica (b[0x153A1] = 165 protege os
+ * 30 primeiros canais: ela avisa e nao grava) so a fabrica age. */
+FIRMWARE(MEMCH_FABRICA, 0x01E3A906);   void MEMCH_FABRICA(void);
+#define CANAIS_PROTEGIDOS  (*(volatile u8 *)0x000153A1)
+
+NA_LIVRE_COD void memch_grava(void)
+{
+    unsigned lado = LADO_B != 0, k;
+
+    if (CANAIS_PROTEGIDOS == 165 && VALOR <= 29) {
+        MEMCH_FABRICA();
+        return;
+    }
+    MODO_LADOS = (MODO_LADOS & ~(15u << lado * 4)) | 1u << lado * 4;
+    MEMCH_FABRICA();
+    for (k = 0; k < 12; k++)
+        ((volatile u8 *)0x00014DD3)[lado * 31 + k] = 0;
+}
+
 /* B -> C: guarda o modo, o canal e o VFO do B e poe os da C. Sem o setor dos VFOs (a primeira vez), a C
  * comeca com o VFO do B. */
 NA_LIVRE_COD __attribute__((noinline)) static void vai_c(struct vigia *v)
@@ -1334,16 +1385,55 @@ __asm__(".section .livre.bancos.text,\"ax\"\n"
  * cabo -, nada o le nem o grava, conferido no desmontado inteiro), e o poe em b[0x706C] na partida
  * (todo caminho ate o gancho da partida passa pela copia da calibracao, 0x01E561CC) e na hora em que
  * muda. A saida do menu grava os ajustes no chip (0x01E3C2B0), e o CHIRP o le e grava no bloco
- * 0x9000. A calibracao de fabrica nao muda. 0, o padrao, e HIGH: o topo, perto dos 30 de fabrica. */
+ * 0x9000. A calibracao de fabrica nao muda.
+ * O DEFAULT (v138, como no UV-17L): o valor da calibracao, o codigo 3; qualquer codigo fora da lista (o 171 que
+ * o RESET deixa, o 0xFF) tambem vale DEFAULT (pedido do dono). Na lista ele fica em ordem de valor entre os
+ * niveis (HIGH 31, DEFAULT 30, MID 25, LOW 19 no radio do dono; no empate, antes): o item e um numero com
+ * exibicao propria, como o CRYSTAL FINE, porque a posicao muda de radio para radio. A calibracao vem do chip
+ * (LE_FLASH): o b[0x706C] da partida o MIC GAIN troca. */
 #define MIC_NIVEL      (*(volatile u8 *)0x00014BDF)
 #define MIC_GANHO      (*(volatile u8 *)0x0000706C)
+#define MIC_DEFAULT    3u
+#define MIC_CAL        0xF210u                                /* o ganho de fabrica, no chip de dados */
 DADO_NA_LIVRE const char titulo_mic[] = "MIC GAIN";
 DADO_NA_LIVRE const char *const mic_opcoes[3] = {"HIGH", "MID", "LOW"};
 DADO_NA_LIVRE static const u8 mic_ganho[3] = {31, 25, 19};   /* o topo, -3 dB e -6 dB */
+DADO_NA_LIVRE static const char mic_padrao[] = "DEFAULT";
+
+/* A posicao do DEFAULT: quantos niveis ficam acima da calibracao. Separada: o LE_FLASH pesa na pilha. */
+NA_LIVRE_COD __attribute__((noinline)) static unsigned mic_d(void)
+{
+    u8 c;
+    unsigned d = 0, k;
+
+    LE_FLASH(MIC_CAL, &c, 1);
+    for (k = 0; k < 3; k++)
+        d += mic_ganho[k] > (c & 0x1Fu);
+    return d;
+}
 
 NA_LIVRE_COD u16 mic_le(void)
 {
-    return MIC_NIVEL < 3 ? MIC_NIVEL : 0;
+    unsigned n = MIC_NIVEL, d = mic_d();
+
+    return n >= MIC_DEFAULT ? d : n < d ? n : n + 1;
+}
+
+NA_LIVRE_COD char *mic_exibe(void)
+{
+    unsigned p = VALOR, d = mic_d();
+
+    return (char *)(p == d ? mic_padrao : mic_opcoes[p < d ? p : p - 1]);
+}
+
+/* O ganho do nivel escolhido no b[0x706C]: o DEFAULT relido do chip. Separada do aplica_audio, que a tela
+ * MESSAGES chama com a pilha no limite: so o set e os ajustes que mudam por fora (o gancho_ajustes) a chamam. */
+NA_LIVRE_COD void aplica_mic(void)
+{
+    if (MIC_NIVEL < MIC_DEFAULT)
+        MIC_GANHO = mic_ganho[MIC_NIVEL];
+    else
+        LE_FLASH(MIC_CAL, (void *)&MIC_GANHO, 1);
 }
 
 /* ---------- COMPRESSOR e MIC AGC: o resto da pasta MIC (v59) ----------
@@ -1449,12 +1539,14 @@ NA_LIVRE_COD u16 deenfase_le(void)                  /* 0 ON (o de fabrica), 1 OF
 /* O ganho, o compressor (razao 1,33:1, 2:1 ou 4:1 nos bits 15:14 do 0x29, o resto como a partida
  * deixa; desligado, o 0xAA00 dela, ou a razao 0 se o expansor liga o bit 3), o expansor e a porta de
  * ruido (o 0x28; os dois de fabrica dao o 0x0B40 da partida), o AGC e, em FM, a DE-EMPHASIS (o 0x2B).
- * Desde a v109 no fim da imagem, e nao no .livre: o medidor S nao cabia la. */
-void aplica_audio(void)
+ * Da v109 a v137 no fim da imagem (o medidor S nao cabia no .livre); desde a v138 de volta ao .livre, que o
+ * .caminhos aliviou, porque o fim da imagem nao cabia o MIC GAIN com o DEFAULT. */
+NA_LIVRE_COD void aplica_audio(void)
 {
     unsigned c = compressor_le(), e = expansor_le(), p = porta_nivel[porta_le()], r = LE_REG(0x31);
 
-    MIC_GANHO = mic_ganho[mic_le()];
+    if (MIC_NIVEL < MIC_DEFAULT)           /* o DEFAULT (v138) fica no que a partida ou o aplica_mic poe */
+        MIC_GANHO = mic_ganho[MIC_NIVEL];
     ESCREVE_REG(0x29, (c ? c : e ? 0 : 2) << 14 | 0x2A00);
     ESCREVE_REG(0x28, e << 14 | (e ? 0x2A00 : 0x0A00) | (p ? 0x100 | p : 0));
     ESCREVE_REG(0x31, c || e ? r | 8 : r & ~8u);
@@ -1465,10 +1557,10 @@ void aplica_audio(void)
 
 NA_LIVRE_COD void mic_grava(void)
 {
-    unsigned n = VALOR;
+    unsigned p = VALOR, d = mic_d();
 
-    MIC_NIVEL = n < 3 ? n : 0;
-    aplica_audio();                        /* vale ja na proxima transmissao */
+    MIC_NIVEL = p == d ? MIC_DEFAULT : p < d ? p : p - 1;
+    aplica_mic();                          /* vale ja na proxima transmissao */
 }
 
 NA_LIVRE_COD void compressor_grava(void)
@@ -1842,6 +1934,7 @@ NA_LIVRE_COD void gancho_ajustes(void)
                                             * 0x01E607B1), e o CHIRP pode liga-lo: no SINGLE fica em 0 (v82) */
         TDR = 0;
     aplica_audio();
+    aplica_mic();                          /* v138: o DEFAULT relido da calibracao */
     aplica_cristal();
     aplica_eq();                           /* v111: o EQ que o CHIRP grava vale sem religar */
     aplica_agc();                          /* v113: o RESET poe o RX GAIN em DEFAULT */

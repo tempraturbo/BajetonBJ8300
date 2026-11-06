@@ -18,6 +18,7 @@ Verifica, sem precisar do radio:
     menu_abre;
   - que no app.bin mudou **so** o que esta previsto, nada em area protegida.
 """
+import hashlib
 import os
 import re
 import struct
@@ -95,7 +96,9 @@ tabela_esperada, textos_esperados = montar.monta_menu(app_velho, blob, tela)
 # v43: a tabela do menu mora no vetor menu_tabela do .livre, e desde a v53 os textos dos grupos no
 # menu_textos - o que vai a flash e o .livre com os dois
 tela_gravada = montar.livre_com_menu(tela, tabela_esperada, textos_esperados)
+caminhos_em, caminhos = montar.codigo_ligado(elf, '.caminhos')   # v138: no lugar dos caminhos das vozes
 blocos = [('codigo', montar.ENDERECO_CODIGO, blob), ('tela B', livre_em, tela_gravada),
+          ('caminhos', caminhos_em, caminhos),
           ('tabela', montar.S[montar.TABELA_SIMBOLO], tabela_esperada),
           ('textos dos grupos', montar.S[montar.TEXTOS_SIMBOLO], textos_esperados)]
 for nome, endereco, esperado in blocos:
@@ -128,11 +131,15 @@ fim_livre = livre_em + len(tela)
 no_texto = lambda a: montar.ENDERECO_CODIGO <= a < fim_codigo
 nas_vozes = lambda a: vozes_em <= a < fim_vozes
 na_livre = lambda a: livre_em <= a < fim_livre
-fora = {n: a for n, a in montar.S.items() if not no_texto(a) and not nas_vozes(a) and not na_livre(a)}
+# v138: no .caminhos so o que o nosso codigo chama ou le - nenhuma das rotinas que o firmware chama (PRECISA)
+nos_caminhos = lambda a: caminhos_em <= a < caminhos_em + len(caminhos)
+fora = {n: a for n, a in montar.S.items()
+        if not no_texto(a) and not nas_vozes(a) and not na_livre(a) and not nos_caminhos(a)}
 trocados = sorted(n for n in montar.PRECISA if nas_vozes(montar.S[n]) != (n in montar.NAS_VOZES)
-                  or na_livre(montar.S[n]) != (n in montar.NA_LIVRE))
+                  or na_livre(montar.S[n]) != (n in montar.NA_LIVRE) or nos_caminhos(montar.S[n]))
 lugares = (vozes_em == montar.VOZES and fim_vozes <= montar.VOZES_ACEITAS_FIM
-           and livre_em == montar.LIVRE and fim_livre <= montar.LIVRE_FIM)
+           and livre_em == montar.LIVRE and fim_livre <= montar.LIVRE_FIM
+           and caminhos_em == montar.CAMINHOS and caminhos_em + len(caminhos) <= montar.CAMINHOS_FIM)
 print(f'2b. simbolos dentro de {montar.ENDERECO_CODIGO:#x}..{fim_codigo:#x}, {vozes_em:#x}..{fim_vozes:#x} '
       f'(ate o fim do C1, {montar.VOZES_ACEITAS_FIM:#x}) ou {livre_em:#x}..{fim_livre:#x} (a faixa do G.729 '
       f'e do MP3 vai ate {montar.LIVRE_FIM:#x}); nas vozes so os {len(montar.NAS_VOZES)} do espectro, na '
@@ -142,9 +149,9 @@ print(f'2b. simbolos dentro de {montar.ENDERECO_CODIGO:#x}..{fim_codigo:#x}, {vo
 if fora:
     erros.append('simbolo fora do codigo novo: ' + ', '.join(fora))
 if trocados:
-    erros.append('rotina no lugar errado (.text x .vozes x .livre): ' + ', '.join(trocados))
+    erros.append('rotina no lugar errado (.text x .vozes x .livre x .caminhos): ' + ', '.join(trocados))
 if not lugares:
-    erros.append('.vozes ou .livre fora do lugar aceito')
+    erros.append('.vozes, .livre ou .caminhos fora do lugar aceito')
 
 # 2c. o codigo foi gravado exatamente onde o linker o ligou. Na v20 o .text saiu ligado para
 # 0x01E96124 (o linker alinhou a secao a 4 por causa de uma tabela de ponteiros) e foi gravado em
@@ -187,7 +194,7 @@ for e in entradas:
 desvios_novos, ruins = 0, []
 for o in range(0, len(app) - 3, 2):
     if (app[o + 1] != 0xEA or not app[o] & 0x80 or app[o:o + 4] == app_velho[o:o + 4]
-            or na_livre(montar.BASE_APP + o)):
+            or na_livre(montar.BASE_APP + o) or nos_caminhos(montar.BASE_APP + o)):
         continue
     d22 = ((app[o] & 0x3F) << 16) | (app[o + 3] << 8) | app[o + 2]
     destino = montar.BASE_APP + o + 4 + 2 * (d22 - 0x400000 if d22 & 0x200000 else d22)
@@ -199,6 +206,9 @@ for o in range(0, len(app) - 3, 2):
         if montar.BASE_APP + o not in sitios:
             ruins.append(f'{montar.BASE_APP + o:#x} -> {destino:#x} (vai para o {nome_secao} de um sitio que o '
                          'montar nao poe la)')
+    elif nos_caminhos(destino):
+        ruins.append(f'{montar.BASE_APP + o:#x} -> {destino:#x} (o firmware nao chama o .caminhos, v138)')
+        continue
     else:
         continue
     desvios_novos += 1
@@ -364,7 +374,7 @@ registro = lambda a: any(r <= a < r + montar.TAM_REGISTRO for r, _, _, _ in mont
 for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
     for o in range(0, len(binario) - 3, 2):
         onde = montar.BASE_APP + o
-        if dentro(onde) or registro(onde):
+        if dentro(onde) or registro(onde) or (binario is app and nos_caminhos(onde)):   # v138: codigo nosso
             continue
         v = struct.unpack_from('<I', binario, o)[0]
         # v43: o ponteiro da tabela do menu ("r5 = menu_tabela", os 32 bits em PONTEIRO_EM + 2) e a unica
@@ -386,6 +396,59 @@ print(f'2h. tela B ({len(tela)} B) em {montar.LIVRE:#x}, no lugar do G.729 e do 
       f'{montar.LIVRE_FIM:#x}); tipo dos dois no registro de fabrica para 0, o resto dos registros intacto; '
       f'nada de fora aponta para a faixa, nem no de fabrica nem no novo (fora os sitios da tela B e '
       f'{len(excecoes)} instrucao conferida byte a byte): ' + ('ok' if not problemas else 'FALHOU'))
+for p_ in problemas[:20]:
+    print('    ' + p_)
+erros += problemas
+
+# 2j. o .caminhos no lugar dos caminhos das vozes (v138). A faixa de fabrica e a dos caminhos (sha256), o
+# .caminhos esta gravado nela, os remendos das vozes que matam os valores que caem nela estao no lugar, e o
+# "*" do editor saiu dela para o do B0. E a faixa e fechada, no firmware de fabrica e no novo: nenhum valor de
+# 32 bits de fora dela cai dentro - em TODO deslocamento, par e impar, porque ponteiro de tabela compactada fica
+# em endereco impar -, nem call/goto de 4 bytes (os da flash pelo endereco dela, os da copia da RAM pelo de
+# la). As excecoes valem so com os bytes de fabrica: as entradas mortas (montar.CAMINHOS_MORTOS) e, so no de
+# fabrica, o "*" (montar.CAMINHOS_REMENDOS). No novo, o .livre e o proprio .caminhos sao codigo nosso, que
+# pode chamar e ler la. Prova inteira em docs/engenharia-reversa.md, secao 29.
+problemas = []
+o = montar.CAMINHOS - montar.BASE_APP
+if hashlib.sha256(bytes(app_velho[o:o + montar.CAMINHOS_FIM - montar.CAMINHOS])).hexdigest() != montar.CAMINHOS_SHA256:
+    problemas.append('a faixa de fabrica nao e a dos caminhos das vozes')
+if bytes(app[o:o + len(caminhos)]) != caminhos:
+    problemas.append('.caminhos ausente do app.bin no lugar dos caminhos das vozes')
+for sitio, _, novo, oque in montar.VOZES_REMENDOS:
+    s = sitio - montar.BASE_APP
+    if sitio in (0x01E40628, 0x01E55ABE) and bytes(app[s:s + len(novo)]) != novo:
+        problemas.append(f'o remendo das vozes em {sitio:#x} ({oque}) nao esta no lugar')
+star = {}
+for sitio, antes, novo, oque in montar.CAMINHOS_REMENDOS:
+    s, alvo = sitio - montar.BASE_APP, int.from_bytes(novo, 'little') - montar.BASE_APP
+    if bytes(app_velho[s:s + 4]) != antes or bytes(app[s:s + 4]) != novo or bytes(app[alvo:alvo + 2]) != b'*\0':
+        problemas.append(f'{sitio:#x} ({oque}): {antes.hex()} -> {novo.hex()} nao conferiu')
+    star[sitio] = antes
+dentro_c = lambda a: montar.CAMINHOS <= a < montar.CAMINHOS_FIM
+morto = lambda a: any(i <= a and a + 4 <= f for i, f, _ in montar.CAMINHOS_MORTOS)
+excecoes_c = 0
+for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
+    for o in range(0, len(binario) - 3):
+        onde = montar.BASE_APP + o
+        if dentro_c(onde) or (binario is app and na_livre(onde)):
+            continue
+        v = struct.unpack_from('<I', binario, o)[0]
+        if dentro_c(v & ~1):
+            if morto(onde) and binario[o:o + 4] == app_velho[o:o + 4]:
+                excecoes_c += 1
+            elif binario is app_velho and star.get(onde) == bytes(binario[o:o + 4]):
+                excecoes_c += 1
+            else:
+                problemas.append(f'{nome_app}: valor {v:#x} em {onde:#x} aponta para dentro dos caminhos')
+        if o % 2 == 0 and binario[o + 1] == 0xEA and binario[o] & 0x80:
+            d22 = ((binario[o] & 0x3F) << 16) | (binario[o + 3] << 8) | binario[o + 2]
+            pc = (onde if o < SEG2_OFF else RAM + o - SEG2_OFF) + 4
+            if dentro_c(pc + 2 * (d22 - 0x400000 if d22 & 0x200000 else d22)):
+                problemas.append(f'{nome_app}: call/goto em {onde:#x} cai dentro dos caminhos')
+print(f'2j. .caminhos ({len(caminhos)} B) em {montar.CAMINHOS:#x}, no lugar dos caminhos das vozes (ate '
+      f'{montar.CAMINHOS_FIM:#x}); remendos das vozes no lugar, o "*" do editor no B0; nada de fora aponta para '
+      f'a faixa, em todo deslocamento, nem no de fabrica nem no novo ({excecoes_c} valores mortos conferidos byte '
+      'a byte): ' + ('ok' if not problemas else 'FALHOU'))
 for p_ in problemas[:20]:
     print('    ' + p_)
 erros += problemas
@@ -508,8 +571,11 @@ for g in range(grupos):
     if filhos != [montar.rotulo(k) for k in chaves]:
         problemas.append(f'{nome}: os textos {filhos} nao sao os do montar')
     # v112: a caixa e a volta da tela MESSAGES acham o item pela posicao (mensagem.c, ITEM_MESSAGES e ITEM_TO)
-    if nome == 'APRS' and filhos[2:3] + filhos[5:6] != ['MESSAGES', 'TO']:
-        problemas.append(f'APRS: o MESSAGES e o TO fora das posicoes 2 e 5 que a tela usa: {filhos}')
+    # v138: e o CALLSIGN, que o # pede antes da caixa quando falta o indicativo (ITEM_CALLSIGN)
+    if nome == 'MEMORY' and filhos[0:1] != ['CH-NAME']:   # v138: o SAVE abre o editor no item 0 (ITEM_CH_NAME)
+        problemas.append(f'MEMORY: o CH-NAME fora da posicao 0 que o SAVE usa: {filhos}')
+    if nome == 'APRS' and filhos[0:1] + filhos[2:3] + filhos[5:6] != ['CALLSIGN', 'MESSAGES', 'TO']:
+        problemas.append(f'APRS: o CALLSIGN, o MESSAGES e o TO fora das posicoes 0, 2 e 5 que a tela usa: {filhos}')
     print(f'3b. {g + 1:2d} {nome:9s} ' + ', '.join(f + ('*' * bool(m)) for f, m in zip(filhos, marcas)))
     vistos += [bytes(tab[(p + i) * T:(p + i + 1) * T]) for i in range(n)]
     p += n
@@ -757,7 +823,8 @@ for linha in desmontado:
     if not nas_vozes(onde) and nas_vozes(destino):
         estranhas.append(f'{onde:#x} {m.group(3)} -> {destino:#x} (de fora do .vozes para o .vozes)')
         continue
-    if no_texto(destino) or nas_vozes(destino) or na_livre(destino) or (na_livre(onde) and destino in voltas):
+    if (no_texto(destino) or nas_vozes(destino) or na_livre(destino) or nos_caminhos(destino)
+            or (na_livre(onde) and destino in voltas)):
         continue
     if destino in declaradas:
         usadas[declaradas[destino]] = usadas.get(declaradas[destino], 0) + 1
@@ -1128,6 +1195,9 @@ previsto += [(s_, s_ + len(a_) - 1, 'vozes: ' + d_) for s_, a_, _, d_ in montar.
 previsto += previsto_tela
 previsto += [(montar.LIVRE, montar.LIVRE + len(tela) - 1, 'tela B no lugar do G.729 e do MP3')]
 previsto += [(r, r + 3, f'tipo do {d} no registro') for r, _, _, d in montar.DECODIFICADORES]
+# v138: o .caminhos no lugar dos caminhos das vozes, e o "*" do editor que sai de la
+previsto += [(montar.CAMINHOS, montar.CAMINHOS + len(caminhos) - 1, 'codigo novo no lugar dos caminhos das vozes')]
+previsto += [(s_, s_ + len(a_) - 1, 'caminhos: ' + d_) for s_, a_, _, d_ in montar.CAMINHOS_REMENDOS]
 
 previsto += [(s, s + 3, f'gancho do cabo ({p})') for s, p in montar.CABO_SITIOS]
 mudados = [i for i in range(len(app)) if app[i] != app_velho[i]]

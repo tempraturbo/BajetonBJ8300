@@ -198,8 +198,11 @@ struct afsk_dac {
  * espelha e a segunda metade e a primeira negativa (v123, pelo espaco; os 64 pontos saem iguais). */
 #if defined(TESTE_PC) || defined(TESTE_RX)
 #define NAS_VOZES
+#define NOS_CAMINHOS
 #else
 #define NAS_VOZES  __attribute__((section(".vozes.rodata.mensagem")))   /* a sobra do C1 (o .livre acabou) */
+/* v138: no lugar dos caminhos das vozes (bancos.ld), so o que o nosso codigo chama - nunca o firmware */
+#define NOS_CAMINHOS  __attribute__((section(".caminhos.mensagem")))
 #endif
 NAS_VOZES static const short seno17[17] = {
     0, 784, 1561, 2322, 3061, 3771, 4445, 5075, 5657, 6184, 6652, 7055, 7391, 7656, 7846, 7961, 8000};
@@ -685,7 +688,7 @@ static const char *const MIC_E[8] = {"EMERGENCY", "PRIORITY", "SPECIAL", "COMMIT
  * um + 28; x aponta o primeiro); depois, o tipo do radio (> ] ` ') e a altitude "xxx}" (metros + 10000,
  * base 91), se ha.
  * Devolve 0 se o destino nao e de Mic-E; senao o fim do texto, e em *px onde o comentario comeca. */
-static char *mic_e(char *p, const u8 *d, unsigned desloc, const u8 **px, const u8 *fim)
+NOS_CAMINHOS static char *mic_e(char *p, const u8 *d, unsigned desloc, const u8 **px, const u8 *fim)
 {
     const u8 *x = *px;
     unsigned k, c, lat = 0, bits = 0, proprio = 0, g, m, vel, rumo;
@@ -799,7 +802,8 @@ static char *posicao(char *p, const u8 **px, const u8 *fim)
 /* O quadro em texto legivel, ate TEXTO_MAX caracteres (48 ate a v73: o que cabia em duas linhas; a tela
  * abre o resto no OK), terminado em 0:
  *  - mensagem para o meu indicativo: "ORIGEM> texto" (sem o "{id", que e so da confirmacao), e devolve 1;
- *  - mensagem para outro: "ORIGEM>DESTINO: texto"; a confirmacao: "ORIGEM>DESTINO: ACK id";
+ *  - mensagem para outro: "ORIGEM>DESTINO: texto", tambem sem o "{id" (a fonte nao tem o "{", que saia como
+ *    "?25"; v138, como no UV-17L); a confirmacao: "ORIGEM>DESTINO: ACK id";
  *  - posicao (! = / @, sem compressao ou comprimida, v76): "ORIGEM: 23 18.07S 046 35.59W CAR 45KM/H 120DEG
  *    comentario", com o PHG, a altitude em metros e o tempo decodificados (v76);
  *  - Mic-E (` '), objeto (;) e item ()) (v76): a posicao como acima, o objeto e o item com "OBJ NOME"
@@ -811,11 +815,11 @@ static char *posicao(char *p, const u8 **px, const u8 *fim)
  * da resposta embutida), que o ack devolve (v75); nas outras, fica vazio. Com TEXTO_BRUTO no n_meu (o
  * APRS DECODE em OFF, v76), so a mensagem e decodificada: o resto vai como veio. No comentario, a altitude
  * "/A=pes" vira metros e o "!wXY!" da precisao extra (DAO) sai (v76). */
-unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned n_meu, char *id)
+NOS_CAMINHOS unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned n_meu, char *id)
 {
     char *p = s, *f;
     const u8 *x, *fim = q + n, *d = q;     /* d: o destino (do Mic-E), em bytes de endereco ou em texto */
-    unsigned i = 7, k, para_mim = 0, bruto = n_meu & TEXTO_BRUTO;
+    unsigned i = 7, k, para_mim = 0, msg = 0, bruto = n_meu & TEXTO_BRUTO;
 
     n_meu &= 0xFF;
     while (i + 7 <= n && !(q[i + 6] & 1))  /* o fim dos enderecos: o bit 0 do ultimo */
@@ -840,6 +844,7 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
         for (k = 0; k < 9 && (k < n_meu ? q[i + 1 + k] == (u8)meu[k] : q[i + 1 + k] == ' '); k++)
             ;
         para_mim = k == 9 && n_meu;
+        msg = 1;
         *p++ = '>';
         if (!para_mim) {
             for (k = 1; k < 10 && q[i + k] != ' '; k++)
@@ -898,7 +903,7 @@ unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *meu, unsigned 
             *p++ = ' ';
         }
     }
-    for (; i < n && p < s + TEXTO_MAX && !(para_mim && q[i] == '{'); i++) {
+    for (; i < n && p < s + TEXTO_MAX && !(msg && q[i] == '{'); i++) {   /* o "{id" de toda mensagem sai (v138) */
         k = q[i];
         if (!bruto && k == '/' && i + 9 <= n && q[i + 1] == 'A' && q[i + 2] == '=' &&
             (int)(k = campo(q + i + 3, 6)) != SEM_DADO) {
@@ -1188,8 +1193,8 @@ static void espera_soltar(void)
  * bipe tocando (b[0x14924]) e a recepcao fora da sintonia (o estado 2 ou mais), e um ciclo parado antes do
  * primeiro OK (v114): o laco da tela para o laco do sinal, e o audio do chip e o amplificador so voltam quando a
  * recepcao entra no estado 4 (0x01E47E0A e 0x01E47E1A) - com a tela aberta antes, ficavam mudos ate a saida
- * (o OK e o EXIT da caixa sintonizam de novo, e o bipe da tecla passa pelo gerador de tom, 0x01E4B68C..
- * 0x01E4B70E). O bipe das teclas (o BEEP PROMPT, b[0x14B72], que 0x01E38B4C le) fica calado enquanto isso. Uma
+ * (o OK e o EXIT da caixa sintonizam de novo). O bipe das teclas (o BEEP PROMPT, b[0x14B72], que 0x01E38B4C le)
+ * fica calado enquanto isso. Uma
  * tecla de verdade ou o PTT desistem da volta, e ela desiste sozinha depois de 7 ciclos sem a tela voltar (o
  * caminho pede 5, com o parado). Cada OK: apertado 5 leituras de 10 ms (a fabrica so aceita a mesma em tres
  * seguidas) e solto 11, para o toque curto sair e a interface o tratar.
@@ -1207,7 +1212,8 @@ static void espera_soltar(void)
 #define MENU_TABELA   RAM(u32, 0x00014BF4)
 #define MENU_NUMERO   RAM(u8, 0x00014BFA)
 #define MODO_TELA     RAM(u8, 0x0001533D)   /* 0 a tela principal, 1 o menu */
-#define ITEM_MESSAGES 2                     /* na pasta APRS (conferir.py, 3b) */
+#define ITEM_CALLSIGN 0                     /* na pasta APRS (conferir.py, 3b; v138) */
+#define ITEM_MESSAGES 2
 #define ITEM_TO       5
 
 /* A volta acabou (a tela voltou, ou ela desistiu): o bipe como estava, e o estado zerado. Devolve o
@@ -1669,9 +1675,24 @@ u16 aprs_dest_le(void)
     return 0;
 }
 
+/* O indicativo gravado (v138): sem ele o quadro_aprs nao monta pacote, e o envio armado subia so a portadora.
+ * Separada: o registro sai da pilha de quem chama. */
+__attribute__((noinline)) static unsigned tem_indicativo(void)
+{
+    struct aprs a;
+
+    le_aprs(&a);
+    return a.tam_ind;
+}
+
+/* O set do CALLSIGN. Pedido pelo # da tela MESSAGES sem indicativo (v138, aprs_caixa_abre), ele grava sem fechar
+ * o editor: o desvio do OK chama o aprs_caixa_abre de novo, que agora acha o indicativo e abre a caixa da
+ * mensagem. */
 void aprs_ind_grava(void)
 {
     aprs_guarda_texto(0);
+    if (TELA_APRS & CAIXA_MSG)
+        return;
     editor_fecha();
 }
 
@@ -1682,7 +1703,7 @@ void aprs_dest_grava(void)
 {
     unsigned t = TELA_APRS;
 
-    if (aprs_guarda_texto(t & CAIXA_MSG ? 2 : 1) && (t & CAIXA_MSG))
+    if (aprs_guarda_texto(t & CAIXA_MSG ? 2 : 1) && (t & CAIXA_MSG) && tem_indicativo())   /* v138: com pacote */
         ESTADO_MSG = ARMADO_APRS;
     if (!(t & CAIXA)) {
         editor_fecha();
@@ -1702,12 +1723,39 @@ unsigned aprs_caixa_abre(void)
 
     if (!c)
         return 0;
+    if (c == CAIXA_MSG && !tem_indicativo()) {   /* v138: sem indicativo, o CALLSIGN antes; gravado, a caixa */
+        MENU_NUMERO = ITEM_CALLSIGN;
+        MENU_TIPO = 7;
+        aprs_texto_le(0);
+        return 1;
+    }
     MENU_NUMERO = ITEM_TO;
     MENU_TIPO = 7;
     if (c == CAIXA_TO)
         aprs_texto_le(1);
     else
         editor_abre(TEXTO, 0, MAX_MSG);
+    return 1;
+}
+
+/* O SAVE como no UV-17L (v138, memch_grava no bancos.c): depois do OK do MEMCH, no desvio do OK (b_menu_marca,
+ * tela.c, a marca MARCA_NOMEIA), o editor do CH-NAME abre na hora, vazio, no item 0 da pasta MEMORY, com o estado
+ * que o OK de fabrica poe ao abrir um editor (0x01E49B20..0x01E49B32: editando, os campos do digitado em 0) e sem
+ * o get do CH-NAME, que traria o nome. So com o lado em canal no canal salvo: na recusa de fabrica (os 30
+ * primeiros canais protegidos) nada foi gravado. Devolve 1 se abriu. */
+#define ITEM_CH_NAME  0                     /* na pasta MEMORY (conferir.py, 3b) */
+unsigned memch_nome_abre(void)
+{
+    if (RAM(u8, 0x00015E12) != 1 || RAM(u16, 0x00015E3C) != VALOR || (RAM(u8, 0x000153A1) == 165 && VALOR <= 29))
+        return 0;
+    MENU_NUMERO = ITEM_CH_NAME;
+    MENU_TIPO = 7;
+    MENU_EDITANDO = 1;
+    VALOR = 0;
+    RAM(u16, 0x00014BFE) = 0;
+    RAM(u32, 0x00014C04) = 0;
+    RAM(u8, 0x00014C08) = 0;
+    editor_abre("", 0, 12);
     return 1;
 }
 
@@ -1951,7 +1999,9 @@ __attribute__((noinline)) static void filtro_rx(unsigned liga, unsigned era3)
         REG_W(0x54, 0x935A);               /* os graves do RX em -3 dB */
         REG_W(0x55, 0x2EFF);
         REG_W(0x75, 0xCC35);               /* os agudos do RX em +4 dB */
-        REG_W(0x7E, 0xB03E);               /* o AGC travado no degrau de cima (v128) */
+        /* o AGC travado no degrau de cima (v128) e o filtro de DC do RX desligado (bits 2:0 = 000, v137: com
+         * os bits crus lidos pelo cabo, 3 quadros perfeitos e 1 quase em 7 envios do UV, contra ~27% com ele) */
+        REG_W(0x7E, 0xB038);
         return;
     }
     AM_FM(era3 >> 16 & 1);
@@ -2116,7 +2166,7 @@ __attribute__((noinline)) static unsigned registro_igual(u32 e, const struct reg
  * mesma estacao ouvida direto e pelos digipeaters) nao entra de novo. A mensagem para mim com numero arma
  * o ack (v75): o numero do registro em ACK_REGISTRO, e o laco sai da tela para ele ir ao ar - a cada
  * copia, porque o ack anterior pode nao ter chegado. E chamada no meio dos bits, antes de o quadro
- * seguinte ocupar o q. */
+ * seguinte ocupar o q. O n_meu traz a sessao nos bits 23:16 (v138), que vai para o sobra[0]. */
 __attribute__((noinline)) static void guarda(int *hist, unsigned *anel, const u8 *q, unsigned n,
                                              const char *meu, unsigned n_meu)
 {
@@ -2127,7 +2177,9 @@ __attribute__((noinline)) static void guarda(int *hist, unsigned *anel, const u8
     for (i = 0; i < REG_HIST; i++)
         ((u8 *)r)[i] = 0xFF;
     r->usado = USADO;
-    r->ambar = aprs_texto(r->texto, q, n, meu, n_meu | (DECODE_APRS == DECODE_OFF ? TEXTO_BRUTO : 0), r->id);
+    r->ambar = aprs_texto(r->texto, q, n, meu, (n_meu & 0xFFFFu) | (DECODE_APRS == DECODE_OFF ? TEXTO_BRUTO : 0),
+                          r->id);
+    r->sobra[0] = n_meu >> 16;             /* a sessao (v138) */
     r->texto[TEXTO_MAX] = 0;               /* um "/A=" no fim passa do limite (e cai no para, refeito abaixo): v128 */
     for (i = 0; i < 9; i++) {              /* a origem, do comeco do texto ate o "> " */
         if (r->texto[i] == '>')
@@ -2178,6 +2230,7 @@ void aprs_rx_grava(void)
     u16 num[7];                            /* FILTER desligado, posicao, quantos, syncs na marca e no espaco,
                                             * BAD, FIX */
     unsigned f, n, k, w = 0, n_meu = meu_indicativo(meu), ativo = 0, pol = 0, desde = TIQUE_MS, olha = 0;
+    unsigned sync_em = 0;                  /* o ultimo sync (v137): a tela espera 2 s depois dele */
     unsigned pede = 15, modo = PRESO, anel = 0, desde_tecla = 0;   /* o OK que abriu ainda esta apertado */
     /* os registradores (de 16 bits) que a saida devolve, dois por variavel: a pilha do laco esta no limite */
     unsigned era1 = REG_R(0x3F) | REG_R(0x70) << 16, era2 = REG_R(0x72) | REG_R(0x5E) << 16;
@@ -2185,6 +2238,16 @@ void aprs_rx_grava(void)
     unsigned era_save = SAVE;              /* a economia de bateria fica desligada na tela (v111) */
     int hist = hist_abre(&anel), topo = 0;
 
+    /* A sessao (v138, achado da auditoria; o UV-17L faz igual): o registro guarda no sobra[0] a sessao em que
+     * entrou, e o registro_igual compara o registro inteiro, entao uma copia so e descartada dentro da mesma
+     * sessao - a hora e o ms desde a partida, e sem isso um registro de outra partida com a hora parecida
+     * bloqueava o mesmo pacote. A sessao e a do ultimo registro, mais 1 numa entrada nova; na volta da caixa ou
+     * do ack ela continua, para a copia do digipeater depois do ack seguir descartada. Ela vai nos bits 23:16
+     * do modo, e o num[1] serve de buffer (ele so e escrito no desenho): a pilha do laco esta no limite. */
+    num[1] = 0;
+    if (hist > 0)
+        LE_FLASH(hist_endereco(hist, anel, hist - 1) + __builtin_offsetof(struct registro_rx, sobra), &num[1], 1);
+    modo |= (u8)(num[1] + !(TELA_APRS & VOLTA)) << 16;
     num[0] = volta_fim();                  /* de volta da caixa ou do envio (v112): o FILTER como estava */
     SAVE = 0;
     ACORDA();
@@ -2272,9 +2335,12 @@ void aprs_rx_grava(void)
         ESPERA_2MS(1);
         /* O 0x0C a cada 20 ms; entre as leituras, so a tela (uma faixa por volta). O rearme e o setor do
          * historico, so logo depois de uma leitura sem nada pendente (v128): da v124 a v127 o rearme rodava ate
-         * 20 ms depois da ultima leitura, e um sync chegado nesse meio era apagado, com o pacote. */
+         * 20 ms depois da ultima leitura, e um sync chegado nesse meio era apagado, com o pacote. A tela
+         * espera os 2 s depois de um sync (v137, a regra da v129): o laco chegou a ficar 146 ms sem ler a FIFO
+         * (8 palavras, ~107 ms), e uma faixa no comeco do quadro o perdia; a v129 leu 40-50% da rede, a v128
+         * nada. */
         if (TIQUE_MS - olha < 20u) {
-            if (pede && !(modo & ESCURO)) {
+            if (pede && !(modo & ESCURO) && !(ativo && TIQUE_MS - sync_em < 2000u)) {
                 k = pede & -pede;
                 pede ^= k;
                 RX_MOSTRA(k);
@@ -2303,7 +2369,7 @@ void aprs_rx_grava(void)
             h.dentro = 1;
             h.linha = pol ^ (REG_R(0x0B) >> 7 & 1);     /* a flag acaba no tom do bit sozinho */
             ativo = 1;
-            desde = TIQUE_MS;
+            sync_em = desde = TIQUE_MS;
             num[3 + pol]++;
             pede |= 8;
         }
@@ -2325,7 +2391,7 @@ void aprs_rx_grava(void)
                 if ((n = hdlc_bit(&h, w >> (k & 8 ? 23 - (k & 15) : 7 - (k & 15)) & 1))) {
                     int antes = hist;
 
-                    guarda(&hist, &anel, q, n, meu, n_meu);
+                    guarda(&hist, &anel, q, n, meu, n_meu | (modo & 0xFF0000u));   /* a sessao nos 23:16 */
                     if (hist == antes)     /* uma copia: nada muda na tela */
                         continue;
                     if ((modo & ABERTO) && hist == antes + 1) {

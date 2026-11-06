@@ -300,6 +300,7 @@ Levantado em 2026-10-25 no desmontado de fábrica, para a tela B (seção 12). B
 | frequência de RX | u32 em +0 | em 10 Hz; `%03d.%05d` com /100000 |
 | tipo de tom | `b[+4]` | 0 nenhum, 1 CT, outro DCS |
 | frequência de TX | u32 em +5 | a que a linha grande mostra transmitindo (`0x01E40FE6`) |
+| tipo de tom de TX | `b[+9]` | como o `+4`. A fábrica grava e nada lê; a tela B o usa transmitindo, desde a v138: a etiqueta vermelha, ou nenhuma sem tom |
 | deslocamento | `b[+10]` | 1 "+", 2 "−". A decodificação o tira comparando o TX com o RX: num canal sem TX (o CHIRP grava `0xFFFFFFFF`, que a conversão de BCD dá como 166666665, 1666,66665 MHz) sai "+". Desde a v81, TX acima de 999,99999 MHz vale "sem TX", sem o "+", e aparece um **NO TX** vermelho: no SINGLE no lugar da linha de TX, no DUAL, no TRIPLE e no resumo do menu nas etiquetas, depois do AM (v82) |
 | largura | `b[+11]` | diferente de 0: "N" |
 | AM | `b[+12]` | 1 = AM, de 18 a 999,99999 MHz; de 108 a 135,99999 MHz sempre AM (`0x01E3B438..0x01E3B47E`) |

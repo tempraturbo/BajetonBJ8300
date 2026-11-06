@@ -5,6 +5,76 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v139 — Nov 6 — v138's round without the new beep, and a single EXIT on text items (flashed and approved)
+
+`BJ8300_BANK_v139.anc` (sha256 `0aa0f360…`), left out of the commits like the other test versions: v138 without the
+new beep and with a fix the owner found while testing.
+
+- **The beep is the factory one again.** With v138's new beep the owner found the pop even worse, and it came out
+  entirely: the queue, the hook and the test. The cause was not found. The beep map, which still holds, is in
+  [section 30](reverse-engineering.md#30-the-key-beep-map-the-bk4819-beep-left-in-v139).
+- **A single EXIT on text items.** In the APRS folder, the 6-letter CALLSIGN took 7 EXITs to get back to the menu.
+  The item's `get` runs in the list, with the item only highlighted, and left the editor's cursor at the end of
+  the text, and the factory EXIT deletes the letter behind the cursor without checking whether the editor is open.
+  Each press took one letter from the editor's copy, with nothing on screen, until it was empty; what was saved never
+  changed. The same went for TO, the MORSE MESSAGE and, with a cursor left over from an edit, CH-NAME and NAME. Now
+  EXIT only deletes a letter with the editor open ([section 21](reverse-engineering.md#21-the-menu-in-folders-v53-to-v57)).
+- **Space.** `mic_e` moved to the voice paths, which leaves 558 B free in `.livre` and about 1.2 KB in the paths.
+
+## v138 — Nov 6 — the round of adjustments the owner asked for, with the beep through the BK4819 (flashed: the beep was undone in v139)
+
+`BJ8300_BANK_v138.anc` (sha256 `7ae44879…`), left out of the commits like the other test versions: v137 with the
+items that were waiting for space.
+
+- **Space.** Removing the Chinese texts frees nothing useful: they are 1,040 B in pieces of up to 40 B, glued to the
+  English ones, and the glyphs live in the data chip, in the middle of the ASCII fonts the screen uses. The space came
+  from the voice paths, dead since v30: 2,944 new bytes, with the proof that nothing alive reads the range
+  ([section 29](reverse-engineering.md#29-the-space-of-the-voice-paths-v138)).
+- **Copies across boots.** A record's time is the time since boot, and a packet from another boot with a similar time
+  blocked the same packet. The record now keeps the session it came in, as on the UV-17L.
+- **The `?25`.** A message to another station shows without the `{nn` of its number; the `{` is not even in the font.
+- **The TX tone.** While transmitting, the label is the TX tone's, in red, and it disappears with no TX tone. It was the
+  RX one, by mistake.
+- **SAVE like on the UV-17L.** After saving to a channel, the name editor opens empty, and the side stays on the saved
+  channel even coming from the VFO ([section 31](reverse-engineering.md#31-the-save-that-asks-for-the-name-v138)).
+- **The AIR label** from 108 to 135.99999 MHz, next to AM.
+- **The PA cap.** No bias goes above 229, 90% of 255, at any power
+  ([section 20](reverse-engineering.md#20-tx-power)).
+- **MIC GAIN with DEFAULT**, the radio's own calibration, in value order among the levels; a code outside the list
+  counts as DEFAULT ([section 19](reverse-engineering.md#19-microphone-gain-and-mic-gain-v49)).
+- **Nothing goes on air without a callsign.** With no CALLSIGN saved, the MESSAGES screen's `#` asks for the CALLSIGN
+  first, and once saved it opens the message box. Until now the send keyed up only the carrier.
+- **The OK that saves the channel.** From v101 to v137 `salva_menu` read four addresses off the wrong base, and the
+  channel only reached the chip on leaving the menu, as on V0.12. It now compares with the chip and saves right away
+  ([section 26](reverse-engineering.md#26-settings-that-got-lost-noise-gate-and-saving-on-ok-v100-and-v101)).
+- **The key beep through the BK4819**, the UV-17L's remedy, left in v139.
+
+Tests: `teste_rx.py` gained the copies across boots (and fails without the session) and the CALLSIGN before the box.
+
+## v137 — Nov 6 — FILTER without the RX DC filter and the screen still for 2 s (tested along with v138)
+
+`BJ8300_BANK_v137.anc` (sha256 `7cd704a1…`), left out of the commits: v128 with the two cheap aids left over from the
+investigation below. FILTER turns the RX DC filter off (`0x7E` = `0xB038`), the best score in the measurements, and
+the screen waits 2 s after each sync to draw. Neither changes the limit.
+
+## v129 to v136 — Nov 5 and 6 — diagnostics: why the BJ reads the UV-17L badly (not released)
+
+Eight diagnostic versions, left out of the commits, to get away from the small samples on the network, where every
+round gave a different number. v132 stopped decoding and started saving the FIFO's raw bits to the history, read later
+over the cable; v133 and v134 extended the capture until it was nearly continuous; v135 and v136 compared states on
+key 0, with texts sent by the UV-17L from another room.
+
+- **The BJ's modem delivers perfect UV frames**, in 20 to 50% of the sends, and the firmware decodes those bits. The
+  decoder is right.
+- **The failures have the demodulator pulling to one tone**, at any point of the frame: flags 6:2 instead of 7:1 and,
+  in the worst stretch, the line stuck for ~130 ms.
+- **Nothing the firmware can reach changes the score:** FILTER 5/18, FILTER off 1/6, AFC off 0/6, RX DC off 3/7,
+  screen off 1/5, charge pump at maximum 1/5, at minimum 1/5, crystal regulator 0/5.
+
+The conclusion is the board's limit, with a PLL without its own regulator. A software demodulator would take a soldered
+wire, because the RX audio does not reach the JieLi.
+[Section 24](reverse-engineering.md#the-raw-capture-why-the-bj-reads-the-uv-17l-badly-v129-to-v136).
+
 ## v128 — Nov 5 — the AGC locked in FILTER and the APRS RX loop audited (flashed: the BJ still did not read the UV)
 
 `BJ8300_BANK_v128.anc` (sha256 `f3d13be9…`), left out of the commits like the other test versions: v125 with FILTER

@@ -171,20 +171,23 @@ static u32 le32(u32 a)
 static void le_lado(struct lado *l, unsigned i, unsigned tx)
 {
     u32 r = VFO(i), rx = le32(r);
-    unsigned tom = RAM(u8, r + 4);
+    /* o tipo do tom (1 CT, 2 e 3 DCS): o de RX no +4; transmitindo, o de TX no +9 (v138), que a fabrica grava no
+     * registro (0x01E3916E) e a linha de informacoes de fabrica le de b[0x15345] durante a TX */
+    unsigned tom = RAM(u8, r + (tx ? 9 : 4));
 
     l->freq = tx ? le32(r + 5) : rx;
     l->canal = (MODO_TRABALHO >> (i * 4) & 15) == 1 ? CANAL(i) + 1 : 0;
     l->exibicao = EXIBICAO(i);
     l->potencia = POTENCIA(i);
-    l->tom = tom ? tom == 1 ? 1 : 2 : 0;
+    l->tom = tom ? (tom == 1 ? 1 : 2) + (tx ? 2 : 0) : 0;   /* 3 e 4: o CT e o DCS de TX, transmitindo */
     /* o canal sem TX (v81): o CHIRP grava 0xFFFFFFFF na frequencia de TX, que a decodificacao BCD de
      * fabrica da como 166666665 (1666,66665 MHz, maior que o RX: o "+"); acima de 999,99999 MHz, o fim da
      * faixa dos canais, nao ha deslocamento, e aparece NO TX em vermelho (o 3): no SINGLE no lugar da linha de
      * TX, no DUAL e no TRIPLE nas etiquetas, depois do AM (v82) */
     l->desloc = le32(r + 5) > 99999999u ? 3 : RAM(u8, r + 10);
     l->estreito = RAM(u8, r + 11) != 0;
-    l->am = rx - 10800000u <= 2799999u || (rx - 1800000u <= 98199999u && RAM(u8, r + 12) == 1);
+    /* 2 na banda aerea (108 a 136 MHz, sempre AM, com a etiqueta AIR; v138), 1 no AM do canal */
+    l->am = rx - 10800000u <= 2799999u ? 2 : rx - 1800000u <= 98199999u && RAM(u8, r + 12) == 1;
     l->sc = RAM(u8, r + 13) != 0;
     l->scr = (RAM(u8, r + 14) & 3) != 0;
     l->rt = RT(i);
@@ -507,8 +510,13 @@ SEPARADA static void informacoes(const struct lado *l, unsigned y, unsigned no_t
         x = info(x, y, l->desloc == 1 ? "+" : "-");
     else if (l->desloc == 3 && no_tx && x + largura("NO TX", 1) + 6 <= 152)   /* fora do SINGLE (v82) */
         x = etiqueta(x, y, "NO TX", COR_CHIP_VERMELHO, COR_SEG_VERMELHO, 0);
-    if (l->tom)
-        x = info(x, y, l->tom == 1 ? "CT" : "DCS");
+    if (l->tom) {                          /* transmitindo, o tom de TX em vermelho, ou nada sem ele (v138) */
+        const char *t = l->tom & 1 ? "CT" : "DCS";
+        x = l->tom < 3 ? info(x, y, t) : x + largura(t, 1) + 6 <= 152
+            ? etiqueta(x, y, t, COR_CHIP_VERMELHO, COR_SEG_VERMELHO, 0) : 160;
+    }
+    if (l->am == 2)                        /* a banda aerea (v138, como no UV-17L) */
+        x = info(x, y, "AIR");
     if (l->rt == 1 || l->rt == 2)
         x = info(x, y, l->rt == 1 ? "R" : "T");
     if (l->sc && !l->am)
@@ -1215,6 +1223,17 @@ u32 b_menu_um(void)
     return n != 0 && n < RADIO;
 }
 
+/* No EXIT num item de texto (tipo 7), antes de apagar a letra atras do cursor (0x01E4D48A, desvio_exit_apaga): o
+ * de fabrica nao olha se o editor esta aberto, e o get do item roda na lista, com o item so marcado. O aprs_texto_le
+ * e o morse_msg_le deixam o cursor no fim do texto, e cada EXIT apagava uma letra da copia do editor, sem nada na
+ * tela, ate ela zerar: o CALLSIGN de 6 letras pedia 7 EXIT para voltar (v139; o gravado nao mudava). Um cursor que
+ * sobre de uma edicao anterior faria o mesmo no CH-NAME e no NAME. Fora da edicao devolve 1, e o desvio segue para
+ * a saida (0x01E4D4F4). */
+u32 b_exit_apaga(void)
+{
+    return MENU_EDITANDO != 1;
+}
+
 /* Depois do set, no OK editando (0x01E49A86, onde o firmware zera o estado da recepcao, b[0x15367], e
  * fecha a edicao; so com o menu aberto, b[0x1533D] = 1): o que a saida do menu grava vai para o chip ja
  * aqui (v101, salva_menu, bancos.c), para nada se perder com o radio desligado de menu aberto. E nos
@@ -1225,17 +1244,19 @@ u32 b_menu_um(void)
  * segue do mesmo jeito: o redesenho e o da caixa. */
 void salva_menu(void);
 unsigned aprs_caixa_abre(void);
+unsigned memch_nome_abre(void);
 u32 b_menu_marca(void)
 {
-    unsigned n = menu_nivel();
+    unsigned n = menu_nivel(), m;
 
     salva_menu();
-    if (aprs_caixa_abre()) {
+    m = n == 0 || n >= RADIO ? 0 : MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO);
+    /* depois do SAVE (MARCA_NOMEIA, v138), o editor do nome do canal salvo, vazio, como no UV-17L */
+    if (aprs_caixa_abre() || ((m & MARCA_NOMEIA) && memch_nome_abre())) {
         ESTADO_RX = 0;
         return 1;
     }
-    if (n == 0 || n >= RADIO
-        || !(MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO) & MARCA_VARIOS))
+    if (!(m & MARCA_VARIOS))
         return 0;
     ESTADO_RX = 0;
     return 1;
@@ -1986,6 +2007,9 @@ DESVIO_MEIO(desvio_menu_marca, b_menu_marca, 0x01E49A8A, 0x01E49C7C, "0x40, 0xe0
 /* O EXIT editando, depois de cancelar a edicao: "r0 = 1400" (0x01E4D53C) le a quantidade de itens, que
  * com 1 fecha o menu; num grupo segue ao bipe do EXIT (0x01E4D59A), como com mais itens (v59). */
 DESVIO_MEIO(desvio_menu_um, b_menu_um, 0x01E4D540, 0x01E4D59A, "0x40, 0xe0, 0x78, 0x05");
+/* O EXIT num item de texto: "r0 = 951" (0x01E4D48A) le o cursor para apagar a letra; fora da edicao segue ao
+ * resto do EXIT (0x01E4D4F4), como com o cursor em 0. */
+DESVIO_MEIO(desvio_exit_apaga, b_exit_apaga, 0x01E4D48E, 0x01E4D4F4, "0x40, 0xe0, 0xb7, 0x03");
 
 /* 0x01E44C68 de fabrica, chamada como rotina: os bytes que o desvio cobre e a volta. O rets que o
  * primeiro deles empilha e o de quem chamou esta, entao a de fabrica volta para la. */
