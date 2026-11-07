@@ -5,6 +5,13 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Nov 7 — PF3 LONG and the APRS message
+
+The driver follows the V3.7T round. The **Specific** page gains **PF3 Key (Long Press)**, right after PF3: MONITOR or FLASHLIGHT, at
+`0x902E` (the base class's `topkey_sp`, which stores 0 or 8, not the list position). **Message** returns to the APRS (SMS) page, with up to
+37 characters, without `{`, `|` and `~`, because the `#` box now opens with it. On the Morse page, the help now talks about the MESSAGES
+box. The module name only changes in the release commit.
+
 ## v150 to v154 — Nov 7 — the LED, `#`, MO, MESSAGES in one click, PF3 LONG and the flashlight screen (flashed and approved)
 
 On v149 the incoming text, the `?MESSAGE+`, the sound and the SENDING screen passed on the radio. The owner found four more things, and

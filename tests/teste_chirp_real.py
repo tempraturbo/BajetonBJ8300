@@ -123,6 +123,13 @@ def main():
 
     # 2. abre uma imagem (e o caminho que o CHIRP usa ao carregar um .img)
     radio = bj.BJ8300(imagem())
+    # o PF3 LONG (V3.7T): no 0x902E, 0 o MO e 8 a lanterna; o que nao for 8 aparece como MONITOR
+    confere('2. PF3 LONG comeca no MONITOR', str(ajuste_de(radio, 'settings_topkey_sp').value), 'MONITOR')
+    muda_ajustes(radio, settings_topkey_sp='FLASHLIGHT')
+    confere('2. PF3 LONG FLASHLIGHT grava 8', bytes(radio._mmap[0x902E:0x902F])[0], 8)
+    confere('2. e volta na pagina', str(ajuste_de(radio, 'settings_topkey_sp').value), 'FLASHLIGHT')
+    muda_ajustes(radio, settings_topkey_sp='MONITOR')
+    confere('2. PF3 LONG MONITOR grava 0', bytes(radio._mmap[0x902E:0x902F])[0], 0)
     rf = radio.get_features()
     confere('2. tem banco e nome de banco', (rf.has_bank, rf.has_bank_names), (True, True))
     confere('2b. limites de canal', rf.memory_bounds, (1, 960))
@@ -692,7 +699,7 @@ def main():
                 (r._mmap[0x903A:0x903E], [str(w[n].value) for n in valores]),
                 (bytes([novo[0], 4, novo[1], 0xA2]), list(valores.values())))
 
-    NOMES_11 = ('aprs_callsign', 'aprs_ssid', 'aprs_path', 'aprs_to', 'aprs_decode',
+    NOMES_11 = ('aprs_callsign', 'aprs_ssid', 'aprs_path', 'aprs_to', 'aprs_message', 'aprs_decode',
                 'morse_message', 'morse_speed', 'morse_tone')
     # 11. APRS e MORSE (firmware v65; gravados pelo cabo desde a v110): os registros APR1 e MRS1, um bloco
     # cada depois do VFO C. Sem registro (o bloco apagado), o que o radio mostra: os padroes. A mensagem do
@@ -703,8 +710,8 @@ def main():
     v = {n: str(w[n].value) for n in NOMES_11}
     confere('11. sem registro: indicativo e textos vazios, sem SSID, WIDE1-1, DECODE On, 15 WPM, 700 Hz',
             [v[n] for n in NOMES_11],
-            ['', 'None', 'WIDE1-1', '', 'On', '', '15 WPM', '700 Hz'])
-    confere('11a. a mensagem do APRS nao esta na pagina (V3.2T)', 'aprs_message' in w, False)
+            ['', 'None', 'WIDE1-1', '', '', 'On', '', '15 WPM', '700 Hz'])
+    confere('11a. a mensagem do APRS esta na pagina (V3.7T: a caixa abre com ela)', 'aprs_message' in w, True)
     muda_ajustes(r, aprs_callsign='n0call', aprs_ssid='-9', aprs_path='None', aprs_to='n0call-7',
                  aprs_decode='Off', morse_message='CQ CQ TEST', morse_speed='20 WPM', morse_tone='800 Hz')
     a = bytes(r._mmap[bj.APRS_BASE:bj.APRS_BASE + bj.EXT_BLOCK])
@@ -723,7 +730,17 @@ def main():
     v = {n: str(w[n].value) for n in NOMES_11}
     confere('11g. e a pagina le de volta o que gravou',
             [v[n] for n in NOMES_11],
-            ['N0CALL', '-9', 'None', 'N0CALL-7', 'Off', 'CQ CQ TEST', '20 WPM', '800 Hz'])
+            ['N0CALL', '-9', 'None', 'N0CALL-7', '', 'Off', 'CQ CQ TEST', '20 WPM', '800 Hz'])
+    # V3.7T: a caixa do APRS abre com a ultima mensagem, e ela volta a pagina; o { fica de fora, porque fecha o texto
+    muda_ajustes(r, aprs_message='Ola 73')
+    confere('11. a mensagem do APRS vai ao registro', (bj._aprs_store(r).record()[6], bytes(bj._aprs_store(r).record()[25:31])),
+            (6, b'Ola 73'))
+    confere('11. e volta na pagina', str(ajuste_de(r, 'aprs_message').value), 'Ola 73')
+    try:
+        muda_ajustes(r, aprs_message='A{B')
+        confere('11. o { nao entra na mensagem', 'aceitou', 'recusou')
+    except Exception:
+        confere('11. o { nao entra na mensagem', 'recusou', 'recusou')
     muda_ajustes(r, aprs_to='N0CALL-7', aprs_decode='On')
     confere('11h. o mesmo destino nao muda o numero; DECODE On grava 0xB0',
             (r._mmap[bj.APRS_BASE + 9], r._mmap[0x903F]), (bytes([1]), bytes([0xB0])))

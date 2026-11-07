@@ -99,8 +99,8 @@ MORSE_LEN = 48              # magic, text length, WPM, tone / 10, -, text (37 + 
 APRS_SECTOR = 0x0D5000
 APRS_MAGIC = b'APR1'
 APRS_LEN = 64               # magic, the 3 text lengths, SSID, path, message number, callsign (6),
-                            # destination (9), message (37), sum. Since V3.2T the message is typed in a
-                            # box on the radio's MESSAGES screen, which opens empty: this page leaves it out
+                            # destination (9), message (37), sum. The message is typed in the box of the
+                            # radio's MESSAGES screen, which since V3.7T opens with the last one
 MSG_MAX = 37
 MORSE_BASE = VFC_BASE + VFC_BLOCKS * EXT_BLOCK  # in the .img, after VFO C
 APRS_BASE = MORSE_BASE + EXT_BLOCK
@@ -113,6 +113,7 @@ APRS_PATHS = ['WIDE1-1', 'WIDE1-1,WIDE2-1', 'None']
 # radio has a code for (the rest it skips).
 CALL_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 MORSE_CHARS = CALL_CHARS + ' !"$&\'()+,-./:;=?@'
+APRS_TEXT_CHARS = ''.join(chr(c) for c in range(32, 127) if chr(c) not in '{|~')   # what an APRS message may carry
 # APRS > DECODE (firmware v76): in the settings block, Off only with 0xB1 (the factory reset leaves 229,
 # which reads On); the radio writes 0xB0 for On.
 APRS_DECODE_ADDR, APRS_DECODE_OFF, APRS_DECODE_ON = 0x903F, 0xB1, 0xB0
@@ -437,6 +438,7 @@ def _aprs_store(radio):
 MORSE_TEXT = (_morse_store, 4, 8, MSG_MAX)
 APRS_CALL = (_aprs_store, 4, 10, 6)
 APRS_TO = (_aprs_store, 5, 16, 9)
+APRS_MESSAGE = (_aprs_store, 6, 25, MSG_MAX)
 
 
 def _record_text(rec, field):
@@ -661,6 +663,28 @@ class _RogerSetting(MemSetting):
         settings, value = memobj.settings, ROGER_VALUES[int(self.value)]
         settings.roger = value & 3
         settings.unused_9017 = int(settings.unused_9017) & ~1 | value >> 2
+
+
+# KEYS > PF3 LONG (V3.7T): 0x902E, the byte after PF3, which the radio keeps from 0 to 8 and the stock firmware does not
+# use (the base class calls it topkey_sp, an RT-470L key). 0 is the stock long press, which opens the squelch; 8 is the
+# flashlight screen.
+PF3_LONG_OPTIONS = ['MONITOR', 'FLASHLIGHT']
+PF3_LONG_VALUES = [0, 8]
+
+
+class _Pf3LongSetting(MemSetting):
+    """The PF3 long press: it stores the value, not the list position."""
+
+    def apply_to_memobj(self, memobj):
+        memobj.settings.topkey_sp = PF3_LONG_VALUES[int(self.value)]
+
+
+def _pf3_long_setting(value):
+    rs = _Pf3LongSetting('settings.topkey_sp', 'PF3 Key (Long Press)', RadioSettingValueList(
+        PF3_LONG_OPTIONS, current_index=int(int(value) == PF3_LONG_VALUES[1])))
+    rs.set_doc("The radio's KEYS > PF3 LONG: MONITOR opens the squelch of the frequency in focus; FLASHLIGHT turns the "
+               'screen white at full brightness, until PF3 or EXIT, and PTT still transmits. Needs V3.7T or later.')
+    return rs
 
 
 # SCRAMBLE (firmware v25/v1.0T onwards): OFF and 2700 to 3400 Hz in 100 Hz steps, in ascending
@@ -1185,6 +1209,11 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         if parent is None:
             LOG.warning('noise reduction setting not found: Mic Gain goes to the end')
             parent = settings[-1]
+        keys = _find(settings, 'settings_skey3_sp')[0]
+        if keys is None:
+            LOG.warning('PF3 setting not found in the base class')
+        else:
+            _put(keys, _pf3_long_setting(self._memobj.settings.topkey_sp), after='settings_skey3_sp')
         # EXPANDER and NOISE GATE (firmware v79), the radio's AUDIO folder, right after it
         _put(parent, self._expander_setting(), after='settings_unknown_9032')
         _put(parent, self._noise_gate_setting(), after='expander')
@@ -1276,6 +1305,9 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             'aprs_to', 'Message to', APRS_TO, CALL_CHARS + '-',
             'APRS > TO: who the messages go to, up to 9 characters (a callsign, with its SSID after a '
             '"-"); empty sends them as status. Also on the MESSAGES screen, holding #.'))
+        group.append(self._text_setting(
+            'aprs_message', 'Message', APRS_MESSAGE, APRS_TEXT_CHARS,
+            'The last message: up to 37 characters. The # box of the MESSAGES screen opens with it (V3.7T or later).'))
         rs = RadioSetting('aprs_decode', 'Decode', RadioSettingValueList(
             ['On', 'Off'], current_index=int(self._mmap[APRS_DECODE_ADDR][0] == APRS_DECODE_OFF)))
         rs.set_doc('APRS > DECODE: On shows the decoded formats of the received packets (Mic-E, compressed '
@@ -1290,11 +1322,12 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         return group
 
     def _morse_settings(self):
-        """Settings > Morse: the radio's MORSE folder (firmware v65), but SEND, which is an action."""
+        """Settings > Morse: the radio's MORSE folder (firmware v65), but the MESSAGES screen, where the messages
+        come in and are sent from (V3.7T; until V3.6T, MESSAGE and SEND)."""
         group = RadioSettingGroup('morse', 'Morse')
         group.append(self._text_setting(
             'morse_message', 'Message', MORSE_TEXT, MORSE_CHARS,
-            'MORSE > MESSAGE: up to 37 characters, sent with MORSE > SEND.'))
+            'The last message: up to 37 characters. The # box of MORSE > MESSAGES opens with it, and OK sends it.'))
         group.append(self._record_list(
             'morse_speed', 'Speed', _morse_store, 5, ['%d WPM' % w for w in MORSE_WPM],
             lambda b: MORSE_WPM.index(b if b in MORSE_WPM else 15), lambda i: MORSE_WPM[i],

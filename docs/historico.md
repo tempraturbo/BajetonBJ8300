@@ -5,6 +5,13 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 07/11 — o PF3 LONG e a mensagem do APRS
+
+O driver acompanha a rodada da V3.7T. Na página **Specific** entra o **PF3 Key (Long Press)**, logo depois do PF3: MONITOR ou FLASHLIGHT,
+no `0x902E` (o `topkey_sp` da classe base, que guarda 0 ou 8, e não a posição na lista). A **Message** volta à página APRS (SMS), com até
+37 caracteres, sem `{`, `|` e `~`, porque a caixa do `#` agora abre com ela. Na página Morse, a ajuda passa a falar da caixa do MESSAGES.
+O nome do módulo só muda no commit da release.
+
 ## v150 a v154 — 07/11 — o LED, o `#`, o MO, o MESSAGES num clique, o PF3 LONG e a lanterna de tela (gravada e aprovada)
 
 Na v149 o texto chegando, o `?MENSAGEM+`, o som e a tela SENDING passaram no rádio. O dono achou mais quatro coisas, e esta rodada traz
