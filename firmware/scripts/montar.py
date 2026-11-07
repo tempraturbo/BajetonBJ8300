@@ -129,6 +129,12 @@ RESERVA, RESERVA_FIM = 0x01E62F98, 0x01E63580
 # (TABELA_SONS_BASE, o imediato em 0x01E40636), que so soma indice de 118 em diante. As entradas 118 a 125, os bipes, ficam.
 SONS, SONS_FIM = 0x01E5E8FC, 0x01E5EAD4
 TABELA_SONS_BASE = 0x01E40636
+# v152: trechos dos nomes de item de fabrica, 0x01E5A766..0x01E5AA30, sem nenhum valor de 32 bits apontando para dentro, em
+# nenhum deslocamento da imagem montada: quem os lia era a tabela de menu de fabrica, morta desde a v43. As mesmas regras do
+# .caminhos. Entre eles ficam textos vivos (as opcoes), que nao mudam.
+MORTOS = ((0x01E5A768, 0x01E5A7D0), (0x01E5A7E0, 0x01E5A82E), (0x01E5AA00, 0x01E5AA30), (0x01E5A872, 0x01E5A8A0),
+          (0x01E5A9BC, 0x01E5A9E8), (0x01E5A96E, 0x01E5A98C), (0x01E5A8AE, 0x01E5A8C6), (0x01E5A90E, 0x01E5A920),
+          (0x01E5A748, 0x01E5A758), (0x01E5A934, 0x01E5A942))
 CAMINHOS_SHA256 = '8080d5e5e38c725b194295fa99e78806369f0dbda4ed50024e4568bba5fc3934'
 CAMINHOS_REMENDOS = ((0x01E60B58, bytes.fromhex('25ace501'), bytes.fromhex('f8b6e501'),
                       'editor 123: o "*" da tecla * no caminho do B0, fora da faixa'),)
@@ -145,6 +151,7 @@ CAMINHOS_MORTOS = ((0x01E55AD0, 0x01E55AD6, 'o caminho do C16 no main, no trecho
 # dentro dos bytes cobertos, e nenhuma das treze le argumento da pilha de quem chama.
 TELA_DESVIOS = (
     (0x01E3C132, bytes.fromhex('7704e29e'), 'desvio_tela', 'b_tela', 'a tela de dois VFOs inteira'),
+    (0x01E3ADBC, bytes.fromhex('7704c0ff406f4001'), 'desvio_envia', 'b_envia', 'o envio ao LCD: a lanterna segura a tela branca'),
     (0x01E3B05C, bytes.fromhex('7604e29d'), 'desvio_barra', 'b_barra', 'a barra de cima'),
     (0x01E3B03E, bytes.fromhex('c1ff80460100'), 'desvio_nivel_bateria', 'b_barra', 'o nivel da bateria'),
     (0x01E3AE50, bytes.fromhex('7504e29d'), 'desvio_cadeado', 'b_barra', 'o icone do cadeado'),
@@ -336,9 +343,9 @@ PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 # devolve a tabela e, se o menu foi fechado de dentro de um grupo, poe o grupo em [+6], que a entrada
 # le logo depois (0x01E4CBCA). Na chamada, r1..r3 estao mortos (escritos antes de lidos depois dela)
 # e o r4 (0, lido em 0x01E4CBC6) a chamada preserva.
-MENU_VAGAS = 95                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ; v112: 95; v113: 96; v144: 95
+MENU_VAGAS = 96                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ; v112: 95; v113: 96; v144: 95
 TABELA_SIMBOLO = 'menu_tabela'
-TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 532   # v111: o que o menu usa (era 640); v144: 532; v143: 536; v140: 528; v112: 520; v113: 524; item novo pede mais
+TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 544   # v111: o que o menu usa (era 640); v144: 532; v143: 536; v140: 528; v112: 520; v113: 524; item novo pede mais
 R5_R0 = bytes.fromhex('0516')
 
 # v53: os grupos do menu (src/telas.c), um nivel acima dos itens, a pedido do dono. Cada item fica em
@@ -353,7 +360,7 @@ GRUPOS = {
     'CHANNEL': ('BANDWIDTH', 'BUSY LOCK', 'ENCRYPT', 'RX MODULATION', 'SCRAMBLE', 'STEP', 'TX POWER'),
     'DISPLAY': ('BACKLIGHT TIME', 'BRIGHTNESS', 'MENU EXIT TIME', 'POWER-ON MSG', 'SHOW A', 'SHOW B', 'SHOW C'),
     'DTMF': ('DTMF CODE', 'DTMF DELAY', 'DTMF GROUP', 'DTMF SIDETONE'),
-    'KEYS': ('AUTOLOCK', 'KEY BEEP', 'PF2', 'PF2 LONG', 'PF3'),
+    'KEYS': ('AUTOLOCK', 'KEY BEEP', 'PF2', 'PF2 LONG', 'PF3', 'PF3 LONG'),
     'CH MEMORY': ('CH NAME', 'DELETE', 'SAVE'),
     'MIC': ('COMPRESSOR', 'MIC AGC', 'MIC GAIN', 'NOISE REDUCTION',    # a NR e do microfone (v80)
             'EQ BASS TX', 'EQ TREBLE TX'),                             # v108
@@ -560,7 +567,7 @@ TEXTOS = [
     (0x01E5A60F, 'All', 'ALL'),
     (0x01E5AA81, 'RX Modulation', 'RX MODULATION'),
     # versao do firmware, que o item VERSION mostra (o hardware V01T32 fica como esta)
-    (0x01E5FD10, 'V0.12', 'V3.6T'),
+    (0x01E5FD10, 'V0.12', 'V3.7T'),
     # o nome chines do item e 语音加密 (criptografia de voz): VOICEPRI engana
     (0x01E5A82F, 'VOICEPRI', 'ENCRYPT'),
     # a dupla escuta virou tripla com o TRIPLE (v42): TDR -> TTR, pedido do dono (v48). A cadeia e
@@ -568,6 +575,7 @@ TEXTOS = [
     # itens de fabrica (0x01E5E697, a de MEMCH, STEP, TXP, SQL...), e as duas passam a dizer TTR
     (0x01E5A782, 'TDR', 'TTR'),
 ]
+TEXTOS = [t for t in TEXTOS if not any(de <= t[0] < ate for de, ate in MORTOS)]   # v152: quem caiu num trecho morto nao se le mais
 
 # Chamada no fim do carregamento de configuracao, trocada pelo gancho que aplica o filtro.
 GANCHO_EM = 0x01E56AE8
@@ -832,6 +840,9 @@ ITENS_DEPOIS[ROGER_ITEM] = [
     dict(nome='APRS MESSAGES', texto='MESSAGES', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le',
          set='aprs_rx_grava', titulo='titulo_aprs_rx', exibe='aprs_rx_opcoes', opcoes_cn='aprs_rx_opcoes'),
     # v76: os formatos decodificados (Mic-E, comprimida, tempo...) ou a info como veio; o 0x903F
+    # v152: a PF3 segurada: o MO de fabrica ou a lanterna de tela
+    dict(nome='PF3 LONG', texto='PF3 LONG', molde=TDR_ITEM, flags=0, maximo=2, get='pf3_longo_le', set='pf3_longo_grava',
+         titulo='titulo_pf3_longo', exibe='pf3_longo_opcoes', opcoes_cn='pf3_longo_opcoes'),
     dict(nome='APRS DECODE', texto='DECODE', molde=TDR_ITEM, flags=0, maximo=2, get='aprs_decode_le', set='aprs_decode_grava',
          titulo='titulo_aprs_decode', exibe='aprs_decode_opcoes', opcoes_cn='aprs_decode_opcoes'),
 ]
@@ -859,7 +870,8 @@ NA_LIVRE += LUZ_PWM
 PRECISA += LUZ_PWM
 GRUPOS['MORSE'] = ('MORSE MESSAGES', 'MORSE SPEED', 'MORSE TONE')
 GRUPOS['APRS (SMS)'] = ('APRS CALLSIGN', 'APRS DECODE', 'APRS MESSAGES', 'APRS PATH', 'APRS SSID', 'APRS TO')
-MENU_MARCAS.update({('MORSE', 'MORSE MESSAGES'): MARCA_SEM_VALOR, ('APRS (SMS)', 'APRS MESSAGES'): MARCA_SEM_VALOR})
+MARCA_DIRETO = 128                         # v151: o OK ja executa, e o "OK TO LISTEN" fica na pasta, como no UV-17L
+MENU_MARCAS.update({('MORSE', 'MORSE MESSAGES'): MARCA_DIRETO, ('APRS (SMS)', 'APRS MESSAGES'): MARCA_DIRETO})
 CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o envio armado liga a TX'),
                    (0x01E46D8C, 0x01E44604, 'gancho_fim_tx', 'Morse e APRS: o conteudo no lugar do roger'),
                    (0x01E46CCE, 0x01E19DCC, 'texto15', 'editor: a copia do texto na piscada, ate 24'),
@@ -901,10 +913,15 @@ AJUSTES_REMENDOS = ((0x01E55D30, bytes.fromhex('4120'), bytes.fromhex('0000'),
 # medidor (0x01E46C7A: "call 0x01E46166; goto" o fim do laco, 0x01E4772E) e 4 e 5 direto no fim. As
 # entradas do 4 e do 5 (meias palavras em 0x01E46A40 e 0x01E46A42, destino = 0x01E46A3A + 2 x entrada)
 # passam de 0x067A, o fim, a 0x0120, a do medidor: ele roda nos tiques 3, 4, 5 e 8.
+# v151: o MO sempre pelo caminho que volta ao lado em evidencia (0x01E3FDE4): com portadora no outro lado da escuta, ele abria
+# aquele; e o medidor comeca vazio, sem o cheio de fabrica, que piscava antes do nivel de verdade
+MO_REMENDOS = ((0x01E4534C, bytes.fromhex('bfea64fa'), bytes.fromhex('40204020'), 'MO: nao olha a portadora do lado que esta na escuta'),
+               (0x01E45382, bytes.fromhex('402a'), bytes.fromhex('4020'), 'MO: o medidor comeca vazio'))
 SINAL_REMENDOS = ((0x01E46A40, bytes.fromhex('7a06'), bytes.fromhex('2001'),
                    'tique lento 4: o medidor, no lugar de nada'),
                   (0x01E46A42, bytes.fromhex('7a06'), bytes.fromhex('2001'),
                    'tique lento 5: o medidor, no lugar de nada'))
+SINAL_REMENDOS += MO_REMENDOS
 # v125: o barramento do BK4819 mais rapido. A escrita de registrador (0x01E39D82) e a leitura (0x01E407C0)
 # mandam bit a bit, e cada bit espera duas vezes pela 0x01E38554 com r0 = 7 (ela multiplica por 4 ou 16 e da
 # tantas voltas de nop em 0x01E35E62): cada acesso leva 1,36 ms, e o trafego vazava para o audio (o apito da
@@ -931,7 +948,8 @@ MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'ganc
             'aprs_caixa_abre', 'gancho_limpa_caixa', 'gancho_limpa_volta', 'aprs_caminho_le', 'aprs_caminho_grava',
             'aprs_caminho_opcoes', 'titulo_aprs_caminho', 'aprs_rx_grava', 'aprs_rx_opcoes', 'titulo_aprs_rx',
             'modem_ganho_le', 'modem_ganho_grava', 'titulo_modem_ganho', 'modem_ganho_opcoes',
-            'aprs_decode_le', 'aprs_decode_grava', 'titulo_aprs_decode', 'aprs_decode_opcoes')
+            'aprs_decode_le', 'aprs_decode_grava', 'titulo_aprs_decode', 'aprs_decode_opcoes',
+            'pf3_longo_le', 'pf3_longo_grava', 'titulo_pf3_longo', 'pf3_longo_opcoes')
 NA_LIVRE += MENSAGEM
 PRECISA += MENSAGEM
 
@@ -1244,6 +1262,7 @@ def main():
     caminhos = secao_ligada(codigo, '.caminhos', CAMINHOS, CAMINHOS_FIM)
     reserva = secao_ligada(codigo, '.reserva', RESERVA, RESERVA_FIM)
     sons = secao_ligada(codigo, '.sons', SONS, SONS_FIM)
+    mortos = [secao_ligada(codigo, f'.mortos{i + 1}', de, ate) for i, (de, ate) in enumerate(MORTOS)]
 
     # Monta a lista de escritas no app.bin e passa pela trava antes de tocar em qualquer byte.
     escritas = [(GANCHO_EM, 4, 'gancho do filtro na partida'), (SCAN_EM, 4, 'gancho do redesenho no scan')]
@@ -1266,6 +1285,7 @@ def main():
     escritas += [(CAMINHOS, len(caminhos), 'codigo novo no lugar dos caminhos das vozes')]
     escritas += [(RESERVA, len(reserva), 'codigo novo na tabela de menu de fabrica, morta')]
     escritas += [(SONS, len(sons), 'codigo novo nas entradas mortas da tabela de caminhos')]
+    escritas += [(de, len(b), 'codigo novo nos nomes de item mortos') for (de, _), b in zip(MORTOS, mortos)]
     escritas += [(s, len(a), f'caminhos: {d}') for s, a, _, d in CAMINHOS_REMENDOS]
     escritas += [(TABELA_RAPIDA_SAVE + CAMPO[c], 4, f'menu rapido do SAVE: {c}') for c, _ in RAPIDA_SAVE_CAMPOS]
     escritas += [(t_ + CAMPO[c], 4, f'menu rapido: o nome claro ({s_})') for t_, s_ in RAPIDA_NOMES for c in ('nome', 'nome_cn')]
@@ -1520,6 +1540,9 @@ def main():
     print(f'  .reserva: {len(reserva)} B em {RESERVA:#x} (cabem {RESERVA_FIM - RESERVA})')
     app[SONS - BASE_APP:SONS - BASE_APP + len(sons)] = sons
     print(f'  .sons: {len(sons)} B em {SONS:#x} (cabem {SONS_FIM - SONS})')
+    for i, ((de, ate), b) in enumerate(zip(MORTOS, mortos)):
+        app[de - BASE_APP:de - BASE_APP + len(b)] = b
+        print(f'  .mortos{i + 1}: {len(b)} B em {de:#x} (cabem {ate - de})')
     print(f'  .caminhos: {len(caminhos)} B em {CAMINHOS:#x} (cabem {CAMINHOS_FIM - CAMINHOS} no lugar dos '
           f'caminhos das vozes)')
 

@@ -1135,8 +1135,8 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * a quantidade de posicoes da tabela no byte 1 e uma marca por posicao a partir do byte 4. Os dois saem do
  * compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e zero no resto, e o
  * montar so escreve neles se achar exatamente isso. */
-const unsigned char menu_tabela[95 * 28] __attribute__((aligned(4))) = {0xFF};   /* v144: sem o MESSAGE e o SEND do Morse; v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN */
-const unsigned char menu_textos[532] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v144) */
+const unsigned char menu_tabela[96 * 28] __attribute__((aligned(4))) = {0xFF};   /* v144: sem o MESSAGE e o SEND do Morse; v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN */
+const unsigned char menu_textos[544] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v144) */
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
  * O mapa do motor de menus esta no telas.c, junto do desenho. O que muda o nivel faz o mesmo que as
@@ -1195,7 +1195,7 @@ u32 menu_abre(void)
 
 /* Sair do aviso para a pasta, no item: o ITEM_MUDOU refaz a base das linhas, que o VALOR do aviso sujou (no EXIT de
  * fabrica o item ficaria sem o "L" ate andar na pasta). */
-__attribute__((section(".reserva.tela"))) static void menu_aviso_sai(void)
+__attribute__((section(".sons.tela"))) static void menu_aviso_sai(void)
 {
     MENU_EDITANDO = 0;
     menu_vai(MENU_TABELA, MENU_CONTA, MENU_NUMERO);
@@ -1231,8 +1231,11 @@ de_novo:
             return MOTOR_MENU();
         }
     }
-    if (n >= RADIO || MENU_TIPO != 8)     /* o radio e os menus rapidos: o OK de fabrica */
+    if (n >= RADIO || MENU_TIPO != 8) {   /* o radio e os menus rapidos: o OK de fabrica */
+        if (marcas_do_item() & MARCA_DIRETO)
+            MENU_EDITANDO = 1;            /* v151: o MESSAGES entra num clique, como no UV-17L: o set nao usa o que a abertura faz */
         return OK_MENU();
+    }
     if (MENU_EDITANDO == 1)
         return 0;
     TEMPO_MENU();
@@ -1672,6 +1675,12 @@ static unsigned no_menu(void)
 
 /* 0x01E3C132(0): a tela inteira. Ela zera o estado de TX (0x01E3C1D4); o gancho tambem. Com 1 e a
  * tela de um VFO, que fica a de fabrica e nao mexe no estado de TX (0x01E3C152 pula 0x01E3C1D4). */
+/* A lanterna (v152, mensagem.c) acesa: nada vai ao LCD, e o branco fica, com a TX ou com o que for. */
+u32 b_envia(void)
+{
+    return RAM(u8, 0x00014BDA) >> 7;
+}
+
 u32 b_tela(u32 um_vfo)
 {
     if (no_menu()) {
@@ -1826,7 +1835,7 @@ u32 b_sinal(void)
     }
     if (m == 20 || !ativa() || (s = medidor_s()) == MEDIDOR_FABRICA)
         return 0;
-    if (s != NIVEL_DESENHADO && s != 255 && (m == 0 || m == 3)) {
+    if (s != NIVEL_DESENHADO && s != 255 && (0x29u >> m & 1)) {   /* os modos 0 e 3, e o 5, que o MO poe (0x01E45344; v154) */
         if (s < 0x80 && DW_NO_OUTRO == 1 && DW_MEDIDOR == 0)
             DW_MEDIDOR = 1;
         b_medidor(s >> 7, SEGMENTOS | (s & 127), s >> 7 ? LADO_B != 0 : MEDIDOR_LADO);
@@ -2041,6 +2050,7 @@ u32 b_transmissao(u32 estado)
             ".previous")
 
 DESVIO(desvio_tela, b_tela, 0x01E3C136, "0x77, 0x04, 0xe2, 0x9e");
+DESVIO(desvio_envia, b_envia, 0x01E3ADC4, "0x77, 0x04, 0xc0, 0xff, 0x40, 0x6f, 0x40, 0x01");
 DESVIO(desvio_barra, b_barra, 0x01E3B060, "0x76, 0x04, 0xe2, 0x9d");
 DESVIO(desvio_nivel_bateria, b_barra, 0x01E3B044, "0xc1, 0xff, 0x80, 0x46, 0x01, 0x00");
 DESVIO(desvio_cadeado, b_barra, 0x01E3AE54, "0x75, 0x04, 0xe2, 0x9d");

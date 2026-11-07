@@ -2607,7 +2607,7 @@ para `0x9010`. A partida (`0x01E55C9A`) lê o registro em uso e, com o CRC errad
 fábrica (`0x01E4842E`).
 
 **A NOISE GATE na partida (v100).** Depois de copiar o registro, a partida zera os bytes fora da faixa:
-`0x14BD7..0x14BDA` de 9 em diante (o PF2, o PF2 LONG PRESS, o PF3 e mais um), `0x14BDB` e `0x14BDC` de 16 em
+`0x14BD7..0x14BDA` de 9 em diante (o PF2, o PF2 LONG PRESS, o PF3 e o PF3 LONG, desde a v152), `0x14BDB` e `0x14BDC` de 16 em
 diante (a zona de cada lado) e `0x14BDD` de 2 em diante. Este último, o `0x9031`, é onde a NOISE GATE (v79 e
 v80) guarda `0xE8` + o nível, e ela voltava ao padrão a cada partida. A varredura da v59 não viu a conferência
 porque o deslocamento vem de `r1 + 6` (`0x01E55D26..0x01E55D34`: `if (r1 >= 2) { r1 = 0; b[r4+r0] = r1 }`). Nada
@@ -3017,18 +3017,39 @@ RAM e flash por `a >= 0xC0000`, e há dados da RAM em `0x10F0D0..0x10F1C4`. Se a
 procurado na flash, o `0x5A` do registro não vinha, e a linha ficava em branco. Agora só `0xD0000..0xDFFFF` vai à flash. O endereço
 da pilha não foi medido: quem confirma é o rádio.
 
-**O LED verde (v149).** Ao abrir o squelch, o laço de fábrica chama `0x01E40CD2(b[0x15E42], 1)` logo depois de abrir o áudio
-(`0x01E47BF2`), e com 0 ao fechar. As telas fazem o mesmo no `rx_portadora`, com o estado no bit 7 do `TELA_APRS`. Que a rotina é o LED
-sai da posição dela na sequência, e falta confirmar no rádio. No APRS, com o AGC travado pelo FILTER, o bit do squelch oscila, e o LED
-pode piscar junto.
+**O LED verde (v149 e v151).** A v149 chamava `0x01E40CD2(b[0x15E42], 1)`, que vem logo depois de abrir o áudio no laço de fábrica
+(`0x01E47BF2`), e tomou a rotina pelo LED por causa da posição dela. Estava errado: ela escolhe o caminho de RF (1 RX, 2 TX, 0 desligado),
+e o `0x01E40CAC` que ela usa é o GPIO do `0x33` do BK4819. Com 0 no fim da portadora, o rádio podia ficar surdo a sinal fraco com o SQUELCH
+ligado. A v151 tirou a chamada. Fora dela, a sequência de fábrica ao abrir o squelch só mexe no áudio e nos dois pinos do amplificador, e o
+LED deve vir deles: o `rx_portadora` chama o `PEDE_AMPLI` (`0x01E39E2C`: 5 pede, 6 solta) e o `AMPLI` (`0x01E39CFC`) quando a portadora
+muda, com o estado no bit 7 do `TELA_APRS`, e o áudio do chip fica fechado (`AUDIO_DO_CHIP`, `0x01E39E22`), o que mantém o alto-falante
+mudo. O dono não voltou a citar o defeito, mas não confirmou o LED, e isso fica como não provado.
 
 **A caixa (v149).** A do APRS abre com a última mensagem, como a do Morse, e a primeira tecla troca o texto todo: é a marca `0xAA` do
 editor de fábrica.
 
+**O `#` e o MENU EXIT TIME (v151).** A tela MESSAGES roda dentro do OK do menu, e o tique (`0x01E41954`) segue descontando o
+`h[0x14680+709*2]`. Zerado, o `0x01E46B14` fecha o menu assim que o laço de fábrica volta: era o `#` depois de muito tempo, que caía na
+tela principal e passava por uma tela preta riscada. Ao sair da tela, o `TEMPO_MENU` (`0x01E484F8`) rearma o tempo.
+
+**Um clique (v151).** Os dois MESSAGES levam a `MARCA_DIRETO`: o `menu_ok_item` põe `MENU_EDITANDO` em 1 e chama o OK de fábrica uma vez só,
+porque o set não usa o que a abertura faz. Na pasta, o valor do item é `OK TO LISTEN`, como no UV-17L.
+
+**O MO (v151, v153 e v154).** A rotina de fábrica põe 5 no `MODO_TELA` em `0x01E45344`. O remendo de `0x01E4534C` vira nop o teste da
+portadora do lado que está na escuta, e o caminho é sempre o de `0x01E3FDE4`, que volta ao lado em evidência. O de `0x01E45382` faz o
+medidor começar vazio. A barra tinha dois bloqueios: o `medidor_s` esperava o `b[0x14690]` chegar a 5, e ele só conta no estado 3, que o
+MO pula (`ESTADO_RX` em 5); e o `b_sinal` só desenhava nos modos de tela 0 e 3. A v153 resolveu o primeiro, e a v154, o segundo.
+
+**O PF3 LONG e a lanterna (v152).** O `0x14BDA` (`0x902E` no cabo) é o quarto byte dos PF: a partida aceita até 8, e a fábrica não o lê. 0 é
+o MO, e 8, a lanterna. A fábrica manda o código longo a 1 s, e o `lanterna_tecla` toma a tecla antes, na 98ª volta. Acesa, o bit 7 do byte
+marca o estado, e os bits 6:4 guardam o BRIGHTNESS de antes. Ela é um estado, não um laço: o laço do sinal segue, e o PTT transmite. O
+`desvio_envia` (`0x01E3ADBC`) segura o envio ao LCD enquanto ela está acesa, e o branco fica, com a TX ou com o que for.
+
 **O espaço.** O `.sons` são as entradas 0..117 da tabela de caminhos (`0x01E5E8FC..0x01E5EAD4`, 472 B), que a fila não lê desde o remendo
 de `0x01E40628`: só a leitura em `0x01E40636` aponta para a faixa, e ela soma índice de 118 em diante. O `.fim` entra na frente do
-`.text`, na área do fim da imagem, e a caixa mora nele. Na v149 sobram 18 B na tela B, 2 B no `.sons` e nada no `.reserva` e no
-`.caminhos`: recurso novo aqui pede liberar espaço antes.
+`.text`, na área do fim da imagem, e a caixa mora nele. Os nomes de item de fábrica sem ponteiro são as áreas `.mortos1` a `.mortos10` (v152, 422 B em 10 pedaços, de 14 a
+104 B; o `montar.MORTOS` as lista, e o `conferir.py` as confere). Na v154 sobram 2 B na tela B, 4 B no `.sons`, 6 B no `.reserva`, 6 B no
+`.fim` e nada no `.caminhos`: recurso novo aqui pede liberar espaço antes.
 
 No ar, medido pelo dono, o BJ lê até 15 WPM, e o melhor tom é 700 Hz. A 20 WPM o ponto e a pausa têm 60 ms, e a pausa quase some nos
 42 ms que o tom dura além da última amostra.

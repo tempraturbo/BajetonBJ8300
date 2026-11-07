@@ -121,6 +121,7 @@ static unsigned copia_ram(char *s, u32 a, unsigned n)
 #define RADIO             0xFE                   /* menu_nivel(): o menu do radio (v56) */
 #define FORA              0xFF                   /* menu_nivel(): uma tabela que nao e a nossa (os rapidos) */
 #define MARCA_SEM_VALOR   1                      /* as marcas de cada item (v55, montar.py MENU_MARCAS) */
+#define MARCA_DIRETO      128                    /* v151: o OK ja executa */
 #define MARCA_VARIOS      2
 #define MARCA_LISTA       8                      /* v140: lista de canais, com as setas e o EXIT dela */
 #define MARCA_NOMEIA      4                      /* v138: o MEMCH abre o editor do nome depois do OK */
@@ -1176,8 +1177,11 @@ SEPARADA static void aprs_cena(u32 a0, unsigned aberto, const u16 *num)
     const char *r = RODAPE;
     unsigned i = LADO_B != 0, x, morse = aberto & 64;   /* v144: a tela lendo Morse, sem o FILTER, o P, o TO e o 0 */
 
-    if (aberto & 32) {                     /* v149: enviando, so a palavra */
-        texto(80 - largura("SENDING", 2) / 2, 54, "SENDING", 2, COR_SEG_VERMELHO);
+    if (aberto & 32) {                     /* v149: enviando, so a palavra; v152: com o bit 7, a lanterna, so o branco */
+        if (aberto & 128)
+            pinta(0, 0, 160, 128, 0xFFFF);
+        else
+            texto(80 - largura("SENDING", 2) / 2, 54, "SENDING", 2, COR_SEG_VERMELHO);
         return;
     }
     aberto &= 1;

@@ -1760,7 +1760,7 @@ unsigned medidor_s(void)
     if (!((ESTADO_RX == 4 && (*(volatile u8 *)0x00015368 == 1 || *(volatile u8 *)0x0001536F == 1))
           || ESTADO_RX == 5))
         return 255;
-    if (*(volatile u8 *)0x00014690 < 5)
+    if (*(volatile u8 *)0x00014690 < 5 && ESTADO_RX != 5)   /* so a vigia conta (0x01E47CA0): o MO nunca chegaria a 5 (v153) */
         return NIVEL_DESENHADO;
     v = LE_REG(0x67) & 0x1FF;
     s1 = medidor_tabela[(FAIXA_MEDIDOR < 5 ? FAIXA_MEDIDOR : 0) * 4 + 3];

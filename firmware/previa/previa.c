@@ -1037,6 +1037,12 @@ int main(int argc, char **argv)
         LINHA(2, 1, "16 WPM");
         telas_b(1, 0);
         grava("60-menu-morse-speed");
+        menu_no("KEYS", "PF3 LONG");
+        LINHA(0, 2, "MONITOR");
+        LINHA(1, 1, "FLASHLIGHT");
+        LINHA(2, 0, "");
+        telas_b(1, 0);
+        grava("60k-menu-pf3-long");
         BASE_TELAS();
         memoria[0x1533D] = 1;
         {

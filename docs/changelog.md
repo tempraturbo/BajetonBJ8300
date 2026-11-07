@@ -5,6 +5,31 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v150 to v154 — Nov 7 — the LED, `#`, MO, MESSAGES in one click, PF3 LONG and the flashlight screen (flashed and approved)
+
+On v149 the incoming text, the `?MESSAGE+`, the sound and the SENDING screen passed on the radio. The owner found four more things, and
+this round also brings what was asked for during the test. **v150** never shipped: it went into v151.
+
+- **The v149 mistake.** `0x01E40CD2`, which it called to light the LED, selects the RF path (1 RX, 2 TX, 0 off), and could leave the radio
+  deaf to weak signals with SQUELCH on. v151 removed the call, and the v149 line below stays as a record.
+- **The green LED.** In the factory sequence on squelch open, besides the audio only the two amplifier pins change, and the LED should
+  come from them. The screens now follow them, with the chip's audio closed, and the speaker stays silent. The owner did not bring the
+  defect up again, but did not confirm the LED either, so it stands as unproven.
+- **`#` after a long time** on the screen went back to the main screen, with a black screen with a line across it in between. MENU EXIT TIME kept
+  running with the screen open, and is now renewed on leaving it.
+- **MESSAGES in one click,** for APRS and Morse, like the UV: OK goes straight in, and the folder shows `OK TO LISTEN`.
+- **MO** (PF3 held) always opens the side in focus; with a carrier on the other watch side, it opened that one. The bar starts empty,
+  without the factory full bar, which flashed. **v153** made the meter read during MO, but the owner saw it still did not move, and
+  **v154** also draws it in screen mode 5, which is the one MO uses.
+- **v152** brought **PF3 LONG** in the KEYS folder (MONITOR, the default, or FLASHLIGHT) and the **flashlight screen**: PF3 held for 1 s on
+  the main screen, all white at full brightness, with no timeout. Only PF3 and EXIT leave it, the brightness returns to what it was, other
+  keys do nothing, and PTT transmits with it on. The VERSION item already shows **V3.7T**, at the owner's request, so no other build is needed.
+- **Space:** 10 pieces of factory item names with no pointers became the `.mortos1` to `.mortos10` areas, 422 B. The Chinese text did
+  not help: its pieces are 40 B at most.
+
+Flashed on the radio and approved by the owner. Still out of `firmware/releases/`, because the `.anc` goes in the release commit. This
+commit's build: sha256 `fc0890e4…`. [Section 36](reverse-engineering.md#36-the-morse-messages-screen-v144-to-v148).
+
 ## v149 — Nov 7 — the incoming text, the green LED, the SENDING screen and the APRS box (committed before testing)
 
 The approved v148 showed the rest of the use. The owner also measured the limit on the air: the BJ reads up to 15 WPM, the UV up to 20,
@@ -13,7 +38,8 @@ and the best tone is 700 Hz.
 - **The incoming text.** On the BJ the card went green and empty, and the text only appeared at the end. The real loop, run on the PC
   with the capture, asked to draw `ABC`. The suspect is `le_linha`, which took every address from `0xC0000` up as flash, and there is RAM
   data at `0x10F000`. Now only `0xD0000..0xDFFFF` goes to flash.
-- **The green LED,** on both MESSAGES screens, through the same call the factory loop makes when the squelch opens.
+- **The green LED,** on both MESSAGES screens, through the same call the factory loop makes when the squelch opens (wrong: that call
+  is something else, and v151 removed it).
 - **APRS audio** follows the Morse rule: it is only heard with SQUELCH OFF.
 - **The APRS box** opens with the last message, and the first key replaces it all, like the Morse one.
 - **The `?MESSAGE+`** on the first send: 0.5 s of silent carrier, AR always closes the message and an unknown code at the start stays

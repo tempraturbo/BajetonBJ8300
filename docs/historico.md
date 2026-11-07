@@ -5,6 +5,31 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v150 a v154 — 07/11 — o LED, o `#`, o MO, o MESSAGES num clique, o PF3 LONG e a lanterna de tela (gravada e aprovada)
+
+Na v149 o texto chegando, o `?MENSAGEM+`, o som e a tela SENDING passaram no rádio. O dono achou mais quatro coisas, e esta rodada traz
+também o que ele pediu no meio do teste. A **v150** não chegou a sair: foi junto na v151.
+
+- **O erro da v149.** O `0x01E40CD2`, que ela chamava para acender o LED, é a escolha do caminho de RF (1 RX, 2 TX, 0 desligado), e podia
+  deixar o rádio surdo a sinal fraco com o SQUELCH ligado. A v151 tirou a chamada, e a linha da v149 aqui embaixo fica como registro.
+- **O LED verde.** Na sequência de fábrica ao abrir o squelch, além do áudio só mudam os dois pinos do amplificador, e o LED deve vir
+  deles. As telas agora os acompanham, com o áudio do chip fechado, e o alto-falante segue mudo. O dono não voltou a citar o defeito,
+  mas também não confirmou o LED, e por isso ele fica como não provado.
+- **O `#` depois de muito tempo** na tela voltava à tela principal, com uma tela preta riscada no meio. O MENU EXIT TIME corria com a
+  tela aberta, e agora é renovado ao sair dela.
+- **O MESSAGES num clique,** no APRS e no Morse, como no UV: o OK já entra, e a pasta mostra `OK TO LISTEN`.
+- **O MO** (PF3 segurada) abre sempre o lado em evidência; com portadora no outro lado da escuta, abria aquele. A barra começa vazia,
+  sem o cheio de fábrica, que piscava. A **v153** fez o medidor ler no MO, mas o dono viu que ele ainda não andava, e a **v154** o
+  desenha também no modo de tela 5, que é o que o MO usa.
+- **A v152** trouxe o **PF3 LONG** na pasta KEYS (MONITOR, o padrão, ou FLASHLIGHT) e a **lanterna de tela**: PF3 segurada por 1 s na
+  tela principal, tudo branco e no brilho máximo, sem apagar por tempo. Só a PF3 e o EXIT saem, o brilho volta ao que estava, as outras
+  teclas não fazem nada, e o PTT transmite com ela acesa. O item VERSION já mostra **V3.7T**, a pedido do dono, para não precisar de outro build.
+- **O espaço:** 10 trechos de nomes de item de fábrica sem ponteiro viraram as áreas `.mortos1` a `.mortos10`, com 422 B. O texto em
+  chinês não ajudou: são pedaços de até 40 B.
+
+Gravada no rádio e aprovada pelo dono. Ainda fora de `firmware/releases/`, porque o `.anc` entra no commit da release. Build deste
+commit: sha256 `fc0890e4…`. [Seção 36](engenharia-reversa.md#36-a-tela-messages-do-morse-v144-a-v148).
+
 ## v149 — 07/11 — o texto chegando, o LED verde, a tela SENDING e a caixa do APRS (commitada antes do teste)
 
 A v148 aprovada mostrou o resto do uso. O dono também mediu o limite no ar: o BJ lê até 15 WPM, o UV até 20, e o melhor tom é 700 Hz.
@@ -12,7 +37,8 @@ A v148 aprovada mostrou o resto do uso. O dono também mediu o limite no ar: o B
 - **O texto chegando.** No BJ o cartão ficava verde e vazio, e o texto só aparecia no fim. O laço real, rodando no PC com a captura,
   mandava desenhar `ABC`. A suspeita é o `le_linha`, que tomava por flash todo endereço de `0xC0000` para cima, e há dados da RAM em
   `0x10F000`. Agora só `0xD0000..0xDFFFF` vai à flash.
-- **O LED verde,** nas duas telas MESSAGES, pela mesma chamada que o laço de fábrica faz ao abrir o squelch.
+- **O LED verde,** nas duas telas MESSAGES, pela mesma chamada que o laço de fábrica faz ao abrir o squelch (errado: a chamada é outra
+  coisa, e a v151 a tirou).
 - **O áudio do APRS** segue a regra do Morse: só se ouve com o SQUELCH em OFF.
 - **A caixa do APRS** abre com a última mensagem, e a primeira tecla troca tudo, como a do Morse.
 - **O `?MENSAGEM+`** do primeiro envio: 0,5 s de portadora muda, o AR sempre fecha a mensagem e um código desconhecido no começo não

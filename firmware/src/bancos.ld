@@ -55,6 +55,17 @@ MEMORY
     caminhos (rx) : ORIGIN = 0x01E5AB60, LENGTH = 2944
     reserva (rx) : ORIGIN = 0x01E62F98, LENGTH = 1512   /* a tabela de menu de fabrica, morta desde a v43 (v140) */
     sons (rx) : ORIGIN = 0x01E5E8FC, LENGTH = 472      /* as entradas 0..117 da tabela de caminhos, mortas (v144) */
+    /* v152: nomes de item de fabrica sem nenhum ponteiro: a tabela que os lia morreu na v43 (montar.py MORTOS) */
+    mortos1 (rx) : ORIGIN = 0x01E5A768, LENGTH = 104
+    mortos2 (rx) : ORIGIN = 0x01E5A7E0, LENGTH = 78
+    mortos3 (rx) : ORIGIN = 0x01E5AA00, LENGTH = 48
+    mortos4 (rx) : ORIGIN = 0x01E5A872, LENGTH = 46
+    mortos5 (rx) : ORIGIN = 0x01E5A9BC, LENGTH = 44
+    mortos6 (rx) : ORIGIN = 0x01E5A96E, LENGTH = 30
+    mortos7 (rx) : ORIGIN = 0x01E5A8AE, LENGTH = 24
+    mortos8 (rx) : ORIGIN = 0x01E5A90E, LENGTH = 18
+    mortos9 (rx) : ORIGIN = 0x01E5A748, LENGTH = 16
+    mortos10 (rx) : ORIGIN = 0x01E5A934, LENGTH = 14
 }
 
 SECTIONS
@@ -85,6 +96,16 @@ SECTIONS
     .sons : {
         *(.sons*)
     } > sons
+    .mortos10 : { *(.mortos10.*) } > mortos10
+    .mortos1 : { *(.mortos1.*) } > mortos1
+    .mortos2 : { *(.mortos2*) } > mortos2
+    .mortos3 : { *(.mortos3*) } > mortos3
+    .mortos4 : { *(.mortos4*) } > mortos4
+    .mortos5 : { *(.mortos5*) } > mortos5
+    .mortos6 : { *(.mortos6*) } > mortos6
+    .mortos7 : { *(.mortos7*) } > mortos7
+    .mortos8 : { *(.mortos8*) } > mortos8
+    .mortos9 : { *(.mortos9*) } > mortos9
 
     /DISCARD/ : { *(.comment) *(.note*) *(.debug*) }
 }

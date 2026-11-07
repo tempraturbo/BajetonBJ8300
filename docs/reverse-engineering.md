@@ -2653,7 +2653,7 @@ the sector is erased and the new one goes to `0x9010`. Startup (`0x01E55C9A`) re
 a wrong CRC or no record, puts the factory ones (`0x01E4842E`).
 
 **NOISE GATE at startup (v100).** After copying the record, startup zeroes the bytes out of range:
-`0x14BD7..0x14BDA` from 9 up (PF2, PF2 LONG PRESS, PF3 and one more), `0x14BDB` and `0x14BDC` from 16 up (each
+`0x14BD7..0x14BDA` from 9 up (PF2, PF2 LONG PRESS, PF3 and PF3 LONG, since v152), `0x14BDB` and `0x14BDC` from 16 up (each
 side's zone) and `0x14BDD` from 2 up. That last one, `0x9031`, is where NOISE GATE (v79 and v80) keeps `0xE8` +
 the level, and it went back to the default at every startup. The v59 scan missed the check because the offset
 comes from `r1 + 6` (`0x01E55D26..0x01E55D34`: `if (r1 >= 2) { r1 = 0; b[r4+r0] = r1 }`). Nothing else in the
@@ -3072,18 +3072,39 @@ between RAM and flash by `a >= 0xC0000`, and there is RAM data at `0x10F0D0..0x1
 text was looked up in flash, the record's `0x5A` did not come back, and the line stayed blank. Now only `0xD0000..0xDFFFF` goes to flash.
 The stack address was not measured: the radio is what confirms it.
 
-**The green LED (v149).** When the squelch opens, the factory loop calls `0x01E40CD2(b[0x15E42], 1)` right after opening the audio
-(`0x01E47BF2`), and with 0 on closing. The screens do the same in `rx_portadora`, with the state in bit 7 of `TELA_APRS`. That the routine
-is the LED comes from its place in the sequence, and the radio still has to confirm it. On APRS, with the AGC locked by FILTER, the
-squelch bit wobbles, and the LED may flicker with it.
+**The green LED (v149 and v151).** v149 called `0x01E40CD2(b[0x15E42], 1)`, which comes right after opening the audio in the factory loop
+(`0x01E47BF2`), and took the routine for the LED because of its place. That was wrong: it selects the RF path (1 RX, 2 TX, 0 off), and the
+`0x01E40CAC` it uses is the BK4819's `0x33` GPIO. With 0 at the end of the carrier, the radio could go deaf to weak signals with SQUELCH on.
+v151 removed the call. Apart from it, the factory sequence on squelch open only touches the audio and the two amplifier pins, and the LED
+should come from them: `rx_portadora` calls `PEDE_AMPLI` (`0x01E39E2C`: 5 asks, 6 releases) and `AMPLI` (`0x01E39CFC`) when the carrier
+changes, with the state in bit 7 of `TELA_APRS`, and the chip's audio stays closed (`AUDIO_DO_CHIP`, `0x01E39E22`), which keeps the speaker
+silent. The owner did not bring the defect up again, but did not confirm the LED, and that stands as unproven.
 
 **The box (v149).** The APRS one opens with the last message, like the Morse one, and the first key replaces all the text: that is the
 factory editor's `0xAA` mark.
 
+**`#` and MENU EXIT TIME (v151).** The MESSAGES screen runs inside the menu's OK, and the tick (`0x01E41954`) keeps counting down
+`h[0x14680+709*2]`. At zero, `0x01E46B14` closes the menu as soon as the factory loop comes back: that was `#` after a long time, which fell to
+the main screen through a black screen with a line across it. On leaving the screen, `TEMPO_MENU` (`0x01E484F8`) re-arms the time.
+
+**One click (v151).** Both MESSAGES items carry `MARCA_DIRETO`: `menu_ok_item` sets `MENU_EDITANDO` to 1 and calls the factory OK only once,
+because the set does not use what opening does. In the folder, the item's value is `OK TO LISTEN`, like on the UV-17L.
+
+**MO (v151, v153 and v154).** The factory routine puts 5 in `MODO_TELA` at `0x01E45344`. The patch at `0x01E4534C` turns the carrier test of
+the watch side into nops, and the path is always the one at `0x01E3FDE4`, which returns to the side in focus. The one at `0x01E45382` makes
+the meter start empty. The bar had two blocks: `medidor_s` waited for `b[0x14690]` to reach 5, and it only counts in state 3, which MO
+skips (`ESTADO_RX` at 5); and `b_sinal` only drew in screen modes 0 and 3. v153 solved the first, and v154 the second.
+
+**PF3 LONG and the flashlight (v152).** `0x14BDA` (`0x902E` on the cable) is the fourth PF byte: startup accepts up to 8, and the factory does
+not read it. 0 is MO, and 8 the flashlight. The factory sends the long code at 1 s, and `lanterna_tecla` takes the key before that, on turn
+98. While lit, bit 7 of the byte marks the state, and bits 6:4 keep the previous BRIGHTNESS. It is a state, not a loop: the signal loop goes
+on, and PTT transmits. `desvio_envia` (`0x01E3ADBC`) holds back sending to the LCD while it is lit, and the white stays, on TX or anything else.
+
 **Space.** `.sons` is entries 0..117 of the path table (`0x01E5E8FC..0x01E5EAD4`, 472 B), which the queue has not read since the patch at
 `0x01E40628`: only the read at `0x01E40636` points to the range, and it adds indexes from 118 up. `.fim` goes in front of `.text`, in
-the area at the end of the image, and the box lives there. In v149 18 B remain in screen B, 2 B in `.sons` and nothing in `.reserva` and
-`.caminhos`: a new feature here needs space freed first.
+the area at the end of the image, and the box lives there. Factory item names with no pointers are the `.mortos1` to `.mortos10` areas (v152, 422 B in 10 pieces, from 14 to
+104 B; `montar.MORTOS` lists them and `conferir.py` checks them). In v154 2 B remain in screen B, 4 B in `.sons`, 6 B in `.reserva`, 6 B in
+`.fim` and nothing in `.caminhos`: a new feature here needs space freed first.
 
 On the air, measured by the owner, the BJ reads up to 15 WPM, and the best tone is 700 Hz. At 20 WPM the dot and the pause are 60 ms, and
 the pause nearly vanishes in the 42 ms the tone lasts past the last sample.

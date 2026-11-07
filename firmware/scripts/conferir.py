@@ -99,10 +99,12 @@ tela_gravada = montar.livre_com_menu(tela, tabela_esperada, textos_esperados)
 reserva_em, reserva = montar.codigo_ligado(elf, '.reserva')     # v140: na tabela de menu de fabrica, morta
 caminhos_em, caminhos = montar.codigo_ligado(elf, '.caminhos')   # v138: no lugar dos caminhos das vozes
 sons_em, sons = montar.codigo_ligado(elf, '.sons')               # v144: nas entradas mortas da tabela de caminhos
+mortos = [montar.codigo_ligado(elf, f'.mortos{i + 1}') for i in range(len(montar.MORTOS))]   # v152: nos nomes de item mortos
 blocos = [('codigo', montar.ENDERECO_CODIGO, blob), ('tela B', livre_em, tela_gravada),
           ('caminhos', caminhos_em, caminhos),
           ('reserva', reserva_em, reserva),
           ('sons', sons_em, sons),
+          *((f'mortos{i + 1}', e, b) for i, (e, b) in enumerate(mortos)),
           ('tabela', montar.S[montar.TABELA_SIMBOLO], tabela_esperada),
           ('textos dos grupos', montar.S[montar.TEXTOS_SIMBOLO], textos_esperados)]
 for nome, endereco, esperado in blocos:
@@ -137,7 +139,7 @@ nas_vozes = lambda a: vozes_em <= a < fim_vozes
 na_livre = lambda a: livre_em <= a < fim_livre
 # v138: no .caminhos so o que o nosso codigo chama ou le - nenhuma das rotinas que o firmware chama (PRECISA)
 nos_caminhos = lambda a: (caminhos_em <= a < caminhos_em + len(caminhos) or reserva_em <= a < reserva_em + len(reserva)
-                          or sons_em <= a < sons_em + len(sons))
+                          or sons_em <= a < sons_em + len(sons) or any(e <= a < e + len(b) for e, b in mortos))
 fora = {n: a for n, a in montar.S.items()
         if not no_texto(a) and not nas_vozes(a) and not na_livre(a) and not nos_caminhos(a)}
 trocados = sorted(n for n in montar.PRECISA if nas_vozes(montar.S[n]) != (n in montar.NAS_VOZES)
@@ -146,7 +148,8 @@ lugares = (vozes_em == montar.VOZES and fim_vozes <= montar.VOZES_ACEITAS_FIM
            and livre_em == montar.LIVRE and fim_livre <= montar.LIVRE_FIM
            and caminhos_em == montar.CAMINHOS and caminhos_em + len(caminhos) <= montar.CAMINHOS_FIM
            and reserva_em == montar.RESERVA and reserva_em + len(reserva) <= montar.RESERVA_FIM
-           and sons_em == montar.SONS and sons_em + len(sons) <= montar.SONS_FIM)
+           and sons_em == montar.SONS and sons_em + len(sons) <= montar.SONS_FIM
+           and all(e == de and e + len(b) <= ate for (e, b), (de, ate) in zip(mortos, montar.MORTOS)))
 print(f'2b. simbolos dentro de {montar.ENDERECO_CODIGO:#x}..{fim_codigo:#x}, {vozes_em:#x}..{fim_vozes:#x} '
       f'(ate o fim do C1, {montar.VOZES_ACEITAS_FIM:#x}) ou {livre_em:#x}..{fim_livre:#x} (a faixa do G.729 '
       f'e do MP3 vai ate {montar.LIVRE_FIM:#x}); nas vozes so os {len(montar.NAS_VOZES)} do espectro, na '
@@ -425,6 +428,9 @@ if bytes(app[montar.RESERVA - montar.BASE_APP:montar.RESERVA - montar.BASE_APP +
     problemas.append('.reserva ausente do app.bin na tabela de menu de fabrica')
 if bytes(app[montar.SONS - montar.BASE_APP:montar.SONS - montar.BASE_APP + len(sons)]) != sons:
     problemas.append('.sons ausente do app.bin nas entradas mortas da tabela de caminhos')
+for e, b in mortos:
+    if bytes(app[e - montar.BASE_APP:e - montar.BASE_APP + len(b)]) != b:
+        problemas.append(f'.mortos ausente do app.bin em {e:#x}')
 for sitio, _, novo, oque in montar.VOZES_REMENDOS:
     s = sitio - montar.BASE_APP
     if sitio in (0x01E40628, 0x01E55ABE) and bytes(app[s:s + len(novo)]) != novo:
@@ -443,7 +449,7 @@ for sitio, antes, novo, oque in montar.CAMINHOS_REMENDOS:
         problemas.append(f'{sitio:#x} ({oque}): {antes.hex()} -> {novo.hex()} nao conferiu')
     star[sitio] = antes
 dentro_c = lambda a: (montar.CAMINHOS <= a < montar.CAMINHOS_FIM or montar.RESERVA <= a < montar.RESERVA_FIM
-                      or montar.SONS <= a < montar.SONS_FIM)
+                      or montar.SONS <= a < montar.SONS_FIM or any(de <= a < ate for de, ate in montar.MORTOS))
 morto = lambda a: any(i <= a and a + 4 <= f for i, f, _ in montar.CAMINHOS_MORTOS)
 excecoes_c = 0
 for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
@@ -460,6 +466,9 @@ for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
             elif onde == montar.TABELA_SONS_BASE and v == montar.SONS:   # v144: a leitura da tabela, so das entradas vivas
                 excecoes_c += 1
             elif binario is app_velho and star.get(onde) == bytes(binario[o:o + 4]):
+                excecoes_c += 1
+            # v152: os menus rapidos de fabrica apontavam para os nomes mortos, e o RAPIDA_NOMES os troca: na imagem nova nao apontam
+            elif binario is app_velho and any(de <= v < ate for de, ate in montar.MORTOS) and app[o:o + 4] != app_velho[o:o + 4]:
                 excecoes_c += 1
             else:
                 problemas.append(f'{nome_app}: valor {v:#x} em {onde:#x} aponta para dentro dos caminhos')
@@ -950,7 +959,7 @@ previsto_tela += [(s_, s_ + len(a_) - 1, 'ajustes: ' + d_) for s_, a_, _, d_ in 
 for sitio, antes, depois, oque in montar.SINAL_REMENDOS:
     o = sitio - montar.BASE_APP
     ok = (bytes(app_velho[o:o + len(antes)]) == antes and bytes(app[o:o + len(antes)]) == depois
-          and bytes(app[0x01E46A3E - montar.BASE_APP:0x01E46A40 - montar.BASE_APP]) == depois)
+          and (sitio < 0x01E46A40 or bytes(app[0x01E46A3E - montar.BASE_APP:0x01E46A40 - montar.BASE_APP]) == depois))
     print(f'4v. laco do sinal {sitio:#x}: {oque}: ' + ('ok' if ok else 'FALHOU'))
     if not ok:
         erros.append(f'laco do sinal: remendo errado em {sitio:#x}')
@@ -1226,6 +1235,7 @@ previsto += [(r, r + 3, f'tipo do {d} no registro') for r, _, _, d in montar.DEC
 # v138: o .caminhos no lugar dos caminhos das vozes, e o "*" do editor que sai de la
 previsto += [(montar.RESERVA, montar.RESERVA + len(reserva) - 1, 'codigo novo na tabela de menu de fabrica, morta')]
 previsto += [(montar.SONS, montar.SONS + len(sons) - 1, 'codigo novo nas entradas mortas da tabela de caminhos')]
+previsto += [(e, e + len(b) - 1, 'codigo novo nos nomes de item mortos') for e, b in mortos]
 previsto += [(montar.CAMINHOS, montar.CAMINHOS + len(caminhos) - 1, 'codigo novo no lugar dos caminhos das vozes')]
 previsto += [(montar.TABELA_RAPIDA_SAVE + montar.CAMPO[c_], montar.TABELA_RAPIDA_SAVE + montar.CAMPO[c_] + 3,
               'menu rapido do SAVE: ' + c_) for c_, _ in montar.RAPIDA_SAVE_CAMPOS]

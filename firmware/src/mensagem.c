@@ -208,12 +208,14 @@ struct afsk_dac {
 #define NA_RESERVA
 #define NOS_SONS
 #define NO_FIM
+#define NOS_MORTOS(n)
 #else
 #define NAS_VOZES  __attribute__((section(".vozes.rodata.mensagem")))   /* a sobra do C1 (o .livre acabou) */
 /* v138: no lugar dos caminhos das vozes (bancos.ld), so o que o nosso codigo chama - nunca o firmware */
 #define NOS_CAMINHOS  __attribute__((section(".caminhos.mensagem")))
 #define NOS_SONS      __attribute__((section(".sons.mensagem")))      /* v144: as mesmas regras, nas entradas mortas da tabela de caminhos */
 #define NO_FIM        __attribute__((section(".fim.mensagem")))       /* v144: na area do fim da imagem, com o bancos.c */
+#define NOS_MORTOS(n) __attribute__((section(".mortos" #n ".mensagem")))   /* v152: nos nomes de item de fabrica mortos */
 #define NA_RESERVA    __attribute__((section(".reserva.mensagem")))   /* v140: as mesmas regras, na tabela de menu morta */
 #endif
 NAS_VOZES static const short seno17[17] = {
@@ -452,7 +454,7 @@ unsigned hdlc_bit(struct hdlc *h, unsigned linha)
 #define decimal(p, v)  numero((p), (v), 1)
 
 /* Um indicativo do quadro (7 bytes) em texto, "PY2ABC-7"; devolve o fim. */
-static char *aprs_indicativo(char *s, const u8 *a)
+NOS_MORTOS(3) static char *aprs_indicativo(char *s, const u8 *a)
 {
     unsigned k, ssid = a[6] >> 1 & 15;
 
@@ -475,7 +477,7 @@ static const char SIMBOLOS[] = "#DIGI\0&GATE\0>CAR\0-HOME\0_WX\0kTRUCK\0uTRUCK\0
 
 /* O caractere como a tela o mostra: o que nao e ASCII visivel vira ponto (um 0 cortaria o texto, e um
  * byte de 0x80 em diante e icone na fonte do radio). */
-static unsigned visivel(unsigned c)
+NOS_MORTOS(10) static unsigned visivel(unsigned c)
 {
     return c >= ' ' && c < 127 ? c : '.';
 }
@@ -485,7 +487,7 @@ static unsigned alfanumerico(unsigned c)
     return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
-static unsigned algarismo(unsigned c)
+NOS_MORTOS(9) static unsigned algarismo(unsigned c)
 {
     return c >= '0' && c <= '9';
 }
@@ -661,7 +663,7 @@ NOS_CAMINHOS static unsigned base91(const u8 *x, unsigned n)
 }
 
 /* Graus e centesimos de minuto de num / div (num < 91^4, entao num % div * 6000 cabe em 32 bits). */
-static char *fracao(char *p, unsigned num, unsigned div, unsigned casas, unsigned letra)
+NOS_MORTOS(5) static char *fracao(char *p, unsigned num, unsigned div, unsigned casas, unsigned letra)
 {
     return coordenada(p, num / div, num % div * 6000 / div, casas, letra);
 }
@@ -1323,7 +1325,7 @@ FIRMWARE(DESARMA_DW, 0x01E3FDE4);  void DESARMA_DW(void);     /* a dupla escuta 
 #define ROGER          RAM(u8, 0x00014B83)
 #define PTT_SOLTO()    (RAM(u32, 0x001E5004) & 0x1000)    /* PA12; 0 = apertado (0x01E47986) */
 
-static unsigned tecla(void)
+NOS_MORTOS(8) static unsigned tecla(void)
 {
     unsigned k = TECLAS();
 
@@ -1348,6 +1350,7 @@ NA_RESERVA static void espera_soltar(void)
 #define TECLA_ESTRELA 9
 #define TECLA_ZERO   13
 #define TECLA_CERQUILHA 17
+#define TECLA_PF3    1
 
 /* O EXIT segurado no editor de texto sai sem salvar (v72). No uso normal a fabrica manda o toque curto
  * de uma tecla so quando ela e solta (o laco do sinal, 0x01E46372: apertar nao manda nada; segurar 1 s
@@ -1410,7 +1413,6 @@ NA_RESERVA static void espera_soltar(void)
 #define MODO_TELA     RAM(u8, 0x0001533D)   /* 0 a tela principal, 1 o menu */
 #define ITEM_CALLSIGN 0                     /* na pasta APRS (conferir.py, 3b; v138) */
 #define SQL_NIVEL     RAM(u8, 0x00014B6C)   /* v144: o SQUELCH do menu */
-#define BANDA_LED     RAM(u8, 0x00015E42)   /* v149: o que a fabrica passa ao LED_RX (0x01E47BE8) */
 #define ITEM_MESSAGES 2
 #define ITEM_TO       5
 
@@ -1421,37 +1423,35 @@ NOS_CAMINHOS static u32 hist_setor(unsigned s)
 }
 
 #ifdef TESTE_RX
-#define LED_RX(banda, liga)
-#define RX_FECHA()  (TELA_APRS &= 127)
+#define AMPLI(n)
+#define RX_FECHA()
 #else
-FIRMWARE(LED_RX, 0x01E40CD2);         void LED_RX(unsigned, unsigned);   /* o que a fabrica chama ao abrir (1) e fechar (0) */
 FIRMWARE(AUDIO_DO_CHIP, 0x01E39E22);  void AUDIO_DO_CHIP(unsigned);
 FIRMWARE(PEDE_AMPLI, 0x01E39E2C);     void PEDE_AMPLI(unsigned);
 FIRMWARE(AMPLI, 0x01E39CFC);          void AMPLI(unsigned);
 /* As telas MESSAGES so se ouvem com o SQL em OFF: com ele ligado, o alto-falante fecha, o que o espectro faz ao seguir
- * (0x01E4AEFC), e o LED apaga, ao entrar e ao sair. */
+ * (0x01E4AEFC), ao entrar e ao sair. */
 NOS_SONS static void rx_fecha(void)
 {
-    TELA_APRS &= 127;                  /* o estado do LED, do rx_portadora */
     if (SQL_NIVEL) {
         AUDIO_DO_CHIP(0);
         PEDE_AMPLI(6);
         AMPLI(0);
-        LED_RX(BANDA_LED, 0);
     }
 }
 #define RX_FECHA()  rx_fecha()
 #endif
 
-/* A portadora, e o LED acompanha, como o laco de fabrica faria (v149). O estado fica no TELA_APRS: a pilha do laco esta no
- * limite, e quem sai dele reescreve o byte. */
+/* A portadora, e o amplificador acompanha, com o audio do chip fechado: a sequencia de fabrica ao abrir o squelch so mexe no
+ * audio e nos dois pinos dele, e o LED verde deve vir daqui (v150). O estado fica no TELA_APRS: a pilha do laco esta no limite. */
 NOS_SONS static unsigned rx_portadora(void)
 {
     unsigned k = !SQL_NIVEL || REG_R(0x0C) >> 1 & 1;
 
     if (k != TELA_APRS >> 7) {
         TELA_APRS ^= 128;
-        LED_RX(BANDA_LED, k);
+        PEDE_AMPLI(6 - k);             /* 5 pede, 6 solta; com o SQL em OFF ele ja estava pedido */
+        AMPLI(k);
     }
     return k;
 }
@@ -1469,6 +1469,32 @@ static unsigned volta_fim(void)
     return f;
 }
 
+/* O PF3 LONG e a lanterna de tela (v152). A fabrica manda o codigo longo a 1 s de tecla, e a leitura o toma antes, na 98a
+ * volta. O byte e o quarto dos PF (0x14BDA, que a partida aceita ate 8 e a fabrica nao usa): 0 o MO, 8 a lanterna, e acesa o
+ * bit 7 e, nos bits 6:4, o BRIGHTNESS de antes. Ela e um estado, e nao um laco: o laco do sinal segue, e o PTT transmite. */
+#define PF3_LONGO     RAM(u8, 0x00014BDA)
+#define LANTERNA_PF   8u
+static void lanterna(unsigned liga);
+
+/* Devolve 1 se a tecla foi dela: a fabrica nao ve nada. */
+__attribute__((noinline)) NO_FIM static unsigned lanterna_tecla(unsigned k)
+{
+    if (PF3_LONGO >> 7) {                  /* acesa: so o PTT, que nao passa por aqui, e a saida */
+        LUZ_ABR();                         /* o tempo da luz nao corre */
+        if (k == TECLA_EXIT || k == TECLA_PF3) {
+            lanterna(0);
+            TECLA_PRESA = 5;
+        }
+        return 1;
+    }
+    if (k != TECLA_PF3 || CONTA_TECLA < 98 || PF3_LONGO != LANTERNA_PF || MODO_TELA)
+        return 0;
+    lanterna(1);
+    RAM(u8, 0x00007030) = 255;             /* a fabrica nao ve a tecla soltar, nem o toque curto */
+    TECLA_PRESA = 5;
+    return 1;
+}
+
 unsigned gancho_teclas(void)
 {
     unsigned k = TECLAS(), t = TELA_APRS, j = INJETA, editor = MENU_TIPO == 7 && MENU_EDITANDO == 1;
@@ -1481,6 +1507,8 @@ unsigned gancho_teclas(void)
         TECLA_PRESA = 5;
         k = 255;
     }
+    if (lanterna_tecla(k))
+        return 255;
     if ((t & CAIXA) && !editor) {          /* a caixa fechou pelo EXIT (o OK ja pos a volta): sintoniza de */
         TELA_APRS = t = (t & (FILTRO_OFF | TELA_MORSE)) | VOLTA;   /* novo, como o OK de fabrica (0x01E49A86) */
         ESTADO_RX = 0;
@@ -1519,7 +1547,7 @@ static unsigned para(void)
 /* O inicio da TX como o da ida do PTT (0x01E43F3E: acorda, acende a luz e inicia), e a ida de fabrica
  * por ultimo, como salto: com o PTT solto ela nao faz nada depois do nosso inicio. So o rets no quadro,
  * como na ida de fabrica: o caminho mais fundo continua o de fabrica. */
-__attribute__((noinline)) static void inicia_tx(void)
+__attribute__((noinline)) NOS_MORTOS(7) static void inicia_tx(void)
 {
     ACORDA();
     LUZ_ABR();
@@ -1664,6 +1692,43 @@ static void manda_aprs(u32 ack)
 #define ENVIANDO     33u
 void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas);
 
+#ifndef TESTE_RX
+void luz_aplica(void);
+FIRMWARE(TELA_TODA, 0x01E44812);    void TELA_TODA(void);
+#define BRILHO        RAM(u8, 0x00014BE5)
+/* Acesa, a tela branca e o brilho no maximo; o bit 7 entra por ultimo, porque e ele que corta o LCD (b_envia). */
+__attribute__((noinline)) NOS_MORTOS(2) static void lanterna(unsigned liga)
+{
+    if (liga) {
+        PF3_LONGO = LANTERNA_PF | (BRILHO & 7u) << 4;
+        BRILHO = 0;
+        luz_aplica();
+        tela_aprs(0, 0, ENVIANDO | 128, 0, 15);
+        PF3_LONGO |= 128;
+    } else {
+        BRILHO = PF3_LONGO >> 4 & 7u;
+        PF3_LONGO = LANTERNA_PF;
+        luz_aplica();
+        TELA_TODA();
+    }
+}
+#else
+static void lanterna(unsigned liga) { (void)liga; }
+#endif
+
+const char titulo_pf3_longo[] = "PF3 LONG";
+const char *const pf3_longo_opcoes[2] = {"MONITOR", "FLASHLIGHT"};
+
+u16 pf3_longo_le(void)
+{
+    return PF3_LONGO >> 3;
+}
+
+void pf3_longo_grava(void)
+{
+    PF3_LONGO = VALOR * LANTERNA_PF;
+}
+
 /* No lugar do roger, no fim da TX que o gancho_ida_ptt ligou, e o fim de fabrica com o roger zerado - que
  * nao grava nada. O Morse usa o gerador de tom: o mesmo preparo e o mesmo desligar do roger BEEP
  * (0x01E44622..0x01E44634 e 0x01E44656..0x01E4466A), com o tom 2 desligado (reg 0x70: so o tom 1, com o
@@ -1730,7 +1795,7 @@ const char titulo_morse_tom[] = "TONE";
 
 /* A caixa da tela do Morse (v144): abre com o ultimo texto, e o OK o guarda e arma o envio. Separada do set: o registro
  * sai da pilha antes do laco. */
-__attribute__((noinline)) NO_FIM static void morse_caixa_abre(void)
+__attribute__((noinline)) NOS_MORTOS(1) static void morse_caixa_abre(void)
 {
     struct morse m;
 
@@ -1738,7 +1803,7 @@ __attribute__((noinline)) NO_FIM static void morse_caixa_abre(void)
     editor_abre(m.texto, m.tam, MAX_MSG);
 }
 
-__attribute__((noinline)) NO_FIM static void morse_caixa_grava(void)
+__attribute__((noinline)) NOS_MORTOS(1) static void morse_caixa_grava(void)
 {
     struct morse m;
 
@@ -1758,13 +1823,21 @@ u16 morse_wpm_le(void)
     return (m.wpm >= 5 && m.wpm <= 40 ? m.wpm : 15) - 5;
 }
 
-void morse_wpm_grava(void)
+static void morse_poe(unsigned tom, unsigned v)
 {
     struct morse m;
 
     le_morse(&m);
-    m.wpm = VALOR <= 35 ? VALOR + 5 : 15;
+    if (tom)
+        m.tom = v;
+    else
+        m.wpm = v;
     grava_morse(&m);
+}
+
+void morse_wpm_grava(void)
+{
+    morse_poe(0, VALOR <= 35 ? VALOR + 5 : 15);
 }
 
 char *morse_wpm_exibe(void)
@@ -1783,11 +1856,7 @@ u16 morse_tom_le(void)
 
 void morse_tom_grava(void)
 {
-    struct morse m;
-
-    le_morse(&m);
-    m.tom = VALOR <= 16 ? 40 + VALOR * 5 : 70;
-    grava_morse(&m);
+    morse_poe(1, VALOR <= 16 ? 40 + VALOR * 5 : 70);
 }
 
 char *morse_tom_exibe(void)
@@ -1819,7 +1888,7 @@ static char *aprs_campo(struct aprs *a, unsigned qual, u8 **tam, unsigned *max)
     return qual == 0 ? a->ind : qual == 1 ? a->dest : a->msg;
 }
 
-static void aprs_texto_le(unsigned qual)
+NOS_MORTOS(4) static void aprs_texto_le(unsigned qual)
 {
     struct aprs a;
     unsigned max;
@@ -2570,7 +2639,7 @@ void aprs_decode_grava(void)
 const char titulo_modem_ganho[] = "MODEM GAIN";
 const char *const modem_ganho_opcoes[4] = {"OFF", "LOW", "MID", "HIGH"};   /* MID como os outros (v82) */
 
-static unsigned ganho_modem(void)
+NOS_MORTOS(6) static unsigned ganho_modem(void)
 {
     return (GANHO_MODEM & 0xFC) == GANHO_MARCA ? GANHO_MODEM & 3 : 3;
 }
@@ -3093,6 +3162,8 @@ void aprs_rx_grava(void)
         }
     }
     RX_FECHA();
+    TELA_APRS &= 127;                      /* o estado do amplificador, do rx_portadora */
+    TEMPO_MENU();                          /* v150: o tempo do menu corre com a tela aberta: zerado, o menu fecharia ja, e a caixa junto */
     if (TELA_APRS == CAIXA_TO)             /* o # ainda apertado: a caixa abre ja, e a fabrica nao o ve */
         TECLA_PRESA = 5;
     else
