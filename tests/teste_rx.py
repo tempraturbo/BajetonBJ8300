@@ -221,6 +221,13 @@ s = roda(ar_com((1.0, transmissao([quadro('PU2EEE-5', '>novo')]))), sai_em(3.0),
 confere('5. com o 0xD7000 ocupado por outra coisa, nada e gravado nele nem no 0xD6000',
         (s['H'], s['flash'][0x7000:0x7004], s['flash'][0x6000:0x6004]), (-1, b'XYZW', b'\xff' * 4))
 
+# 5. no Morse (v147) a faixa e livre: o resto de um diagnostico antigo sai, e o historico recomeca
+outro = bytearray(b'\xff' * 0x10000)
+outro[0x8000:0x8004] = outro[0x9000:0x9004] = b'RAW1'
+s = roda(ar_com(), sai_em(1.0), flash_antes=bytes(outro), nome='alheio_morse', tela=16)
+confere('5. no Morse, o setor com outra coisa e apagado e recebe o cabecalho',
+        (s['flash'][0x8000:0x8004], s['flash'][0x9000:0x9004]), (b'HST3', b'\xff' * 4))
+
 # 5. entre partidas (v138): a hora e o ms desde a partida, entao o mesmo pacote 2 s depois da hora gravada, em outra
 # partida, parece a copia de 2 s atras; ele entra, uma vez, e dentro da mesma partida a copia nao entra
 igual = transmissao([quadro('PU2FFF-5', '>igual')])

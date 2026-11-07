@@ -5,6 +5,26 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v144 a v148 — 06 e 07/11 — a tela MESSAGES do Morse (gravada e aprovada)
+
+A pasta MORSE passa a **MESSAGES, SPEED e TONE**. O MESSAGES abre a tela do APRS, sem CALLSIGN, TO, FILTER e P: lê o Morse que
+chega, guarda as mensagens e, no `#`, abre a caixa SEND, com a mensagem e o envio, que eram itens. O UV-17L tem a mesma tela.
+[Seção 36](engenharia-reversa.md#36-a-tela-messages-do-morse-v144-a-v148).
+
+- **v144:** a tela, o histórico em `0xD8000` e `0xD9000`, a área nova `.sons` (472 B) e o envio com 0,3 s de portadora muda, o KA
+  e o AR. O dono achou o OK da caixa reiniciando o rádio, o número do WPM errado e nada lido.
+- **v145:** o reinício saiu. Com o `MENU_TIPO` em 7 fora da edição, o motor do menu chamava uma tabela de dados como função.
+- **v145d e v146d (diagnóstico):** a medida do `0x6F` na tela, e depois a captura de 49 s, em dois setores de `0xDA000` a `0xDDFFF`,
+  mostraram que este rádio não se porta como o UV: o tom é um ciclo que passa de 127 e dá a volta.
+- **v146:** a regra daqui, com as duas capturas no teste. O envio do BJ já era lido pelo UV, mas o BJ seguia sem mostrar nada.
+- **v147d (diagnóstico) e v147:** a captura do laço real, com o alto-falante aberto e fechado, leu `KA ABC DEF AR` nas duas. A
+  perda era depois da leitura: as capturas `RAW1` da v92 ainda ocupavam os setores do histórico, e ele recusava gravar. O do Morse
+  agora apaga o que não é dele. O do APRS segue recusando.
+- **v148:** a tela fica calada, com ou sem sinal, e só se ouve com o SQUELCH em OFF, a pedido do dono.
+
+Nenhuma delas vai para `firmware/releases/`: a V3.6T segue a estável. O build deste commit é o que foi gravado e aprovado, sha256
+`d9ea35d3…`. A prova no ar é a 15 WPM e 700 Hz, e a captura de 700 Hz é a única medida: outros valores de SPEED e TONE podem ler pior.
+
 ## V3.6T — 06/11 — o CH MEMORY, os BANKS refeitos, os nomes claros e o TRIPLE WATCH
 
 A v143 virou a **V3.6T**, a pedido do dono: `firmware/releases/BJ8300_BANK_v3.6T.anc` (sha256 `4d696529…`), a v142 aprovada

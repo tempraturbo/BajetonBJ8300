@@ -83,7 +83,7 @@ em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes 
 | 8 DTMF | DTMF CODE, DTMF DELAY, DTMF GROUP, DTMF SIDETONE |
 | 9 KEYS | AUTOLOCK, KEY BEEP, PF2, PF2 LONG, PF3 |
 | 10 MIC | COMPRESSOR, EQ BASS, EQ TREBLE, MIC AGC, MIC GAIN, NOISE REDUCTION |
-| 11 MORSE | MESSAGE, SEND, SPEED, TONE |
+| 11 MORSE | MESSAGE, SEND, SPEED, TONE (depois da V3.6T: MESSAGES, SPEED, TONE) |
 | 12 REPEATER | OFFSET, RPT TAIL CUT, RPT TAIL DELAY, TONE BURST, TX SHIFT |
 | 13 SCAN | SCAN ADD, SCAN RESUME |
 | 14 SYSTEM | ALARM MODE, BATTERY SAVE, BLUETOOTH, RESET, VERSION |
@@ -105,7 +105,8 @@ em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes 
 - **NOISE GATE:** corta o áudio abaixo de um nível (OFF, LOW, DEFAULT, MID, HIGH, do que menos corta ao que
   mais corta). DEFAULT é o de fábrica.
 - **DE-EMPHASIS:** ON é o de fábrica; OFF deixa o áudio de FM bem mais agudo.
-- **MORSE:** a mensagem (até 37 caracteres), a velocidade (5 a 40 wpm) e o tom (400 a 1200 Hz); o SEND toca.
+- **MORSE:** a mensagem (até 37 caracteres), a velocidade (5 a 40 wpm) e o tom (400 a 1200 Hz); o SEND toca. Depois da
+  V3.6T, o MESSAGES lê o Morse que chega, e o `#` dele abre a caixa da mensagem.
 - **CALIBRATION:** o LIGHT PWM (a frequência do PWM que escurece a luz, para fugir da interferência), o
   MODEM GAIN (o ganho do modem que a tela MESSAGES usa) e, desde a V3.2T, o RX GAIN (o ganho do receptor).
 
@@ -198,6 +199,7 @@ desenho que vai para o rádio.
 | 📁 **Menu em pastas**<ul><li>Os itens do menu ficam em **17 pastas** por assunto, em ordem alfabética, numa janela âmbar.</li><li>A janela mostra os itens de cada pasta e, dentro dela, o valor do item do cursor, com rolagem quando a lista não cabe.</li><li>**OK** no item já abre a edição, e gravar ou cancelar volta para a pasta.</li><li>O menu do rádio (FM/AM/SSB) usa a mesma janela ([veja acima](#-menu-novo-tudo-em-pastas)).</li></ul> | <img src="docs/imagens/tela-menu-pastas.png" alt="Menu em pastas" width="300"> |
 | 📨 **APRS**<ul><li>Pasta nova **APRS (SMS)**: CALLSIGN, SSID, PATH (WIDE1-1, WIDE1-1,WIDE2-1 ou nenhum), TO, DECODE e a tela **MESSAGES**, onde as mensagens chegam e de onde saem ([veja acima](#-a-tela-messages-do-aprs-na-v32t)).</li><li>**Envio:** o **#** abre a caixa da mensagem (até 37 caracteres), e o OK a manda ao TO (vazio, um status) em AX.25. O **# segurado** abre a caixa do TO. Depois do envio, a tela volta sozinha.</li><li>Sem **CALLSIGN** gravado, o **#** pede o indicativo antes, e nada vai ao ar sem pacote.</li><li>O AFSK de 1200 bps é gerado no rádio e posto na entrada do microfone, como um TNC de placa de som: o APRSdroid e os TNCs leem.</li><li>**FILTER:** a tela abre com FM, o filtro largo, sem scramble nem compressor, os graves em −3 dB, os agudos em +4 dB e o SAVE desligado. A tecla 0 o desliga para comparar, e tudo volta ao do menu ao sair.</li><li>**Recepção:** a mensagem, a posição, o tempo, os objetos e o Mic-E decodificados (ou como vieram, com o DECODE em OFF), o ack do que chega para o seu indicativo, o histórico e a conta dos syncs (P).</li><li>A recepção usa o modem do chip de rádio, que só acerta o pacote que chega sem erro: pega menos que um TNC.</li></ul> | <img src="docs/imagens/tela-aprs-caixa-mensagem.png" alt="A tela MESSAGES com a caixa da mensagem" width="300"> |
 | 📻 **Morse**<ul><li>Pasta nova **MORSE**: MESSAGE (até 37 caracteres), SEND, SPEED (5 a 40 wpm) e TONE (400 a 1200 Hz).</li><li>Sai em FM pelo gerador de tom, como o roger; o PTT ou qualquer tecla param no meio.</li><li>O editor de texto das mensagens vai a 37 caracteres, em duas linhas quando não cabe numa.</li></ul> | <img src="docs/imagens/tela-morse.png" alt="MORSE SPEED" width="300"> |
+| 📻 **Tela MESSAGES do Morse**, depois da V3.6T, ainda sem release<ul><li>A pasta passa a **MESSAGES**, **SPEED** e **TONE**: o MESSAGES lê o Morse que chega e guarda as mensagens, como o do APRS.</li><li>O **#** abre a caixa da mensagem. O envio leva 0,3 s de portadora muda, para o squelch de quem recebe abrir, e o KA no começo e o AR no fim.</li><li>A tela é calada, com ou sem sinal; com o SQUELCH em OFF, ouve-se tudo.</li><li>Lê o que o UV-17L manda: provado no ar a 15 wpm e 700 Hz.</li></ul> | <img src="docs/imagens/tela-morse-messages.png" alt="MORSE MESSAGES" width="300"> |
 | 🎚️ **EQ**<ul><li>**EQ BASS** e **EQ TREBLE** na pasta AUDIO (o que se ouve) e na MIC (o que se transmite).</li><li>Graves de −3 a +4 dB e agudos de −1 a +4 dB, pelo equalizador do próprio chip de rádio.</li><li>DEFAULT é o de fábrica. O CHIRP também os ajusta.</li></ul> | <img src="docs/imagens/tela-eq.png" alt="EQ BASS" width="300"> |
 | 📶 **Barra S**<ul><li>O medidor de cada lado virou uma barra S de **24 segmentos**: 2 por S do S1 ao S9 e 1 por 10 dB acima, até S9+60.</li><li>O S escrito ao lado: verde até o S3, amarelo até o S8 e vermelho do S9 para cima.</li><li>O S1 começa no chiado de cada faixa, pela calibração de fábrica, e a leitura é 4 vezes por segundo.</li><li>No SINGLE, no DUAL (também no lado compacto) e no TRIPLE (na faixa de quem recebe, no lugar do canal).</li><li>Transmitindo, mostra o nível do microfone, com MIC.</li></ul> | <img src="docs/imagens/tela-barra-s.png" alt="Barra S" width="300"> |
 | 🔊 **Pasta AUDIO**<ul><li>**EXPANDER** (OFF, LOW, MID, HIGH): o expansor do áudio recebido, que o chip tem e a fábrica deixava desligado.</li><li>**NOISE GATE** (OFF, LOW, DEFAULT, MID, HIGH): corta o áudio abaixo de um nível; DEFAULT é o de fábrica.</li><li>**DE-EMPHASIS**: ON, a de fábrica, ou OFF.</li><li>Com o SQUELCH, o TAIL CUT e o EQ.</li></ul> | <img src="docs/imagens/tela-audio.png" alt="Pasta AUDIO" width="300"> |
@@ -615,7 +617,8 @@ variável `JL_TOOLCHAIN` para ela.
 **Opcionais:**
 
 - **Prévia da tela no PC** (abaixo): `pip install ziglang`.
-- **Teste do Morse e do APRS** (o pacote, o AFSK e o decodificador, no PC): `python -I tests/teste_mensagem.py`,
+- **Teste do Morse e do APRS** (o pacote, o AFSK, o decodificador e a leitura do Morse nas capturas do rádio, no PC):
+  `python -I tests/teste_mensagem.py`,
   com o mesmo zig; e o laço da recepção do APRS inteiro, com o modem, a flash e as teclas imitados:
   `python -I tests/teste_rx.py`.
 - **Testes do driver do CHIRP:** `python -I tests/teste_bj8300.py` não precisa de nada;

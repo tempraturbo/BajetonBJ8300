@@ -82,6 +82,7 @@ by looking for where content starts mirroring address 0:
 | **`0xD4000–0xD4FFF`** | **the Morse message**, speed and tone (v65; [section 24](#24-morse-and-aprs-v65)) |
 | **`0xD5000–0xD5FFF`** | **APRS**: callsign, SSID, addressee, message and path (v65) |
 | **`0xD6000–0xD7FFF`** | **the APRS RX history**: up to 62 packets, as a ring, one header per sector (v70; `0xD7000` since v74; the ring since v75) |
+| **`0xD8000–0xD9FFF`** | **the Morse history**: the same ring ([section 36](#36-the-morse-messages-screen-v144-to-v148)) |
 | `0xFA000` | 4 KB used by the firmware |
 | free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -3017,3 +3018,53 @@ A folder has no text of its own: its name is the key in `montar.py`'s `GRUPOS`, 
 became the key in `MENU_MARCAS`, in `conferir.py` and in the preview. The vector grew to 536 B in v143 (it was 528), a multiple of
 4 because the pointer lists it holds stay aligned, and 34 B remain in `.livre`. The folder keeps its place, because `APRS (SMS)`
 still sorts before `AUDIO`.
+
+## 36. The Morse MESSAGES screen (v144 to v148)
+
+The MORSE folder has **MESSAGES, SPEED and TONE**. MESSAGES opens the same screen as APRS, without CALLSIGN, TO, FILTER and P: what
+arrives goes into a list, and `#` opens the message box, titled SEND, with the speed in the footer. The message and SEND, which used to
+be items, live in that box. `aprs_rx_grava` is the same loop: the `MORSE` bit of `modo` picks the path, and the frame's `q` holds the
+reader's state.
+
+**Sending.** 0.3 s of silent carrier, so the receiver's squelch opens (it takes ~0.2 s, measured on the UV-17L), KA, the text and AR.
+
+**Reading.** Received audio does not reach the processor (v96), and what is left is the BK4819's `0x6F`. Measured in v146d, 49 s every
+6 ms, with the UV sending `ABC DEF` at 15 WPM:
+
+| On the air | `0x6F` |
+|---|---|
+| silent carrier | 12 to 42 |
+| 700 Hz tone | a 5-sample cycle, `18 13 3 20 117`, which looks like the meter passing 127 and wrapping around |
+| after the tone | falls from ~112 to ~23 in ~100 ms |
+| noise, no carrier | 0 to 126 |
+
+On the UV-17L the tone sits at ~87, and that rule does not work here. On this radio a sample of 11 or less, which a silent carrier never
+gives, or of 100 or more is tone, and the tone lasts 42 ms past the last such sample. It only counts with the squelch open: bit 1 of
+`0x0C` tracks the squelch with the AGC free (the v130 note applies to the APRS mode), and with no carrier it counts as silence. Tone and
+pause become dot, dash and end of letter through the unit, which starts at SPEED and moves a quarter of what each element asks. The
+number next to WPM is that unit: it starts at SPEED and, alone, does not prove the reading is right.
+
+KA opens the message, and AR after it closes the message at once; without KA, it is `+`. Without KA, a message only counts with 3 or
+more letters and 2 per word on average: speech also crosses the limit, but comes out as loose letters. The screen moves word by word,
+when there is time before the next tone. Every message enters the history, even a repeated one: the 30 s copy filter is APRS only.
+
+**The reboot on OK (v145).** With `MENU_TIPO` at 7 outside editing, the menu engine calls the item's `+0x13` (`exibe`) as a function, at
+`0x01E48DE6`, and the MESSAGES item has a data table there. The box clears `MENU_TIPO` on OK and on cancel.
+
+**Why nothing showed up (v147).** v147d recorded the screen's real loop: `0x6F`, the squelch and the clock of each step, with the speaker
+open (key 0) and closed (key `*`), and the reader's state at the end. The step was 6 ms on all 3967 turns, both captures read
+`KA ABC DEF AR` on the PC, and the text was in the radio's memory. The loss came afterwards: sectors `0xD8000` and `0xD9000` still held
+the `RAW1` captures from v92, `hist_abre` accepts no sector that is neither erased nor its own, and with `hist` at -1 `hist_grava`
+writes nothing. The Morse history now erases what is not its own and starts over, because the range is free in the section 3 map. The
+APRS one still refuses.
+
+**The speaker (v148).** The screen is silent, with or without a signal: the factory loop, which would open it, does not run here, and
+entering closes it with SQUELCH on. With OFF it stays as it was, open. Both v147d captures read the same, so this does not change the
+reading.
+
+**Space.** `.sons` is entries 0..117 of the path table (`0x01E5E8FC..0x01E5EAD4`, 472 B), which the queue has not read since the patch at
+`0x01E40628`: only the read at `0x01E40636` points to the range, and it adds indexes from 118 up. `.fim` goes in front of `.text`, in
+the area at the end of the image, and the box lives there.
+
+The on-air proof is at 15 WPM and 700 Hz, and the captures all use those values. The measured tone depends on how many cycles fit in
+6 ms, and another TONE may land on a bad phase: 500, 750 and 1000 Hz are the most worrying.

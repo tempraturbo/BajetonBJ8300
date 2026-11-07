@@ -371,7 +371,7 @@ SEPARADA static void menu_cena(const struct menu_b *m)
             x1 = etiqueta(156, TOPO_MENU + 3, modos_editor[EDITOR_MODO - 1], COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 1) - 3;
         if (CAIXA_APRS) {                  /* a caixa da tela MESSAGES (v112): o titulo dela, sem o numero */
             /* v138: sem indicativo, o # abre antes o CALLSIGN (o item 0 da pasta APRS) */
-            junta(s, CAIXA_APRS != 1 ? "TO" : MENU_NUMERO ? "MESSAGE TO SEND" : "CALLSIGN");
+            junta(s, TELA_APRS & 16 ? "SEND" : CAIXA_APRS != 1 ? "TO" : MENU_NUMERO ? "MESSAGE TO SEND" : "CALLSIGN");
         } else {
             if (m->nivel == FORA)
                 numero(s, m->numero, 2);
@@ -1119,6 +1119,20 @@ static void esp_limite(unsigned x0, unsigned x1, unsigned y)
 /* O texto do registro de a (0 = nenhum) de y para baixo, em ate n linhas de 24 quebrando num espaco, em
  * ambar se e mensagem para o meu indicativo. Se nao couber, a etiqueta MORE vai embaixo da ultima linha
  * (v111; ate a v110, ao lado, com a linha cortada para ela caber), e o OK abre. */
+#ifdef PREVIA
+#define NO_CHIP(a)  1                      /* a previa imita o chip em 0x8000 */
+#else
+#define NO_CHIP(a)  ((a) >= 0xC0000)
+#endif
+SEPARADA static void le_linha(u32 a, char *s, unsigned n)
+{
+    if (NO_CHIP(a))
+        LE_FLASH(a, s, n);
+    else                                   /* o Morse chegando, na RAM (v144) */
+        while (n--)
+            *s++ = *(const char *)(__SIZE_TYPE__)a++;
+}
+
 SEPARADA static void aprs_linhas(u32 a, unsigned y, unsigned n)
 {
     char s[26];
@@ -1126,12 +1140,12 @@ SEPARADA static void aprs_linhas(u32 a, unsigned y, unsigned n)
 
     if (!a)
         return;
-    LE_FLASH(a, s, 2);
+    le_linha(a, s, 2);
     if ((u8)s[0] != 0x5A)                  /* sem o "usado": gravado pela metade (v75), fica em branco */
         return;
     cor = s[1] ? COR_TEXTO_AMBAR : COR_TEXTO;
     for (a += 2; n--; y += 12) {
-        LE_FLASH(a, s, 25);
+        le_linha(a, s, 25);
         for (k = 0; k < 25 && s[k]; k++)
             ;
         if (!k)
@@ -1154,13 +1168,15 @@ SEPARADA static void aprs_linhas(u32 a, unsigned y, unsigned n)
     }
 }
 
-SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
+SEPARADA static void aprs_cena(u32 a0, unsigned aberto, const u16 *num)
 {
     /* as teclas do rodape e o que cada uma faz, em pares, uma cadeia so (v114: sem os dois vetores) */
     static const char RODAPE[] = "#\0MSG\0HOLD #\0TO\0" "0\0FLT\0OK\0OPEN\0*\0OFF\0HOLD EXIT\0CLR";
     char s[14];                            /* o nome do canal (12) ou "65535/65535", e o 0 */
     const char *r = RODAPE;
-    unsigned i = LADO_B != 0, x;
+    unsigned i = LADO_B != 0, x, morse = aberto & 64;   /* v144: a tela lendo Morse, sem o FILTER, o P, o TO e o 0 */
+
+    aberto &= 1;
 
     if (NA_JANELA(0, 18)) {
         pinta(0, 0, 160, 17, COR_ESTADO);
@@ -1173,10 +1189,10 @@ SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
         else
             texto_canal(s, CANAL(i) + 1);
         i = etiqueta(4, 3, s, COR_CHIP_AMBAR, COR_TEXTO_AMBAR, 0);
-        if (num[0])                        /* a tecla 0 desligou o FILTER (v111): o canal e os menus */
+        if (num[0] && !morse)              /* a tecla 0 desligou o FILTER (v111): o canal e os menus */
             etiqueta(i, 3, "FILTER", COR_ESTADO, COR_CINZA, 0);   /* apagado: sem o fundo do selo */
         else                               /* ligado (v103, filtro_rx) */
-            etiqueta(i, 3, "FILTER", COR_CHIP_RX, COR_TEXTO_RX, 0);
+            etiqueta(i, 3, morse ? "MORSE" : "FILTER", COR_CHIP_RX, COR_TEXTO_RX, 0);
         if (num[2]) {
             numero(junta(numero(s, num[1], 1), "/"), num[2], 1);
             texto(156 - largura(s, 1), 5, s, 1, COR_CINZA);
@@ -1186,13 +1202,6 @@ SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
     if (a0)                                /* o de cima e o da posicao no alto: num fundo verde, que se ve
                                             * bem no LCD (v74); aberto, a area toda */
         pinta(3, 20, 157, aberto ? 102 : 56, COR_CHIP_RX);
-    if (aberto) {
-        aprs_linhas(a0, 22, 6);            /* 2 px acima: o MORE da 6a linha cabe antes do rodape (v111) */
-    } else {
-        aprs_linhas(a0, 24, 2);
-        pinta(4, 59, 156, 60, COR_LINHA);
-        aprs_linhas(a1, 68, 2);
-    }
     if (NA_JANELA(102, 128)) {
         /* o rodape num fundo proprio (v75; o da barra de cima, na v74, saiu quase preto): em cima o P e as
          * teclas da caixa e do FILTER (v112), embaixo as outras, em etiquetas, com o que cada uma faz */
@@ -1200,13 +1209,18 @@ SEPARADA static void aprs_cena(u32 a0, u32 a1, unsigned aberto, const u16 *num)
         pinta(0, 103, 160, 128, COR_SEG_FUNDO);
         pinta(0, 115, 160, 116, COR_LINHA);
         numero(s, num[3] + num[4], 1);
-        x = texto(texto(4, 106, "P", 1, COR_CINZA) + 4, 106, s, 1, COR_TEXTO) + 3;
+        x = texto(texto(4, 106, morse ? "WPM" : "P", 1, COR_CINZA) + 4, 106, s, 1, COR_TEXTO) + 3;
         pinta(x, 103, x + 1, 115, COR_LINHA);
         for (i = 0, x += 4; i < 6; i++) {
             unsigned y = i < 3 ? 104 : 117, c;
 
             if (i == 3)
                 x = 3;
+            if (morse && i == 1) {         /* o HOLD # e o 0 ficam de fora */
+                r += 16;
+                i++;
+                continue;
+            }
             c = etiqueta(x, y, r, COR_ESTADO, COR_TEXTO, 0);
             if (*r == 'H')                 /* segurada: o HOLD apagado no mesmo quadrado (a fonte nao tem
                                             * minusculas) */
@@ -1229,7 +1243,14 @@ void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas)
     for (y = 0; y < 128; y += 32)
         if (faixas >> (y >> 5) & 1) {
             janela_b(0, 160, y, y + 32, COR_FUNDO);
-            aprs_cena(a0, a1, aberto, num);
+            aprs_cena(a0, aberto, num);
+            if (aberto & 1) {              /* o texto daqui, nao do aprs_cena: um quadro a menos na pilha (v144) */
+                aprs_linhas(a0, 22, 6);    /* 2 px acima: o MORE da 6a linha cabe antes do rodape (v111) */
+            } else {
+                aprs_linhas(a0, 24, 2);
+                pinta(4, 59, 156, 60, COR_LINHA);
+                aprs_linhas(a1, 68, 2);
+            }
             ENVIA();
         }
 }

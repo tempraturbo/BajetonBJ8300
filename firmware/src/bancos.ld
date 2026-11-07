@@ -54,11 +54,13 @@ MEMORY
     vozes (rx) : ORIGIN = 0x01E797A0, LENGTH = 0x1BF50
     caminhos (rx) : ORIGIN = 0x01E5AB60, LENGTH = 2944
     reserva (rx) : ORIGIN = 0x01E62F98, LENGTH = 1512   /* a tabela de menu de fabrica, morta desde a v43 (v140) */
+    sons (rx) : ORIGIN = 0x01E5E8FC, LENGTH = 472      /* as entradas 0..117 da tabela de caminhos, mortas (v144) */
 }
 
 SECTIONS
 {
     .text : {
+        *(.fim*)
         *(EXCLUDE_FILE(*tela.o *mensagem.o) .text*)
         *(EXCLUDE_FILE(*tela.o *mensagem.o) .rodata*)
     } > novo
@@ -80,6 +82,9 @@ SECTIONS
     .reserva : {
         *(.reserva*)
     } > reserva
+    .sons : {
+        *(.sons*)
+    } > sons
 
     /DISCARD/ : { *(.comment) *(.note*) *(.debug*) }
 }

@@ -124,13 +124,17 @@ CAMINHOS, CAMINHOS_FIM = 0x01E5AB60, 0x01E5B6E0
 # PONTEIRO_EM, que passou ao menu_abre. O .reserva segue as regras do .caminhos, e o conferir.py refaz a varredura nela
 # (2j). O montar le a tabela para os moldes antes de gravar por cima.
 RESERVA, RESERVA_FIM = 0x01E62F98, 0x01E63580
+# A tabela de caminhos (v144): so o 0x01E40634 a le, e o remendo 0x01E40628 tira da fila todo numero de voz, entao as
+# entradas 0..117 nunca sao lidas: 472 B com as regras do .caminhos. O unico valor que aponta para a faixa e o da leitura
+# (TABELA_SONS_BASE, o imediato em 0x01E40636), que so soma indice de 118 em diante. As entradas 118 a 125, os bipes, ficam.
+SONS, SONS_FIM = 0x01E5E8FC, 0x01E5EAD4
+TABELA_SONS_BASE = 0x01E40636
 CAMINHOS_SHA256 = '8080d5e5e38c725b194295fa99e78806369f0dbda4ed50024e4568bba5fc3934'
 CAMINHOS_REMENDOS = ((0x01E60B58, bytes.fromhex('25ace501'), bytes.fromhex('f8b6e501'),
                       'editor 123: o "*" da tecla * no caminho do B0, fora da faixa'),)
 # Os valores de fora que caem na faixa e estao mortos (inicio, fim, o que e): o conferir.py exige os bytes de
 # fabrica e os remendos das vozes que os matam.
-CAMINHOS_MORTOS = ((0x01E5E8FC, 0x01E5EAD4, 'entradas 0..117 da tabela de caminhos, que a fila nao le mais'),
-                   (0x01E55AD0, 0x01E55AD6, 'o caminho do C16 no main, no trecho que o remendo pula'))
+CAMINHOS_MORTOS = ((0x01E55AD0, 0x01E55AD6, 'o caminho do C16 no main, no trecho que o remendo pula'),)
 
 # A tela principal B (v35, src/tela.c): treze rotinas de fabrica que desenham a tela de dois VFOs
 # ganham um desvio de 4 bytes na entrada (goto para o desvio_* do tela.c, na faixa .livre). O
@@ -332,9 +336,9 @@ PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 # devolve a tabela e, se o menu foi fechado de dentro de um grupo, poe o grupo em [+6], que a entrada
 # le logo depois (0x01E4CBCA). Na chamada, r1..r3 estao mortos (escritos antes de lidos depois dela)
 # e o r4 (0, lido em 0x01E4CBC6) a chamada preserva.
-MENU_VAGAS = 96                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ; v112: 95; v113: 96
+MENU_VAGAS = 95                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ; v112: 95; v113: 96; v144: 95
 TABELA_SIMBOLO = 'menu_tabela'
-TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 536   # v111: o que o menu usa (era 640); v143: 536; v140: 528; v112: 520; v113: 524; item novo pede mais
+TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 532   # v111: o que o menu usa (era 640); v144: 532; v143: 536; v140: 528; v112: 520; v113: 524; item novo pede mais
 R5_R0 = bytes.fromhex('0516')
 
 # v53: os grupos do menu (src/telas.c), um nivel acima dos itens, a pedido do dono. Cada item fica em
@@ -807,10 +811,9 @@ PRECISA += ESPECTRO_B
 # editor (ABC) ganha o espaco primeiro e o - / = + @, que nenhuma tecla alcancava (o ponteiro dela na
 # tabela 0x01E60B60).
 ITENS_DEPOIS[ROGER_ITEM] = [
-    dict(nome='MORSE MESSAGE', texto='MESSAGE', molde=CH_NAME, flags=FLAGS_EDITOR, maximo=0, get='morse_msg_le',
-         set='morse_msg_grava', titulo='titulo_mensagem', exibe='morse_msg_exibe'),
-    dict(nome='MORSE SEND', texto='SEND', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le', set='morse_envia_grava',
-         titulo='titulo_envia', exibe='envia_opcoes', opcoes_cn='envia_opcoes'),
+    # v144: a tela de receber e mandar, a mesma do APRS; o MESSAGE e o SEND foram para a caixa dela
+    dict(nome='MORSE MESSAGES', texto='MESSAGES', molde=TDR_ITEM, flags=0, maximo=1, get='acao_le',
+         set='morse_rx_grava', titulo='titulo_aprs_rx', exibe='aprs_rx_opcoes', opcoes_cn='aprs_rx_opcoes'),
     dict(nome='MORSE SPEED', texto='SPEED', molde=ZONE, flags=FLAGS_NUMERO, maximo=36, get='morse_wpm_le',
          set='morse_wpm_grava', titulo='titulo_morse_wpm', exibe='morse_wpm_exibe'),
     dict(nome='MORSE TONE', texto='TONE', molde=ZONE, flags=FLAGS_NUMERO, maximo=17, get='morse_tom_le',
@@ -854,9 +857,9 @@ PRECISA += RX_GAIN
 LUZ_PWM = ('luz_pwm_le', 'luz_pwm_grava', 'titulo_luz_pwm', 'luz_pwm_opcoes')
 NA_LIVRE += LUZ_PWM
 PRECISA += LUZ_PWM
-GRUPOS['MORSE'] = ('MORSE MESSAGE', 'MORSE SEND', 'MORSE SPEED', 'MORSE TONE')
+GRUPOS['MORSE'] = ('MORSE MESSAGES', 'MORSE SPEED', 'MORSE TONE')
 GRUPOS['APRS (SMS)'] = ('APRS CALLSIGN', 'APRS DECODE', 'APRS MESSAGES', 'APRS PATH', 'APRS SSID', 'APRS TO')
-MENU_MARCAS.update({('MORSE', 'MORSE SEND'): MARCA_SEM_VALOR, ('APRS (SMS)', 'APRS MESSAGES'): MARCA_SEM_VALOR})
+MENU_MARCAS.update({('MORSE', 'MORSE MESSAGES'): MARCA_SEM_VALOR, ('APRS (SMS)', 'APRS MESSAGES'): MARCA_SEM_VALOR})
 CHAMADAS_LIVRE += ((0x01E46540, 0x01E43E8A, 'gancho_ida_ptt', 'Morse e APRS: o envio armado liga a TX'),
                    (0x01E46D8C, 0x01E44604, 'gancho_fim_tx', 'Morse e APRS: o conteudo no lugar do roger'),
                    (0x01E46CCE, 0x01E19DCC, 'texto15', 'editor: a copia do texto na piscada, ate 24'),
@@ -919,9 +922,8 @@ PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com
                    # em 0x01E41CEC (o valor nos 4 ultimos bytes, 0x01E41CEE); o gancho_mic poe o AFSK no lugar
                    # das amostras durante o envio e, fora dele, segue para o 0x01E41C06.
                    (0x01E41CEE, 0x01E41C06, 'gancho_mic', 'APRS pelo DAC: o bloco do microfone pelo gancho'))
-MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'gancho_mic', 'tecla_zero', 'acao_le', 'envia_opcoes',
-            'morse_msg_le', 'morse_msg_grava', 'morse_msg_exibe', 'titulo_mensagem', 'morse_envia_grava',
-            'titulo_envia', 'morse_wpm_le', 'morse_wpm_grava', 'morse_wpm_exibe', 'titulo_morse_wpm',
+MENSAGEM = ('texto15', 'gancho_teclas', 'gancho_ida_ptt', 'gancho_fim_tx', 'gancho_mic', 'tecla_zero', 'acao_le',
+            'morse_rx_grava', 'morse_wpm_le', 'morse_wpm_grava', 'morse_wpm_exibe', 'titulo_morse_wpm',
             'morse_tom_le', 'morse_tom_grava', 'morse_tom_exibe', 'titulo_morse_tom',
             'aprs_ind_le', 'aprs_ind_grava', 'aprs_ind_exibe', 'titulo_aprs_ind',
             'aprs_ssid_le', 'aprs_ssid_grava', 'aprs_ssid_exibe', 'titulo_aprs_ssid',
@@ -1241,6 +1243,7 @@ def main():
     vozes = secao_ligada(codigo, '.vozes', VOZES, VOZES_ACEITAS_FIM)
     caminhos = secao_ligada(codigo, '.caminhos', CAMINHOS, CAMINHOS_FIM)
     reserva = secao_ligada(codigo, '.reserva', RESERVA, RESERVA_FIM)
+    sons = secao_ligada(codigo, '.sons', SONS, SONS_FIM)
 
     # Monta a lista de escritas no app.bin e passa pela trava antes de tocar em qualquer byte.
     escritas = [(GANCHO_EM, 4, 'gancho do filtro na partida'), (SCAN_EM, 4, 'gancho do redesenho no scan')]
@@ -1262,6 +1265,7 @@ def main():
     escritas += [(s, 4, f'gancho do cabo ({p})') for s, p in CABO_SITIOS]
     escritas += [(CAMINHOS, len(caminhos), 'codigo novo no lugar dos caminhos das vozes')]
     escritas += [(RESERVA, len(reserva), 'codigo novo na tabela de menu de fabrica, morta')]
+    escritas += [(SONS, len(sons), 'codigo novo nas entradas mortas da tabela de caminhos')]
     escritas += [(s, len(a), f'caminhos: {d}') for s, a, _, d in CAMINHOS_REMENDOS]
     escritas += [(TABELA_RAPIDA_SAVE + CAMPO[c], 4, f'menu rapido do SAVE: {c}') for c, _ in RAPIDA_SAVE_CAMPOS]
     escritas += [(t_ + CAMPO[c], 4, f'menu rapido: o nome claro ({s_})') for t_, s_ in RAPIDA_NOMES for c in ('nome', 'nome_cn')]
@@ -1514,6 +1518,8 @@ def main():
     app[o:o + len(caminhos)] = caminhos
     app[RESERVA - BASE_APP:RESERVA - BASE_APP + len(reserva)] = reserva
     print(f'  .reserva: {len(reserva)} B em {RESERVA:#x} (cabem {RESERVA_FIM - RESERVA})')
+    app[SONS - BASE_APP:SONS - BASE_APP + len(sons)] = sons
+    print(f'  .sons: {len(sons)} B em {SONS:#x} (cabem {SONS_FIM - SONS})')
     print(f'  .caminhos: {len(caminhos)} B em {CAMINHOS:#x} (cabem {CAMINHOS_FIM - CAMINHOS} no lugar dos '
           f'caminhos das vozes)')
 

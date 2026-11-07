@@ -85,7 +85,7 @@ alphabetical order, in a window that shows what is inside each one before you op
 | 8 DTMF | DTMF CODE, DTMF DELAY, DTMF GROUP, DTMF SIDETONE |
 | 9 KEYS | AUTOLOCK, KEY BEEP, PF2, PF2 LONG, PF3 |
 | 10 MIC | COMPRESSOR, EQ BASS, EQ TREBLE, MIC AGC, MIC GAIN, NOISE REDUCTION |
-| 11 MORSE | MESSAGE, SEND, SPEED, TONE |
+| 11 MORSE | MESSAGE, SEND, SPEED, TONE (after V3.6T: MESSAGES, SPEED, TONE) |
 | 12 REPEATER | OFFSET, RPT TAIL CUT, RPT TAIL DELAY, TONE BURST, TX SHIFT |
 | 13 SCAN | SCAN ADD, SCAN RESUME |
 | 14 SYSTEM | ALARM MODE, BATTERY SAVE, BLUETOOTH, RESET, VERSION |
@@ -109,7 +109,7 @@ alphabetical order, in a window that shows what is inside each one before you op
   the one that cuts most). DEFAULT is the stock setting.
 - **DE-EMPHASIS:** ON is the stock setting; OFF makes FM audio much brighter.
 - **MORSE:** the message (up to 37 characters), the speed (5 to 40 wpm) and the tone (400 to 1200 Hz); SEND
-  plays it.
+  plays it. After V3.6T, MESSAGES reads incoming Morse, and its `#` opens the message box.
 - **CALIBRATION:** LIGHT PWM (the frequency of the PWM that dims the light, to get away from interference),
   MODEM GAIN (the gain of the modem the MESSAGES screen uses) and, since V3.2T, RX GAIN (the receiver gain).
 
@@ -203,6 +203,7 @@ drawing code that goes into the radio.
 | 📁 **A menu in folders**<ul><li>The menu items sit in **17 folders** by topic, in alphabetical order, in an amber window.</li><li>The window shows each folder's items and, inside it, the value of the item under the cursor, scrolling when the list does not fit.</li><li>**OK** on an item opens it for editing straight away, and saving or cancelling goes back to the folder.</li><li>The radio menu (FM/AM/SSB) uses the same window ([see above](#-a-new-menu-everything-in-folders)).</li></ul> | <img src="docs/imagens/tela-menu-pastas.png" alt="Folder menu" width="300"> |
 | 📨 **APRS**<ul><li>New **APRS (SMS)** folder: CALLSIGN, SSID, PATH (WIDE1-1, WIDE1-1,WIDE2-1 or none), TO, DECODE and the **MESSAGES** screen, where messages come in and go out from ([see above](#-the-aprs-messages-screen-in-v32t)).</li><li>**Sending:** **#** opens the message box (up to 37 characters), and OK sends it to TO (empty, a status) in AX.25. **Holding #** opens the TO box. After sending, the screen comes back by itself.</li><li>With no **CALLSIGN** saved, **#** asks for the callsign first, and nothing goes on air without a packet.</li><li>The 1200 bps AFSK is generated in the radio and fed into the microphone input, like a sound-card TNC: APRSdroid and TNCs read it.</li><li>**FILTER:** the screen opens with FM, the wide filter, no scramble or compressor, bass at −3 dB, treble at +4 dB and SAVE off. Key 0 turns it off to compare, and everything goes back to the menu's settings on leaving.</li><li>**Receiving:** the message, position, weather, objects and Mic-E decoded (or as they came, with DECODE OFF), the ack of what arrives for your callsign, a history and the count of syncs (P).</li><li>Receiving uses the radio chip's modem, which only gets a packet that arrives without errors: it catches fewer than a TNC.</li></ul> | <img src="docs/imagens/tela-aprs-caixa-mensagem.png" alt="The MESSAGES screen with the message box" width="300"> |
 | 📻 **Morse**<ul><li>New **MORSE** folder: MESSAGE (up to 37 characters), SEND, SPEED (5 to 40 wpm) and TONE (400 to 1200 Hz).</li><li>It goes out in FM through the tone generator, like the roger; PTT or any key stops it.</li><li>The message text editor goes up to 37 characters, on two lines when one is not enough.</li></ul> | <img src="docs/imagens/tela-morse.png" alt="MORSE SPEED" width="300"> |
+| 📻 **Morse MESSAGES screen**, after V3.6T, not released yet<ul><li>The folder becomes **MESSAGES**, **SPEED** and **TONE**: MESSAGES reads incoming Morse and keeps the messages, like the APRS one.</li><li>**#** opens the message box. Sending takes 0.3 s of silent carrier, so the receiver's squelch opens, with KA at the start and AR at the end.</li><li>The screen stays silent, with or without a signal; with SQUELCH OFF, you hear everything.</li><li>Reads what the UV-17L sends: proven on the air at 15 wpm and 700 Hz.</li></ul> | <img src="docs/imagens/tela-morse-messages.png" alt="MORSE MESSAGES" width="300"> |
 | 🎚️ **EQ**<ul><li>**EQ BASS** and **EQ TREBLE** in the AUDIO folder (what you hear) and in MIC (what you transmit).</li><li>Bass from −3 to +4 dB and treble from −1 to +4 dB, through the radio chip's own equalizer.</li><li>DEFAULT is the stock one. CHIRP sets them too.</li></ul> | <img src="docs/imagens/tela-eq.png" alt="EQ BASS" width="300"> |
 | 📶 **S-meter**<ul><li>Each side's meter became a **24-segment** S-meter: 2 per S from S1 to S9 and 1 per 10 dB above, up to S9+60.</li><li>The S written next to it: green up to S3, yellow up to S8 and red from S9 up.</li><li>S1 starts at each band's hiss, by the factory calibration, and it reads 4 times a second.</li><li>In SINGLE, in DUAL (on the compact side too) and in TRIPLE (on the receiving strip, in place of the channel).</li><li>While transmitting it shows the microphone level, with MIC.</li></ul> | <img src="docs/imagens/tela-barra-s.png" alt="S-meter" width="300"> |
 | 🔊 **AUDIO folder**<ul><li>**EXPANDER** (OFF, LOW, MID, HIGH): the received audio expander, which the chip has and the factory left off.</li><li>**NOISE GATE** (OFF, LOW, DEFAULT, MID, HIGH): mutes the audio below a level; DEFAULT is the stock one.</li><li>**DE-EMPHASIS**: ON, the stock one, or OFF.</li><li>With SQUELCH, TAIL CUT and the EQ.</li></ul> | <img src="docs/imagens/tela-audio.png" alt="AUDIO folder" width="300"> |
@@ -619,7 +620,8 @@ checks the sha256 of the compiler's five files; to use another copy of the compi
 **Optional:**
 
 - **Screen preview on the PC** (below): `pip install ziglang`.
-- **Morse and APRS test** (the packet, the AFSK and the decoder, on the PC): `python -I tests/teste_mensagem.py`,
+- **Morse and APRS test** (the packet, the AFSK, the decoder and the Morse reader on the radio's captures, on the PC):
+  `python -I tests/teste_mensagem.py`,
   with the same zig; and the whole APRS receive loop, with the modem, the flash and the keys imitated:
   `python -I tests/teste_rx.py`.
 - **CHIRP driver tests:** `python -I tests/teste_bj8300.py` needs nothing;

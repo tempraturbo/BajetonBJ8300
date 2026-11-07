@@ -216,7 +216,7 @@ void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas)
     unsigned i;
 
     (void)a0, (void)a1, (void)aberto;
-    for (i = 0; i < 7; i++)
+    for (i = 0; i < 5; i++)
         ultimo_num[i] = num[i];
     ultima_posicao = num[1];
     for (; faixas; faixas &= faixas - 1) {

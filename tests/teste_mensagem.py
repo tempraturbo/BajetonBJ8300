@@ -301,10 +301,82 @@ for wpm, texto in ((20, 'CQ CQ de PY2ABC/8300 k'), (12, 'Ola, 73! (teste) 1+1=2 
             letra = ''
     if letra:
         saida.append(DE_VOLTA.get(letra, '#'))
-    confere(f'4. Morse a {wpm} wpm volta igual', ''.join(saida).strip(), texto.upper())
+    # v144: o texto vai entre o KA (que nao tem caractere: #) e o AR (o +), depois de 0,3 s de portadora muda
+    confere(f'4. Morse a {wpm} wpm volta igual', ''.join(saida).strip(), '#' + texto.upper() + '+')
+    comeco = next(int(t) for _, t, reg, _ in (l.split() for l in log.splitlines()) if reg == '999')
+    primeiro = next(t for t, v in eventos if v)
+    confere(f'4. Morse a {wpm} wpm: 0,3 s de portadora antes do primeiro tom', round((primeiro - comeco) / 1000 / 10) * 10, 300)
     confere(f'4. Morse a {wpm} wpm: so pontos de 1 e tracos de 3 unidades', sorted(set(sinais)), [1, 3])
     confere(f'4. Morse a {wpm} wpm: tom de 700 Hz', {round(unidade_hz(v)) for t, v in eventos if v},
             {700})
+
+# ---------- 4b. a leitura do Morse: as capturas reais do radio e um imitador do que ele mostra (v146) ----------
+AMOSTRAS = 0x2000
+capturas = open(os.path.join(RAIZ, 'tests', 'morse-capturas.bin'), 'rb').read()
+
+
+def le_morse(dados, wpm, nome):
+    arq = os.path.join(pasta, nome)
+    with open(arq, 'wb') as f:
+        f.write(dados)
+    return [l[2:] for l in roda('mrx', arq, wpm).splitlines() if l.startswith('M ')]
+
+
+# 49 s com o UV-17L mandando KA ABC DEF AR a 15 WPM, entre o chiado, a portadora muda e a fala; o squelch no bit 7
+for n, nome in ((0, 'com o AGC solto'), (1, 'com o AGC travado')):
+    confere(f'4b. captura {nome}', le_morse(capturas[n * AMOSTRAS:(n + 1) * AMOSTRAS], 15, f'c{n}.bin'), ['ABC DEF'])
+confere('4b. com o SQL em 0 (sempre aberto), a mesma captura',
+        le_morse(bytes(x | 128 for x in capturas[:AMOSTRAS]), 15, 's0.bin'), ['ABC DEF'])
+fala = bytearray(capturas[:AMOSTRAS])
+fala[int(17 / .006):int(27 / .006)] = bytes(fala[int(7 / .006):int(17 / .006)])
+confere('4b. sem o Morse, a fala nao vira mensagem', le_morse(bytes(fala), 15, 'f.bin'), [])
+
+
+def imitado(texto, wpm, speed):
+    """Uma transmissao como o BJ a mede: o ciclo de 5 amostras no tom, e a descida depois dele."""
+    u = 1200 / wpm
+    ms = [100, 3, 120, 8, 110] * 200              # o chiado antes, de squelch fechado
+    fim_tom = None
+
+    def ar(d):
+        nonlocal fim_tom
+        for _ in range(round(d / 6)):
+            k = None if fim_tom is None else len(ms) - fim_tom
+            ms.append(128 | (DESCE[k] if k is not None and k < len(DESCE) else 23))
+
+    def tom(d):
+        nonlocal fim_tom
+        for i in range(round(d / 6)):
+            ms.append(128 | CICLO[(len(ms) + i) % 5])
+        fim_tom = len(ms)
+
+    def letra(e):
+        for s in e:
+            tom(u if s == '.' else 3 * u)
+            ar(u)
+        ar(2 * u)
+
+    ar(300)
+    letra('-.-.-')
+    for c in texto:
+        if c == ' ':
+            ar(4 * u)
+        else:
+            letra(ITU[c])
+    letra('.-.-.')
+    tom(300)
+    ar(300)
+    ms += [100, 3, 120, 8, 110] * 400
+    return bytes(ms)
+
+
+CICLO = (18, 13, 3, 20, 117)
+DESCE = (112, 107, 99, 71, 90, 63, 78, 66, 66, 68, 15, 59, 44, 38, 28)
+for wpm in (5, 10, 15, 18, 20):
+    confere(f'4b. imitado a {wpm} WPM', le_morse(imitado('ABC DEF', wpm, wpm), wpm, 'i.bin'), ['ABC DEF'])
+confere('4b. quem manda 20% mais devagar', le_morse(imitado('ABC DEF', 12, 15), 15, 'i.bin'), ['ABC DEF'])
+confere('4b. quem manda 20% mais rapido', le_morse(imitado('ABC DEF', 18, 15), 15, 'i.bin'), ['ABC DEF'])
+confere('4b. o + fecha a mensagem, como o AR', le_morse(imitado('ABC+D', 15, 15), 15, 'i.bin')[:1], ['ABC'])
 
 # ---------- 5. o quadro em texto legivel (a tela do APRS RX) ----------
 def texto_e_id(origem, caminho, info, meu, destino='APZBJ8', bruto=False):

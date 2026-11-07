@@ -71,6 +71,9 @@ static unsigned morse_de(unsigned c)
     return c >= '!' && c <= 'Z' ? MORSE[c - '!'] : 0;
 }
 
+#define MORSE_KA  0x35u               /* -.-.-, o comeco de mensagem: sem caractere na tabela */
+#define MORSE_AR  0x2Au               /* .-.-., o fim de mensagem: na tabela e o + */
+
 /* Parar no meio (o PTT ou uma tecla), mais abaixo; no PC, a imitacao. Chamada direta, nao por
  * ponteiro: o conferir.py so aceita destino que ele confere. */
 static unsigned para(void);
@@ -78,15 +81,18 @@ static unsigned para(void);
 /* Toca o texto com o gerador ja ligado: a unidade e 1200/wpm ms (a palavra PARIS), ponto 1, traco 3,
  * 1 entre elementos, 3 entre letras e 7 entre palavras. A espera conta de 2 em 2 ms. para() e
  * consultada antes de cada caractere e de cada elemento (o radio limpa o watchdog nela; o mais longe
- * entre duas e 10 unidades, 2,4 s a 5 wpm); ela pedindo, para no meio. */
+ * entre duas e 10 unidades, 2,4 s a 5 wpm); ela pedindo, para no meio. v144: antes, 0,3 s de portadora
+ * muda, para o squelch de quem recebe abrir (o do UV levou ~0,2 s, medido, e a primeira letra se perdia),
+ * e o texto vai entre o KA e o AR, que a leitura usa e qualquer operador entende. */
 void morse_toca(const char *texto, unsigned n, unsigned wpm, unsigned hz)
 {
     unsigned u = 600 / wpm, i, c, e;
 
-    for (i = 0; i < n; i++) {
+    ESPERA_2MS(150);
+    for (i = 0; i <= n + 1; i++) {
         if (para())
             return;
-        c = morse_de((u8)texto[i]);
+        c = !i ? MORSE_KA : i > n ? MORSE_AR : morse_de((u8)texto[i - 1]);
         if (!c) {                          /* espaco (ou caractere sem codigo): fecha a palavra */
             ESPERA_2MS(4 * u);             /* 3 da letra anterior + 4 = 7 */
             continue;
@@ -200,10 +206,14 @@ struct afsk_dac {
 #define NAS_VOZES
 #define NOS_CAMINHOS
 #define NA_RESERVA
+#define NOS_SONS
+#define NO_FIM
 #else
 #define NAS_VOZES  __attribute__((section(".vozes.rodata.mensagem")))   /* a sobra do C1 (o .livre acabou) */
 /* v138: no lugar dos caminhos das vozes (bancos.ld), so o que o nosso codigo chama - nunca o firmware */
 #define NOS_CAMINHOS  __attribute__((section(".caminhos.mensagem")))
+#define NOS_SONS      __attribute__((section(".sons.mensagem")))      /* v144: as mesmas regras, nas entradas mortas da tabela de caminhos */
+#define NO_FIM        __attribute__((section(".fim.mensagem")))       /* v144: na area do fim da imagem, com o bancos.c */
 #define NA_RESERVA    __attribute__((section(".reserva.mensagem")))   /* v140: as mesmas regras, na tabela de menu morta */
 #endif
 NAS_VOZES static const short seno17[17] = {
@@ -405,15 +415,19 @@ unsigned hdlc_bit(struct hdlc *h, unsigned linha)
                 return cabecalho_aprs(h->q, m) ? m : 0;
             if (alinhado && n <= h->max && (crc = conserta(h->q, n, crc))) {
                 if (parece_aprs(h->q, m)) {
+#ifdef TESTE_PC
                     h->consertados++;
+#endif
                     return m;
                 }
                 troca_par(h->q, crc - 1);  /* o conserto nao era: desfeito */
             }
             /* o BAD (v74): um quadro com cabecalho de APRS que chegou com bits errados, alinhado ou nao
              * (antes so o alinhado contava). O ruido depois do pacote quase nunca tem esse cabecalho. */
+#ifdef TESTE_PC
             if (cabecalho_aprs(h->q, m))
                 h->ruins++;
+#endif
             return 0;
         }
         if (uns == 5)                      /* 0 de enchimento: some */
@@ -544,7 +558,7 @@ static char *movimento(char *p, unsigned rumo, unsigned nos)
     return junta(p, "DEG");
 }
 
-static char *altitude(char *p, int metros)
+NOS_SONS static char *altitude(char *p, int metros)
 {
     p = junta(p, "ALT ");
     if (metros < 0) {
@@ -943,6 +957,184 @@ NOS_CAMINHOS unsigned aprs_texto(char *s, const u8 *q, unsigned n, const char *m
     return para_mim;
 }
 
+/* ---------- a leitura do Morse (v144, a mesma do UV-17L) ----------
+ * O audio recebido nao chega ao processador (v96): o que chega e o 0x6F do BK4819. Aqui ele nao se porta como no UV-17L,
+ * em que o tom fica parado em ~87 (o morse.c de la): medido neste radio (v146d, 49 s de 6 em 6 ms, com o UV mandando
+ * ABC DEF a 15 WPM), a portadora muda fica entre 12 e 42, e o tom salta para fora dessa faixa, num ciclo de 5 amostras a
+ * 700 Hz (18 13 3 20 117), que parece o medidor passando de 127 e dando a volta; o chiado sem portadora vai de 0 a 126.
+ * Depois do tom ele desce de ~112 ate ~23 em ~100 ms. A regra: e tom a amostra de ate 11, que a portadora muda nunca da,
+ * ou de 100 para cima, e o tom dura 42 ms alem da ultima dessas. As duas capturas, com o AGC solto e travado, leram tudo.
+ * Provado so a 15 WPM e com o tom de 700 Hz, que e o padrao dos dois radios.
+ *
+ * So o tempo importa, nao a altura do tom: tom e pausa viram ponto, traco e fim de letra pela unidade, que comeca na
+ * velocidade do SPEED e acompanha quem manda. Fala tambem passa do limite, mas sai em letras soltas, separadas por
+ * pausas de palavra: sem o KA, a mensagem so vale com palavras de duas letras ou mais, em media. */
+#define MRX_MUDOU  1u
+#define MRX_FIM    2u                  /* a mensagem acabou e vale: quem chama a guarda e da mrx_limpa */
+#define TOM_BAIXO  11u                 /* a portadora muda nunca fica nisso ou abaixo */
+#define TOM_ALTO   100u                /* nem nisso ou acima */
+#define SEGURA_MS  42u                 /* o tom dura isso alem da ultima amostra fora da faixa */
+#define CAUDA      55u                 /* quanto o tom parece mais longo, e a pausa mais curta, em ms */
+#define UN_MIN     48u                 /* 25 WPM */
+#define UN_MAX     300u                /* 4 WPM */
+#define RUIDO_MS   1200u               /* mais tom que o traco de 5 WPM: e chiado, a portadora acabou */
+#define FIM_MS     2500u               /* silencio que fecha a mensagem */
+
+struct morse_rx {
+    u32 desde, virou;                  /* a ultima troca entre tom e silencio, e o comeco da que pode vir */
+    u32 inicio;                        /* o comeco do elemento */
+    u32 ultima;                        /* a ultima amostra fora da faixa da portadora muda */
+    u16 un, n;                         /* a unidade, o tempo do ponto, em ms, e o tamanho do texto */
+    u8 letras, palavras;               /* o que a mensagem tem ate agora */
+    u8 ligado, contra;                 /* no tom; amostras seguidas do outro lado */
+    u8 espera;                         /* parado ate o primeiro silencio: o chiado antes do sinal e depois dele */
+    u8 codigo;                         /* a letra em montagem: um 1 de marca e um bit por elemento, como a tabela */
+    u8 ka, espaco;                     /* chegou o KA, o comeco de mensagem; o texto ja termina em espaco */
+    u8 usado, ambar;                   /* como o comeco do registro do historico: a tela le daqui como de la */
+    char texto[TEXTO_MAX + 1];
+};
+
+NA_RESERVA static void mrx_limpa(struct morse_rx *m)
+{
+    m->n = m->letras = m->palavras = 0;
+    m->ka = m->espaco = 0;
+    m->texto[0] = 0;
+}
+
+NA_RESERVA static void mrx_comeca(struct morse_rx *m, unsigned wpm)
+{
+    unsigned i;
+
+    for (i = 0; i < sizeof *m; i++)
+        ((u8 *)m)[i] = 0;
+    m->un = wpm < 25 ? 1200u / wpm : UN_MIN;
+    m->espera = 1;
+    m->usado = 0x5A;
+}
+
+NA_RESERVA static unsigned mrx_vale(const struct morse_rx *m)
+{
+    unsigned palavras = m->palavras + !m->espaco;
+
+    return m->ka || (m->letras >= 3 && m->letras >= 2u * palavras);
+}
+
+/* Um ponto ou traco a mais na letra. A unidade anda um quarto do que ele pede. */
+NA_RESERVA static void mrx_elemento(struct morse_rx *m, unsigned traco, u32 unidade)
+{
+    unsigned un = (3u * m->un + unidade) / 4u;
+
+    m->un = un < UN_MIN ? UN_MIN : un > UN_MAX ? UN_MAX : un;
+    m->codigo = m->codigo ? m->codigo << 1 | traco : 2u | traco;
+}
+
+/* A letra acabou: o codigo volta ao caractere pela tabela do envio. Devolve 1 no AR, o fim de uma mensagem que comecou
+ * com o KA: sem o KA ele e o + da tabela. */
+NOS_CAMINHOS static unsigned mrx_letra(struct morse_rx *m)
+{
+    unsigned c = m->codigo, k = '!';
+
+    m->codigo = 0;
+    if (c == MORSE_KA) {
+        mrx_limpa(m);
+        m->ka = 1;
+        return 0;
+    }
+    if (c == MORSE_AR && m->ka)
+        return 1;
+    while (k <= 'Z' && morse_de(k) != c)
+        k++;
+    if (m->n < TEXTO_MAX) {
+        m->texto[m->n++] = k > 'Z' ? '?' : k;
+        m->texto[m->n] = 0;
+    }
+    m->letras++;
+    m->espaco = 0;
+    return 0;
+}
+
+/* A mensagem acabou: sem o espaco do fim e, sem o KA, sem a letra solta que a cauda de quem manda faz. */
+NOS_CAMINHOS static unsigned mrx_fecha(struct morse_rx *m)
+{
+    unsigned n = m->n;
+
+    while (n && m->texto[n - 1] == ' ')
+        n--;
+    if (!m->ka && n >= 2 && m->texto[n - 2] == ' ')
+        n -= 2;
+    m->n = n;
+    m->texto[n] = 0;
+    if (n && mrx_vale(m))
+        return MRX_FIM | MRX_MUDOU;
+    mrx_limpa(m);
+    return MRX_MUDOU;
+}
+
+/* Uma amostra do 0x6F, de 5 em 5 ms ou menos, e se ha portadora; devolve MRX_MUDOU e MRX_FIM. */
+NOS_SONS static unsigned mrx_amostra(struct morse_rx *m, u32 agora, unsigned nivel, unsigned aberto)
+{
+    unsigned tom, ev = 0, un = m->un;
+    u32 d;
+
+    /* sem portadora, vale como silencio: uma piscada do squelch no meio do tom nao o quebra, e o que chegou fecha */
+    if (aberto && (nivel <= TOM_BAIXO || nivel >= TOM_ALTO))
+        m->ultima = agora;
+    tom = agora - m->ultima < SEGURA_MS;
+
+    if (tom == m->ligado)
+        m->contra = 0;
+    else {
+        if (!m->contra)
+            m->virou = agora;
+        if (++m->contra >= 2) {        /* uma amostra so do outro lado e tremida */
+            d = m->virou - m->inicio;
+            m->desde = m->virou;
+            m->ligado = tom;
+            m->contra = 0;
+            if (!m->espera && !tom && d >= CAUDA + un / 3u) {   /* mais curto que um terco do ponto e pico, nao elemento */
+                d -= CAUDA;
+                if (d >= 2u * un)
+                    mrx_elemento(m, 1, d / 3u);
+                else
+                    mrx_elemento(m, 0, d);
+            }
+            if (tom)
+                m->inicio = m->virou;
+        }
+    }
+
+    if (aberto && !tom)
+        m->espera = 0;                 /* portadora em silencio: dali em diante e sinal */
+    d = agora - m->desde;
+    if (m->espera)
+        return 0;
+    if (m->ligado) {
+        if (d > RUIDO_MS) {
+            m->espera = 1;
+            m->codigo = 0;
+            return m->n ? mrx_fecha(m) : 0;
+        }
+        return 0;
+    }
+    if (m->codigo && d + CAUDA >= 2u * m->un && mrx_letra(m)) {
+        m->espera = 1;                 /* a cauda depois do AR nao e letra */
+        return mrx_fecha(m);
+    }
+    if (m->n && !m->espaco && d + CAUDA >= 5u * m->un) {
+        m->texto[m->n] = ' ';          /* a tela anda por palavra: da tempo antes do tom seguinte */
+        if (m->n < TEXTO_MAX)
+            m->texto[++m->n] = 0;
+        m->palavras++;
+        m->espaco = 1;
+        ev = MRX_MUDOU;
+    }
+    if (m->n >= TEXTO_MAX || (m->n && d >= FIM_MS)) {
+        m->espera = 1;
+        ev = mrx_fecha(m);
+    }
+    return ev;
+}
+
 #ifndef TESTE_PC
 /* ---------- o menu: as pastas MORSE e APRS ---------- */
 FIRMWARE(SPRINTF, 0x01E19DCC);        int SPRINTF(char *, const char *, ...);
@@ -1100,7 +1292,7 @@ static char *resumo(const char *t, unsigned n)
 /* O registro do historico do APRS RX com a origem e o numero do ack (o setor * 32 + o lugar), no 0x903E
  * dos ajustes (b[0x14BEA], livre pela varredura da v59; so vale com o ESTADO_MSG em 'K'). */
 #define ACK_REGISTRO   RAM(u8, 0x00014BEA)
-#define HIST_SETOR(s)  (0x000D6000u + (s) * 0x1000u)   /* o historico do APRS RX: dois setores */
+#define HIST_SETOR(s)  hist_setor(s)    /* o historico: dois setores, 0xD6000 no APRS e 0xD8000 no Morse (v144) */
 #define REG_HIST       128u              /* um registro (struct registro_rx, no APRS RX) */
 #define ACK_PARA       (2 + TEXTO_MAX + 1)               /* a origem (9) e o numero (6) dentro dele */
 
@@ -1210,14 +1402,38 @@ static void espera_soltar(void)
 #define CAIXA_TO      2u
 #define FILTRO_OFF    4u                    /* a tecla 0 tinha desligado o FILTER: a tela volta assim */
 #define VOLTA         8u                    /* a tela MESSAGES volta sozinha */
+#define TELA_MORSE    16u                   /* v144: a mesma tela, lendo Morse, na pasta MORSE, onde ela e o item 0 */
 #define INJETA        RAM(u8, 0x00014BEF)   /* 0x9043: as leituras do OK injetado, de 1 em diante (bits 6:0), e o */
 #define BEEP_PROMPT   RAM(u8, 0x00014B72)   /* BEEP PROMPT (0 ou 1) que a volta calou (bit 7) */
 #define MENU_TABELA   RAM(u32, 0x00014BF4)
 #define MENU_NUMERO   RAM(u8, 0x00014BFA)
 #define MODO_TELA     RAM(u8, 0x0001533D)   /* 0 a tela principal, 1 o menu */
 #define ITEM_CALLSIGN 0                     /* na pasta APRS (conferir.py, 3b; v138) */
+#define SQL_NIVEL     RAM(u8, 0x00014B6C)   /* v144: o SQUELCH do menu */
 #define ITEM_MESSAGES 2
 #define ITEM_TO       5
+
+/* O setor s do historico da tela em uso: 0xD6000 no APRS e 0xD8000 no Morse, livre no mapa da secao 3 (v144). */
+NOS_SONS static u32 hist_setor(unsigned s)
+{
+    return 0x000D6000u + (s + (TELA_APRS & TELA_MORSE ? 2 : 0)) * 0x1000u;
+}
+
+#ifdef TESTE_RX
+#define ALTO_FALANTE_FECHA()
+#else
+FIRMWARE(AUDIO_DO_CHIP, 0x01E39E22);  void AUDIO_DO_CHIP(unsigned);
+FIRMWARE(PEDE_AMPLI, 0x01E39E2C);     void PEDE_AMPLI(unsigned);
+FIRMWARE(AMPLI, 0x01E39CFC);          void AMPLI(unsigned);
+/* Fecha o alto-falante, o que o espectro faz ao seguir (0x01E4AEFC): a tela do Morse so se ouve com o SQL em OFF. */
+NOS_SONS static void alto_falante_fecha(void)
+{
+    AUDIO_DO_CHIP(0);
+    PEDE_AMPLI(6);
+    AMPLI(0);
+}
+#define ALTO_FALANTE_FECHA()  alto_falante_fecha()
+#endif
 
 /* A volta acabou (a tela voltou, ou ela desistiu): o bipe como estava, e o estado zerado. Devolve o
  * FILTRO_OFF, que a tela usa. */
@@ -1245,7 +1461,7 @@ unsigned gancho_teclas(void)
         k = 255;
     }
     if ((t & CAIXA) && !editor) {          /* a caixa fechou pelo EXIT (o OK ja pos a volta): sintoniza de */
-        TELA_APRS = t = (t & FILTRO_OFF) | VOLTA;   /* novo, como o OK de fabrica (0x01E49A86) */
+        TELA_APRS = t = (t & (FILTRO_OFF | TELA_MORSE)) | VOLTA;   /* novo, como o OK de fabrica (0x01E49A86) */
         ESTADO_RX = 0;
     }
     if (!(t & VOLTA))
@@ -1261,8 +1477,7 @@ unsigned gancho_teclas(void)
         BEEP_PROMPT = 0;
     }
     if (!(j & 15) && MODO_TELA && MENU_TABELA != MENU_BASE && MENU_EDITANDO != 1) {
-        MENU_NUMERO = ITEM_MESSAGES;       /* na pasta: o MESSAGES, que o OK abre */
-        VALOR = ITEM_MESSAGES;
+        MENU_NUMERO = VALOR = t & TELA_MORSE ? 0 : ITEM_MESSAGES;   /* na pasta: o MESSAGES, que o OK abre */
         MENU_TIPO = 0;
     }
     INJETA = j + 1;
@@ -1483,44 +1698,28 @@ void gancho_fim_tx(void)
 }
 
 /* ---------- MORSE ---------- */
-const char titulo_mensagem[] = "MESSAGE";       /* sem o MORSE da pasta (v83); o mesmo no APRS (v111) */
-const char titulo_envia[] = "SEND";
 const char titulo_morse_wpm[] = "SPEED";
 const char titulo_morse_tom[] = "TONE";
-const char *const envia_opcoes[1] = {"OK TO SEND"};
 
-u16 morse_msg_le(void)
+/* A caixa da tela do Morse (v144): abre com o ultimo texto, e o OK o guarda e arma o envio. Separada do set: o registro
+ * sai da pilha antes do laco. */
+__attribute__((noinline)) NO_FIM static void morse_caixa_abre(void)
 {
     struct morse m;
 
     le_morse(&m);
     editor_abre(m.texto, m.tam, MAX_MSG);
-    return 0;
 }
 
-/* Separada do set, como o grava_nome_do_editor do bancos.c: o registro sai da pilha antes da saida
- * do editor, que redesenha a tela inteira. */
-__attribute__((noinline)) static void morse_guarda_texto(void)
+__attribute__((noinline)) NO_FIM static void morse_caixa_grava(void)
 {
     struct morse m;
 
     le_morse(&m);
     m.tam = editor_texto(m.texto, MAX_MSG);
     grava_morse(&m);
-}
-
-void morse_msg_grava(void)
-{
-    morse_guarda_texto();
-    editor_fecha();
-}
-
-char *morse_msg_exibe(void)
-{
-    struct morse m;
-
-    le_morse(&m);
-    return resumo(m.texto, m.tam);
+    if (m.tam)
+        ESTADO_MSG = ARMADO_MORSE;
 }
 
 /* Velocidade: 5 a 40 palavras por minuto (a linha 0 e 5); tom: 400 a 1200 Hz de 50 em 50. */
@@ -1573,15 +1772,6 @@ char *morse_tom_exibe(void)
 u16 acao_le(void)
 {
     return 0;
-}
-
-void morse_envia_grava(void)
-{
-    struct morse m;
-
-    le_morse(&m);
-    if (m.tam)
-        ESTADO_MSG = ARMADO_MORSE;
 }
 
 /* ---------- APRS ---------- */
@@ -1726,6 +1916,11 @@ unsigned aprs_caixa_abre(void)
 
     if (!c)
         return 0;
+    if (TELA_APRS & TELA_MORSE) {          /* v144: no proprio MESSAGES da pasta MORSE, o item 0 */
+        MENU_TIPO = 7;
+        morse_caixa_abre();
+        return 1;
+    }
     if (c == CAIXA_MSG && !tem_indicativo()) {   /* v138: sem indicativo, o CALLSIGN antes; gravado, a caixa */
         MENU_NUMERO = ITEM_CALLSIGN;
         MENU_TIPO = 7;
@@ -2296,6 +2491,7 @@ void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas)
 #define DUPLICADO_MS 30000u                /* a mesma estacao com o mesmo texto: so a primeira entra */
 #define EXIT_LONGO   100                   /* o EXIT segurado 0,6 s */
 #define CERQ_LONGO   101                   /* o # segurado 0,6 s (v114) */
+#define MORSE        64u                   /* v144: lendo Morse; o mesmo bit no aberto do tela_aprs */
 #define ABERTO       1u                    /* os bits de modo, no laco */
 #define PRESO        2u                    /* uma tecla esta apertada: so conta de novo depois de solta */
 #define ESPERA_EXIT  4u                    /* o EXIT apertado: curto ou segurado, so se sabe depois */
@@ -2466,8 +2662,10 @@ static int hist_limpa(unsigned *anel)
 }
 
 /* Abre o historico: os dois cabecalhos dizem qual setor recebe (a geracao mais nova) e se ha velhos no
- * outro. So usa setor apagado ou ja nosso: com outra coisa num deles, devolve -1 e nada e gravado. Fora do
- * laco (v111): colada nele, as variaveis dela iam para o quadro do laco, e a pilha passava. */
+ * outro. So usa setor apagado ou ja nosso: com outra coisa num deles, devolve -1 e nada e gravado. O do Morse
+ * (v147) apaga e recomeca: a faixa e livre no mapa da secao 3, e o que sobra nela sao capturas de diagnostico,
+ * como as RAW1 da v92, que o faziam jogar fora tudo o que lia. Fora do laco (v111): colada nele, as variaveis
+ * dela iam para o quadro do laco, e a pilha passava. */
 __attribute__((noinline)) static int hist_abre(unsigned *anel)
 {
     u32 m[2];
@@ -2480,7 +2678,7 @@ __attribute__((noinline)) static int hist_abre(unsigned *anel)
     }
     for (s = 0; s < 2; s++)
         if (m[s] != MARCA_HIST && m[s] != 0xFFFFFFFFu)
-            return -1;
+            return TELA_APRS & TELA_MORSE ? hist_limpa(anel) : -1;
     if (m[0] != MARCA_HIST && m[1] != MARCA_HIST) {
         setor_novo(0, 0);
         *anel = 0;
@@ -2532,7 +2730,7 @@ static unsigned hist_grava(int *hist, unsigned *anel, const struct registro_rx *
 }
 
 /* Onde esta o registro i do historico (0 o mais velho), ou 0 se nao ha. */
-static u32 hist_endereco(int hist, unsigned anel, int i)
+NA_RESERVA static u32 hist_endereco(int hist, unsigned anel, int i)
 {
     unsigned velhos = ANEL_VELHOS(anel);
 
@@ -2604,11 +2802,29 @@ __attribute__((noinline)) static void guarda(int *hist, unsigned *anel, const u8
     }
 }
 
-/* Direto na tela, sem rotina no meio: o quadro dela pesaria na pilha do laco. */
+#define MORSE_NUMERO  (1200u / MRX->un)
+/* Direto na tela, sem rotina no meio: o quadro dela pesaria na pilha do laco. Lendo Morse, o que esta chegando vai
+ * em cima dos outros, lido da RAM, e o P da lugar a velocidade. */
 #define RX_MOSTRA(faixas) \
-    (num[1] = topo + 1, num[2] = hist < 0 ? 0 : hist, num[5] = h.ruins, num[6] = h.consertados, \
-     tela_aprs(hist_endereco(hist, anel, hist - 1 - topo), hist_endereco(hist, anel, hist - 2 - topo), \
-               modo & ABERTO, num, (faixas)))
+    (num[1] = topo + 1, num[2] = hist < 0 ? 0 : hist, \
+     n = modo & MORSE ? (num[3] = MORSE_NUMERO, mrx_vale(MRX)) : 0, \
+     tela_aprs(n && !(modo & ABERTO) ? (u32)(__SIZE_TYPE__)&MRX->usado : hist_endereco(hist, anel, hist - 1 - topo), \
+               hist_endereco(hist, anel, hist - 2 - topo + n), modo & (ABERTO | MORSE), num, (faixas)))
+
+/* Uma amostra da leitura do Morse: a mensagem que acaba entra no historico como a do APRS. O estado da leitura comeca o
+ * registro (usado, ambar e texto): o resto dele, que so o APRS le, vai como estiver. */
+#define MRX  ((struct morse_rx *)q)
+__attribute__((noinline)) NA_RESERVA static unsigned morse_passo(struct morse_rx *m, int *hist, unsigned *anel)
+{
+    unsigned nivel = REG_R(0x6F) & 0x7F, aberto = !SQL_NIVEL || REG_R(0x0C) >> 1 & 1;
+    unsigned e = mrx_amostra(m, TIQUE_MS, nivel, aberto);
+
+    if (e & MRX_FIM) {
+        hist_grava(hist, anel, (const struct registro_rx *)&m->usado);
+        mrx_limpa(m);
+    }
+    return e;
+}
 
 /* O meu indicativo em texto ("PY2ABC-7", em maiusculas: o editor tem o modo abc); devolve o tamanho.
  * Separada: o registro sai da pilha antes do laco. */
@@ -2629,15 +2845,16 @@ __attribute__((noinline)) static unsigned meu_indicativo(char *meu)
 
 void aprs_rx_grava(void)
 {
-    u8 q[136];                             /* o comeco do quadro: os enderecos e ~100 de info, o que a tela
-                                            * mostra (160 na v74; 136 pela pilha do historico, v75) */
+    /* o comeco do quadro: os enderecos e ~100 de info, o que a tela mostra (160 na v74; 136 pela pilha do historico,
+     * v75); lendo Morse (v144), o estado da leitura, que cabe nele */
+    u8 q[136] __attribute__((aligned(4)));
     struct hdlc h;
     char meu[10];
-    u16 num[7];                            /* FILTER desligado, posicao, quantos, syncs na marca e no espaco,
-                                            * BAD, FIX */
+    u16 num[5];                            /* FILTER desligado, posicao, quantos, syncs na marca e no espaco */
     unsigned f, n, k, w = 0, n_meu = meu_indicativo(meu), ativo = 0, pol = 0, desde = TIQUE_MS, olha = 0;
     unsigned sync_em = 0;                  /* o ultimo sync (v137): a tela espera 2 s depois dele */
-    unsigned pede = 15, modo = PRESO, anel = 0, desde_tecla = 0;   /* o OK que abriu ainda esta apertado */
+    unsigned pede = 15, modo = PRESO | (TELA_APRS & TELA_MORSE ? MORSE : 0), anel = 0, desde_tecla = 0;   /* o OK que
+                                            * abriu ainda esta apertado */
     /* os registradores (de 16 bits) que a saida devolve, dois por variavel: a pilha do laco esta no limite */
     unsigned era1 = REG_R(0x3F) | REG_R(0x70) << 16, era2 = REG_R(0x72) | REG_R(0x5E) << 16;
     unsigned era3 = REG_R(0x43) | REG_R(0x31) << 16;   /* o canal, para o FILTER (v102) */
@@ -2658,19 +2875,25 @@ void aprs_rx_grava(void)
     SAVE = 0;
     ACORDA();
     DESARMA_DW();
-    REG_W(0x70, 0x00E0);                   /* o FSK ligado, com o ganho do roger TONE1200 */
-    REG_W(0x72, 0x3065);                   /* 1200 bps */
-    REG_W(0x58, MODEM_RX | ganho_modem() << 8);
-    REG_W(0x5C, 0xAA30);                   /* sem o CRC do chip */
-    REG_W(0x5D, 0xFFE0);                   /* 2048 bytes */
-    REG_W(0x5E, 0x0204);                   /* quase cheia com 4 palavras */
-    REG_W(0x3F, 0x3002);                   /* avisos: sync, quase cheia, fim */
-    REG_W(0x02, 0);
-    filtro_rx(!num[0], era3);              /* desligado, a saida dele (o canal e os menus) nao muda nada */
-    fsk_rx_arma(0);
-    hdlc_comeca(&h, q, sizeof q);
-    h.ruins = h.consertados = 0;
     num[3] = num[4] = 0;
+    if (modo & MORSE) {
+        TELA_APRS = TELA_MORSE;            /* o historico dele, ate sair */
+        mrx_comeca(MRX, morse_wpm_le() + 5);
+        if (SQL_NIVEL)                     /* o laco de fabrica, que o abriria, nao roda aqui: fica fechado ate sair */
+            ALTO_FALANTE_FECHA();
+    } else {
+        REG_W(0x70, 0x00E0);               /* o FSK ligado, com o ganho do roger TONE1200 */
+        REG_W(0x72, 0x3065);               /* 1200 bps */
+        REG_W(0x58, MODEM_RX | ganho_modem() << 8);
+        REG_W(0x5C, 0xAA30);               /* sem o CRC do chip */
+        REG_W(0x5D, 0xFFE0);               /* 2048 bytes */
+        REG_W(0x5E, 0x0204);               /* quase cheia com 4 palavras */
+        REG_W(0x3F, 0x3002);               /* avisos: sync, quase cheia, fim */
+        REG_W(0x02, 0);
+        filtro_rx(!num[0], era3);          /* desligado, a saida dele (o canal e os menus) nao muda nada */
+        fsk_rx_arma(0);
+        hdlc_comeca(&h, q, sizeof q);
+    }
     for (;;) {
         WDT();
         /* as teclas, sem esperar soltar: a apertada so conta de novo depois de solta; o EXIT, so ao soltar
@@ -2717,10 +2940,11 @@ void aprs_rx_grava(void)
             } else if (f == TECLA_ESTRELA) {
                 LUZ(0);
                 modo |= ESCURO;
-            } else if (f == TECLA_ZERO) {  /* o FILTER (v111): desligado, o canal e os menus, como na saida; */
+            } else if (f == TECLA_ZERO && !(modo & MORSE)) {
+                /* o FILTER (v111): desligado, o canal e os menus, como na saida; */
                 filtro_rx(num[0], era3);   /* os contadores recomecam, para comparar os dois */
                 num[0] ^= 1;
-                num[3] = num[4] = h.ruins = h.consertados = 0;
+                num[3] = num[4] = 0;
             } else if (f == EXIT_LONGO) {  /* segurado: apaga o historico e fica */
                 if (hist >= 0)
                     hist = hist_limpa(&anel);
@@ -2729,7 +2953,9 @@ void aprs_rx_grava(void)
             } else if (f == TECLA_EXIT && (modo & ABERTO)) {
                 modo &= ~ABERTO;
             } else {                       /* o EXIT curto e as outras teclas saem; o # (v112), para a caixa: */
-                if (f == TECLA_CERQUILHA)  /* a da mensagem, ou a do TO segurado (v114: a 0,6 s, apertado) */
+                if (modo & MORSE)          /* o # e a caixa dele, curto ou segurado (v144) */
+                    TELA_APRS = f == TECLA_CERQUILHA || f == CERQ_LONGO ? CAIXA_MSG | TELA_MORSE : 0;
+                else if (f == TECLA_CERQUILHA)   /* a da mensagem, ou a do TO segurado (v114: a 0,6 s, apertado) */
                     TELA_APRS = CAIXA_MSG;
                 else if (f == CERQ_LONGO)
                     TELA_APRS = CAIXA_TO;
@@ -2745,7 +2971,7 @@ void aprs_rx_grava(void)
          * espera os 2 s depois de um sync (v137, a regra da v129): o laco chegou a ficar 146 ms sem ler a FIFO
          * (8 palavras, ~107 ms), e uma faixa no comeco do quadro o perdia; a v129 leu 40-50% da rede, a v128
          * nada. */
-        if (TIQUE_MS - olha < 20u) {
+        if (TIQUE_MS - olha < (modo & MORSE ? 5u : 20u)) {
             if (pede && !(modo & ESCURO) && !(ativo && TIQUE_MS - sync_em < 2000u)) {
                 k = pede & -pede;
                 pede ^= k;
@@ -2754,6 +2980,19 @@ void aprs_rx_grava(void)
             continue;
         }
         olha = TIQUE_MS;
+        if (modo & MORSE) {
+            /* A tela anda por palavra (mrx_amostra): sobra tempo antes do tom seguinte. */
+            f = morse_passo(MRX, &hist, &anel);
+            if (f & MRX_FIM) {
+                topo = 0;
+                modo &= ~ABERTO;
+            }
+            if (f)
+                pede = 15;
+            if (MRX->n)
+                continue;
+            goto setor;
+        }
         if (!(REG_R(0x0C) & 1)) {
             if (TIQUE_MS - desde > (ativo ? 300u : 30u)) {
                 /* esperando, a outra polaridade a cada 40 ms (a 2a leitura do 0x0C, de 20 em 20; o UV troca a cada
@@ -2819,8 +3058,6 @@ void aprs_rx_grava(void)
             TELA_APRS = VOLTA;             /* volta (v112) */
             break;
         }
-        if (num[5] != h.ruins || num[6] != h.consertados)   /* o BAD e o FIX mudaram desde o ultimo desenho */
-            pede |= 8;
     setor:
         /* O setor que recebe encheu: o outro se apaga ja (dezenas de ms) - parado, ou logo depois de um aviso,
          * com a FIFO recem-lida e a folga inteira (v128: no meio de uma captura o hist_grava o apagava no meio
@@ -2849,5 +3086,18 @@ void aprs_rx_grava(void)
     REG_W(0x02, 0);
     filtro_rx(0, era3);                    /* o canal e os menus de novo (v102) */
     SAVE = era_save;                       /* antes de o OK gravar os ajustes (salva_menu) */
+}
+
+/* O set do MESSAGES da pasta MORSE (v144): a tela, a mesma do APRS, ou o OK da caixa dela. */
+void morse_rx_grava(void)
+{
+    if (TELA_APRS & CAIXA) {
+        morse_caixa_grava();
+        TELA_APRS = TELA_MORSE | VOLTA;
+        MENU_TIPO = 0;                     /* o do item: com 7 e fora da edicao, o motor (0x01E48DE6) chamaria o +0x13, */
+        return;                            /* que aqui e a lista de opcoes, e nao uma funcao: o radio reiniciava */
+    }
+    TELA_APRS |= TELA_MORSE;
+    aprs_rx_grava();
 }
 #endif

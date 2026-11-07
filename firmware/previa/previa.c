@@ -1039,18 +1039,6 @@ int main(int argc, char **argv)
         grava("60-menu-morse-speed");
         BASE_TELAS();
         memoria[0x1533D] = 1;
-        strcpy((char *)&memoria[0x15494], "MESSAGE");
-        menu_no("MORSE", "MESSAGE");
-        memoria[0x14C00] = 7;
-        memoria[0x14BF9] = 1;
-        digitando("CQ CQ DE PY2ABC PY2ABC K 73 GL 5NN TU");
-        memoria[0x14A36] = 37;
-        memoria[0x14A38] = 1;
-        telas_b(1, 0);
-        grava("61-editor-mensagem-37");
-        digitando("CQ CQ DE PY2ABC K 73");
-        telas_b(1, 0);
-        grava("61b-editor-mensagem-20");
         {
             /* dois registros do historico (v74: a tela os le da flash), aqui num canto do chip imitado */
             static const char *const rx[2] = {
@@ -1099,6 +1087,44 @@ int main(int argc, char **argv)
             memoria[0x14A36] = 9;
             caixa_b();
             grava("62e-aprs-caixa-to");
+            /* v144: a tela do Morse: o historico, uma mensagem chegando (na RAM, no radio) e a caixa do #, com o ultimo
+             * texto */
+            {
+                static const char *const mx[3] = {"CQ CQ DE PY2ABC PY2ABC K", "QTH BRAGANCA PTA", "PY2XYZ DE PY2ABC"};
+                static u16 nm[7] = {0, 1, 3, 15, 0, 0, 0};
+
+                for (i = 0; i < 3; i++) {
+                    memset(chip + 0x8000 + i * 128, 0, 128);
+                    chip[0x8000 + i * 128] = 0x5A;
+                    strcpy((char *)chip + 0x8002 + i * 128, mx[i]);
+                }
+                memoria[0x14BF2] = 0;
+                memoria[0x1533D] = 0;
+                tela_aprs(0x8000, 0x8080, 64, nm, 15);
+                grava("62g-morse-messages");
+                tela_aprs(0x8100, 0x8000, 64, nm, 15);
+                grava("62h-morse-chegando");
+                tela_aprs(0x8000, 0x8080, 64, nm, 15);
+                memoria[0x1533D] = 1;
+                memoria[0x14BF2] = 1 | 16;
+                memoria[0x14BFA] = 0;
+                memoria[0x14C00] = 7;
+                memoria[0x14BF9] = 1;
+                digitando("CQ CQ DE PY2ABC");
+                memoria[0x14A36] = 37;
+                caixa_b();
+                grava("62i-morse-caixa");
+                tela_aprs(0x8000, 0x8080, 64, nm, 15);
+                digitando("CQ CQ DE PY2ABC PY2ABC K 73 GL 5NN TU");
+                memoria[0x14A36] = 37;
+                memoria[0x14A38] = 1;
+                caixa_b();
+                grava("61-editor-mensagem-37");
+                tela_aprs(0x8000, 0x8080, 64, nm, 15);
+                digitando("CQ CQ DE PY2ABC K 73");
+                caixa_b();
+                grava("61b-editor-mensagem-20");
+            }
             memoria[0x14BF2] = 0;
         }
 

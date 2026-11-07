@@ -1135,8 +1135,8 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * a quantidade de posicoes da tabela no byte 1 e uma marca por posicao a partir do byte 4. Os dois saem do
  * compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e zero no resto, e o
  * montar so escreve neles se achar exatamente isso. */
-const unsigned char menu_tabela[96 * 28] __attribute__((aligned(4))) = {0xFF};   /* v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN */
-const unsigned char menu_textos[536] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v143) */
+const unsigned char menu_tabela[95 * 28] __attribute__((aligned(4))) = {0xFF};   /* v144: sem o MESSAGE e o SEND do Morse; v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN */
+const unsigned char menu_textos[532] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v144) */
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
  * O mapa do motor de menus esta no telas.c, junto do desenho. O que muda o nivel faz o mesmo que as
@@ -1280,7 +1280,7 @@ u32 b_menu_um(void)
 
 /* No EXIT num item de texto (tipo 7), antes de apagar a letra atras do cursor (0x01E4D48A, desvio_exit_apaga): o
  * de fabrica nao olha se o editor esta aberto, e o get do item roda na lista, com o item so marcado. O aprs_texto_le
- * e o morse_msg_le deixam o cursor no fim do texto, e cada EXIT apagava uma letra da copia do editor, sem nada na
+ * e o editor do Morse deixam o cursor no fim do texto, e cada EXIT apagava uma letra da copia do editor, sem nada na
  * tela, ate ela zerar: o CALLSIGN de 6 letras pedia 7 EXIT para voltar (v139; o gravado nao mudava). Um cursor que
  * sobre de uma edicao anterior faria o mesmo no CH-NAME e no NAME. Fora da edicao devolve 1, e o desvio segue para
  * a saida (0x01E4D4F4). */
@@ -2158,8 +2158,11 @@ void gancho_limpa_volta(unsigned modo)
 FIRMWARE(SAI_DO_EDITOR, 0x01E3C7AA);  void SAI_DO_EDITOR(void);
 void gancho_limpa_caixa(unsigned modo)
 {
-    if (CAIXA_APRS)
+    if (CAIXA_APRS) {
+        if (TELA_APRS & 16)                /* a caixa do Morse: o item nao e de editor (morse_rx_grava) */
+            MENU_TIPO = 0;
         return;
+    }
     LIMPA(modo);
     SAI_DO_EDITOR();
 }

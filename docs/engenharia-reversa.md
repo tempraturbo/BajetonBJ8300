@@ -82,6 +82,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | **`0xD4000–0xD4FFF`** | **a mensagem do Morse**, a velocidade e o tom (v65; [seção 24](#24-morse-e-aprs-v65)) |
 | **`0xD5000–0xD5FFF`** | **o APRS**: indicativo, SSID, destinatário, mensagem e caminho (v65) |
 | **`0xD6000–0xD7FFF`** | **o histórico do APRS RX**: até 62 pacotes, em anel, um cabeçalho por setor (v70; o `0xD7000` desde a v74; o anel desde a v75) |
+| **`0xD8000–0xD9FFF`** | **o histórico do Morse**: o mesmo anel ([seção 36](#36-a-tela-messages-do-morse-v144-a-v148)) |
 | `0xFA000` | 4 KB de uso do firmware |
 | livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
 
@@ -2963,3 +2964,51 @@ A pasta dos grupos não tem texto próprio: o nome é a chave do `GRUPOS` do `mo
 `APRS (SMS)` passou a ser a chave também no `MENU_MARCAS`, no `conferir.py` e na prévia. O vetor foi a 536 B na v143 (eram 528),
 múltiplo de 4 porque as listas de ponteiros que ele guarda ficam alinhadas, e sobram 34 B no `.livre`. A posição da pasta não muda,
 porque `APRS (SMS)` continua antes de `AUDIO` na ordem alfabética.
+
+## 36. A tela MESSAGES do Morse (v144 a v148)
+
+A pasta MORSE tem **MESSAGES, SPEED e TONE**. O MESSAGES abre a mesma tela do APRS, sem CALLSIGN, TO, FILTER e P: o que chega entra
+numa lista, e o `#` abre a caixa da mensagem, com o título SEND e a velocidade no rodapé. A mensagem e o SEND, que eram itens,
+moram nessa caixa. O `aprs_rx_grava` é o mesmo laço: o bit `MORSE` do `modo` escolhe o caminho, e o `q` do quadro guarda o estado da
+leitura.
+
+**O envio.** 0,3 s de portadora muda, para o squelch de quem recebe abrir (ele leva ~0,2 s, medido no UV-17L), o KA, o texto e o AR.
+
+**A leitura.** O áudio recebido não chega ao processador (v96), e o que sobra é o `0x6F` do BK4819. Medido na v146d, 49 s de 6 em 6 ms,
+com o UV mandando `ABC DEF` a 15 WPM:
+
+| No ar | O `0x6F` |
+|---|---|
+| portadora muda | de 12 a 42 |
+| tom de 700 Hz | um ciclo de 5 amostras, `18 13 3 20 117`, que parece o medidor passando de 127 e dando a volta |
+| depois do tom | desce de ~112 a ~23 em ~100 ms |
+| chiado, sem portadora | de 0 a 126 |
+
+No UV-17L o tom fica parado em ~87, e a regra de lá não serve aqui. Neste rádio é tom a amostra de até 11, que a portadora muda nunca
+dá, ou de 100 para cima, e ele dura 42 ms além da última dessas. Só conta com o squelch aberto: o bit 1 do `0x0C` acompanha o squelch
+com o AGC solto (a nota da v130 vale para o modo do APRS), e sem portadora vale como silêncio. Tom e pausa viram ponto, traço e fim
+de letra pela unidade, que começa no SPEED e anda um quarto do que cada elemento pede. O número ao lado de WPM é essa unidade: ele
+começa no SPEED e, sozinho, não prova que a leitura está certa.
+
+O KA abre a mensagem, e o AR depois dele a fecha na hora; sem o KA, ele é o `+`. Sem o KA, a mensagem só vale com 3 letras ou mais e 2
+por palavra, em média: fala também passa do limite, mas sai em letras soltas. A tela anda por palavra, quando sobra tempo antes do tom
+seguinte. Toda mensagem entra no histórico, mesmo repetida: o filtro de cópias de 30 s é só do APRS.
+
+**O reinício no OK (v145).** Com o `MENU_TIPO` em 7 fora da edição, o motor do menu chama o `+0x13` do item (`exibe`) como função, em
+`0x01E48DE6`, e o item MESSAGES tem uma tabela de dados ali. A caixa zera o `MENU_TIPO` no OK e no cancelar.
+
+**Por que nada aparecia (v147).** A v147d gravou o laço real da tela: o `0x6F`, o squelch e o relógio de cada passo, com o alto-falante
+aberto (tecla 0) e fechado (tecla `*`), e no fim o estado da leitura. O passo deu 6 ms em todas as 3967 voltas, as duas capturas
+leram `KA ABC DEF AR` no PC, e o texto estava na memória do rádio. A perda vinha depois: os setores `0xD8000` e `0xD9000` ainda tinham
+as capturas `RAW1` da v92, o `hist_abre` não aceita setor que não seja apagado ou dele, e com o `hist` em -1 o `hist_grava` não
+grava. O do Morse agora apaga o que não é dele e recomeça, porque a faixa é livre no mapa da seção 3. O do APRS segue recusando.
+
+**O alto-falante (v148).** A tela é calada, com ou sem sinal: o laço de fábrica, que o abriria, não roda aqui, e a entrada o fecha com
+o SQUELCH ligado. Em OFF ele fica como estava, aberto. As duas capturas da v147d leram igual, então isso não muda a leitura.
+
+**O espaço.** O `.sons` são as entradas 0..117 da tabela de caminhos (`0x01E5E8FC..0x01E5EAD4`, 472 B), que a fila não lê desde o remendo
+de `0x01E40628`: só a leitura em `0x01E40636` aponta para a faixa, e ela soma índice de 118 em diante. O `.fim` entra na frente do
+`.text`, na área do fim da imagem, e a caixa mora nele.
+
+A prova no ar é a 15 WPM e 700 Hz, e as capturas são todas nesses valores. O tom medido depende de quantas voltas cabem em 6 ms, e
+outro TONE pode cair numa fase ruim: 500, 750 e 1000 Hz são os que mais preocupam.

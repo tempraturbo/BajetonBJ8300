@@ -45,8 +45,25 @@ int main(int argc, char **argv)
             printf("\n");
         }
     } else if (argc == 5 && !strcmp(argv[1], "morse")) {
+        printf("R %u 999 0\n", relogio_us);
         morse_toca(argv[4], strlen(argv[4]), atoi(argv[2]), atoi(argv[3]));
         printf("R %u 0 0\n", relogio_us);
+    } else if (argc == 4 && !strcmp(argv[1], "mrx")) {
+        /* a leitura do Morse: de 6 em 6 ms, o 0x6F nos bits 6:0 e o squelch no 7, como na captura do radio */
+        static struct morse_rx m;
+        FILE *f = fopen(argv[2], "rb");
+        unsigned t = 1000;
+        int c;
+
+        mrx_comeca(&m, atoi(argv[3]));
+        while ((c = fgetc(f)) != EOF) {
+            if (mrx_amostra(&m, t, c & 127, c >> 7) & MRX_FIM) {
+                printf("M %s\n", m.texto);
+                mrx_limpa(&m);
+            }
+            t += 6;
+        }
+        printf("U %u\n", 1200u / m.un);
     } else if (argc == 4 && !strcmp(argv[1], "hdlc")) {
         struct hdlc h;
         FILE *f = fopen(argv[2], "rb");

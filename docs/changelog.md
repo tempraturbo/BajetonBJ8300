@@ -5,6 +5,27 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v144 to v148 — Nov 6 and 7 — the Morse MESSAGES screen (flashed and approved)
+
+The MORSE folder becomes **MESSAGES, SPEED and TONE**. MESSAGES opens the APRS screen, without CALLSIGN, TO, FILTER and P: it reads
+incoming Morse, keeps the messages and, on `#`, opens the SEND box, with the message and sending, which used to be items. The UV-17L
+has the same screen. [Section 36](reverse-engineering.md#36-the-morse-messages-screen-v144-to-v148).
+
+- **v144:** the screen, the history at `0xD8000` and `0xD9000`, the new `.sons` area (472 B) and sending with 0.3 s of silent
+  carrier, KA and AR. The owner found the box's OK rebooting the radio, a wrong WPM number and nothing read.
+- **v145:** the reboot went away. With `MENU_TIPO` at 7 outside editing, the menu engine called a data table as a function.
+- **v145d and v146d (diagnostic):** the `0x6F` reading on screen, then a 49 s capture, in two blocks from `0xDA000` to `0xDDFFF`,
+  showed this radio does not behave like the UV: the tone is a cycle that passes 127 and wraps around.
+- **v146:** this radio's rule, with both captures in the test. The UV already read the BJ, but the BJ still showed nothing.
+- **v147d (diagnostic) and v147:** a capture of the real loop, with the speaker open and closed, read `KA ABC DEF AR` both times.
+  The loss came after the reading: the `RAW1` captures from v92 still sat in the history sectors, and it refused to write. The Morse
+  history now erases what is not its own. The APRS one still refuses.
+- **v148:** the screen stays silent, with or without a signal, and is only heard with SQUELCH OFF, at the owner's request.
+
+None of them goes into `firmware/releases/`: V3.6T remains the stable one. This commit's build is the one flashed and approved,
+sha256 `d9ea35d3…`. The on-air proof is at 15 WPM and 700 Hz, and the 700 Hz capture is the only measurement: other SPEED and TONE
+values may read worse.
+
 ## V3.6T — Nov 6 — CH MEMORY, the rebuilt BANKS, clear names and TRIPLE WATCH
 
 v143 became **V3.6T**, at the owner's request: `firmware/releases/BJ8300_BANK_v3.6T.anc` (sha256 `4d696529…`), the v142
