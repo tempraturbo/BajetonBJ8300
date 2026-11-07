@@ -5,6 +5,15 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V3.7T — Nov 7 — the Morse MESSAGES screen, SENDING, PF3 LONG and the flashlight screen
+
+v154 became **V3.7T**, at the owner's request, with no other build: `firmware/releases/BJ8300_BANK_v3.7T.anc` (sha256 `fc0890e4…`), flashed
+and approved on the radio. The CHIRP module became `bj8300_v3.7TEMPRA.py` (model `BJ8300_v3.7TEMPRA`), and images saved with
+`BJ8300_v3.6TEMPRA` open in it (`MODEL_COMPAT`). In the README, V3.7T at the top, a section on the Morse MESSAGES screen, rows for PF3 LONG,
+the flashlight and SENDING, the space budget with the seven places, 2 screens redone and 4 new ones. The releases folder swaps V3.6T for
+V3.7T; V3.6T stays in its own GitHub release. Published in the [V3.7T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.7T), with the CHIRP module, the flasher
+and the cable driver.
+
 ## CHIRP driver — Nov 7 — PF3 LONG and the APRS message
 
 The driver follows the V3.7T round. The **Specific** page gains **PF3 Key (Long Press)**, right after PF3: MONITOR or FLASHLIGHT, at
