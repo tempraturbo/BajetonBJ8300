@@ -326,13 +326,13 @@ confere('10. a tecla presa: nada passa ate 5 leituras soltas seguidas, nem a lei
         (k[7:13], [r[7] for r in rr[7:13]]),
         ([[255] * 3, [255], [255] * 4, [255], [255] * 5, [17]], [5, 5, 1, 5, 0, 0]))
 
-# a caixa: abre no TO (item 5, tipo 7), a da mensagem vazia ate 37 e a do TO com o gravado ate 9; o OK da
+# a caixa: abre no TO (item 5, tipo 7), a da mensagem com a ultima (v149) ate 37 e a do TO com o gravado ate 9; o OK da
 # mensagem a grava com o numero seguinte e arma o envio ('A'), vazia nao arma; o TO em branco se grava; fora da
 # caixa, o TO da pasta como sempre (maiusculas); sem indicativo, o # pede o CALLSIGN (o item 0) e so depois a
 # caixa, e nada vai ao ar sem ele (v138)
 c = [' '.join(l) for l in roda_modo('caixa')]
 confere('10. a caixa e o set do TO', c,
-        ['B 0 0 0 0 0 ', 'B 1 5 7 0 37 ', 'D 12 65 8 6 8 PU2XYZ-9|Ola 73', 'B 1 5 7 0 37 ', 'D 8 0 8 0 9 PU2XYZ-9|',
+        ['B 0 0 0 0 0 ', 'B 1 5 7 0 37 ', 'D 12 65 8 6 8 PU2XYZ-9|Ola 73', 'B 1 5 7 6 37 Ola 73', 'D 8 0 8 0 9 PU2XYZ-9|',
          'B 1 5 7 8 9 PU2XYZ-9', 'D 8 0 0 0 10 |', 'D 0 0 5 0 11 PY5ZZ|',
          'B 1 0 7 0 6 ', 'B 1 0 7 0 6 ', 'I 1 PY2ABC', 'B 1 5 7 0 37 ', 'D 8 0 5 3 12 PY5ZZ|Ola'])
 

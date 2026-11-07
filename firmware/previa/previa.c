@@ -1104,6 +1104,8 @@ int main(int argc, char **argv)
                 grava("62g-morse-messages");
                 tela_aprs(0x8100, 0x8000, 64, nm, 15);
                 grava("62h-morse-chegando");
+                tela_aprs(0, 0, 33, 0, 15);
+                grava("62j-enviando");
                 tela_aprs(0x8000, 0x8080, 64, nm, 15);
                 memoria[0x1533D] = 1;
                 memoria[0x14BF2] = 1 | 16;

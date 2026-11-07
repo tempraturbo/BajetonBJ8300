@@ -2972,7 +2972,10 @@ numa lista, e o `#` abre a caixa da mensagem, com o título SEND e a velocidade 
 moram nessa caixa. O `aprs_rx_grava` é o mesmo laço: o bit `MORSE` do `modo` escolhe o caminho, e o `q` do quadro guarda o estado da
 leitura.
 
-**O envio.** 0,3 s de portadora muda, para o squelch de quem recebe abrir (ele leva ~0,2 s, medido no UV-17L), o KA, o texto e o AR.
+**O envio.** 0,5 s de portadora muda, para o squelch de quem recebe abrir (ele leva ~0,2 s, medido no UV-17L), o KA, o texto e o AR.
+Até a v148 eram 0,3 s, e o primeiro envio podia chegar como `?MENSAGEM+`: a causa provável, ainda sem prova, é o primeiro traço do KA
+cortado. O `gancho_fim_tx` desenha a tela de enviando antes do conteúdo: só a palavra SENDING, pelo bit 5 do `aberto` do `tela_aprs`, no
+Morse e no APRS. O ack automático não a mostra.
 
 **A leitura.** O áudio recebido não chega ao processador (v96), e o que sobra é o `0x6F` do BK4819. Medido na v146d, 49 s de 6 em 6 ms,
 com o UV mandando `ABC DEF` a 15 WPM:
@@ -2990,8 +2993,9 @@ com o AGC solto (a nota da v130 vale para o modo do APRS), e sem portadora vale 
 de letra pela unidade, que começa no SPEED e anda um quarto do que cada elemento pede. O número ao lado de WPM é essa unidade: ele
 começa no SPEED e, sozinho, não prova que a leitura está certa.
 
-O KA abre a mensagem, e o AR depois dele a fecha na hora; sem o KA, ele é o `+`. Sem o KA, a mensagem só vale com 3 letras ou mais e 2
-por palavra, em média: fala também passa do limite, mas sai em letras soltas. A tela anda por palavra, quando sobra tempo antes do tom
+O KA abre a mensagem, e o AR a fecha na hora, mesmo que o KA tenha se perdido (v149); só sem nada escrito ele é o `+`. Um código
+desconhecido no começo não entra. Sem o KA, a mensagem só vale com 3 letras ou mais e 2 por palavra, em média: fala também passa do
+limite, mas sai em letras soltas. A tela anda por palavra, quando sobra tempo antes do tom
 seguinte. Toda mensagem entra no histórico, mesmo repetida: o filtro de cópias de 30 s é só do APRS.
 
 **O reinício no OK (v145).** Com o `MENU_TIPO` em 7 fora da edição, o motor do menu chama o `+0x13` do item (`exibe`) como função, em
@@ -3003,12 +3007,28 @@ leram `KA ABC DEF AR` no PC, e o texto estava na memória do rádio. A perda vin
 as capturas `RAW1` da v92, o `hist_abre` não aceita setor que não seja apagado ou dele, e com o `hist` em -1 o `hist_grava` não
 grava. O do Morse agora apaga o que não é dele e recomeça, porque a faixa é livre no mapa da seção 3. O do APRS segue recusando.
 
-**O alto-falante (v148).** A tela é calada, com ou sem sinal: o laço de fábrica, que o abriria, não roda aqui, e a entrada o fecha com
-o SQUELCH ligado. Em OFF ele fica como estava, aberto. As duas capturas da v147d leram igual, então isso não muda a leitura.
+**O alto-falante (v148 e v149).** As duas telas MESSAGES são caladas, com ou sem sinal: o laço de fábrica, que o abriria, não roda aqui,
+e a entrada o fecha com o SQUELCH ligado. Em OFF ele fica como estava, aberto. As duas capturas da v147d leram igual, então isso não muda
+a leitura.
+
+**O texto em branco (v149).** O cartão ficava verde e vazio no lugar do que estava chegando, e o texto só aparecia no fim. O laço real,
+rodando no PC com a captura, mandava desenhar o texto certo, e o código compilado passava o endereço certo. O `le_linha` decidia entre
+RAM e flash por `a >= 0xC0000`, e há dados da RAM em `0x10F0D0..0x10F1C4`. Se a pilha da tarefa estiver acima desse limite, o texto era
+procurado na flash, o `0x5A` do registro não vinha, e a linha ficava em branco. Agora só `0xD0000..0xDFFFF` vai à flash. O endereço
+da pilha não foi medido: quem confirma é o rádio.
+
+**O LED verde (v149).** Ao abrir o squelch, o laço de fábrica chama `0x01E40CD2(b[0x15E42], 1)` logo depois de abrir o áudio
+(`0x01E47BF2`), e com 0 ao fechar. As telas fazem o mesmo no `rx_portadora`, com o estado no bit 7 do `TELA_APRS`. Que a rotina é o LED
+sai da posição dela na sequência, e falta confirmar no rádio. No APRS, com o AGC travado pelo FILTER, o bit do squelch oscila, e o LED
+pode piscar junto.
+
+**A caixa (v149).** A do APRS abre com a última mensagem, como a do Morse, e a primeira tecla troca o texto todo: é a marca `0xAA` do
+editor de fábrica.
 
 **O espaço.** O `.sons` são as entradas 0..117 da tabela de caminhos (`0x01E5E8FC..0x01E5EAD4`, 472 B), que a fila não lê desde o remendo
 de `0x01E40628`: só a leitura em `0x01E40636` aponta para a faixa, e ela soma índice de 118 em diante. O `.fim` entra na frente do
-`.text`, na área do fim da imagem, e a caixa mora nele.
+`.text`, na área do fim da imagem, e a caixa mora nele. Na v149 sobram 18 B na tela B, 2 B no `.sons` e nada no `.reserva` e no
+`.caminhos`: recurso novo aqui pede liberar espaço antes.
 
-A prova no ar é a 15 WPM e 700 Hz, e as capturas são todas nesses valores. O tom medido depende de quantas voltas cabem em 6 ms, e
-outro TONE pode cair numa fase ruim: 500, 750 e 1000 Hz são os que mais preocupam.
+No ar, medido pelo dono, o BJ lê até 15 WPM, e o melhor tom é 700 Hz. A 20 WPM o ponto e a pausa têm 60 ms, e a pausa quase some nos
+42 ms que o tom dura além da última amostra.

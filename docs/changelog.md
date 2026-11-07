@@ -5,6 +5,25 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v149 — Nov 7 — the incoming text, the green LED, the SENDING screen and the APRS box (committed before testing)
+
+The approved v148 showed the rest of the use. The owner also measured the limit on the air: the BJ reads up to 15 WPM, the UV up to 20,
+and the best tone is 700 Hz.
+
+- **The incoming text.** On the BJ the card went green and empty, and the text only appeared at the end. The real loop, run on the PC
+  with the capture, asked to draw `ABC`. The suspect is `le_linha`, which took every address from `0xC0000` up as flash, and there is RAM
+  data at `0x10F000`. Now only `0xD0000..0xDFFFF` goes to flash.
+- **The green LED,** on both MESSAGES screens, through the same call the factory loop makes when the squelch opens.
+- **APRS audio** follows the Morse rule: it is only heard with SQUELCH OFF.
+- **The APRS box** opens with the last message, and the first key replaces it all, like the Morse one.
+- **The `?MESSAGE+`** on the first send: 0.5 s of silent carrier, AR always closes the message and an unknown code at the start stays
+  out. The rule that cut the stray last letter is gone.
+- **The sending screen:** only the word SENDING, for Morse and APRS, at the owner's request.
+
+Space: small routines moved to `.caminhos` and `.reserva`, and only a few bytes are left in each area. Committed at the owner's request
+**before** the radio test: the incoming text, the LED and the `?` are not proven yet. This commit's build: sha256 `f4b8bac0…`, no release.
+[Section 36](reverse-engineering.md#36-the-morse-messages-screen-v144-to-v148).
+
 ## v144 to v148 — Nov 6 and 7 — the Morse MESSAGES screen (flashed and approved)
 
 The MORSE folder becomes **MESSAGES, SPEED and TONE**. MESSAGES opens the APRS screen, without CALLSIGN, TO, FILTER and P: it reads

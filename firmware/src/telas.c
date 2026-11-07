@@ -1122,7 +1122,7 @@ static void esp_limite(unsigned x0, unsigned x1, unsigned y)
 #ifdef PREVIA
 #define NO_CHIP(a)  1                      /* a previa imita o chip em 0x8000 */
 #else
-#define NO_CHIP(a)  ((a) >= 0xC0000)
+#define NO_CHIP(a)  ((a) >> 16 == 0xD)         /* os historicos; ha dados da RAM acima de 0xC0000, em 0x10F000 (v149) */
 #endif
 SEPARADA static void le_linha(u32 a, char *s, unsigned n)
 {
@@ -1176,6 +1176,10 @@ SEPARADA static void aprs_cena(u32 a0, unsigned aberto, const u16 *num)
     const char *r = RODAPE;
     unsigned i = LADO_B != 0, x, morse = aberto & 64;   /* v144: a tela lendo Morse, sem o FILTER, o P, o TO e o 0 */
 
+    if (aberto & 32) {                     /* v149: enviando, so a palavra */
+        texto(80 - largura("SENDING", 2) / 2, 54, "SENDING", 2, COR_SEG_VERMELHO);
+        return;
+    }
     aberto &= 1;
 
     if (NA_JANELA(0, 18)) {

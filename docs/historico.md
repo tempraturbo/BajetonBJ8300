@@ -5,6 +5,24 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v149 — 07/11 — o texto chegando, o LED verde, a tela SENDING e a caixa do APRS (commitada antes do teste)
+
+A v148 aprovada mostrou o resto do uso. O dono também mediu o limite no ar: o BJ lê até 15 WPM, o UV até 20, e o melhor tom é 700 Hz.
+
+- **O texto chegando.** No BJ o cartão ficava verde e vazio, e o texto só aparecia no fim. O laço real, rodando no PC com a captura,
+  mandava desenhar `ABC`. A suspeita é o `le_linha`, que tomava por flash todo endereço de `0xC0000` para cima, e há dados da RAM em
+  `0x10F000`. Agora só `0xD0000..0xDFFFF` vai à flash.
+- **O LED verde,** nas duas telas MESSAGES, pela mesma chamada que o laço de fábrica faz ao abrir o squelch.
+- **O áudio do APRS** segue a regra do Morse: só se ouve com o SQUELCH em OFF.
+- **A caixa do APRS** abre com a última mensagem, e a primeira tecla troca tudo, como a do Morse.
+- **O `?MENSAGEM+`** do primeiro envio: 0,5 s de portadora muda, o AR sempre fecha a mensagem e um código desconhecido no começo não
+  entra. Saiu a regra que cortava a letra solta do fim.
+- **A tela de enviando:** só a palavra SENDING, no Morse e no APRS, a pedido do dono.
+
+Espaço: rotinas pequenas foram para o `.caminhos` e o `.reserva`, e sobram poucos bytes em cada área. Commitada a pedido do dono **antes**
+do teste no rádio: o texto chegando, o LED e o `?` ainda não estão provados. Build deste commit: sha256 `f4b8bac0…`, sem release.
+[Seção 36](engenharia-reversa.md#36-a-tela-messages-do-morse-v144-a-v148).
+
 ## v144 a v148 — 06 e 07/11 — a tela MESSAGES do Morse (gravada e aprovada)
 
 A pasta MORSE passa a **MESSAGES, SPEED e TONE**. O MESSAGES abre a tela do APRS, sem CALLSIGN, TO, FILTER e P: lê o Morse que

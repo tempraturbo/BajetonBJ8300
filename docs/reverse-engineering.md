@@ -3026,7 +3026,10 @@ arrives goes into a list, and `#` opens the message box, titled SEND, with the s
 be items, live in that box. `aprs_rx_grava` is the same loop: the `MORSE` bit of `modo` picks the path, and the frame's `q` holds the
 reader's state.
 
-**Sending.** 0.3 s of silent carrier, so the receiver's squelch opens (it takes ~0.2 s, measured on the UV-17L), KA, the text and AR.
+**Sending.** 0.5 s of silent carrier, so the receiver's squelch opens (it takes ~0.2 s, measured on the UV-17L), KA, the text and AR.
+Up to v148 it was 0.3 s, and the first send could arrive as `?MESSAGE+`: the likely cause, not proven yet, is the first dash of KA being
+cut. `gancho_fim_tx` draws the sending screen before the content: only the word SENDING, through bit 5 of `tela_aprs`'s `aberto`, for
+Morse and APRS. The automatic ack does not show it.
 
 **Reading.** Received audio does not reach the processor (v96), and what is left is the BK4819's `0x6F`. Measured in v146d, 49 s every
 6 ms, with the UV sending `ABC DEF` at 15 WPM:
@@ -3044,8 +3047,9 @@ gives, or of 100 or more is tone, and the tone lasts 42 ms past the last such sa
 pause become dot, dash and end of letter through the unit, which starts at SPEED and moves a quarter of what each element asks. The
 number next to WPM is that unit: it starts at SPEED and, alone, does not prove the reading is right.
 
-KA opens the message, and AR after it closes the message at once; without KA, it is `+`. Without KA, a message only counts with 3 or
-more letters and 2 per word on average: speech also crosses the limit, but comes out as loose letters. The screen moves word by word,
+KA opens the message, and AR closes it at once, even if KA was lost (v149); only with nothing written is it `+`. An unknown code at the
+start stays out. Without KA, a message only counts with 3 or more letters and 2 per word on average: speech also crosses the limit, but
+comes out as loose letters. The screen moves word by word,
 when there is time before the next tone. Every message enters the history, even a repeated one: the 30 s copy filter is APRS only.
 
 **The reboot on OK (v145).** With `MENU_TIPO` at 7 outside editing, the menu engine calls the item's `+0x13` (`exibe`) as a function, at
@@ -3058,13 +3062,28 @@ the `RAW1` captures from v92, `hist_abre` accepts no sector that is neither eras
 writes nothing. The Morse history now erases what is not its own and starts over, because the range is free in the section 3 map. The
 APRS one still refuses.
 
-**The speaker (v148).** The screen is silent, with or without a signal: the factory loop, which would open it, does not run here, and
-entering closes it with SQUELCH on. With OFF it stays as it was, open. Both v147d captures read the same, so this does not change the
-reading.
+**The speaker (v148 and v149).** Both MESSAGES screens are silent, with or without a signal: the factory loop, which would open it, does
+not run here, and entering closes it with SQUELCH on. With OFF it stays as it was, open. Both v147d captures read the same, so this does
+not change the reading.
+
+**The blank text (v149).** The card went green and empty in place of what was arriving, and the text only appeared at the end. The real
+loop, run on the PC with the capture, asked to draw the right text, and the compiled code passed the right address. `le_linha` chose
+between RAM and flash by `a >= 0xC0000`, and there is RAM data at `0x10F0D0..0x10F1C4`. If the task's stack sits above that limit, the
+text was looked up in flash, the record's `0x5A` did not come back, and the line stayed blank. Now only `0xD0000..0xDFFFF` goes to flash.
+The stack address was not measured: the radio is what confirms it.
+
+**The green LED (v149).** When the squelch opens, the factory loop calls `0x01E40CD2(b[0x15E42], 1)` right after opening the audio
+(`0x01E47BF2`), and with 0 on closing. The screens do the same in `rx_portadora`, with the state in bit 7 of `TELA_APRS`. That the routine
+is the LED comes from its place in the sequence, and the radio still has to confirm it. On APRS, with the AGC locked by FILTER, the
+squelch bit wobbles, and the LED may flicker with it.
+
+**The box (v149).** The APRS one opens with the last message, like the Morse one, and the first key replaces all the text: that is the
+factory editor's `0xAA` mark.
 
 **Space.** `.sons` is entries 0..117 of the path table (`0x01E5E8FC..0x01E5EAD4`, 472 B), which the queue has not read since the patch at
 `0x01E40628`: only the read at `0x01E40636` points to the range, and it adds indexes from 118 up. `.fim` goes in front of `.text`, in
-the area at the end of the image, and the box lives there.
+the area at the end of the image, and the box lives there. In v149 18 B remain in screen B, 2 B in `.sons` and nothing in `.reserva` and
+`.caminhos`: a new feature here needs space freed first.
 
-The on-air proof is at 15 WPM and 700 Hz, and the captures all use those values. The measured tone depends on how many cycles fit in
-6 ms, and another TONE may land on a bad phase: 500, 750 and 1000 Hz are the most worrying.
+On the air, measured by the owner, the BJ reads up to 15 WPM, and the best tone is 700 Hz. At 20 WPM the dot and the pause are 60 ms, and
+the pause nearly vanishes in the 42 ms the tone lasts past the last sample.

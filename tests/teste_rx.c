@@ -110,7 +110,7 @@ static int caixa(void)
     memcpy(a->dest, "PU2XYZ-9", 8);
     a->id = 7;
     caixa_mostra(aprs_caixa_abre());       /* nada pedido: nao abre */
-    TELA_APRS = CAIXA_MSG | FILTRO_OFF;    /* o #: vazia, ate 37 */
+    TELA_APRS = CAIXA_MSG | FILTRO_OFF;    /* o #: com a ultima mensagem, ate 37 */
     caixa_mostra(aprs_caixa_abre());
     digita("Ola 73");
     grava_mostra();                        /* o OK: a mensagem, o numero novo, o envio armado e a volta */
