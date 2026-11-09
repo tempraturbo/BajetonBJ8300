@@ -305,7 +305,7 @@ Levantado em 2026-10-25 no desmontado de fábrica, para a tela B (seção 12). B
 | largura | `b[+11]` | diferente de 0: "N" |
 | AM | `b[+12]` | 1 = AM, de 18 a 999,99999 MHz; de 108 a 135,99999 MHz sempre AM (`0x01E3B438..0x01E3B47E`) |
 | SC | `b[+13]` | diferente de 0 e fora de AM: "SC" (significado sem prova) |
-| SCR | `b[+14] & 3` | diferente de 0: "SCR" (significado sem prova) |
+| SCR | `b[+14]` | o scramble: a cópia do `b[0x15E2C]` que `0x01E39184` faz, zerada na faixa aérea. A fábrica testa `& 3` (`0x01E3B52A`), feito para o OFF/ON; com as frequências da v25 isso perdia o 4 (2800 Hz) e o 8 (3300 Hz), e a tela B testa o byte inteiro desde a v155 |
 | nome | 12 B em +15 | para em 0 ou 0xFF (`0x01E3BDCC..0x01E3BDE6`); vazio: "Unnamed CH" |
 
 Fora do registro:

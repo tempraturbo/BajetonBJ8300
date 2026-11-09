@@ -5,6 +5,16 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v155 — Nov 8 — SCR on every scramble frequency (committed before testing)
+
+The UV-17L got the scramble SCR label, and the comparison showed a defect here. The stock routine `0x01E39184` copies the side's
+scramble (`b[0x15E2C]`, the whole nibble) into `+14` of the screen record, and the stock drawing tests `& 3` (`0x01E3B52A`), which was
+enough for OFF/ON. Screen B inherited the `& 3`, and since v25, with the eight frequencies, SCR vanished at values 4 (2800 Hz) and 8
+(3300 Hz). Now it tests the whole byte. `+14` already comes zeroed in the air band, so SCR stays off there. The
+[screen map](screen-map.md) no longer lists SCR as "meaning unproven".
+
+Built and checked by `build.sh` ("tudo certo"), but not yet flashed to the radio. Build of this commit: sha256 `d841ac41…`, no release.
+
 ## V3.7T — Nov 7 — the Morse MESSAGES screen, SENDING, PF3 LONG and the flashlight screen
 
 v154 became **V3.7T**, at the owner's request, with no other build: `firmware/releases/BJ8300_BANK_v3.7T.anc` (sha256 `fc0890e4…`), flashed

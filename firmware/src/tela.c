@@ -189,7 +189,7 @@ static void le_lado(struct lado *l, unsigned i, unsigned tx)
     /* 2 na banda aerea (108 a 136 MHz, sempre AM, com a etiqueta AIR; v138), 1 no AM do canal */
     l->am = rx - 10800000u <= 2799999u ? 2 : rx - 1800000u <= 98199999u && RAM(u8, r + 12) == 1;
     l->sc = RAM(u8, r + 13) != 0;
-    l->scr = (RAM(u8, r + 14) & 3) != 0;
+    l->scr = RAM(u8, r + 14) != 0;         /* o scramble (0x15E2C, 0x01E39184): o & 3 de fabrica perdia o 4 e o 8 (v155) */
     l->rt = RT(i);
     l->zona = MODO_ZONA == 0 ? ZONA(i) + 1 : 0;
     l->sinal = 0;

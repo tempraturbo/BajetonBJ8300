@@ -308,7 +308,7 @@ Mapped on 2026-10-25 in the stock disassembly, for screen B (section 12). Global
 | bandwidth | `b[+11]` | non-zero: "N" |
 | AM | `b[+12]` | 1 = AM, from 18 to 999.99999 MHz; 108 to 135.99999 MHz is always AM (`0x01E3B438..0x01E3B47E`) |
 | SC | `b[+13]` | non-zero and not AM: "SC" (meaning unproven) |
-| SCR | `b[+14] & 3` | non-zero: "SCR" (meaning unproven) |
+| SCR | `b[+14]` | the scramble: the copy of `b[0x15E2C]` made by `0x01E39184`, zeroed in the air band. The stock code tests `& 3` (`0x01E3B52A`), meant for OFF/ON; with the v25 frequencies that missed 4 (2800 Hz) and 8 (3300 Hz), and screen B tests the whole byte since v155 |
 | name | 12 B at +15 | stops at 0 or 0xFF (`0x01E3BDCC..0x01E3BDE6`); empty: "Unnamed CH" |
 
 Outside the record:

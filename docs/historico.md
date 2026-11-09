@@ -5,6 +5,16 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v155 — 08/11 — o SCR em todas as frequências do scramble (commitada antes do teste)
+
+O UV-17L ganhou a etiqueta SCR do scramble, e a comparação mostrou um defeito aqui. A rotina de fábrica `0x01E39184` copia o scramble do
+lado (`b[0x15E2C]`, o nibble inteiro) para o `+14` do registro da tela, e o desenho de fábrica testa `& 3` (`0x01E3B52A`), que bastava
+para o OFF/ON. A tela B herdou o `& 3`, e desde a v25, com as oito frequências, o SCR sumia nos valores 4 (2800 Hz) e 8 (3300 Hz). Agora
+ela testa o byte inteiro. O `+14` já vem zerado na faixa aérea, e ali o SCR continua de fora. O [mapa da tela](mapa-da-tela.md) deixa de
+dar o SCR como "significado sem prova".
+
+Compilada e conferida pelo `build.sh` ("tudo certo"), mas ainda não gravada no rádio. Build deste commit: sha256 `d841ac41…`, sem release.
+
 ## V3.7T — 07/11 — a tela MESSAGES do Morse, o SENDING, o PF3 LONG e a lanterna de tela
 
 A v154 virou a **V3.7T**, a pedido do dono, sem outro build: `firmware/releases/BJ8300_BANK_v3.7T.anc` (sha256 `fc0890e4…`), gravada e
