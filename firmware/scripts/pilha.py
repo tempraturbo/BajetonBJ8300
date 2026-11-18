@@ -62,13 +62,10 @@ for l in open(nosso_dis, encoding='utf-8', errors='replace').read().splitlines()
     conta[atual] = conta.get(atual, 0) + 1
     a, n, t = int(m.group(1), 16), len(m.group(2).split()), m.group(3)
     ini.setdefault(atual, a)
-    p = re.search(r'\[--sp\] = \{rets(?:, r(\d+)(?:-r(\d+))?)?\}', t)
-    if p:
-        qn[atual] += 4 * (1 + (0 if not p.group(1) else int(p.group(1)) - int(p.group(2) or p.group(1)) + 1))
-    elif re.search(r'\[--sp\] = rets', t):
+    if re.search(r'\[--sp\] = rets', t):
         qn[atual] += 4
-    elif re.search(r'\[--sp\] = \{r3-r0\}', t):
-        qn[atual] += 16
+    else:
+        qn[atual] += g['empilhados'](t.strip())          # v156: qualquer lista, como no de fabrica
     s = re.search(r'\bsp \+= -(\d+)', t)
     if s:
         qn[atual] += int(s.group(1))

@@ -66,19 +66,33 @@ MEMORY
     mortos8 (rx) : ORIGIN = 0x01E5A90E, LENGTH = 18
     mortos9 (rx) : ORIGIN = 0x01E5A748, LENGTH = 16
     mortos10 (rx) : ORIGIN = 0x01E5A934, LENGTH = 14
+    /* v156: o codigo de fabrica do espectro que os ganchos dele deixaram sem chamador (montar.py MORTOS): o corpo das
+     * rotinas trocadas por um goto na entrada, depois dele, e duas rotinas inteiras cujas chamadas foram trocadas.
+     * Recebem rotinas do mensagem.c sem mudanca, e o .livre que elas deixam recebe o remoto.c. */
+    mortos11 (rx) : ORIGIN = 0x01E4AB2E, LENGTH = 174
+    mortos12 (rx) : ORIGIN = 0x01E4ABE0, LENGTH = 148
+    mortos13 (rx) : ORIGIN = 0x01E4AFC6, LENGTH = 134
+    mortos14 (rx) : ORIGIN = 0x01E4AD7C, LENGTH = 130
+    mortos15 (rx) : ORIGIN = 0x01E4AAA8, LENGTH = 130
+    mortos16 (rx) : ORIGIN = 0x01E4B050, LENGTH = 80
+    mortos17 (rx) : ORIGIN = 0x01E45D9A, LENGTH = 76
+    mortos18 (rx) : ORIGIN = 0x01E4AE02, LENGTH = 66
+    mortos19 (rx) : ORIGIN = 0x01E4A9A0, LENGTH = 34
+    mortos20 (rx) : ORIGIN = 0x01E4A9C6, LENGTH = 32
 }
 
 SECTIONS
 {
     .text : {
         *(.fim*)
-        *(EXCLUDE_FILE(*tela.o *mensagem.o) .text*)
-        *(EXCLUDE_FILE(*tela.o *mensagem.o) .rodata*)
+        *(EXCLUDE_FILE(*tela.o *mensagem.o *remoto.o) .text*)
+        *(EXCLUDE_FILE(*tela.o *mensagem.o *remoto.o) .rodata*)
     } > novo
 
     .livre : {
         *tela.o(.text* .rodata*)
         *mensagem.o(.text* .rodata*)
+        *remoto.o(.text* .rodata*)      /* v156: o controle remoto */
         *(.livre.*)
         *(.carimbo)     /* v47: o CRC16 do .text, por ultimo, para nada mudar de lugar com ele */
     } > livre
@@ -98,14 +112,24 @@ SECTIONS
     } > sons
     .mortos10 : { *(.mortos10.*) } > mortos10
     .mortos1 : { *(.mortos1.*) } > mortos1
-    .mortos2 : { *(.mortos2*) } > mortos2
-    .mortos3 : { *(.mortos3*) } > mortos3
-    .mortos4 : { *(.mortos4*) } > mortos4
-    .mortos5 : { *(.mortos5*) } > mortos5
-    .mortos6 : { *(.mortos6*) } > mortos6
-    .mortos7 : { *(.mortos7*) } > mortos7
-    .mortos8 : { *(.mortos8*) } > mortos8
-    .mortos9 : { *(.mortos9*) } > mortos9
+    .mortos2 : { *(.mortos2.*) } > mortos2      /* v156: com o ponto, que o .mortos20 nao caia aqui */
+    .mortos3 : { *(.mortos3.*) } > mortos3
+    .mortos4 : { *(.mortos4.*) } > mortos4
+    .mortos5 : { *(.mortos5.*) } > mortos5
+    .mortos6 : { *(.mortos6.*) } > mortos6
+    .mortos7 : { *(.mortos7.*) } > mortos7
+    .mortos8 : { *(.mortos8.*) } > mortos8
+    .mortos9 : { *(.mortos9.*) } > mortos9
+    .mortos11 : { *(.mortos11.*) } > mortos11
+    .mortos12 : { *(.mortos12.*) } > mortos12
+    .mortos13 : { *(.mortos13.*) } > mortos13
+    .mortos14 : { *(.mortos14.*) } > mortos14
+    .mortos15 : { *(.mortos15.*) } > mortos15
+    .mortos16 : { *(.mortos16.*) } > mortos16
+    .mortos17 : { *(.mortos17.*) } > mortos17
+    .mortos18 : { *(.mortos18.*) } > mortos18
+    .mortos19 : { *(.mortos19.*) } > mortos19
+    .mortos20 : { *(.mortos20.*) } > mortos20
 
     /DISCARD/ : { *(.comment) *(.note*) *(.debug*) }
 }

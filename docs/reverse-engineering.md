@@ -3141,4 +3141,73 @@ caller (checked with four reachability variants, including data pointers to the 
 spectrum routines, about 1 KB in pieces of 32 to 174 bytes; the stock functions only the old menu table pointed to,
 556 bytes; and leftovers of G.729 and MP3, 196 bytes. A minimal remote control (key, PTT and status) was estimated at
 about 150 bytes, and with the screen mirror at about 340; the free RAM for its state would be `b[0x14BED]` and
-`b[0x14BEE]`. None of it became firmware: every piece needs its proof in the disassembly before it is reused.
+`b[0x14BEE]`. None of it became firmware: every piece needs its proof in the disassembly before it is reused. (It
+did in v156, with the proof: section 38.)
+
+## 38. Remote control (v156 to v161)
+
+The remote control lives in `firmware/src/remoto.c`, entirely in the free G.729 and MP3 range (`.livre`). To make
+room, ten `mensagem.c` routines moved, unchanged, into stock code that the spectrum hooks left with no caller
+(`mortos11` to `mortos20` in `bancos.ld`). The proof that they are dead disassembles the end of `app.bin` (from
+`0x6AC0C` on, the part copied to RAM) at its own address, `0x02000000`: at the flash address the calls from there do
+not show, and seven ranges that looked dead were alive. The protocol and the bits are at the top of `remoto.c`; this
+is what the firmware showed.
+
+**The hooks.**
+
+- **The PC frames** land in the session buffer. Both calls to the PROGRAMBT11U matcher (`0x01E4B4B4`, the cable, and
+  `0x01E41762`, BLE) go through `remoto_cabo`, which looks for the newest `'~' 'R'` frame and returns 0; with no frame,
+  it goes on to the matcher, and CHIRP works as before. The cable loop (`0x01E4B46E`) reads up to 72 bytes at a time
+  and, with 7 or more, calls the matcher; if it does not return 1, the count is zeroed (`0x01E4B4F8`). That is why the
+  PC sends plain frames twice (a cut frame shows whole in the second copy) and a screen slice request only once: two
+  copies could be served twice.
+- **Keys.** Both key reads in `mensagem.c` (`0x01E43D50`) go through `remoto_tecla`, which returns the remote key when
+  no key is pressed and sends the 9-byte reply. The stock key machine (section 24) wants the same key in 3 reads 10 ms
+  apart, and the short press fires on release, from the table at `0x01E60369`; there `1` and `0` have their own events
+  (`0x60` and `0x22`), which become digits at `0x01E4635C`. With the backlight off, the first key only turns it on:
+  measured through the remote, the first press after idling changed nothing on screen, and the next one did.
+- **PTT.** The five runtime reads (`call 0x01E001BA(12)` at `0x01E40DEA`, `0x01E43C0A`, `0x01E43EBE`, `0x01E46E78` and
+  `0x01E47988`) go through `ptt_porta`, which keeps r2 and r3. **PA12, the PTT, is also the RX wire of the cable's
+  serial port:** in v156 the PC frames pressed PTT (the radio transmitted from the 5th frame on; opening the port
+  without sending does not transmit). Since v157, with the remote on over the cable, the PTT is the frame's only.
+- **The mirror.** `desvio_envia` (`0x01E3ADBC`) calls `remoto_envia`, which writes each window line straight into the
+  UART ring (`0x151AC`, 2400 B), with the same lock as `0x01E41676`.
+
+**The UART output does not move while the screen draws.** `0x01E41676`, which puts bytes in the ring, only locks,
+copies and unlocks. The ring is drained by `0x01E4DFB6`: it takes up to 1200 B into the `0x16A82` buffer and calls the
+device write (the pointer at `[0x14784]`, + 20). It is called by the end-of-send handler (`0x01E4DFFA`) and by a
+periodic tick (`0x01E4E074`), and, measured on the radio, neither runs in the middle of a redraw: the whole screen
+drawn at once carries only 28 lines (2048 B), at 115200 and at 460800, and a key that changes the screen carries 25 to
+34 lines. v157 waited up to 250 ms for room in the ring, with the radio stuck and the output too (only the top of the
+screen reached the PC). Since v158 a line with no room for the worst case (160 runs, 488 B) is dropped at once, and the
+loss is flagged.
+
+**The whole screen, in slices (v158).** The PC asks for a node of a tree of the 128 lines, in the frame's 5th byte (1
+is the whole screen, `n` has children `2n` and `2n + 1`); the radio redraws the whole screen (`0x01E44812`, the main
+one, or `0x01E489E0`, the menu) and sends only the node's lines. A slice that does not fit is split in half, down to 4
+lines (the worst case, 4 × 488 B, fits). Measured: the main screen is 8.3 KB and comes in 8 slices of 16 lines, in
+1.3 s at 115200 and in 0.73 s at 460800; each slice takes about 65 ms to its first line. A compression (the color from
+two runs back in a single byte) would bring lines to 58% of their size, measured on the real screen, and was left out
+for lack of room.
+
+**The flags (v159).** Bit 6 of `CONTA` says the last slice did not fit; bit 5, that the mirror lost a line since the
+last reply, which the reply carries (bit 5 of the side byte) and clears. In v158 it was a single flag, and the next
+slice cleared it: with a key pressed in the middle of a whole-screen pass, the PC ended with a stale piece. The watchdog
+timestamp went down to 5 bits (16 to 31 ticks of 64 ms: bit 4 of the elapsed time).
+
+**The side as raw bits (v159).** The reply carries the WATCH view, B in focus, dual watch stopped on the other side and
+the rotation with the third in place, and the PC works out the letter the meter measures (`remoto.c` got 14 B smaller
+than in v158).
+
+**The cable's serial port at 460800 (v160).** Boot starts the UART through `0x01E4381A(baud)` at `0x01E54A92`, with
+`r0 = 0xE100` (57600) in the instruction before. That 4-byte instruction's immediate is `(0x80 | the low 7 bits)`
+rotated right by the high 9 bits of the halfword: `0c61` gives 57600, `0be1` gives 115200 (the UPDATE mode's, at
+`0x01E4C092`, which stays) and `0ae1` gives 460800 (checked with the JieLi assembler). v157 went to 115200 and v160 to
+460800, which worked on the radio; `conferir.py` checks the value through the immediate and that UPDATE mode stays at
+115200.
+
+**v161 (not tested on the radio).** The backlight does not go off with the remote on: `gancho_luz` was already on the
+only call that turns it off (`0x01E46578`). And the slice is not redrawn in the middle of digit entry (`b[0x14A35]`,
+the digits typed): the whole screen shows the normal side, because only the entry routines show the digits
+(`tela.c`), and the entry vanished from the display in under 1 s, from the PC or from the radio's keypad. It was not
+lost inside (the whole screen only zeroes `b[0x14685]`, which is 2 during TX).

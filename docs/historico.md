@@ -5,6 +5,30 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v156 a v161 — 18/11 — o controle remoto pelo cabo (sem release; a v161 sem teste no rádio)
+
+O controle remoto que a seção 37 estudou: as teclas, o PTT, um estado de 9 bytes (quem o medidor mede, o S-meter, a
+tensão) e o espelho da tela, pelo cabo e pelo Bluetooth (este sem o espelho). O que o firmware mostrou está na
+[seção 38](engenharia-reversa.md#38-o-controle-remoto-v156-a-v161) da engenharia reversa.
+
+- **v156:** o `remoto.c` inteiro na faixa livre, com dez rotinas do `mensagem.c` levadas sem mudança para trechos de
+  fábrica mortos (`mortos11` a `mortos20`); o `pilha.py` passou a contar o `{rets, r5, r4}`, que dava 0 (a v155 já
+  passava 32 B da pilha de fábrica, e a tela B foi enxugada até 740/620/696). No rádio, o Tempra Link (a 115200,
+  copiado do UV) não falava com o rádio a 57600, e os quadros do PC apertavam o PTT: o PA12 é o fio do RX da serial.
+- **v157:** a serial do cabo a 115200 desde a partida; com o remoto ligado pelo cabo, o PTT é só o do quadro. No
+  rádio, leu e as teclas chegaram; o espelho travava, e só o alto da tela chegava.
+- **v158:** o espelho não espera mais (a saída da UART não anda enquanto a tela se desenha), e a tela inteira vem por
+  fatias de uma árvore das linhas. No rádio, as teclas ficaram rápidas e a tela, lenta; as medidas estão na seção 38.
+- **v159:** a marca da perda de fora das fatias, que só a resposta limpa (a fatia seguinte a apagava), o carimbo do
+  vigia em 5 bits e o lado em bits crus, com a letra calculada no PC.
+- **v160:** a serial do cabo a 460800. No rádio, funcionou.
+- **v161:** a luz não apaga com o remoto ligado (apagada, a primeira tecla só a acendia) e a fatia não se redesenha no
+  meio de uma digitação (a digitação sumia do visor). Só compilada e testada no PC.
+
+Build deste commit (a v161): sha256 `be68d671…`, sem release. O `build.sh` dá "tudo certo", com a pilha igual à de
+fábrica e a imagem do mesmo tamanho. Testes: o novo `tests/teste_remoto.py` (44 conferências, com o espelho
+decodificado por um leitor escrito à parte) e os de sempre.
+
 ## Tempra Link do BJ-8300 — 17/11 — o rádio pelo PC (sem teste no rádio)
 
 O Tempra Link do Baofeng UV-17L ganhou o irmão daqui, a pedido do dono: um programa separado, neste repositório, para

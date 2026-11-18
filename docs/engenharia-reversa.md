@@ -3087,4 +3087,70 @@ deixar o resto seguir para o `0x01E3FD12`.
 espectro de fábrica, cerca de 1 KB em pedaços de 32 a 174 bytes; as funções de fábrica que só a tabela de menu antiga
 apontava, 556 bytes; e restos do G.729 e do MP3, 196 bytes. Um controle remoto mínimo (tecla, PTT e estado) foi estimado
 em uns 150 bytes, e com o espelho da tela em uns 340; a RAM livre para o estado seriam `b[0x14BED]` e `b[0x14BEE]`.
-Nada disso virou firmware: cada pedaço precisa da prova no desassemblado antes de ser reaproveitado.
+Nada disso virou firmware: cada pedaço precisa da prova no desassemblado antes de ser reaproveitado. (Virou na
+v156, com a prova: seção 38.)
+
+## 38. O controle remoto (v156 a v161)
+
+O controle remoto mora no `firmware/src/remoto.c`, inteiro na faixa livre do G.729 e do MP3 (`.livre`). Para caber,
+dez rotinas do `mensagem.c` foram, sem mudança, para trechos de fábrica que os ganchos do espectro deixaram sem
+chamador (`mortos11` a `mortos20` no `bancos.ld`). A prova de que estão mortos desmonta o fim do `app.bin` (de
+`0x6AC0C` em diante, o que é copiado para a RAM) no endereço dele, `0x02000000`: no endereço da flash, as chamadas de
+lá não aparecem, e sete trechos que pareciam mortos estavam vivos. O protocolo e os bits estão no alto do `remoto.c`;
+aqui fica o que o firmware mostrou.
+
+**Os ganchos.**
+
+- **Os quadros do PC** caem no buffer da sessão. As duas chamadas do conferidor do PROGRAMBT11U (`0x01E4B4B4`, o cabo,
+  e `0x01E41762`, o BLE) passam pelo `remoto_cabo`, que procura o quadro `'~' 'R'` mais novo e devolve 0; sem quadro,
+  segue para o conferidor, e o CHIRP fica como estava. O laço do cabo (`0x01E4B46E`) lê até 72 bytes por vez e, com 7
+  ou mais, chama o conferidor; se ele não devolve 1, zera a conta (`0x01E4B4F8`). Por isso o PC manda os quadros comuns
+  em dupla (um quadro cortado aparece inteiro na segunda cópia), e o pedido de fatia da tela num quadro só: duas
+  cópias podiam ser atendidas duas vezes.
+- **As teclas.** As duas leituras do `mensagem.c` (`0x01E43D50`) passam pelo `remoto_tecla`, que devolve a tecla do
+  remoto quando nenhuma está apertada e manda a resposta de 9 bytes. A máquina de teclas de fábrica (seção 24) quer a
+  mesma tecla em 3 leituras de 10 ms, e o toque curto sai na soltura, pela tabela `0x01E60369`; ali o `1` e o `0` têm
+  eventos próprios (`0x60` e `0x22`), que viram algarismo em `0x01E4635C`. Com a luz apagada, a primeira tecla só a
+  acende: medido pelo remoto, o primeiro toque depois de um tempo parado não mudou nada na tela, e o seguinte mudou.
+- **O PTT.** As cinco leituras da execução (`call 0x01E001BA(12)` em `0x01E40DEA`, `0x01E43C0A`, `0x01E43EBE`,
+  `0x01E46E78` e `0x01E47988`) passam pelo `ptt_porta`, que guarda o r2 e o r3. **O PA12, o PTT, é também o fio do RX
+  da serial do cabo:** na v156 os quadros do PC apertavam o PTT (o rádio transmitiu do 5º quadro em diante; abrir a
+  porta sem mandar nada não transmite). Desde a v157, com o remoto ligado pelo cabo, o PTT é só o do quadro.
+- **O espelho.** O `desvio_envia` (`0x01E3ADBC`) chama o `remoto_envia`, que escreve cada linha da janela direto no
+  anel da UART (`0x151AC`, 2400 B), com a mesma trava do `0x01E41676`.
+
+**A saída da UART não anda enquanto a tela se desenha.** O `0x01E41676`, que põe bytes no anel, só trava, copia e
+solta. Quem esvazia é o `0x01E4DFB6`: tira até 1200 B para o buffer `0x16A82` e chama a escrita do dispositivo (o
+ponteiro em `[0x14784]`, + 20). Ele é chamado pelo tratador do fim do envio (`0x01E4DFFA`) e por um tique periódico
+(`0x01E4E074`), e, medido no rádio, nenhum dos dois roda no meio de um redesenho: a tela inteira desenhada de uma vez
+leva só 28 linhas (2048 B), a 115200 e a 460800, e uma tecla que muda a tela leva de 25 a 34 linhas. A v157 esperava
+até 250 ms por lugar no anel, com o rádio parado e a saída também (só o alto da tela chegava ao PC). Desde a v158 a
+linha sem lugar para o pior caso (160 corridas, 488 B) se perde na hora, e fica a marca.
+
+**A tela inteira, por fatias (v158).** O PC pede um nó de uma árvore das 128 linhas, no 5º byte do quadro (o 1 é a
+tela toda, o `n` tem os filhos `2n` e `2n + 1`); o rádio redesenha a tela inteira (`0x01E44812`, a principal, ou
+`0x01E489E0`, o menu) e manda só as linhas do nó. A fatia que não cabe se parte ao meio, até 4 linhas (o pior caso,
+4 × 488 B, cabe). Medido: a tela principal tem 8,3 KB e vem em 8 fatias de 16 linhas, em 1,3 s a 115200 e em 0,73 s a
+460800; cada fatia leva uns 65 ms até a primeira linha. Uma compressão (a cor de duas corridas atrás num byte só)
+deixaria as linhas com 58% do tamanho, medido com a tela de verdade, e ficou de fora por falta de espaço.
+
+**As marcas (v159).** O bit 6 do `CONTA` diz que a última fatia não coube; o bit 5, que o espelho perdeu linha desde a
+última resposta, e a resposta o leva (o bit 5 do lado) e o limpa. Na v158 era uma marca só, e a fatia seguinte a
+apagava: com uma tecla apertada no meio da tela inteira, o PC terminava com um pedaço velho. O carimbo do vigia ficou
+com 5 bits (16 a 31 carimbos de 64 ms: o bit 4 do tempo passado).
+
+**O lado em bits crus (v159).** A resposta leva a vista do WATCH, a evidência no B, a dupla escuta parada no outro
+lado e o rodízio com a terceira no lugar, e o PC faz a conta da letra que o medidor mede (o `remoto.c` ficou 14 B menor
+que na v158).
+
+**A serial do cabo a 460800 (v160).** A partida liga a UART pelo `0x01E4381A(baud)` em `0x01E54A92`, com
+`r0 = 0xE100` (57600) na instrução de antes. O imediato dessa instrução de 4 bytes é `(0x80 | os 7 bits de baixo)`
+rotacionado à direita pelos 9 de cima da meia palavra: `0c61` dá 57600, `0be1` dá 115200 (o do modo UPDATE, em
+`0x01E4C092`, que fica) e `0ae1` dá 460800 (conferido no montador da JieLi). A v157 passou a 115200 e a v160 a 460800,
+que funcionou no rádio; o `conferir.py` confere o valor pelo imediato e que o modo UPDATE segue a 115200.
+
+**A v161 (sem teste no rádio).** A luz não apaga com o remoto ligado: o `gancho_luz` já estava na única chamada que
+apaga (`0x01E46578`). E a fatia não se redesenha no meio de uma digitação (`b[0x14A35]`, os dígitos digitados): a
+tela inteira mostra o lado normal, porque só as rotinas de digitação mostram os dígitos (o `tela.c`), e a digitação
+sumia do visor em menos de 1 s, pelo PC ou pelo teclado do rádio. Ela não se perdia por dentro (a tela inteira só
+zera o `b[0x14685]`, que vale 2 na TX).

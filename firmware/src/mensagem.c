@@ -47,6 +47,24 @@ char *tela_junta(char *s, const char *t);
 #define junta   tela_junta
 #endif
 
+/* As secoes fora do .livre (bancos.ld): no PC, nenhuma. */
+#if defined(TESTE_PC) || defined(TESTE_RX)
+#define NAS_VOZES
+#define NOS_CAMINHOS
+#define NA_RESERVA
+#define NOS_SONS
+#define NO_FIM
+#define NOS_MORTOS(n)
+#else
+#define NAS_VOZES  __attribute__((section(".vozes.rodata.mensagem")))   /* a sobra do C1 (o .livre acabou) */
+/* v138: no lugar dos caminhos das vozes (bancos.ld), so o que o nosso codigo chama - nunca o firmware */
+#define NOS_CAMINHOS  __attribute__((section(".caminhos.mensagem")))
+#define NOS_SONS      __attribute__((section(".sons.mensagem")))      /* v144: as mesmas regras, nas entradas mortas da tabela de caminhos */
+#define NO_FIM        __attribute__((section(".fim.mensagem")))       /* v144: na area do fim da imagem, com o bancos.c */
+#define NOS_MORTOS(n) __attribute__((section(".mortos" #n ".mensagem")))   /* v152: nos nomes de item de fabrica mortos; v156: 11 a 20 no codigo morto do espectro */
+#define NA_RESERVA    __attribute__((section(".reserva.mensagem")))   /* v140: as mesmas regras, na tabela de menu morta */
+#endif
+
 /* Hz na unidade do reg 0x71 (x 10.32444, a conta do roger), para um tom que so se sabe na hora (o do
  * Morse), sem ponto flutuante: 330382 / 32000. */
 #define HZ_INT(f)  (((f) * 330382u + 16000) / 32000)
@@ -64,7 +82,7 @@ static const u8 MORSE[58] = {
 };
 
 /* O codigo de um caractere (minuscula vira maiuscula), ou 0. */
-static unsigned morse_de(unsigned c)
+NOS_MORTOS(19) static unsigned morse_de(unsigned c)
 {
     if (c >= 'a' && c <= 'z')
         c -= 'a' - 'A';
@@ -115,7 +133,7 @@ void morse_toca(const char *texto, unsigned n, unsigned wpm, unsigned hz)
  * Endereco: 6 letras deslocadas 1 bit para a esquerda (espaco no que faltar) e o byte do SSID:
  * 0x60 | ssid << 1, com o bit 7 = C no destino (comando, como o APRS manda) e o bit 0 no ultimo
  * endereco. O indicativo vem em texto ("PY2ABC-7"): ate 6 letras e o SSID depois do '-'. */
-static u8 *ax_endereco(u8 *p, const char *ind, unsigned n, unsigned extra)
+NOS_MORTOS(13) static u8 *ax_endereco(u8 *p, const char *ind, unsigned n, unsigned extra)
 {
     unsigned i = 0, k, ssid = 0;
 
@@ -135,7 +153,7 @@ static u8 *ax_endereco(u8 *p, const char *ind, unsigned n, unsigned extra)
 }
 
 /* O FCS do AX.25: CRC-16 do X.25 (polinomio 0x8408 refletido, comeca em 0xFFFF, sai invertido). */
-static u16 crc_byte(u16 c, unsigned v)
+NOS_MORTOS(20) static u16 crc_byte(u16 c, unsigned v)
 {
     unsigned k;
 
@@ -160,7 +178,7 @@ static u16 fcs(const u8 *p, unsigned n)
 #define DESTINO_APRS  "APZBJ8"            /* APZ = software experimental (lista de tocalls do APRS) */
 static const char WIDE[2][8] = {"WIDE1-1", "WIDE2-1"};
 
-unsigned ax_quadro(u8 *q, const char *origem, unsigned n_origem, unsigned caminho,
+NOS_MORTOS(14) unsigned ax_quadro(u8 *q, const char *origem, unsigned n_origem, unsigned caminho,
                    const char *info, unsigned n_info)
 {
     u8 *p = q;
@@ -202,22 +220,6 @@ struct afsk_dac {
 
 /* Um seno de 64 pontos, a -12 dB do fundo de escala: so o primeiro quarto, de 0 a 16, porque o segundo o
  * espelha e a segunda metade e a primeira negativa (v123, pelo espaco; os 64 pontos saem iguais). */
-#if defined(TESTE_PC) || defined(TESTE_RX)
-#define NAS_VOZES
-#define NOS_CAMINHOS
-#define NA_RESERVA
-#define NOS_SONS
-#define NO_FIM
-#define NOS_MORTOS(n)
-#else
-#define NAS_VOZES  __attribute__((section(".vozes.rodata.mensagem")))   /* a sobra do C1 (o .livre acabou) */
-/* v138: no lugar dos caminhos das vozes (bancos.ld), so o que o nosso codigo chama - nunca o firmware */
-#define NOS_CAMINHOS  __attribute__((section(".caminhos.mensagem")))
-#define NOS_SONS      __attribute__((section(".sons.mensagem")))      /* v144: as mesmas regras, nas entradas mortas da tabela de caminhos */
-#define NO_FIM        __attribute__((section(".fim.mensagem")))       /* v144: na area do fim da imagem, com o bancos.c */
-#define NOS_MORTOS(n) __attribute__((section(".mortos" #n ".mensagem")))   /* v152: nos nomes de item de fabrica mortos */
-#define NA_RESERVA    __attribute__((section(".reserva.mensagem")))   /* v140: as mesmas regras, na tabela de menu morta */
-#endif
 NAS_VOZES static const short seno17[17] = {
     0, 784, 1561, 2322, 3061, 3771, 4445, 5075, 5657, 6184, 6652, 7055, 7391, 7656, 7846, 7961, 8000};
 
@@ -515,7 +517,7 @@ static char *coordenada(char *p, unsigned graus, unsigned cmin, unsigned casas, 
 /* "DDMM.mm" + a letra, de uma posicao sem compressao, em "DD MM.mmL"; devolve o fim, ou 0 se nao for
  * uma posicao. graus: 2 na latitude, 3 na longitude. Copiada como veio: os espacos da posicao
  * imprecisa de proposito ficam. */
-static char *aprs_coordenada(char *s, const u8 *p, unsigned graus)
+NOS_MORTOS(12) static char *aprs_coordenada(char *s, const u8 *p, unsigned graus)
 {
     unsigned k;
 
@@ -534,7 +536,7 @@ static char *aprs_coordenada(char *s, const u8 *p, unsigned graus)
 }
 
 /* " NOME" do simbolo, se e da lista da tabela primaria; senao, o caractere dele. */
-static char *simbolo(char *p, unsigned tabela, unsigned codigo)
+NOS_MORTOS(16) static char *simbolo(char *p, unsigned tabela, unsigned codigo)
 {
     const char *t = tabela == '/' ? SIMBOLOS : "";
 
@@ -576,7 +578,7 @@ NOS_SONS static char *altitude(char *p, int metros)
 
 /* n algarismos (e espacos ou pontos de "sem dado") em x: o valor, ou SEM_DADO sem dado ou fora do formato.
  * Um '-' na frente vale (a temperatura). */
-static int campo(const u8 *x, unsigned n)
+NOS_MORTOS(18) static int campo(const u8 *x, unsigned n)
 {
     int v = 0, sinal = 1;
 
@@ -1317,6 +1319,10 @@ FIRMWARE(AF, 0x01E39DEA);          void AF(unsigned);
 FIRMWARE(PEDE_AMPLI, 0x01E39E2C);  void PEDE_AMPLI(unsigned);
 FIRMWARE(WDT, 0x01E37E76);         void WDT(void);
 FIRMWARE(TECLAS, 0x01E43D50);      unsigned TECLAS(void);     /* codigo cru, 255 = nenhuma */
+#ifndef TESTE_RX
+unsigned remoto_tecla(void);        /* remoto.c (v156): a varredura, ou a tecla do controle remoto com nenhuma apertada */
+#define TECLAS  remoto_tecla
+#endif
 FIRMWARE(COLUNAS, 0x01E43CF4);     void COLUNAS(unsigned);    /* o laco repoe as colunas com 60 */
 FIRMWARE(DESARMA_DW, 0x01E3FDE4);  void DESARMA_DW(void);     /* a dupla escuta no lado em evidencia */
 #define TX_ESTADO      RAM(u8, 0x0001533C)       /* 0 parado, 1 TX, 2 recusada */
@@ -1534,7 +1540,7 @@ unsigned gancho_teclas(void)
 }
 
 /* Parar no meio: o PTT ou qualquer tecla. */
-static unsigned para(void)
+NOS_MORTOS(12) static unsigned para(void)
 {
     unsigned parou;
 
@@ -1696,7 +1702,7 @@ void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas)
 void luz_aplica(void);
 FIRMWARE(TELA_TODA, 0x01E44812);    void TELA_TODA(void);
 #define BRILHO        RAM(u8, 0x00014BE5)
-/* Acesa, a tela branca e o brilho no maximo; o bit 7 entra por ultimo, porque e ele que corta o LCD (b_envia). */
+/* Acesa, a tela branca e o brilho no maximo; o bit 7 entra por ultimo, porque e ele que corta o LCD (remoto_envia). */
 __attribute__((noinline)) NOS_MORTOS(2) static void lanterna(unsigned liga)
 {
     if (liga) {
@@ -2682,7 +2688,7 @@ FIRMWARE(AM_FM, 0x01E440C4);        void AM_FM(unsigned am);      /* 1 AM, o res
 FIRMWARE(FILTRO, 0x01E4A980);       void FILTRO(unsigned);        /* o 0x43 do espectro: 0 o largo */
 void aplica_audio(void);
 void aplica_eq(void);
-__attribute__((noinline)) static void filtro_rx(unsigned liga, unsigned era3)
+NOS_MORTOS(11) __attribute__((noinline)) static void filtro_rx(unsigned liga, unsigned era3)
 {
     if (liga) {
         AM_FM(0);
@@ -2745,7 +2751,7 @@ static unsigned conta_setor(unsigned s)
 }
 
 /* Apaga o historico (o EXIT segurado na tela): os dois setores, e o primeiro recomeca. */
-static int hist_limpa(unsigned *anel)
+NOS_MORTOS(17) static int hist_limpa(unsigned *anel)
 {
     APAGA_SETOR(HIST_SETOR(0));
     APAGA_SETOR(HIST_SETOR(1));
@@ -2836,7 +2842,7 @@ NA_RESERVA static u32 hist_endereco(int hist, unsigned anel, int i)
 
 /* O registro da flash em e e o mesmo r (o texto, a origem e o numero), chegado ha menos de 30 s?
  * Separada: o buffer dela nao soma com o registro do guarda no caminho da gravacao. */
-__attribute__((noinline)) static unsigned registro_igual(u32 e, const struct registro_rx *r)
+NOS_MORTOS(15) __attribute__((noinline)) static unsigned registro_igual(u32 e, const struct registro_rx *r)
 {
     u8 b[12];
     unsigned k, j;

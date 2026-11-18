@@ -53,7 +53,7 @@ def partes(caminho):
 dados, entradas, chave, app = partes(novo)
 dados_velhos, entradas_velhas, _, app_velho = partes(original)
 fonte = ''.join(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', f),
-                     encoding='utf-8').read() for f in ('bancos.c', 'tela.c', 'telas.c', 'mensagem.c'))
+                     encoding='utf-8').read() for f in ('bancos.c', 'tela.c', 'telas.c', 'mensagem.c', 'remoto.c'))
 declaradas = {int(e, 16): n for n, e in re.findall(r'^FIRMWARE\((\w+), (0x[0-9A-Fa-f]+)\)', fonte, re.M)}
 
 
@@ -196,6 +196,11 @@ sitios_livre = ({s for s, _ in montar.REALCE_SITIOS_GANCHO} | {s for s, _ in mon
                | {s for s, _, _, _ in montar.CHAMADAS_LIVRE + montar.GOTOS_LIVRE + montar.CHAMADAS_NO_LUGAR}
                | {s for s, _, _, _, _, _ in montar.MENU_DESVIOS} | {s for s, _ in montar.SETAS}
                | {montar.PONTEIRO_EM})   # v53: call menu_abre
+# v156: o meio (+2) de um call/goto de 4 bytes que o montar grava nao e comeco de instrucao: o deslocamento dele com o
+# comeco da instrucao seguinte casou com um call (o goto do desvio_exit_lista em 0x01E4D4F4, "fe ea be ea", lido em
+# 0x01E4D4F6 como "be ea d8 ee"), so pelo lugar onde o .livre caiu
+meio_nosso = {s + 2 for s in sitios_vozes | sitios_livre
+              if app[s - montar.BASE_APP + 1] == 0xEA and app[s - montar.BASE_APP] & 0x80}
 imagens = []
 for e in entradas:
     if e['type'] in jlfw.FLASH_TYPES:
@@ -204,7 +209,7 @@ for e in entradas:
 desvios_novos, ruins = 0, []
 for o in range(0, len(app) - 3, 2):
     if (app[o + 1] != 0xEA or not app[o] & 0x80 or app[o:o + 4] == app_velho[o:o + 4]
-            or na_livre(montar.BASE_APP + o) or nos_caminhos(montar.BASE_APP + o)):
+            or na_livre(montar.BASE_APP + o) or nos_caminhos(montar.BASE_APP + o) or montar.BASE_APP + o in meio_nosso):
         continue
     d22 = ((app[o] & 0x3F) << 16) | (app[o + 3] << 8) | app[o + 2]
     destino = montar.BASE_APP + o + 4 + 2 * (d22 - 0x400000 if d22 & 0x200000 else d22)
@@ -400,7 +405,8 @@ for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
         if binario[o + 1] == 0xEA and binario[o] & 0x80:
             d22 = ((binario[o] & 0x3F) << 16) | (binario[o + 3] << 8) | binario[o + 2]
             pc = (onde if o < SEG2_OFF else RAM + o - SEG2_OFF) + 4
-            if dentro(pc + 2 * (d22 - 0x400000 if d22 & 0x200000 else d22)) and onde not in sitios_livre:
+            if (dentro(pc + 2 * (d22 - 0x400000 if d22 & 0x200000 else d22)) and onde not in sitios_livre
+                    and not (binario is app and onde in meio_nosso)):
                 problemas.append(f'{nome_app}: call/goto em {onde:#x} cai dentro da faixa')
 print(f'2h. tela B ({len(tela)} B) em {montar.LIVRE:#x}, no lugar do G.729 e do MP3 (ate '
       f'{montar.LIVRE_FIM:#x}); tipo dos dois no registro de fabrica para 0, o resto dos registros intacto; '
@@ -476,7 +482,11 @@ for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
             d22 = ((binario[o] & 0x3F) << 16) | (binario[o + 3] << 8) | binario[o + 2]
             pc = (onde if o < SEG2_OFF else RAM + o - SEG2_OFF) + 4
             if dentro_c(pc + 2 * (d22 - 0x400000 if d22 & 0x200000 else d22)):
-                problemas.append(f'{nome_app}: call/goto em {onde:#x} cai dentro dos caminhos')
+                # v156: as rotinas do espectro mortas inteiras eram chamadas na fabrica de sitios que o montar trocou
+                if binario is app_velho and app[o:o + 4] != app_velho[o:o + 4]:
+                    excecoes_c += 1
+                else:
+                    problemas.append(f'{nome_app}: call/goto em {onde:#x} cai dentro dos caminhos')
 print(f'2j. .caminhos ({len(caminhos)} B) em {montar.CAMINHOS:#x}, no lugar dos caminhos das vozes (ate '
       f'{montar.CAMINHOS_FIM:#x}); remendos das vozes no lugar, o "*" do editor no B0; nada de fora aponta para '
       f'a faixa, em todo deslocamento, nem no de fabrica nem no novo ({excecoes_c} valores mortos conferidos byte '
@@ -974,6 +984,22 @@ for sitio, antes, depois, oque in montar.BARRAMENTO_REMENDOS:
     if not ok:
         erros.append(f'barramento: remendo errado em {sitio:#x}')
 previsto_tela += [(s_, s_ + len(a_) - 1, 'barramento: ' + d_) for s_, a_, _, d_ in montar.BARRAMENTO_REMENDOS]
+# 4x. a serial do cabo (v157 a 115200, v160 a 460800): o "r0 = 0xE100" de antes da ligacao da UART na partida vira o
+# "r0 = imediato" da mesma forma que a fabrica usa ao entrar no modo UPDATE (o 0x1C200, que fica), com o valor de
+# montar.SERIAL_BAUD, e a chamada seguinte continua sendo a da ligacao.
+for sitio, antes, depois, oque in montar.SERIAL_REMENDOS:
+    o, u = sitio - montar.BASE_APP, montar.SERIAL_UPDATE_EM - montar.BASE_APP
+    ok = (bytes(app_velho[o:o + 4]) == antes and bytes(app[o:o + 4]) == depois
+          and montar.imediato_rotacionado(antes) == 57600 and montar.imediato_rotacionado(depois) == montar.SERIAL_BAUD
+          and bytes(app_velho[u:u + 4]) == bytes(app[u:u + 4]) and bytes(app[u:u + 2]) == depois[:2]
+          and montar.imediato_rotacionado(app[u:u + 4]) == 115200
+          and bytes(app[o + 4:o + 8]) == bytes(app_velho[o + 4:o + 8]) == montar.monta_call(sitio + 4, montar.SERIAL_LIGA)
+          and bytes(app[u + 4:u + 8]) == montar.monta_call(montar.SERIAL_UPDATE_EM + 4, montar.SERIAL_LIGA))
+    print(f'4x. serial {sitio:#x}: {oque}, na forma do modo UPDATE em {montar.SERIAL_UPDATE_EM:#x}, que fica a 115200: '
+          + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append(f'serial: remendo errado em {sitio:#x}')
+previsto_tela += [(s_, s_ + len(a_) - 1, 'serial: ' + d_) for s_, a_, _, d_ in montar.SERIAL_REMENDOS]
 # v65: o ponteiro da tecla 0 do editor: de fabrica o da sequencia original, remendado o da nossa, que
 # tem de estar no .livre e trazer o espaco primeiro e o 0 no fim. v86: o do bloco do microfone, o
 # gancho_mic, tambem no .livre.

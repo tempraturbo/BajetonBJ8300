@@ -32,6 +32,19 @@ def rotina_de(a):
     return inicios[i] if i >= 0 else None
 
 
+def empilhados(t):
+    """Os bytes de um "[--sp] = {...}": 4 por registrador da lista, com o rets, as faixas "r7-r4" e os soltos
+    "r5, r4" (v156: ate ali so "rets, rN" e "rets, rA-rB" contavam, e "{rets, r5, r4}" valia 0)."""
+    m = re.match(r'\[--sp\] = \{([^}]*)\}', t)
+    if not m:
+        return 0
+    n = 0
+    for p in m.group(1).split(','):
+        f = re.fullmatch(r'\s*r(\d+)-r(\d+)\s*', p)
+        n += int(f.group(1)) - int(f.group(2)) + 1 if f else 1
+    return 4 * n
+
+
 quadro, chamadas = {}, {}
 pos = {a: i for i, (a, _, _) in enumerate(ins)}
 for r in inicios:
@@ -39,9 +52,8 @@ for r in inicios:
         continue
     q = 0
     for a, n, t in ins[pos[r]:pos[r] + 4]:
-        p = re.match(r'\[--sp\] = \{rets(?:, r(\d+)(?:-r(\d+))?)?\}', t)
-        if p:
-            q += 4 * (1 + (0 if not p.group(1) else int(p.group(1)) - int(p.group(2) or p.group(1)) + 1))
+        if re.match(r'\[--sp\] = \{rets', t):
+            q += empilhados(t)
         s = re.match(r'sp \+= -(\d+)', t)
         if s:
             q += int(s.group(1))

@@ -539,11 +539,12 @@ static void revalida_lados(void)
  */
 /* O envio do Morse e do APRS armado ou no ar (v65, mensagem.c): o 0x9044 dos ajustes (b[0x14BF0]; ate a
  * v110, o 0x903A, que agora e do EQ); e (v112) a caixa e a volta da tela MESSAGES, no 0x9046 e no 0x9043
- * (b[0x14BF2] e b[0x14BEF]). Zerados na partida e nos ajustes que chegam pelo cabo ou pelo retorno aos de
- * fabrica, para nada transmitir nem voltar sozinho. */
+ * (b[0x14BF2] e b[0x14BEF]); e (v156) o estado do controle remoto, no 0x9042 (b[0x14BEE], remoto.c). Zerados na
+ * partida e nos ajustes que chegam pelo cabo ou pelo retorno aos de fabrica, para nada transmitir nem voltar
+ * sozinho. */
 NA_LIVRE_COD static void zera_envio(void)
 {
-    *(volatile u8 *)0x00014BEF = 0;
+    *(volatile u16 *)0x00014BEE = 0;      /* o remoto e a volta da tela MESSAGES */
     *(volatile u16 *)0x00014BF0 = 0;      /* o envio e o EXIT segurado (mensagem.c, gancho_teclas) */
     *(volatile u16 *)0x00014BF2 = 0;      /* e, v141, o banco aberto no CHANNELS (mensagem.c) */
 }
@@ -889,7 +890,7 @@ NA_LIVRE_COD u32 watch_le_tudo(void)
     return v.modo | (u32)v.mdf_c << 8 | (u32)v.canal_c << 16;
 }
 
-NA_LIVRE_COD unsigned watch_vista(void)
+__attribute__((section(".mortos14.bancos"))) unsigned watch_vista(void)   /* v158: na sobra do ax_quadro, pelo .livre do remoto */
 {
     return watch_le_tudo() & 0xFF;
 }
@@ -1942,11 +1943,13 @@ NA_LIVRE_COD void gancho_ajustes(void)
  * 3, 11 e 20 - 0x01E41876 e 0x01E41A0C) chega a 0: 0x01E394D6(0) em 0x01E46578, o unico lugar que
  * apaga (a marca da luz, b[0x15386], so vai a 0 dentro dela; os outros tres chamadores acendem). No
  * espectro (modo 20, so a entrada por tecla o grava, 0x01E4CF7E) ela fica acesa. Nada e gravado: ao
- * sair do espectro, ou ao religar o radio, o ABR volta a valer. */
+ * sair do espectro, ou ao religar o radio, o ABR volta a valer. v161: com o controle remoto ligado (o REM do
+ * remoto.c, que o vigia zera 1 s depois do ultimo quadro do PC) ela tambem fica acesa: apagada, a tecla seguinte so
+ * a acende (docs/engenharia-reversa.md, secao 24), e a primeira tecla do PC se perdia sem ninguem ver a luz. */
 #define MODO_TELA      (*(volatile u8 *)0x0001533D)
 NA_LIVRE_COD void gancho_luz(unsigned acende)
 {
-    if (MODO_TELA != 20)
+    if (MODO_TELA != 20 && !*(volatile u8 *)0x00014BEE)
         LUZ(acende);
 }
 

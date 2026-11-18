@@ -323,16 +323,17 @@ static unsigned avanco(unsigned l, unsigned e)
 }
 
 /* Uma letra com o canto de cima em (x, y), cada ponto um quadrado de e x e. Devolve quanto andar:
- * a largura dela mais uma coluna de espaco. */
+ * a largura dela mais uma coluna de espaco. O laco anda pela coluna e soma e ao x (v156): sem o indice e o
+ * x + i * e guardados, o quadro caiu de 80 para 72 B, e ela esta no fim dos caminhos mais fundos da tela. */
 static unsigned letra(unsigned x, unsigned y, unsigned c, unsigned e, unsigned cor)
 {
-    unsigned l = fonte_b_letra[indice(c)], i, b, r;
+    unsigned l = fonte_b_letra[indice(c)], k = l >> 3, fim = k + (l & 7), b, r;
 
     if (x < JAN_X1 && y < JAN_Y1 && y + FONTE_B_ALTURA * e > JAN_Y0)
-        for (i = 0; i < (l & 7); i++)
-            for (b = fonte_b_colunas[(l >> 3) + i], r = y; b; b >>= 1, r += e)
+        for (; k < fim; k++, x += e)
+            for (b = fonte_b_colunas[k], r = y; b; b >>= 1, r += e)
                 if (b & 1)
-                    retangulo(x + i * e, r, x + i * e + e, r + e, cor);
+                    retangulo(x, r, x + e, r + e, cor);
     return ((l & 7) + 1) * e;
 }
 
@@ -676,17 +677,20 @@ void LE_FLASH(u32, void *, unsigned);   /* o endereco vem do FIRMWARE() do telas
  * Separada: o buffer de 32 B fica no quadro dela, e nao no da faixa, que desenha. */
 SEPARADA static u32 le_canal_c(unsigned canal, char *nome12)
 {
-    u8 r[32];
+    const u8 *r = (const u8 *)nome12;
     u32 f = 0;
     int k;
 
-    LE_FLASH((u32)canal * 32, r, sizeof r);
+    /* v156: a frequencia e depois o nome, lidos no buffer de quem chama (16 B), e nao o registro de 32 B na pilha:
+     * este e o fim do caminho mais fundo da tela B (a faixa da terceira), e o buffer passava do de fabrica */
+    LE_FLASH((u32)canal * 32, nome12, 4);
     if (r[0] == 0xFF || r[3] == 0)
         return 0;
     for (k = 3; k >= 0; k--)
         f = f * 100 + (r[k] >> 4) * 10 + (r[k] & 15);
-    for (k = 0; k < 12 && r[20 + k] != 0 && r[20 + k] != 0xFF; k++)
-        nome12[k] = r[20 + k];
+    LE_FLASH((u32)canal * 32 + 20, nome12, 12);
+    for (k = 0; k < 12 && nome12[k] != 0 && (u8)nome12[k] != 0xFF; k++)
+        ;
     nome12[k] = 0;
     return f;
 }
@@ -738,15 +742,12 @@ SEPARADA static void faixa_lado(const struct estado *e, unsigned i)
 /* A faixa da terceira - a que esta fora dos dois lados: a C, ou o B quando a C esta no lado B -,
  * lida do chip de dados e mostrada como o MDF dela pede (0 nome, 1 frequencia, 2 numero). Recebendo:
  * o outro lado tem sinal com a terceira no lugar dele. */
-SEPARADA static void faixa_terceira(const struct estado *e)
+SEPARADA static void faixa_terceira_texto(const struct estado *e, u32 t, unsigned j, unsigned y)
 {
-    u32 t, f = 0;
-    unsigned canal, mdf, n, j = 3 - LETRA(e, 1), y = Y_FAIXA(e, j);
+    u32 f = 0;
+    unsigned canal, mdf, n;
     char s[16];
 
-    if (JAN_Y0 >= y + ALTURA_FAIXA || JAN_Y1 <= y)
-        return;
-    t = terceira();
     canal = t & 0xFFFF;
     mdf = t >> 16 & 0xFF;
     if (t & TERCEIRA_VFO) {                /* v49: em VFO, a frequencia e "VFO", como a faixa de um lado */
@@ -767,6 +768,18 @@ SEPARADA static void faixa_terceira(const struct estado *e)
     }
     faixa(y, 'A' + j, s, n, !c_no_lugar() ? 0 : e->lado[!e->evidencia].sinal ? e->lado[!e->evidencia].sinal
                                                : outro_recebendo() ? SEM_NIVEL : 0);
+}
+
+/* v156: a terceira se acha antes do texto, que so entra na pilha depois: o caminho dela ate a leitura do canal
+ * (terceira_de, canal_existe, a flash) era o mais fundo da tela B e passava 32 B do de fabrica (pilha.py, com o
+ * "{rets, r5, r4}" contado). */
+SEPARADA static void faixa_terceira(const struct estado *e)
+{
+    unsigned j = 3 - LETRA(e, 1), y = Y_FAIXA(e, j);
+
+    if (JAN_Y0 >= y + ALTURA_FAIXA || JAN_Y1 <= y)
+        return;
+    faixa_terceira_texto(e, terceira(), j, y);
 }
 
 /* O outro lado, compacto: selo, o texto da exibicao (no VFO, a frequencia inteira), o canal e um
@@ -838,40 +851,11 @@ SEPARADA static unsigned etiqueta_nivel(unsigned x, const char *s, unsigned nive
     return nivel && nivel < 5 && x < 96 ? etiqueta(x, 2, s, fundos[nivel - 1], cores[nivel - 1], 0) : x;
 }
 
-SEPARADA static void barra_estado(const struct estado *e)
+/* A tensao e a bateria, no fim da barra. */
+SEPARADA static void tensao_bateria(const struct estado *e)
 {
     char s[8], *p;
-    unsigned i, x = 4;
-
-    pinta(0, 0, 160, ALTURA_ESTADO - 1, COR_ESTADO);
-    pinta(0, ALTURA_ESTADO - 1, 160, ALTURA_ESTADO, COR_LINHA);
-    /* RX ou TX: o mesmo chip, com a bolinha, em verde ou em vermelho (v38: o TX tinha so o texto) */
-    if (e->tx || e->rx) {
-        unsigned cor = e->tx ? COR_SEG_VERMELHO : COR_TEXTO_RX;
-
-        pinta(x, 2, x + 22, 13, e->tx ? COR_CHIP_VERMELHO : COR_CHIP_RX);
-        pinta(x + 3, 6, x + 6, 9, cor);
-        texto(x + 8, 4, e->tx ? "TX" : "RX", 1, cor);
-        x += 24;
-    }
-    if (e->rx && MODO_TELA == 1) {
-        quem_recebe(e, x);
-    } else {
-        if (e->vox)
-            x = etiqueta(x, 2, "VOX", COR_CHIP_DW, COR_TEXTO, 0);
-        if (e->dw)
-            x = etiqueta(x, 2, e->vista >= VISTA_TRIPLE ? "TW" : "DW", COR_CHIP_DW, COR_TEXTO, 0);   /* v142 */
-        if (e->mo)
-            x = etiqueta(x, 2, "MO", COR_CHIP_DW, COR_TEXTO, 0);
-        x = etiqueta_nivel(x, "NR", e->nr & 15);
-        x = etiqueta_nivel(x, "NG", e->nr >> 4);
-        if (e->dtmf)
-            x = texto(x + 1, 4, ICONE_NOTA, 1, COR_VERDE) + 1;
-        if (e->bt)
-            x = texto(x + 1, 4, ICONE_BLUETOOTH, 1, COR_VERDE) + 1;
-        if (e->trava)
-            texto(x + 1, 4, ICONE_CADEADO, 1, COR_VERDE);
-    }
+    unsigned i;
 
     p = numero(s, e->tensao / 10, 1);
     *p++ = '.';
@@ -887,6 +871,46 @@ SEPARADA static void barra_estado(const struct estado *e)
         for (i = 0; e->bateria <= 3 && i <= e->bateria; i++)
             pinta(142 + i * 3, 6, 144 + i * 3, 10, COR_VERDE);
     }
+}
+
+/* v156: no menu recebendo, a tensao vai antes e o quem_recebe por ultimo, em salto de cauda: sem o quadro da barra
+ * embaixo do dele, que era o caminho mais fundo da interface (pilha.py, com o "{rets, r5, r4}" contado). A caixa
+ * dele para em FIM_RECEBENDO, antes da tensao, e a tela sai igual. Fora dele, a ordem de sempre. */
+SEPARADA static void barra_estado(const struct estado *e)
+{
+    unsigned x = 4;
+
+    pinta(0, 0, 160, ALTURA_ESTADO - 1, COR_ESTADO);
+    pinta(0, ALTURA_ESTADO - 1, 160, ALTURA_ESTADO, COR_LINHA);
+    /* RX ou TX: o mesmo chip, com a bolinha, em verde ou em vermelho (v38: o TX tinha so o texto) */
+    if (e->tx || e->rx) {
+        unsigned cor = e->tx ? COR_SEG_VERMELHO : COR_TEXTO_RX;
+
+        pinta(x, 2, x + 22, 13, e->tx ? COR_CHIP_VERMELHO : COR_CHIP_RX);
+        pinta(x + 3, 6, x + 6, 9, cor);
+        texto(x + 8, 4, e->tx ? "TX" : "RX", 1, cor);
+        x += 24;
+    }
+    if (e->rx && MODO_TELA == 1) {
+        tensao_bateria(e);
+        quem_recebe(e, x);
+        return;
+    }
+    if (e->vox)
+        x = etiqueta(x, 2, "VOX", COR_CHIP_DW, COR_TEXTO, 0);
+    if (e->dw)
+        x = etiqueta(x, 2, e->vista >= VISTA_TRIPLE ? "TW" : "DW", COR_CHIP_DW, COR_TEXTO, 0);   /* v142 */
+    if (e->mo)
+        x = etiqueta(x, 2, "MO", COR_CHIP_DW, COR_TEXTO, 0);
+    x = etiqueta_nivel(x, "NR", e->nr & 15);
+    x = etiqueta_nivel(x, "NG", e->nr >> 4);
+    if (e->dtmf)
+        x = texto(x + 1, 4, ICONE_NOTA, 1, COR_VERDE) + 1;
+    if (e->bt)
+        x = texto(x + 1, 4, ICONE_BLUETOOTH, 1, COR_VERDE) + 1;
+    if (e->trava)
+        texto(x + 1, 4, ICONE_CADEADO, 1, COR_VERDE);
+    tensao_bateria(e);
 }
 
 /* A caixa do DTMF (modo de tela 7, a tecla #), no lugar da de fabrica (0x01E4DA54 abrindo,
@@ -1675,12 +1699,6 @@ static unsigned no_menu(void)
 
 /* 0x01E3C132(0): a tela inteira. Ela zera o estado de TX (0x01E3C1D4); o gancho tambem. Com 1 e a
  * tela de um VFO, que fica a de fabrica e nao mexe no estado de TX (0x01E3C152 pula 0x01E3C1D4). */
-/* A lanterna (v152, mensagem.c) acesa: nada vai ao LCD, e o branco fica, com a TX ou com o que for. */
-u32 b_envia(void)
-{
-    return RAM(u8, 0x00014BDA) >> 7;
-}
-
 u32 b_tela(u32 um_vfo)
 {
     if (no_menu()) {
@@ -2050,7 +2068,9 @@ u32 b_transmissao(u32 estado)
             ".previous")
 
 DESVIO(desvio_tela, b_tela, 0x01E3C136, "0x77, 0x04, 0xe2, 0x9e");
-DESVIO(desvio_envia, b_envia, 0x01E3ADC4, "0x77, 0x04, 0xc0, 0xff, 0x40, 0x6f, 0x40, 0x01");
+/* v156: o gancho do envio e o do controle remoto (remoto.c): a lanterna (v152, mensagem.c) acesa segura o branco no
+ * LCD, com a TX ou com o que for; e, com o espelho ligado, a janela vai ao PC antes de ir ao LCD. */
+DESVIO(desvio_envia, remoto_envia, 0x01E3ADC4, "0x77, 0x04, 0xc0, 0xff, 0x40, 0x6f, 0x40, 0x01");
 DESVIO(desvio_barra, b_barra, 0x01E3B060, "0x76, 0x04, 0xe2, 0x9d");
 DESVIO(desvio_nivel_bateria, b_barra, 0x01E3B044, "0xc1, 0xff, 0x80, 0x46, 0x01, 0x00");
 DESVIO(desvio_cadeado, b_barra, 0x01E3AE54, "0x75, 0x04, 0xe2, 0x9d");

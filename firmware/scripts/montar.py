@@ -135,6 +135,17 @@ TABELA_SONS_BASE = 0x01E40636
 MORTOS = ((0x01E5A768, 0x01E5A7D0), (0x01E5A7E0, 0x01E5A82E), (0x01E5AA00, 0x01E5AA30), (0x01E5A872, 0x01E5A8A0),
           (0x01E5A9BC, 0x01E5A9E8), (0x01E5A96E, 0x01E5A98C), (0x01E5A8AE, 0x01E5A8C6), (0x01E5A90E, 0x01E5A920),
           (0x01E5A748, 0x01E5A758), (0x01E5A934, 0x01E5A942))
+# v156: o codigo de fabrica do espectro que os ganchos dele deixaram sem chamador. Cinco rotinas trocadas inteiras por
+# um goto na entrada (ESPECTRO_FUNCOES e ESPECTRO_B_FUNCOES), da instrucao depois do goto ao fim delas (no b_esp_freq,
+# ate a segunda entrada, 0x01E45DE6, que o laco do sinal chama), e duas rotinas inteiras: a do registro do ponto
+# (0x01E4AD7C, as duas chamadas trocadas pelo gancho_registra) e a da linha do limite (0x01E4AAA8, a chamada do
+# grafico trocada pelo gancho_limite; as outras quatro sao do b_esp_eixo, morto). Prova sobre a imagem montada, com
+# o pedaco da RAM desmontado em 0x02000000: nenhum valor de 32 bits aponta para dentro, em nenhum deslocamento, e
+# nenhum desvio de fora cai dentro (docs/engenharia-reversa.md, secao 38). Recebem rotinas do mensagem.c como estao,
+# e o .livre que elas deixam recebe o remoto.c.
+MORTOS += ((0x01E4AB2E, 0x01E4ABDC), (0x01E4ABE0, 0x01E4AC74), (0x01E4AFC6, 0x01E4B04C), (0x01E4AD7C, 0x01E4ADFE),
+           (0x01E4AAA8, 0x01E4AB2A), (0x01E4B050, 0x01E4B0A0), (0x01E45D9A, 0x01E45DE6), (0x01E4AE02, 0x01E4AE44),
+           (0x01E4A9A0, 0x01E4A9C2), (0x01E4A9C6, 0x01E4A9E6))
 CAMINHOS_SHA256 = '8080d5e5e38c725b194295fa99e78806369f0dbda4ed50024e4568bba5fc3934'
 CAMINHOS_REMENDOS = ((0x01E60B58, bytes.fromhex('25ace501'), bytes.fromhex('f8b6e501'),
                       'editor 123: o "*" da tecla * no caminho do B0, fora da faixa'),)
@@ -151,7 +162,8 @@ CAMINHOS_MORTOS = ((0x01E55AD0, 0x01E55AD6, 'o caminho do C16 no main, no trecho
 # dentro dos bytes cobertos, e nenhuma das treze le argumento da pilha de quem chama.
 TELA_DESVIOS = (
     (0x01E3C132, bytes.fromhex('7704e29e'), 'desvio_tela', 'b_tela', 'a tela de dois VFOs inteira'),
-    (0x01E3ADBC, bytes.fromhex('7704c0ff406f4001'), 'desvio_envia', 'b_envia', 'o envio ao LCD: a lanterna segura a tela branca'),
+    (0x01E3ADBC, bytes.fromhex('7704c0ff406f4001'), 'desvio_envia', 'remoto_envia',
+     'o envio ao LCD: a lanterna segura a tela branca; o espelho do controle remoto (v156)'),
     (0x01E3B05C, bytes.fromhex('7604e29d'), 'desvio_barra', 'b_barra', 'a barra de cima'),
     (0x01E3B03E, bytes.fromhex('c1ff80460100'), 'desvio_nivel_bateria', 'b_barra', 'o nivel da bateria'),
     (0x01E3AE50, bytes.fromhex('7504e29d'), 'desvio_cadeado', 'b_barra', 'o icone do cadeado'),
@@ -655,6 +667,19 @@ CHAMADAS_LIVRE += ((0x01E410EA, 0x01E3FDE4, 'gancho_tx_desarma', 'TX-A/B/C: a te
 # que so para no 0, e o CHIRP completa o nome com 0xFF: o editor abria com 12/12 e os 0xFF como
 # letras. O tamanho e a copia para o editor (COPIA_MEM, com o tamanho + 1) passam pelos ganchos, que
 # param no 0 ou no 0xFF como o resto do firmware, e o editor abre em ABC.
+# v156: o controle remoto (src/remoto.c). As duas chamadas do conferidor do PROGRAMBT11U fora da sessao (a do cabo, no
+# laco da interface, e a do BLE, 0x01E41706) passam pelo remoto_cabo, que atende os quadros do PC e devolve o resto ao
+# conferidor; e as cinco leituras do PTT da execucao (0x01E001BA com r0 = 12, testando o bit 12 do +4) passam pelo
+# ptt_porta, que guarda o r2 e o r3 (a de fabrica so mexe no r0 e no r1, e o 0x01E43C1A le o r2 depois). As duas da
+# partida (0x01E5679A e a protegida 0x01E56CBC) ficam.
+MAGIC_ERA, PORTA_ERA = 0x01E3FD12, 0x01E001BA
+CHAMADAS_LIVRE += ((0x01E4B4B4, MAGIC_ERA, 'remoto_cabo', 'remoto: os quadros do PC pelo cabo'),
+                   (0x01E41762, MAGIC_ERA, 'remoto_cabo', 'remoto: os quadros do PC pelo BLE'),
+                   (0x01E40DEA, PORTA_ERA, 'ptt_porta', 'remoto: o PTT em 0x01E40DC0'),
+                   (0x01E43C0A, PORTA_ERA, 'ptt_porta', 'remoto: o PTT em 0x01E43B64'),
+                   (0x01E43EBE, PORTA_ERA, 'ptt_porta', 'remoto: o PTT na ida do PTT'),
+                   (0x01E46E78, PORTA_ERA, 'ptt_porta', 'remoto: o PTT no laco do sinal, TX recusada'),
+                   (0x01E47988, PORTA_ERA, 'ptt_porta', 'remoto: o PTT no laco do sinal'))
 CHAMADAS_LIVRE += ((0x01E3C784, 0x021127C0, 'nome_tamanho', 'CH-NAME: o tamanho do nome, ate o 0 ou o 0xFF'),
                    (0x01E3C792, 0x021127A8, 'nome_para_editor', 'CH-NAME: o nome no editor, que abre em ABC'))
 # v52: o editor de nome so com ABC e 123. A tecla # (0x01E4A590..0x01E4A5AE) soma 1 ao modo
@@ -809,6 +834,9 @@ LUZ = ('luz_inicia', 'luz_aplica', 'brilho_le', 'brilho_grava', 'brilho_opcoes',
 NA_LIVRE += LUZ                            # v60 e v61: a luz por PWM e o BRIGHTNESS
 PRECISA += LUZ
 PRECISA += ESPECTRO_B
+REMOTO = ('remoto_cabo', 'ptt_porta')      # v156: as entradas do controle remoto (o remoto_envia vem pelo TELA_DESVIOS)
+NA_LIVRE += REMOTO
+PRECISA += REMOTO
 
 # v65: o Morse e o APRS (src/mensagem.c, inteiro no .livre). Duas pastas novas, e o envio pela TX de
 # fabrica: o SEND so arma, a chamada da ida do PTT no laco do sinal (0x01E46540) liga a TX como o PTT,
@@ -932,6 +960,27 @@ BARRAMENTO_REMENDOS = ((0x01E39D60, bytes.fromhex('4027'), bytes.fromhex('4021')
                        (0x01E39D70, bytes.fromhex('4027'), bytes.fromhex('4021'), 'envio de bit: espera depois do SCK subir'),
                        (0x01E40844, bytes.fromhex('4027'), bytes.fromhex('4021'), 'leitura de bit: espera com o SCK alto'),
                        (0x01E4085C, bytes.fromhex('4027'), bytes.fromhex('4021'), 'leitura de bit: espera com o SCK baixo'))
+# v157: a serial do cabo a 115200 fora do modo UPDATE. A partida liga a UART pelo 0x01E4381A(baud) em 0x01E54A92 com
+# "r0 = 0xE100" (57600) na instrucao de antes; a troca para o modo UPDATE (0x01E4C092..0x01E4C096) a liga de novo com
+# "r0 = 0x1C200" (115200), na mesma forma de 4 bytes, que e a que entra aqui. O 0x01E4381A so tem esses dois
+# chamadores, e o modo UPDATE (a recuperacao pelo BinTalk) segue igual: ele poe os 115200 dele. O CHIRP e o Tempra
+# Link tentam 115200 e, sem resposta, 57600 (o firmware de fabrica e o TEMPRA ate a v156).
+# v160: 460800, para o espelho do controle remoto (a tela inteira, 8 KB, levava 0,7 s so de serial a 115200). O
+# imediato dessa instrucao e o (0x80 | os 7 bits de baixo) rotacionado pelos 9 de cima: 0xE1 rotacionado da 57600
+# (0c61), 115200 (0be1) e 460800 (0ae1), conferido no montador da JieLi. O modo UPDATE fica nos 115200 dele. O CHIRP e
+# o Tempra Link tentam 460800, 115200 (v157 a v159) e 57600.
+SERIAL_REMENDOS = ((0x01E54A8E, bytes.fromhex('60e0610c'), bytes.fromhex('60e0e10a'),
+                    'a serial do cabo a 460800 (era 57600)'),)
+SERIAL_BAUD = 460800
+SERIAL_LIGA, SERIAL_UPDATE_EM = 0x01E4381A, 0x01E4C092
+
+
+def imediato_rotacionado(b):
+    """O valor do "r0 = imediato" de 4 bytes (60 e0 + meia palavra): (0x80 | h & 0x7F) rotacionado h >> 7 a direita."""
+    h = b[2] | b[3] << 8
+    r = h >> 7 & 31
+    v = 0x80 | h & 0x7F
+    return (v >> r | v << (32 - r)) & 0xFFFFFFFF
 # (onde, o ponteiro de fabrica, o simbolo novo, o que e)
 PONTEIROS_LIVRE = ((0x01E60B60, 0x01E5B7AA, 'tecla_zero', 'editor: a tecla 0 com o espaco primeiro e - / = + @'),
                    # v86 (experimental): o APRS pelo DAC. A abertura do microfone (0x01E41CBA) entrega a
@@ -1277,6 +1326,7 @@ def main():
     escritas += [(s, len(a), f'ajustes: {d}') for s, a, _, d in AJUSTES_REMENDOS]
     escritas += [(s, len(a), f'laco do sinal: {d}') for s, a, _, d in SINAL_REMENDOS]
     escritas += [(s, len(a), f'barramento: {d}') for s, a, _, d in BARRAMENTO_REMENDOS]
+    escritas += [(s, len(a), f'serial: {d}') for s, a, _, d in SERIAL_REMENDOS]
     escritas += [(s, 4, d) for s, _, _, d in PONTEIROS_LIVRE]
     escritas += [(ROGER_DESVIO_EM, 4, 'roger: valores 3 e 4 no caminho do BEEP'),
                  (ROGER_LACO_EM, len(ROGER_LACO_ANTES), 'roger: laco dos tons'),
@@ -1379,7 +1429,7 @@ def main():
     # do editor de nome
     for rotulo, remendos in (('vozes', VOZES_REMENDOS), ('editor de nome', EDITOR_REMENDOS),
                              ('ajustes', AJUSTES_REMENDOS), ('laco do sinal', SINAL_REMENDOS),
-                             ('barramento', BARRAMENTO_REMENDOS)):
+                             ('barramento', BARRAMENTO_REMENDOS), ('serial', SERIAL_REMENDOS)):
         for sitio, antes, depois, oque in remendos:
             o = sitio - BASE_APP
             if bytes(app[o:o + len(antes)]) != antes:

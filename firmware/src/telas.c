@@ -266,14 +266,20 @@ static void le_menu(struct menu_b *m)
  * couber em largura_max sai no medio - os nomes mais compridos, como o NOISE REDUCTION. */
 #define ALTURA_MENU 10
 
-static void texto_menu(unsigned x, unsigned y, const char *s, unsigned largura_max, unsigned cor)
+/* A largura no tamanho do menu. Separada (v156): a conta, dentro do texto_menu, levava o quadro dele de 28 a 40 B,
+ * embaixo da letra, no caminho mais fundo da interface (o menu de pastas). */
+SEPARADA static unsigned largura_janela(const char *t)
 {
-    const char *t;
     unsigned l = 0;
 
-    for (t = s; *t; t++)
+    for (; *t; t++)
         l += avanco(fonte_b_letra[indice((u8)*t)], MEDIA) + 1;
-    if (l > largura_max + 2) {
+    return l;
+}
+
+static void texto_menu(unsigned x, unsigned y, const char *s, unsigned largura_max, unsigned cor)
+{
+    if (largura_janela(s) > largura_max + 2) {
         texto_medio(x, y + 1, s, largura_max, cor);
         return;
     }

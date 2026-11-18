@@ -28,13 +28,14 @@ compila() {   # $1 = arquivo, $2 = o carimbo do fim
         -DCARIMBO_FIM=$2 -c src/$1.c -o build/$1.o
 }
 liga() {
-    "$B/pi32v2-ld.exe" -T src/bancos.ld -o build/bancos.elf build/bancos.o build/tela.o build/mensagem.o
+    "$B/pi32v2-ld.exe" -T src/bancos.ld -o build/bancos.elf build/bancos.o build/tela.o build/mensagem.o build/remoto.o
     "$B/llvm-objcopy.exe" -O binary -j .text build/bancos.elf build/bancos.bin
 }
 # Duas ligacoes (v47): a primeira da o .text (o codigo do fim da imagem), e a segunda grava o CRC16
 # dele no carimbo_fim, dentro do app.bin, para o carregador ver toda mudanca no fim (bancos.c).
 compila tela 0
 compila mensagem 0
+compila remoto 0
 compila bancos 0
 liga
 CARIMBO=$(python -I -c "import sys; sys.path.insert(0, 'scripts'); import jlfw; print(jlfw.crc16(open('build/bancos.bin', 'rb').read()))")

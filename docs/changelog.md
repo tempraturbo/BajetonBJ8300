@@ -5,6 +5,31 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v156 to v161 — Nov 18 — remote control over the cable (no release; v161 not tested on the radio)
+
+The remote control that section 37 studied: the keys, the PTT, a 9-byte status (what the meter measures, the S-meter,
+the voltage) and the screen mirror, over the cable and over Bluetooth (the latter without the mirror). What the
+firmware showed is in [section 38](reverse-engineering.md#38-remote-control-v156-to-v161) of the reverse engineering.
+
+- **v156:** `remoto.c` entirely in the free range, with ten `mensagem.c` routines moved unchanged into dead stock code
+  (`mortos11` to `mortos20`); `pilha.py` now counts `{rets, r5, r4}`, which counted as 0 (v155 was already 32 B over
+  the stock stack, and screen B was trimmed down to 740/620/696). On the radio, Tempra Link (at 115200, copied from
+  the UV) did not talk to the radio at 57600, and the PC frames pressed PTT: PA12 is the serial port's RX wire.
+- **v157:** the cable's serial port at 115200 from boot; with the remote on over the cable, the PTT is the frame's
+  only. On the radio, it read and the keys arrived; the mirror stalled, and only the top of the screen arrived.
+- **v158:** the mirror no longer waits (the UART output does not move while the screen draws), and the whole screen
+  comes in slices of a tree of the lines. On the radio, keys became fast and the screen slow; the measurements are in
+  section 38.
+- **v159:** the flag for losses outside the slices, which only the reply clears (the next slice used to clear it), the
+  watchdog timestamp in 5 bits and the side as raw bits, with the letter worked out on the PC.
+- **v160:** the cable's serial port at 460800. On the radio, it worked.
+- **v161:** the backlight does not go off with the remote on (when off, the first key only turned it on) and the slice
+  is not redrawn in the middle of digit entry (the entry vanished from the display). Only built and tested on the PC.
+
+Build of this commit (v161): sha256 `be68d671…`, no release. `build.sh` says "tudo certo", with the stack equal to
+stock and the image the same size. Tests: the new `tests/teste_remoto.py` (44 checks, with the mirror decoded by a
+separately written reader) and the usual ones.
+
 ## BJ-8300 Tempra Link — Nov 17 — the radio from the PC (not tested on the radio)
 
 The Baofeng UV-17L's Tempra Link got its sibling here, at the owner's request: a separate program, in this
