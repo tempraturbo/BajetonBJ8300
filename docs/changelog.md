@@ -5,6 +5,25 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Tempra Link — Nov 18 — the remote's screen drawn on the PC, ROGER CUSTOM, the screen switch and a remote that reconnects
+
+- **The remote control's screen** comes from the portrait (the firmware of the same round) and is drawn with the
+  firmware's screen code, built into the program (`tempralink/tela`, compiled by `firmware/previa/tela_pc.py` with
+  zig). The display only repaints when the screen changes, and without clearing first (it flickered on every portrait).
+- **ROGER CUSTOM** in the settings' TX folder, with the UV-17L Tempra Link's editor: the piano, the timeline, the
+  presets and MIDI and sound import. The notes go to sector `0xDA000` (v164 or newer); with an older firmware, the
+  program warns that the radio did not keep them. Older backups open with no notes.
+- **The "Radio screen" switch** (On/Off) on the remote control, replacing v164's checkbox: it turns the radio's screen
+  off, to save battery, and goes back to On by itself when a key on the radio lights it (v165).
+- **The remote reconnects by itself:** after talking to the radio, a dropped link (the PTT's RF can knock down the
+  cable's USB, which comes back as another device) is redone every second, on the same port or on whatever CH340
+  cable shows up, until Disconnect. Before, only closing the program helped.
+- **The start of the phone app** (`tempralink/celular`, no project yet): the remote's screen in FMX; `Idioma`, `Logo`
+  (with `LogoFormato`) and `Bluetooth` now serve both.
+
+On the radio: the remote's screen up to v163 (approved) and v164's dark screen; the switch, the reconnection (v165) and
+ROGER CUSTOM only on the simulator and the PC.
+
 ## CHIRP driver — Nov 18 — ROGER CUSTOM
 
 - ROGER gets CUSTOM (value 5, in the roger's same 3 bits). CHIRP does not edit the notes: the Tempra Link writes them.

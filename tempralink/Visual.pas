@@ -4,7 +4,7 @@
   por cima as cores do rádio (firmware/src/ui_tela.c): as superfícies em verde quase preto e o verde de destaque. Os
   botões se desenham arredondados (o TBotaoEstilo no lugar do desenho do estilo, com o mesmo comportamento), com três
   tipos: o comum, o principal da página (verde) e o de perigo (vermelho); as teclas do controle remoto são as do
-  rádio (TTecla). }
+  rádio (TTecla), e a chave de liga e desliga, uma pílula verde (TChave). }
 
 interface
 
@@ -61,6 +61,28 @@ type
     property Tipo: TTipoTecla read FTipo write FTipo;
     property OnMouseDown;
     property OnMouseUp;
+  end;
+
+  // Uma chave de liga e desliga: a pílula verde com a bolinha à direita, ligada, e apagada com ela à esquerda, e o texto
+  // do estado ao lado. O clique (ou o espaço, com o foco) a troca e chama o OnClick; o Ligada posto pelo programa não.
+  TChave = class(TCustomControl)
+  private
+    FLigada: Boolean;
+    FTextoLigada, FTextoDesligada: string;
+    procedure SetLigada(V: Boolean);
+    procedure Troca;
+    procedure CMFocusChanged(var Message: TMessage); message CM_FOCUSCHANGED;
+  protected
+    procedure Paint; override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure KeyDown(var Key: Word; Shift: TShiftState); override;
+  public
+    constructor Create(AOwner: TComponent); override;
+    property Ligada: Boolean read FLigada write SetLigada;
+    property TextoLigada: string read FTextoLigada write FTextoLigada;
+    property TextoDesligada: string read FTextoDesligada write FTextoDesligada;
+    property Font;
+    property OnClick;
   end;
 
 procedure Destaca(B: TButton; Tipo: TTipoBotao);
@@ -156,6 +178,91 @@ end;
 function Escala(C: TControl; X: Integer): Integer;
 begin
   Result := MulDiv(X, C.CurrentPPI, 96);
+end;
+
+{ TChave }
+
+constructor TChave.Create(AOwner: TComponent);
+begin
+  inherited;
+  ControlStyle := ControlStyle + [csOpaque];
+  TabStop := True;
+  DoubleBuffered := True;
+  FLigada := True;
+end;
+
+procedure TChave.SetLigada(V: Boolean);
+begin
+  if V <> FLigada then
+  begin
+    FLigada := V;
+    Invalidate;
+  end;
+end;
+
+procedure TChave.Troca;
+begin
+  Ligada := not FLigada;
+  Click;
+end;
+
+procedure TChave.CMFocusChanged(var Message: TMessage);
+begin
+  inherited;
+  Invalidate;
+end;
+
+procedure TChave.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+  inherited;
+  if Button = mbLeft then
+  begin
+    if CanFocus then
+      SetFocus;
+    Troca;
+  end;
+end;
+
+procedure TChave.KeyDown(var Key: Word; Shift: TShiftState);
+begin
+  inherited;
+  if Key = VK_SPACE then
+    Troca;
+end;
+
+procedure TChave.Paint;
+var
+  A, L, M, Y: Integer;
+  R: TRect;
+  T: string;
+begin
+  Canvas.Brush.Color := COR_FUNDO;
+  Canvas.FillRect(ClientRect);
+  A := Escala(Self, 20);
+  L := Escala(Self, 40);
+  M := Escala(Self, 4);
+  Y := (Height - A) div 2;
+  R := Rect(0, Y, L, Y + A);
+  if FLigada then
+  begin
+    Arredondado(Canvas, R, A div 2, COR_VERDE, IfThen(Focused, COR_TEXTO, COR_VERDE));
+    R := Rect(L - A + M, Y + M, L - M, Y + A - M);
+    Arredondado(Canvas, R, R.Height div 2, COR_FUNDO, COR_FUNDO);
+  end
+  else
+  begin
+    Arredondado(Canvas, R, A div 2, COR_SUPERFICIE, IfThen(Focused, COR_TEXTO, COR_TEXTO_FRACO));
+    R := Rect(M, Y + M, A - M, Y + A - M);
+    Arredondado(Canvas, R, R.Height div 2, COR_TEXTO_FRACO, COR_TEXTO_FRACO);
+  end;
+  if FLigada then
+    T := FTextoLigada
+  else
+    T := FTextoDesligada;
+  Canvas.Font := Font;
+  Canvas.Font.Color := COR_TEXTO;
+  Canvas.Brush.Style := bsClear;
+  Canvas.TextOut(L + Escala(Self, 10), (Height - Canvas.TextHeight(T)) div 2, T);
 end;
 
 { TBotaoEstilo }

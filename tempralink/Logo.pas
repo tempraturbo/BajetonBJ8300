@@ -1,20 +1,12 @@
 ﻿unit Logo;
 
-{ O logo de abertura do BJ-8300 no formato do rádio: 160 x 138 em RGB565, em 0x10000 do chip de dados (o
-  firmware/scripts/logo_bmp.py), que o Tempra Link lê pelo comando estendido do cabo (CaboBJ.pas). Sem nada de
-  janela, para dar para testar. }
+{ O logo de abertura do BJ-8300 (o formato está no LogoFormato.pas, que o app do celular também usa) de e para as
+  imagens da VCL: o Tempra Link o lê pelo comando estendido do cabo (CaboBJ.pas). }
 
 interface
 
 uses
-  Winapi.Windows, System.SysUtils, Vcl.Graphics;
-
-const
-  LOGO_ENDERECO = $010000;
-  LOGO_LARGURA = 160;  // o que a memória guarda
-  LOGO_VISIVEL = 160;  // o que aparece: tudo
-  LOGO_ALTURA = 138;
-  LOGO_TAMANHO = LOGO_LARGURA * LOGO_ALTURA * 2;
+  Winapi.Windows, System.SysUtils, Vcl.Graphics, LogoFormato;
 
 function ImagemParaLogo(Imagem: TGraphic; Inteira: Boolean): TBytes;
 function LogoParaBitmap(const Dados: TBytes; Largura: Integer = LOGO_VISIVEL; Altura: Integer = LOGO_ALTURA): TBitmap;

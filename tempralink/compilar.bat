@@ -18,6 +18,11 @@ copy /y "%BDS%\Redist\styles\vcl\Windows10Dark.vsf" estilo.vsf >nul || goto erro
 rem o cgrc (o rc.exe da Microsoft), porque o brcc32 nao aceita o icone com PNG dentro
 "%BDS%\bin\cgrc.exe" -r -foRecursos.res Recursos.rc >nul || goto erro
 if defined CHIRP python -I testes\fixtures.py gera || goto erro
+rem o desenho da tela do controle remoto (v162): o codigo da tela do firmware, compilado pelo zig (pip install
+rem ziglang); sem ele, o tela\tela_bj_win32.obj que ja esta no repositorio
+set ZIG=
+python -I -c "import ziglang" >nul 2>&1 && set ZIG=1
+if defined ZIG python -I ..\firmware\previa\tela_pc.py win32 >nul || goto erro
 "%BDS%\bin\dcc32.exe" -B -Q -NUdcu -Edcu -Utestes testes\TesteTempraLink.dpr || goto erro
 dcu\TesteTempraLink.exe . || goto erro
 if defined CHIRP python -I testes\fixtures.py confere || goto erro

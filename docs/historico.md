@@ -5,6 +5,25 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Tempra Link — 18/11 — a tela do remoto desenhada no PC, o ROGER CUSTOM, a chave da tela e o remoto que se reconecta
+
+- **A tela do controle remoto** vem do retrato (o firmware da mesma rodada) e se desenha com o código da tela do
+  firmware, embutido no programa (`tempralink/tela`, compilado pelo `firmware/previa/tela_pc.py` com o zig). O visor só
+  repinta quando a tela muda, e sem apagar antes (piscava a cada retrato).
+- **O ROGER CUSTOM** na pasta TX dos ajustes, com o editor do Tempra Link do UV-17L: o piano, a linha do tempo, os
+  modelos e a importação de MIDI e de som. As notas vão para o setor `0xDA000` (v164 ou mais novo); com um firmware de
+  antes, o programa avisa que o rádio não as guardou. Os backups de antes abrem sem notas.
+- **A chave "Tela do rádio"** (Acesa/Apagada) no controle remoto, no lugar da caixa de marcar da v164: apaga a tela do
+  rádio, para poupar a bateria, e volta sozinha a Acesa quando uma tecla do rádio a acende (v165).
+- **O remoto se reconecta sozinho:** depois de falar com o rádio, a ligação que cai (o RF do PTT pode derrubar o USB
+  do cabo, que volta como outro aparelho) se refaz a cada segundo, pela mesma porta ou pelo cabo CH340 que aparecer,
+  até o Desconectar. Antes, só fechando o programa.
+- **O começo do app do celular** (`tempralink/celular`, ainda sem projeto): a tela do remoto em FMX; o `Idioma`, o
+  `Logo` (com o `LogoFormato`) e o `Bluetooth` passaram a servir aos dois.
+
+No rádio: a tela do remoto até a v163 (aprovada) e a tela apagada da v164; a chave, a reconexão (v165) e o ROGER CUSTOM
+só no simulador e no PC.
+
 ## Driver do CHIRP — 18/11 — o ROGER CUSTOM
 
 - O ROGER ganha o CUSTOM (o valor 5, nos mesmos 3 bits do roger). As notas, o CHIRP não edita: quem as grava é o

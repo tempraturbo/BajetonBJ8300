@@ -4,16 +4,18 @@
   remoto, Firmware, Backup e Registro), o rádio, a porta e as ações no alto, e o andamento embaixo. O que fala com o
   rádio roda numa thread. As grades se editam na própria célula: o texto e a frequência num campo, as escolhas numa
   lista (o sim e o não também, numa lista SIM/NÃO), e os bancos numa lista de marcar; com várias linhas
-  escolhidas, o valor vai para todas. A mesma janela do Tempra Link do UV-17L, sem o que o BJ não tem (o ROGER CUSTOM e
-  a gravação do firmware pelo programa), e com o Bluetooth na lista das portas. O controle remoto (v159) traz a tela
-  do rádio pelo cabo; pelo Bluetooth, o estado. }
+  escolhidas, o valor vai para todas. A mesma janela do Tempra Link do UV-17L, sem o que o BJ não tem (a gravação do
+  firmware pelo programa), e com o Bluetooth na lista das portas. O ROGER CUSTOM (firmware v164) se edita na pasta TX
+  dos ajustes, com o editor do UV-17L. O controle remoto (v159) traz a tela do rádio pelo cabo; pelo Bluetooth, o
+  estado. }
 
 interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, System.Types, Vcl.Graphics, Vcl.Controls,
   Vcl.Forms, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls, Vcl.Dialogs, Vcl.Grids, Vcl.WinXPanels, Vcl.WinXCtrls,
-  Vcl.CheckLst, Vcl.Menus, Transporte, CaboBJ, Logo, Ajustes, BJ8300, PortaSerial, Bluetooth, Visual, Remoto;
+  Vcl.CheckLst, Vcl.Menus, Transporte, CaboBJ, Logo, LogoFormato, Ajustes, BJ8300, PortaSerial, Bluetooth, Visual, Remoto,
+  TelaBJ, EditorRoger;
 
 const
   VERSAO_TEMPRA_LINK = '1.0';  // a mesma do Recursos.rc
@@ -89,6 +91,28 @@ type
     ListaPastas: TListBox;
     PainelValores: TPanel;
     GradeAjustes: TStringGrid;
+    PainelRoger: TPanel;
+    LabelRoger: TLabel;
+    LabelRogerInfo: TLabel;
+    LabelRogerDica: TLabel;
+    BotaoOuvir: TButton;
+    BotaoTocarDaqui: TButton;
+    LabelDuracaoNova: TLabel;
+    ComboDuracaoNova: TComboBox;
+    BotaoPausa: TButton;
+    BotaoApagarNota: TButton;
+    LabelNotaEscolhida: TLabel;
+    EditHz: TEdit;
+    LabelHz: TLabel;
+    EditMs: TEdit;
+    LabelMs: TLabel;
+    LabelNomeNota: TLabel;
+    BotaoImportarSom: TButton;
+    LabelInicio: TLabel;
+    EditInicio: TEdit;
+    LabelDuracao: TLabel;
+    EditDuracao: TEdit;
+    ComboModelos: TComboBox;
     CartaoLogo: TCard;
     PainelPrevia: TPanel;
     Previa: TImage;
@@ -105,6 +129,7 @@ type
     PaintVisor: TPaintBox;
     BotaoConectar: TButton;
     LabelRemoto: TLabel;
+    LabelTelaRadio: TLabel;
     PainelTeclado: TPanel;
     LabelAvisoCabo: TLabel;
     LabelControleNota: TLabel;
@@ -125,6 +150,7 @@ type
     DialogoSalvarBackup: TSaveDialog;
     DialogoCsv: TOpenDialog;
     DialogoSalvarCsv: TSaveDialog;
+    DialogoSom: TOpenDialog;
     MenuCanais: TPopupMenu;
     ItemCopiar: TMenuItem;
     ItemColar: TMenuItem;
@@ -156,6 +182,16 @@ type
     procedure ListaPastasClick(Sender: TObject);
     procedure ListaPastasDrawItem(Control: TWinControl; Index: Integer; Rect: TRect; State: TOwnerDrawState);
     procedure BuscaAjusteChange(Sender: TObject);
+    procedure BotaoOuvirClick(Sender: TObject);
+    procedure BotaoTocarDaquiClick(Sender: TObject);
+    procedure BotaoPausaClick(Sender: TObject);
+    procedure BotaoApagarNotaClick(Sender: TObject);
+    procedure ComboDuracaoNovaChange(Sender: TObject);
+    procedure EditNotaChange(Sender: TObject);
+    procedure ComboModelosChange(Sender: TObject);
+    procedure BotaoImportarSomClick(Sender: TObject);
+    procedure EditSomChange(Sender: TObject);
+    procedure ChaveTelaClick(Sender: TObject);
     procedure BotaoImagemClick(Sender: TObject);
     procedure RadioAjusteClick(Sender: TObject);
     procedure BotaoLerLogoClick(Sender: TObject);
@@ -178,10 +214,17 @@ type
     FBotaoPtt: TTecla;
     FSegurado: TTimer;              // anda enquanto uma tecla ou o PTT está apertado: solta se o mouse soltou fora
     FTela: TBitmap;                 // a última tela do rádio que chegou
+    FAvisoTela: string;             // o que falta nela (TelaBJ: o espectro, o APRS e o Morse), ou por que ela parou
     FTarefa: TTarefa;
     FAcao: TAcao;
     FCabo: TCaboBJ;
     FMemoria: TMemoriaBJ8300;   // o que se lê, se mostra, se edita e se grava; vazia até ler ou abrir um backup
+    FChaveTela: TChave;         // a tela do rádio no controle remoto: Ligada, acesa (o pedido de apagar desligado)
+    FNotas: TArray<TNota>;      // o que o editor do ROGER mostra (pode estar inválido enquanto se edita)
+    FArquivoSom: string;        // o MIDI ou o som do ROGER, que se lê de novo quando o começo ou a duração mudam
+    FLinhaRoger: TLinhaDoTempo;
+    FTeclado: TTeclado;
+    FMostrandoNota: Boolean;    // os campos da nota escolhida sendo preenchidos: o OnChange não muda nada
     FLida: TMemoriaBJ8300;      // a que a thread está lendo
     FOrigem: string;            // de onde veio a memória: o rádio ou o arquivo
     FDoArquivo: Boolean;        // veio de um backup: gravar é restaurar
@@ -210,6 +253,14 @@ type
     procedure PreencheLinhaDoCanal(L, N: Integer);
     procedure PreencheBancos;
     procedure PreencheAjustes;
+    procedure PreencheNotas;
+    procedure MostraNotaEscolhida;
+    procedure RogerAntes(Sender: TObject);
+    procedure RogerMudou(Sender: TObject);
+    procedure RogerEscolheu(Sender: TObject);
+    procedure RogerFimDoSom(Sender: TObject);
+    procedure PoeNoRoger(const N: TNota);
+    procedure ImportaSom;
     procedure ListaAsPortas;
     procedure Habilita;
     procedure Registra(const Msg: string);
@@ -222,6 +273,7 @@ type
     function Porta: string;
     function Escolhida: Integer;
     function AbreTransporte: TFunc<ITransporte>;
+    function AbreRemoto: TFunc<ITransporte>;
     function NovoCabo: TCaboBJ;
     function DescartaMudancas: Boolean;
     procedure Terminou(Sender: TObject);
@@ -256,7 +308,7 @@ implementation
 
 uses
   Winapi.ShellAPI, System.IOUtils, System.Math, System.StrUtils, Vcl.Clipbrd, Vcl.Imaging.pngimage, Csv, Idioma,
-  Winapi.GDIPOBJ;
+  Winapi.GDIPOBJ, Melodia;
 
 const
   CARTAO_CANAIS = 0;
@@ -379,13 +431,15 @@ type
 const
   // a linha de cima, os algarismos em 4 linhas de 3 e as laterais; o código é o cru da varredura (firmware/src/remoto.c)
   TECLAS_RADIO: array[0..17] of TTeclaRadio = (
-    (Texto: 'MENU'; Letras: 'OK'; Codigo: TECLA_OK; Tipo: ttFuncao), (Texto: '▼'; Codigo: TECLA_BAIXO; Tipo: ttFuncao),
-    (Texto: '▲'; Codigo: TECLA_CIMA; Tipo: ttFuncao), (Texto: 'EXIT'; Codigo: TECLA_EXIT; Tipo: ttFuncao),
+    (Texto: 'MENU'; Letras: 'OK'; Codigo: TECLA_OK; Tipo: ttFuncao), (Texto: '▲'; Codigo: TECLA_CIMA; Tipo: ttFuncao),
+    (Texto: '▼'; Codigo: TECLA_BAIXO; Tipo: ttFuncao), (Texto: 'EXIT'; Codigo: TECLA_EXIT; Tipo: ttFuncao),
     (Texto: '1'; Codigo: 6), (Texto: '2'; Letras: 'ABC'; Codigo: 7), (Texto: '3'; Letras: 'DEF'; Codigo: 8),
     (Texto: '4'; Letras: 'GHI'; Codigo: 10), (Texto: '5'; Letras: 'JKL'; Codigo: 11), (Texto: '6'; Letras: 'MNO'; Codigo: 12),
     (Texto: '7'; Letras: 'PQRS'; Codigo: 14), (Texto: '8'; Letras: 'TUV'; Codigo: 15), (Texto: '9'; Letras: 'WXYZ'; Codigo: 16),
     (Texto: '*'; Codigo: TECLA_ESTRELA), (Texto: '0'; Codigo: TECLA_ZERO), (Texto: '#'; Codigo: TECLA_CERQUILHA),
     (Texto: 'PF2'; Codigo: TECLA_PF2; Tipo: ttFuncao), (Texto: 'PF3'; Codigo: TECLA_PF3; Tipo: ttFuncao));
+  // as durações das notas novas do ROGER, em ms
+  DURACOES_NOVAS: array[0..7] of Integer = (30, 50, 80, 100, 150, 200, 300, 500);
   // em 96 dpi: o teclado tem a largura de 4 teclas de cima; os números, 3 por linha, na mesma largura
   TECLA_LARGURA = 72;
   TECLA_ALTURA = 46;
@@ -476,6 +530,66 @@ begin
   GradeAjustes.Cells[1, 0] := Tr('Valor', 'Value');
   GradeAjustes.ColWidths[0] := MulDiv(240, CurrentPPI, 96);
   GradeAjustes.ColWidths[1] := MulDiv(220, CurrentPPI, 96);
+  // o ROGER CUSTOM (v164), na pasta TX: o editor do Tempra Link do UV-17L
+  LabelRoger.Caption := Tr('ROGER CUSTOM  ·  escolha CUSTOM no ROGER, acima, para o rádio tocar',
+                           'ROGER CUSTOM  ·  choose CUSTOM in ROGER, above, for the radio to play it');
+  LabelRogerDica.Caption := Tr(
+    'Clique numa tecla do piano para ouvir; dois cliques, ou arrastar a tecla para a linha, põem a nota. Na linha, ' +
+    'arraste a nota para cima e para baixo (o tom), pela ponta direita (a duração) e para os lados (a ordem). ' +
+    'Espaço toca; Delete apaga.',
+    'Click a piano key to hear it; double-click it, or drag it to the line, to add the note. On the line, drag the ' +
+    'note up and down (the tone), by its right end (the length) and sideways (the order). Space plays; Delete removes.');
+  BotaoOuvir.Caption := Tr('▶  Tocar', '▶  Play');
+  BotaoTocarDaqui.Caption := Tr('▶  Da escolhida', '▶  From selected');
+  LabelDuracaoNova.Caption := Tr('Notas novas', 'New notes');
+  for var D in DURACOES_NOVAS do
+    ComboDuracaoNova.Items.Add(Format('%d ms', [D]));
+  ComboDuracaoNova.ItemIndex := 3;
+  BotaoPausa.Caption := Tr('+ Pausa', '+ Pause');
+  BotaoApagarNota.Caption := Tr('Apagar', 'Delete');
+  LabelNotaEscolhida.Caption := Tr('Nota escolhida', 'Selected note');
+  FLinhaRoger := TLinhaDoTempo.Create(Self);
+  FLinhaRoger.Parent := PainelRoger;
+  FLinhaRoger.SetBounds(16, 98, PainelRoger.ClientWidth - 32, 150);
+  FLinhaRoger.Anchors := [akLeft, akTop, akRight];
+  FLinhaRoger.DuracaoNova := 100;
+  FLinhaRoger.OnAntes := RogerAntes;
+  FLinhaRoger.OnMudou := RogerMudou;
+  FLinhaRoger.OnEscolheu := RogerEscolheu;
+  FLinhaRoger.OnFimDoSom := RogerFimDoSom;
+  FLinhaRoger.OnTom :=
+    procedure(Hz: Integer)
+    begin
+      FLinhaRoger.Para;
+      TocaTom(Hz, 200);
+    end;
+  FTeclado := TTeclado.Create(Self);
+  FTeclado.Parent := PainelRoger;
+  FTeclado.SetBounds(16, 256, PainelRoger.ClientWidth - 32, 66);
+  FTeclado.Anchors := [akLeft, akTop, akRight];
+  FTeclado.OnToca :=
+    procedure(Nota: Integer)
+    begin
+      FLinhaRoger.Para;
+      TocaTom(HzDaNota(Nota), 350);
+    end;
+  FTeclado.OnPoe :=
+    procedure(Nota: Integer)
+    var
+      N: TNota;
+    begin
+      N.Hz := HzDaNota(Nota);
+      N.Ms := FLinhaRoger.DuracaoNova;
+      PoeNoRoger(N);
+    end;
+  ComboModelos.Items.Text := Tr('Modelos...'#13#10'Bipe curto'#13#10'Dois tons'#13#10'Três tons subindo'#13#10'K em Morse',
+                                'Presets...'#13#10'Short beep'#13#10'Two tones'#13#10'Three rising tones'#13#10'K in Morse');
+  ComboModelos.ItemIndex := 0;
+  BotaoImportarSom.Caption := Tr('Importar MIDI ou som...', 'Import MIDI or sound...');
+  LabelInicio.Caption := Tr('Começar em (s)', 'Start at (s)');
+  LabelDuracao.Caption := Tr('Duração (s)', 'Length (s)');
+  DialogoSom.Filter := Tr('MIDI e sons|*.mid;*.midi;*.mp3;*.wav;*.wma;*.m4a;*.aac;*.flac|Todos os arquivos (*.*)|*.*',
+                          'MIDI and sounds|*.mid;*.midi;*.mp3;*.wav;*.wma;*.m4a;*.aac;*.flac|All files (*.*)|*.*');
 
   // o firmware: o gravador é o da BinTe, que o repositório traz
   LabelInfo.Caption := Tr('O firmware do BJ-8300 se grava pelo BinTe ANC Bootloader, que vem no repositório ' +
@@ -573,12 +687,23 @@ begin
     'Com o rádio ligado normalmente (firmware v159 ou mais novo), Conectar liga o controle remoto; pelo cabo, a tela ' +
     'do rádio vem junto e daí em diante muda com ela. As teclas daqui ficam apertadas no rádio enquanto o botão do ' +
     'mouse está apertado nelas: segurar 1 s é o toque longo. O PTT transmite enquanto estiver apertado, e o TX TIMEOUT ' +
-    'do rádio vale também. Se o PC parar de mandar por 1 s, o rádio solta a tecla e o PTT sozinho.',
+    'do rádio vale também. Se o PC parar de mandar por 1 s, o rádio solta a tecla e o PTT sozinho. Com a tela do rádio ' +
+    'apagada (firmware v164), que poupa a bateria, uma tecla dele a acende.',
     'With the radio on normally (firmware v159 or newer), Connect starts the remote control; over the cable, the radio ' +
     'screen comes along and from then on changes with it. The keys here stay pressed on the radio while the mouse ' +
     'button is pressed on them: holding 1 s is the long press. PTT transmits while pressed, and the radio''s TX TIMEOUT ' +
-    'also applies. If the PC stops sending for 1 s, the radio releases the key and the PTT by itself.');
+    'also applies. If the PC stops sending for 1 s, the radio releases the key and the PTT by itself. With the radio ' +
+    'screen turned off (firmware v164), which saves battery, a key on the radio turns it on.');
   LabelRemoto.Caption := '';
+  LabelTelaRadio.Caption := Tr('Tela do rádio', 'Radio screen');
+  FChaveTela := TChave.Create(Self);
+  FChaveTela.Parent := LabelTelaRadio.Parent;
+  FChaveTela.SetBounds(MulDiv(124, CurrentPPI, 96), MulDiv(455, CurrentPPI, 96), MulDiv(200, CurrentPPI, 96),
+                       MulDiv(26, CurrentPPI, 96));
+  FChaveTela.Font := LabelTelaRadio.Font;
+  FChaveTela.TextoLigada := Tr('Acesa', 'On');
+  FChaveTela.TextoDesligada := Tr('Apagada', 'Off');
+  FChaveTela.OnClick := ChaveTelaClick;
   // a linha de cima com 4, os números em 4 linhas de 3, as laterais lado a lado e o PTT na largura toda
   for I := 0 to High(TECLAS_RADIO) + 1 do
   begin
@@ -826,9 +951,14 @@ begin
                                      'Open: %s'#13#10'Firmware %s, read on %s. %d channels saved.'),
                                   [FOrigem, FMemoria.Versao, FormatDateTime('dd/mm/yyyy hh:nn', FMemoria.Lida),
                                    FMemoria.Salvos]);
+  if FMemoria.Vazia then
+    FNotas := nil
+  else
+    FNotas := FMemoria.Notas;
   PreencheGrade;
   PreencheBancos;
   PreencheAjustes;
+  PreencheNotas;
   MostraTopo;
   Habilita;
 end;
@@ -1037,6 +1167,152 @@ begin
     else
       GradeAjustes.Cells[1, L + 1] := ValorAjuste(FMemoria, FAjustes[L]);
   end;
+  PainelRoger.Visible := (Busca_ = '') and (ListaPastas.ItemIndex >= 0) and
+                         (ListaPastas.Items[ListaPastas.ItemIndex] = 'TX');
+end;
+
+procedure TFormPrincipal.PreencheNotas;
+var
+  Total: Integer;
+  Erro: string;
+  Valem: Boolean;
+begin
+  FLinhaRoger.Notas := FNotas;
+  Total := FLinhaRoger.Total;
+  Valem := NotasValidas(FNotas, Erro);
+  if FNotas = nil then
+    LabelRogerInfo.Caption := Tr('Nenhuma nota: o CUSTOM fica calado.', 'No notes: CUSTOM stays silent.')
+  else if Valem then
+    LabelRogerInfo.Caption := Format(Tr('%d de %d notas  ·  %s s de %s s', '%d of %d notes  ·  %s s of %s s'),
+                                     [Length(FNotas), ROGER_NOTAS, FormatFloat('0.00', Total / 1000),
+                                      FormatFloat('0', ROGER_TOTAL_MS / 1000)])
+  else
+    LabelRogerInfo.Caption := Erro + ' ' + Tr('Assim não vai para o rádio.', 'It will not go to the radio like this.');
+  if (FNotas <> nil) and not Valem then
+    LabelRogerInfo.Font.Color := COR_VERMELHO
+  else
+    LabelRogerInfo.Font.Color := COR_TEXTO_FRACO;
+  MostraNotaEscolhida;
+end;
+
+// os campos da nota escolhida na linha do tempo, e a tecla dela acesa no piano
+procedure TFormPrincipal.MostraNotaEscolhida;
+var
+  K: Integer;
+begin
+  K := FLinhaRoger.Escolhida;
+  FMostrandoNota := True;
+  try
+    if (K >= 0) and (K <= High(FNotas)) then
+    begin
+      EditHz.Text := IntToStr(FNotas[K].Hz);
+      EditMs.Text := IntToStr(FNotas[K].Ms);
+      if FNotas[K].Hz = 0 then
+        LabelNomeNota.Caption := Tr('pausa (0 Hz)', 'pause (0 Hz)')
+      else
+        LabelNomeNota.Caption := NomeDaNota(NotaDoHz(FNotas[K].Hz));
+      FTeclado.Marcada := IfThen(FNotas[K].Hz = 0, -1, NotaDoHz(FNotas[K].Hz));
+    end
+    else
+    begin
+      EditHz.Text := '';
+      EditMs.Text := '';
+      LabelNomeNota.Caption := '';
+      FTeclado.Marcada := -1;
+    end;
+  finally
+    FMostrandoNota := False;
+  end;
+  EditHz.Enabled := (K >= 0) and BotaoPausa.Enabled;
+  EditMs.Enabled := EditHz.Enabled;
+  BotaoApagarNota.Enabled := EditHz.Enabled;
+  BotaoTocarDaqui.Enabled := EditHz.Enabled;
+end;
+
+procedure TFormPrincipal.RogerAntes(Sender: TObject);
+begin
+  FMemoria.Guarda;
+end;
+
+// a linha do tempo mudou as notas: elas vão para a memória quando valem (nenhuma também: o CUSTOM fica calado)
+procedure TFormPrincipal.RogerMudou(Sender: TObject);
+var
+  Erro: string;
+begin
+  FNotas := FLinhaRoger.Notas;
+  if (FNotas = nil) or NotasValidas(FNotas, Erro) then
+    FMemoria.PoeNotas(FNotas);
+  PreencheNotas;
+  Mudou;
+end;
+
+procedure TFormPrincipal.RogerEscolheu(Sender: TObject);
+begin
+  MostraNotaEscolhida;
+end;
+
+procedure TFormPrincipal.RogerFimDoSom(Sender: TObject);
+begin
+  BotaoOuvir.Caption := Tr('▶  Tocar', '▶  Play');
+end;
+
+// depois da escolhida (ou no fim), tocando
+procedure TFormPrincipal.PoeNoRoger(const N: TNota);
+var
+  K: Integer;
+begin
+  K := FLinhaRoger.Escolhida;
+  if K < 0 then
+    K := Length(FNotas)
+  else
+    Inc(K);
+  if not FLinhaRoger.Insere(K, N) then
+    Avisa(Format(Tr('Não cabe mais: o ROGER vai até %d notas e %d s.', 'No more room: the ROGER takes up to %d notes ' +
+                    'and %d s.'), [ROGER_NOTAS, ROGER_TOTAL_MS div 1000]))
+  else if N.Hz > 0 then
+  begin
+    FLinhaRoger.Para;
+    TocaTom(N.Hz, 200);
+  end;
+end;
+
+procedure TFormPrincipal.BotaoPausaClick(Sender: TObject);
+var
+  N: TNota;
+begin
+  N.Hz := 0;
+  N.Ms := FLinhaRoger.DuracaoNova;
+  PoeNoRoger(N);
+end;
+
+procedure TFormPrincipal.BotaoApagarNotaClick(Sender: TObject);
+begin
+  FLinhaRoger.Apaga(FLinhaRoger.Escolhida);
+end;
+
+procedure TFormPrincipal.ComboDuracaoNovaChange(Sender: TObject);
+begin
+  FLinhaRoger.DuracaoNova := DURACOES_NOVAS[Max(0, ComboDuracaoNova.ItemIndex)];
+end;
+
+// o Hz e os ms digitados da nota escolhida: valem quando ficam numa faixa do rádio (0 Hz é pausa)
+procedure TFormPrincipal.EditNotaChange(Sender: TObject);
+var
+  K, Hz, Ms: Integer;
+  N: TArray<TNota>;
+begin
+  K := FLinhaRoger.Escolhida;
+  if FMostrandoNota or (K < 0) or (K > High(FNotas)) or not TryStrToInt(Trim(EditHz.Text), Hz) or
+     not TryStrToInt(Trim(EditMs.Text), Ms) or (Hz <> 0) and ((Hz < 300) or (Hz > 3000)) or (Ms < 10) or
+     (Ms > 1000) or (FLinhaRoger.Total - FNotas[K].Ms + Ms > ROGER_TOTAL_MS) or
+     (Hz = FNotas[K].Hz) and (Ms = FNotas[K].Ms) then
+    Exit;
+  FMemoria.Guarda;
+  N := Copy(FNotas);
+  N[K].Hz := Hz;
+  N[K].Ms := Ms;
+  FLinhaRoger.Notas := N;
+  RogerMudou(nil);
 end;
 
 procedure TFormPrincipal.BuscaChange(Sender: TObject);
@@ -1062,6 +1338,115 @@ procedure TFormPrincipal.BuscaAjusteChange(Sender: TObject);
 begin
   CancelaEdicao;
   PreencheAjustes;
+end;
+
+{ As notas do ROGER CUSTOM }
+
+procedure TFormPrincipal.BotaoOuvirClick(Sender: TObject);
+begin
+  if FLinhaRoger.Tocando then
+    FLinhaRoger.Para
+  else
+  begin
+    FLinhaRoger.Toca(0);
+    BotaoOuvir.Caption := Tr('■  Parar', '■  Stop');
+  end;
+end;
+
+procedure TFormPrincipal.BotaoTocarDaquiClick(Sender: TObject);
+begin
+  FLinhaRoger.Toca(FLinhaRoger.Escolhida);
+  BotaoOuvir.Caption := Tr('■  Parar', '■  Stop');
+end;
+
+procedure TFormPrincipal.ComboModelosChange(Sender: TObject);
+const
+  // Hz e ms, uma nota depois da outra
+  MODELOS: array[1..4] of string = ('1200 100', '1000 80 1500 120', '800 70 1000 70 1300 110',
+                                    '700 150 0 50 700 50 0 50 700 150');
+var
+  Numeros: TArray<string>;
+  K: Integer;
+  Erro: string;
+begin
+  if ComboModelos.ItemIndex < 1 then
+    Exit;
+  Numeros := MODELOS[ComboModelos.ItemIndex].Split([' ']);
+  SetLength(FNotas, Length(Numeros) div 2);
+  for K := 0 to High(FNotas) do
+  begin
+    FNotas[K].Hz := StrToInt(Numeros[2 * K]);
+    FNotas[K].Ms := StrToInt(Numeros[2 * K + 1]);
+  end;
+  ComboModelos.ItemIndex := 0;
+  FMemoria.Guarda;
+  if NotasValidas(FNotas, Erro) then
+    FMemoria.PoeNotas(FNotas);
+  PreencheNotas;
+  Mudou;
+end;
+
+procedure TFormPrincipal.BotaoImportarSomClick(Sender: TObject);
+begin
+  if DialogoSom.Execute then
+  begin
+    FArquivoSom := DialogoSom.FileName;
+    ImportaSom;
+  end;
+end;
+
+procedure TFormPrincipal.EditSomChange(Sender: TObject);
+begin
+  if FArquivoSom <> '' then
+    ImportaSom;
+end;
+
+{ As notas do arquivo escolhido, do começo e com a duração dos campos: o MIDI pelas notas, o resto pelo som (uma
+  aproximação, que se ouve no PC e se ajusta à mão). }
+procedure TFormPrincipal.ImportaSom;
+var
+  Inicio, Duracao: Double;
+  N: TArray<TNota>;
+  Erro: string;
+begin
+  if not TryStrToFloat(Trim(EditInicio.Text).Replace(',', '.'), Inicio, TFormatSettings.Invariant) or (Inicio < 0) or
+     not TryStrToFloat(Trim(EditDuracao.Text).Replace(',', '.'), Duracao, TFormatSettings.Invariant) or
+     (Duracao < 0.1) or (Duracao > ROGER_TOTAL_MS / 1000) then
+  begin
+    Avisa(Format(Tr('O começo vai em segundos, e a duração de 0,1 a %.0f s.', 'The start goes in seconds, and the ' +
+                    'length from 0.1 to %.0f s.'), [ROGER_TOTAL_MS / 1000]));
+    Exit;
+  end;
+  try
+    Screen.Cursor := crHourGlass;
+    try
+      N := NotasDoArquivo(FArquivoSom, Round(Inicio * 1000), Round(Duracao * 100) * 10);
+    finally
+      Screen.Cursor := crDefault;
+    end;
+  except
+    on E: Exception do
+    begin
+      Avisa(Format('%s: %s', [ExtractFileName(FArquivoSom), E.Message]));
+      Exit;
+    end;
+  end;
+  FMemoria.Guarda;
+  FNotas := N;
+  if NotasValidas(FNotas, Erro) then
+    FMemoria.PoeNotas(FNotas);
+  PreencheNotas;
+  Mudou;
+  if EhMidi(FArquivoSom) then
+    Avisa(Format(Tr('%s: a melodia de %.1f s em diante. Ouça no PC; falta gravar no rádio.',
+                    '%s: the melody from %.1f s on. Listen on the PC; still to write to the radio.'),
+                 [ExtractFileName(FArquivoSom), Inicio]))
+  else
+    Avisa(Format(Tr('%s: a melodia aproximada de %.1f s em diante (o rádio toca uma nota por vez). Ouça no PC e ajuste ' +
+                    'as notas se precisar; falta gravar no rádio.',
+                    '%s: the approximate melody from %.1f s on (the radio plays one note at a time). Listen on the PC ' +
+                    'and adjust the notes if needed; still to write to the radio.'),
+                 [ExtractFileName(FArquivoSom), Inicio]));
 end;
 
 { O desenho das grades: o cabeçalho cinza, as linhas alternadas, a escolhida em verde claro, e o ajuste que mudou e
@@ -1856,6 +2241,16 @@ begin
   Grade.Enabled := Edita;
   GradeBancos.Enabled := Edita;
   GradeAjustes.Enabled := Edita;
+  FLinhaRoger.Enabled := Edita;
+  FTeclado.Enabled := Edita;
+  BotaoPausa.Enabled := Edita;
+  ComboDuracaoNova.Enabled := Edita;
+  ComboModelos.Enabled := Edita;
+  BotaoImportarSom.Enabled := Edita;
+  EditInicio.Enabled := Edita;
+  EditDuracao.Enabled := Edita;
+  BotaoOuvir.Enabled := FNotas <> nil;
+  MostraNotaEscolhida;
   BotaoNovoCanal.Enabled := Edita;
   BotaoApagarCanal.Enabled := Edita;
   BotaoImportarCsv.Enabled := Edita;
@@ -1981,7 +2376,7 @@ begin
   CancelaEdicao;
   FAcao := Acao;
   Barra.Position := 0;
-  if Acao = acProcurar then
+  if Acao in [acProcurar, acRemoto] then   // o remoto abre o transporte ele mesmo, e de novo depois de uma queda
     FTarefa := TTarefa.Create(nil, Corpo)
   else
     FTarefa := TTarefa.Create(AbreTransporte(), Corpo);
@@ -2193,21 +2588,27 @@ end;
 procedure TFormPrincipal.BotaoConectarClick(Sender: TObject);
 var
   R: TRemoto;
-  Espelho: Boolean;
+  Tela: Boolean;
+  Abre: TFunc<ITransporte>;
 begin
   if (FTarefa <> nil) and (FAcao = acRemoto) then
   begin
     FRemoto.Parar := True;
     Exit;
   end;
-  // a tela só vem pelo cabo: pelo Bluetooth não há vazão nem prova de que o envio aguenta
-  Espelho := Escolhida < Length(FPortas);
+  // a tela só se pede pelo cabo: pelo Bluetooth do Windows não há prova de que o retrato (uns 500 B a cada quadro)
+  // passa sem atrasar as teclas
+  Tela := Escolhida < Length(FPortas);
   FRemoto := TRemoto.Create;
   R := FRemoto;
+  R.Apaga(not FChaveTela.Ligada);
   R.OnRegistro := Avisos();
   R.OnEstado :=
     procedure(E: TEstadoRadio)
+    var
+      Apagando: Boolean;
     begin
+      Apagando := R.Apagando;   // aqui, na thread do remoto: na janela o R pode já não existir
       NaJanela(
         procedure
         var
@@ -2215,6 +2616,8 @@ begin
         begin
           FConectado := True;
           FEstadoRemoto := E;
+          // a chave segue o rádio: uma tecla dele acendeu a tela apagada (v165)
+          FChaveTela.Ligada := not Apagando;
           if E.TX = 1 then
             S := Tr('Transmitindo', 'Transmitting')
           else if E.RX = 4 then
@@ -2229,30 +2632,94 @@ begin
         end);
     end;
   R.OnTela :=
-    procedure(Pixels: TBytes)
+    procedure(Pixels: TBytes; Codigo: Integer)
     begin
       NaJanela(
         procedure
         var
           B: TBitmap;
         begin
-          B := LogoParaBitmap(Pixels, TELA_LARGURA, TELA_ALTURA);
-          try
-            FTela.Assign(B);
-          finally
-            B.Free;
+          if Pixels <> nil then
+          begin
+            B := LogoParaBitmap(Pixels, TELA_LARGURA, TELA_ALTURA);
+            try
+              FTela.Assign(B);
+            finally
+              B.Free;
+            end;
           end;
+          FAvisoTela := AvisoDaTela(Codigo);
           PaintVisor.Invalidate;
         end);
     end;
   FConectado := False;
   FTela.Assign(nil);
+  FAvisoTela := '';
+  R.OnQueda :=
+    procedure
+    begin
+      NaJanela(
+        procedure
+        begin
+          LabelRemoto.Caption := Tr('Reconectando...', 'Reconnecting...');
+          FAvisoTela := Tr('A ligação com o rádio caiu: reconectando...', 'The link to the radio dropped: reconnecting...');
+          PaintVisor.Invalidate;
+        end);
+    end;
+  Abre := AbreRemoto();
   Inicia(acRemoto,
     procedure(T: ITransporte)
     begin
-      R.Executa(T, Espelho);
+      R.ExecutaReligando(Abre, Tela);
     end);
   PaintVisor.Invalidate;
+end;
+
+// A tela do rádio apagada pelo controle remoto (firmware v164): vale também com ele já conectado. A chave mostra o
+// pedido: uma tecla do rádio que acende a tela a volta para Acesa (o OnEstado).
+procedure TFormPrincipal.ChaveTelaClick(Sender: TObject);
+begin
+  if FRemoto <> nil then
+    FRemoto.Apaga(not FChaveTela.Ligada);
+end;
+
+{ O transporte do controle remoto, que ele abre de novo depois de uma queda: pela serial, a porta escolhida e, se ela
+  sumiu (o USB do cabo caiu com o RF do PTT e voltou com outro nome), a única porta do CH340 que houver; pelo Bluetooth,
+  o mesmo rádio. }
+function TFormPrincipal.AbreRemoto: TFunc<ITransporte>;
+var
+  K: Integer;
+  Nome: string;
+  Registra_: TProc<string>;
+begin
+  K := Escolhida;
+  if K >= Length(FPortas) then
+    Exit(AbreTransporte());
+  Nome := FPortas[K].Nome;
+  Registra_ := Avisos();
+  Result :=
+    function: ITransporte
+    var
+      P: TPorta;
+      Ch340: TArray<string>;
+    begin
+      try
+        Result := TPortaSerial.Create(Nome);
+      except
+        on EInOutError do
+        begin
+          Ch340 := nil;
+          for P in ListaPortas do
+            if P.Ch340 then
+              Ch340 := Ch340 + [P.Nome];
+          if (Length(Ch340) <> 1) or (Ch340[0] = Nome) then
+            raise;
+          Nome := Ch340[0];
+          Registra_(Format(Tr('O cabo voltou como %s.', 'The cable came back as %s.'), [Nome]));
+          Result := TPortaSerial.Create(Nome);
+        end;
+      end;
+    end;
 end;
 
 { As teclas e o PTT ficam apertados no rádio enquanto o botão esquerdo do mouse está apertado neles, como no teclado: o
@@ -2295,14 +2762,16 @@ begin
     SoltaTudo;
 end;
 
-{ O visor: a tela do rádio, na proporção dela e no meio. Sem ela (o Bluetooth, ou antes de chegar), o estado: a letra
-  de quem recebe, o S-meter em 24 segmentos e a tensão; e antes de tudo, o que está acontecendo. }
+{ O visor: a tela do rádio, na proporção dela e no meio, com o aviso do que falta embaixo. Sem ela (o Bluetooth, ou
+  antes de chegar), o estado: a letra de quem recebe, o S-meter em 24 segmentos e a tensão; e antes de tudo, o que está
+  acontecendo. }
 procedure TFormPrincipal.PaintVisorPaint(Sender: TObject);
 var
   C: TCanvas;
   W, H, K, X0, Y0, L: Integer;
   Texto: string;
   E: TEstadoRadio;
+  Faixa: TRect;
 begin
   C := PaintVisor.Canvas;
   C.Brush.Color := COR_NAV;
@@ -2313,6 +2782,22 @@ begin
     H := W * TELA_ALTURA div TELA_LARGURA;
     C.StretchDraw(System.Types.Rect((PaintVisor.Width - W) div 2, (PaintVisor.Height - H) div 2,
                                     (PaintVisor.Width + W) div 2, (PaintVisor.Height + H) div 2), FTela);
+    if FAvisoTela <> '' then
+    begin
+      C.Font.Height := -MulDiv(13, CurrentPPI, 96);
+      C.Font.Style := [];
+      Faixa := System.Types.Rect(0, 0, W - MulDiv(24, CurrentPPI, 96), 0);
+      DrawText(C.Handle, PChar(FAvisoTela), -1, Faixa, DT_CALCRECT or DT_WORDBREAK or DT_CENTER);
+      Faixa.Width := W - MulDiv(24, CurrentPPI, 96);
+      OffsetRect(Faixa, (PaintVisor.Width - Faixa.Width) div 2,
+                 (PaintVisor.Height + H) div 2 - Faixa.Height - MulDiv(12, CurrentPPI, 96));
+      C.Brush.Color := COR_NAV;
+      C.FillRect(System.Types.Rect(Faixa.Left - MulDiv(8, CurrentPPI, 96), Faixa.Top - MulDiv(6, CurrentPPI, 96),
+                                   Faixa.Right + MulDiv(8, CurrentPPI, 96), Faixa.Bottom + MulDiv(6, CurrentPPI, 96)));
+      C.Brush.Style := bsClear;
+      C.Font.Color := COR_AMBAR;
+      DrawText(C.Handle, PChar(FAvisoTela), -1, Faixa, DT_WORDBREAK or DT_CENTER);
+    end;
     Exit;
   end;
   C.Brush.Style := bsClear;
@@ -2464,6 +2949,8 @@ begin
         PaintVisor.Invalidate;
         FSegurado.Enabled := False;
         FBotaoPtt.Caption := Tr('PTT  ·  segure para transmitir', 'PTT  ·  hold to transmit');
+        FChaveTela.Ligada := True;   // sem o remoto, o rádio volta com a tela acesa
+        FAvisoTela := '';
         if T.Fim = fOk then
           Registra(Tr('Controle remoto desconectado.', 'Remote control disconnected.'))
         else

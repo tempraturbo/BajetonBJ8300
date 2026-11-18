@@ -10,7 +10,7 @@
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.ZLib, System.Math, Idioma, Transporte, CaboBJ, Ajustes,
-  BJ8300, Csv, Logo, Remoto, SimuladorBJ;
+  BJ8300, Csv, Logo, LogoFormato, Remoto, TelaBJ, SimuladorBJ;
 
 var
   Pasta: string;
@@ -559,31 +559,40 @@ begin
   end;
 end;
 
+// O retrato e a tela de uma cena da prévia (tests/teste_tela_pc.py --amostras): o que o firmware v163 mandaria e o que
+// a prévia desenha.
+function Amostra(const Cena: string; out Tela: TBytes): TBytes;
+begin
+  Result := TFile.ReadAllBytes(TPath.Combine(Pasta, 'testes\retrato-' + Cena + '.bin'));
+  Tela := TFile.ReadAllBytes(TPath.Combine(Pasta, 'testes\tela-' + Cena + '.bin'));
+end;
+
 procedure TesteRemoto;
+const
+  PRINCIPAL = '1-a-em-evidencia-recebendo';   // com o medidor em 12 segmentos (S6)
+  MENU = '9-menu-roger';                      // sem sinal (255)
 var
   R: TRadioBJSimulado;
   T: ITransporte;
   Rem: TRemoto;
   L: TLeitorRemoto;
   E: TEstadoRadio;
-  B, Fluxo, Tela, Ultima: TBytes;
-  I, P, N, Telas, Estados, Mudancas: Integer;
+  B, Fluxo, Ret, RetMenu, Tela, TelaMenu, Ultima, Imagem: TBytes;
+  I, P, N, Telas, Estados, Mudancas, Codigo, SemRetrato: Integer;
   Msg, Letras: string;
 begin
   // o quadro do PC e o estado do rádio, byte a byte (firmware/src/remoto.c)
-  Confere(Iguais(QuadroRemoto(17, BIT_PTT or BIT_ESPELHO), TBytes.Create(126, 82, 17, 3, 255, 255, 226)),
+  Confere(Iguais(QuadroRemoto(17, BIT_PTT or BIT_TELA), TBytes.Create(126, 82, 17, 3, 255, 255, 226)),
           'remoto: o quadro do PC, com a soma');
-  Confere(Iguais(QuadroRemoto(TECLA_NENHUMA, BIT_ESPELHO or BIT_TELA_INTEIRA, 45),
-                 TBytes.Create(126, 82, 255, 6, 45, 255, 1)), 'remoto: o quadro da fatia leva o no no quinto byte');
-  // o lado em bits crus (v159): a vista 3, a evidencia no B e a perda
-  B := TBytes.Create(126, 114, 10 or 32, 1, 4, 13 or $80, 3 or 4 or 32, 167, 0);
+  // o lado em bits crus (v159): a vista 3 e a evidência no B
+  B := TBytes.Create(126, 114, 10 or 32 or 64, 1, 4, 13 or $80, 3 or 4, 167, 0);
   for I := 0 to 7 do
     B[8] := Byte(B[8] + B[I]);
-  Confere(EstadoDe(B, 0, E) and (E.Tecla = 9) and E.Ptt and not E.Espelho and (E.TX = 1) and (E.RX = 4) and
-          (E.Sinal = 13) and E.Microfone and (E.Letra = 'C') and (E.Vista = 3) and E.EvidenciaB and E.Sujo and
-          (E.Tensao = 74), 'remoto: o estado de 9 bytes, campo a campo');
-  // a letra, os mesmos 10 casos que o firmware conferia ate a v158 (tests/teste_remoto.py): (vista, evidencia no B,
-  // dupla escuta no outro, rodizio)
+  Confere(EstadoDe(B, 0, E) and (E.Tecla = 9) and E.Ptt and E.Tela and (E.TX = 1) and (E.RX = 4) and
+          (E.Sinal = 13) and E.Microfone and (E.SinalCru = 13 or $80) and (E.Letra = 'C') and (E.Vista = 3) and
+          E.EvidenciaB and (E.Tensao = 74), 'remoto: o estado de 9 bytes, campo a campo');
+  // a letra, os mesmos 10 casos que o firmware conferia até a v158 (tests/teste_remoto.py): (vista, evidência no B,
+  // dupla escuta no outro, rodízio)
   Letras := '';
   for I := 0 to 9 do
     Letras := Letras + LetraDe(Ord('0000223331'[I + 1]) - Ord('0'), '0011001000'[I + 1] = '1',
@@ -593,37 +602,56 @@ begin
   B[8] := 0;
   for I := 0 to 7 do
     B[8] := Byte(B[8] + B[I]);
-  Confere(not EstadoDe(B, 0, E), 'remoto: o rodizio sem a dupla escuta no outro nao vale, mesmo com a soma');
-  B[6] := 3 or 4 or 32;
+  Confere(not EstadoDe(B, 0, E), 'remoto: o rodízio sem a dupla escuta no outro não vale, mesmo com a soma');
+  B[6] := 3 or 4;
   B[8] := 0;
   for I := 0 to 7 do
     B[8] := Byte(B[8] + B[I]);
   B[8] := Byte(B[8] + 1);
-  Confere(not EstadoDe(B, 0, E), 'remoto: a soma errada nao vale');
+  Confere(not EstadoDe(B, 0, E), 'remoto: a soma errada não vale');
   B[3] := 3;
   B[8] := 0;
   for I := 0 to 7 do
     B[8] := Byte(B[8] + B[I]);
-  Confere(not EstadoDe(B, 0, E), 'remoto: um tx que o firmware nao manda nao vale, mesmo com a soma');
+  Confere(not EstadoDe(B, 0, E), 'remoto: um tx que o firmware não manda não vale, mesmo com a soma');
   B[3] := 1;
   B[8] := Byte(B[8] - 2);
   Confere(EstadoDe(B, 0, E), 'remoto: e o mesmo estado com o tx certo e a soma refeita vale');
   Confere((TextoSinal(0) = 'S0') and (TextoSinal(1) = 'S1') and (TextoSinal(2) = 'S1') and (TextoSinal(3) = 'S2') and
           (TextoSinal(18) = 'S9') and (TextoSinal(19) = 'S9+10') and (TextoSinal(24) = 'S9+60'),
-          'remoto: o medidor em S (2 segmentos por S ate o S9, depois 10 dB)');
+          'remoto: o medidor em S (2 segmentos por S até o S9, depois 10 dB)');
 
-  // o leitor: a tela inteira do simulador, picada em pedacos, com ruido e um estado no meio, e uma linha estragada
+  // o desenho da tela (TelaBJ, o código da tela do rádio ligado dentro do exe): as amostras da prévia
+  Ret := Amostra(PRINCIPAL, Tela);
+  RetMenu := Amostra(MENU, TelaMenu);
+  Confere((TamanhoRetrato = Length(Ret)) and (Ret[2] = VersaoRetrato),
+          'tela: o tamanho e a versão do retrato são os das amostras (' + IntToStr(TamanhoRetrato) + ' B)');
+  Imagem := nil;
+  Codigo := DesenhaRetrato(Ret, 12, Imagem);
+  Confere((Codigo = TELA_BJ_INTEIRA) and Iguais(Imagem, Tela),
+          'tela: a principal, com o medidor em S6, sai igual à prévia, pixel por pixel');
+  Codigo := DesenhaRetrato(RetMenu, 255, Imagem);
+  Confere((Codigo = TELA_BJ_INTEIRA) and Iguais(Imagem, TelaMenu),
+          'tela: o menu, sem sinal (o 255 não é a TX), sai igual à prévia');
+  B := Copy(Ret);
+  B[100] := B[100] xor $10;
+  Ultima := Imagem;
+  Codigo := DesenhaRetrato(B, 12, Imagem);
+  N := DesenhaRetrato(Copy(Ret, 0, Length(Ret) - 1), 12, Imagem);
+  B := Copy(Ret);
+  B[2] := B[2] xor 1;
+  P := DesenhaRetrato(B, 12, Imagem);
+  Confere((Codigo = TELA_BJ_ERRO_SOMA) and (N = TELA_BJ_ERRO_TAMANHO) and (P = TELA_BJ_ERRO_VERSAO) and Iguais(Imagem, Ultima),
+          'tela: os erros (somas, tamanho, versão), e a imagem fica como estava');
+
+  // o leitor: o estado e o retrato no meio do ruído, picados em pedaços, e um retrato estragado que se pula
+  B := Copy(Ret);
+  B[200] := B[200] xor 1;
   R := NovoRadio;
   T := R;
-  for I := 0 to 160 * 128 - 1 do
-  begin
-    R.Tela[I * 2] := Byte(I * 37 div 160);
-    R.Tela[I * 2 + 1] := Byte((I mod 160) div 9);
-  end;
-  R.EstragaLinha := 77;
-  R.Capacidade := MaxInt;
-  T.Escreve(QuadroRemoto(TECLA_NENHUMA, BIT_ESPELHO or BIT_TELA_INTEIRA, 1));
-  Fluxo := TBytes.Create(1, 2, 126, 9) + T.Le;
+  R.Retrato := Ret;
+  T.Escreve(QuadroRemoto(TECLA_NENHUMA, BIT_TELA));
+  Fluxo := TBytes.Create(1, 2, 126, 9, 126, 83) + B + TBytes.Create(126) + T.Le + TBytes.Create(126, 83, 4);
   L := TLeitorRemoto.Create;
   try
     P := 0;
@@ -634,32 +662,32 @@ begin
       Inc(P, N);
       N := N mod 97 + 1;
     end;
-    Tela := Copy(R.Tela);
-    FillChar(Tela[77 * 320], 320, 0);
-    Confere(Iguais(L.Tela, Tela), 'remoto: a tela volta igual pelo leitor, com o fluxo picado (fora a linha estragada)');
-    // a perda so serve para pedir a tela de novo: cada 01 de dentro do quadro estragado tambem conta
-    Confere((L.Estragados > 0) and (L.Estados = 1) and L.Estado.Valido and (L.Estado.Letra = 'B') and
-            (TextoSinal(L.Estado.Sinal) = 'S7'), 'remoto: a linha estragada vira perda, e o estado sai lido do meio do ruido');
+    Confere((L.Estados = 1) and L.Estado.Valido and (L.Estado.Letra = 'B') and (TextoSinal(L.Estado.Sinal) = 'S7') and
+            (L.Retratos = 1) and Iguais(L.Retrato, Ret) and (L.Estragados > 0),
+            'remoto: o estado e o retrato saem lidos do meio do ruído, e o estragado se pula');
   finally
     L.Free;
   end;
 
-  // o laco: a tecla e o PTT vao ao radio, a tela vem, a perda pede a tela de novo, e no fim tudo solto
+  // o laço: a tecla e o PTT vão ao rádio, a tela vem desenhada, e no fim tudo solto
   R := NovoRadio;
   T := R;
-  for I := 0 to 160 * 128 * 2 - 1 do
-    R.Tela[I] := Byte(I div 640);
-  R.EstragaLinha := 5;
+  R.Retrato := Ret;
+  R.Status[2] := 12;
   Rem := TRemoto.Create;
   try
     Telas := 0;
     Estados := 0;
     Mudancas := 0;
+    Codigo := -99;
+    Ultima := nil;
     Rem.OnTela :=
-      procedure(Px: TBytes)
+      procedure(Px: TBytes; K: Integer)
       begin
-        Inc(Telas);
+        if Px <> nil then
+          Inc(Telas);
         Ultima := Px;
+        Codigo := K;
       end;
     Rem.OnEstado :=
       procedure(Es: TEstadoRadio)
@@ -670,7 +698,7 @@ begin
             Rem.Aperta(TECLA_DIGITO[7]);
           6:
             begin
-              Confere(R.RemTecla = 14, 'remoto: a tecla 7 chega ao radio como o codigo 14');
+              Confere(R.RemTecla = 14, 'remoto: a tecla 7 chega ao rádio como o código 14');
               Rem.Solta;
               Rem.Ptt(True);
             end;
@@ -681,180 +709,89 @@ begin
               Rem.Ptt(False);
               Inc(Mudancas);
             end;
-          400:
+          20:
+            R.Status[2] := 255;   // o sinal some: a tela muda (o medidor apaga)
+          30:
+            R.Status[2] := 12;
+          40:
             Rem.Parar := True;
         end;
       end;
     Rem.Executa(T, True);
-    Confere((R.TelasInteiras = 2) and (R.Fatias[0] = 8) and (R.Fatias[1] = 1) and Iguais(Ultima, R.Tela),
-            'remoto: a primeira fatia de 16 linhas, e com a linha estragada nela a tela de novo, inteira num pedido so ' +
-            '(a imagem diz que cabe), e a imagem fica certa');
-    Confere((R.RemTecla = -1) and (R.RemBits = 0), 'remoto: no fim, a tecla, o PTT e o espelho desligados no radio');
-    Confere(Mudancas = 1, 'remoto: o laco chega ao fim pelo Parar');
+    // o retrato vem a cada quadro, e a janela só ouve a tela que mudou: a primeira, sem o sinal e de novo com ele
+    Confere((Telas = 3) and (R.Retratos >= 30) and (Codigo = TELA_BJ_INTEIRA) and Iguais(Ultima, Tela),
+            'remoto: a tela vem só quando muda, desenhada igual à prévia (' + IntToStr(Telas) + ' telas de ' +
+            IntToStr(R.Retratos) + ' retratos)');
+    Confere((R.RemTecla = -1) and (R.RemBits = 0), 'remoto: no fim, a tecla, o PTT e a tela desligados no rádio');
+    Confere(Mudancas = 1, 'remoto: o laço chega ao fim pelo Parar');
   finally
     Rem.Free;
   end;
 
-  // a tela densa (um pixel de cada cor, 488 B por linha): as fatias de 16 e de 8 linhas nao cabem na saida do radio
-  // e se partem ate as de 4, que cabem; a imagem fica certa e nada mais se pede
+  // o retrato estragado não vira tela; o laço do APRS ou do Morse (o estado vem, o retrato não) dá o aviso uma vez, e
+  // a tela volta quando ele acaba; a tela muda quando o rádio muda (o menu)
   R := NovoRadio;
   T := R;
-  for I := 0 to 160 * 128 - 1 do
-  begin
-    R.Tela[I * 2] := Byte(I and 1);
-    R.Tela[I * 2 + 1] := Byte(I div 160);
-  end;
+  R.Retrato := Ret;
+  R.Status[2] := 12;   // o sinal da amostra
   Rem := TRemoto.Create;
   try
+    Telas := 0;
     Estados := 0;
-    Rem.OnTela :=
-      procedure(Px: TBytes)
-      begin
-        Ultima := Px;
-      end;
-    Rem.OnEstado :=
-      procedure(Es: TEstadoRadio)
-      begin
-        Inc(Estados);
-        if Estados = 150 then
-          Rem.Parar := True;
-      end;
-    Rem.Executa(T, True);
-    N := 0;
-    for I := 0 to R.Fatias.Count - 1 do
-      if R.Fatias[I] >= 32 then
-        Inc(N);
-    Confere((R.TelasInteiras = 8 + 16 + 32) and (N = 32) and (R.Fatias[0] = 8) and (R.Fatias[1] = 16) and
-            (R.Fatias[2] = 32) and (R.Fatias[3] = 33) and (R.Fatias[4] = 17) and not R.Perdeu,
-            'remoto: a tela densa se parte ate as fatias de 4 linhas, em ordem, e cada uma vai uma vez');
-    Confere(Iguais(Ultima, R.Tela), 'remoto: e a imagem densa fica certa');
-  finally
-    Rem.Free;
-  end;
-
-  // na TX a fatia nao se redesenha: ela se pede de novo, sem se partir, e vai quando a TX acaba
-  R := NovoRadio;
-  T := R;
-  R.Status[0] := 1;
-  Rem := TRemoto.Create;
-  try
-    Estados := 0;
-    Rem.OnEstado :=
-      procedure(Es: TEstadoRadio)
-      begin
-        Inc(Estados);
-        if Estados = 10 then
-          R.Status[0] := 0;
-        if Estados = 60 then
-          Rem.Parar := True;
-      end;
-    Rem.Executa(T, True);
-    Confere((R.TelasInteiras = 8) and (R.Fatias[0] = 8) and (R.Fatias[7] = 15) and not R.Perdeu,
-            'remoto: na TX a fatia espera, sem se partir, e depois a tela vem');
-  finally
-    Rem.Free;
-  end;
-
-  // uma tecla no meio da passada (v159): as linhas de cima mudam, densas, e so 4 cabem; a perda vem na resposta e a
-  // tela se refaz, mesmo com as fatias dali ja recebidas (na v158 a fatia seguinte apagava a marca)
-  R := NovoRadio;
-  T := R;
-  for I := 0 to 160 * 128 * 2 - 1 do
-    R.Tela[I] := Byte(I div 640);
-  Rem := TRemoto.Create;
-  try
-    Estados := 0;
-    Rem.OnTela :=
-      procedure(Px: TBytes)
-      begin
-        Ultima := Px;
-      end;
-    Rem.OnEstado :=
-      procedure(Es: TEstadoRadio)
-      var
-        K: Integer;
-      begin
-        Inc(Estados);
-        if Estados = 3 then
-        begin
-          for K := 0 to 160 * 16 - 1 do
-            R.Tela[K * 2] := Byte(K and 1 + 7);
-          R.Redesenha(0, 16);
-        end;
-        if Estados = 80 then
-          Rem.Parar := True;
-      end;
-    Rem.Executa(T, True);
-    Confere(Iguais(Ultima, R.Tela) and not R.Perdeu, 'remoto: a tecla no meio da passada: a perda nao se esquece, e a ' +
-            'imagem fica certa');
-  finally
-    Rem.Free;
-  end;
-
-  // uma tecla com a tela parada (v159), depois das 8 fatias do comeco: as linhas 40 a 99 mudam, densas, e so 4 cabem;
-  // a tela se refaz comecando pela fatia da linha 44 (a seguinte a ultima que chegou), de 4 linhas porque a imagem
-  // diz que a de 8 nao cabe
-  R := NovoRadio;
-  T := R;
-  for I := 0 to 160 * 128 * 2 - 1 do
-    R.Tela[I] := Byte(I div 640);
-  Rem := TRemoto.Create;
-  try
-    Estados := 0;
+    SemRetrato := 0;
     N := -1;
     Rem.OnTela :=
-      procedure(Px: TBytes)
+      procedure(Px: TBytes; K: Integer)
       begin
+        if K = TELA_SEM_RETRATO then
+        begin
+          Inc(SemRetrato);
+          N := Estados;
+        end
+        else if (K <> TELA_BJ_INTEIRA) or not (Iguais(Px, Tela) or Iguais(Px, TelaMenu)) then
+          Inc(Telas);   // aqui, as telas erradas
         Ultima := Px;
       end;
     Rem.OnEstado :=
       procedure(Es: TEstadoRadio)
-      var
-        K: Integer;
       begin
         Inc(Estados);
-        if Estados = 20 then
-        begin
-          N := R.Fatias.Count;
-          for K := 160 * 40 to 160 * 100 - 1 do
-            R.Tela[K * 2] := Byte(K and 1 + 9);
-          R.Redesenha(40, 100);
+        case Estados of
+          5:
+            R.EstragaRetrato := True;
+          10:
+            R.Laco := True;
+          30:
+            begin
+              R.Laco := False;
+              R.Retrato := RetMenu;
+              R.Status[2] := 255;
+            end;
+          40:
+            Rem.Parar := True;
         end;
-        if Estados = 150 then
-          Rem.Parar := True;
       end;
     Rem.Executa(T, True);
-    P := -1;
-    if (N >= 0) and (R.Fatias.Count > N) then
-      P := R.Fatias[N];
-    Confere((N = 8) and (P = 43) and Iguais(Ultima, R.Tela) and not R.Perdeu,
-            'remoto: a tecla com a tela parada: a tela se refaz a partir da linha 44, e a imagem fica certa (' +
-            IntToStr(N) + ' fatias antes, a primeira depois: ' + IntToStr(P) + ')');
+    Confere(Telas = 0, 'remoto: o retrato estragado no meio não vira tela errada');
+    Confere((SemRetrato = 1) and (N >= 10 + SEM_RETRATO_MS div TELA_MS - 1) and (N < 30),
+            'remoto: o laço do APRS ou do Morse dá o aviso uma vez, depois de ' + IntToStr(SEM_RETRATO_MS) +
+            ' ms sem retrato (no estado ' + IntToStr(N) + ')');
+    Confere(Iguais(Ultima, TelaMenu), 'remoto: depois do laço a tela volta, e é a de agora (o menu)');
   finally
     Rem.Free;
   end;
 
-  // v161: o clique curto (o Aperta e o Solta na mesma volta do laco) chega ao radio, segurado o minimo; e com uma
-  // tecla apertada nenhuma fatia vai (o redesenho deixava o radio sem ler o teclado), e depois de soltar a tela se refaz
+  // v161: o clique curto (o Aperta e o Solta na mesma volta do laço) chega ao rádio, segurado o mínimo
   R := NovoRadio;
   T := R;
-  for I := 0 to 160 * 128 * 2 - 1 do
-    R.Tela[I] := Byte(I div 640);
+  R.Retrato := Ret;
   Rem := TRemoto.Create;
   try
     Estados := 0;
     Mudancas := 0;
-    N := -1;
-    P := -2;
-    Rem.OnTela :=
-      procedure(Px: TBytes)
-      begin
-        Ultima := Px;
-      end;
+    Telas := 0;
     Rem.OnEstado :=
       procedure(Es: TEstadoRadio)
-      var
-        K: Integer;
       begin
         Inc(Estados);
         if Es.Tecla = TECLA_DIGITO[2] then
@@ -862,41 +799,26 @@ begin
         if Estados = 25 then
           Telas := R.UltimoToque;
         case Estados of
-          20:
+          10:
             begin
               Rem.Aperta(TECLA_DIGITO[2]);
               Rem.Solta;
             end;
-          40:
-            begin
-              for K := 160 * 40 to 160 * 100 - 1 do
-                R.Tela[K * 2] := Byte(K and 1 + 9);
-              R.Redesenha(40, 100);
-              Rem.Aperta(TECLA_CIMA);
-              N := R.Fatias.Count;
-            end;
-          55:
-            begin
-              P := R.Fatias.Count;
-              Rem.Solta;
-            end;
-          150:
+          30:
             Rem.Parar := True;
         end;
       end;
     Rem.Executa(T, True);
     Confere((Mudancas > 0) and (Telas >= TECLA_MIN_MS),
-            'remoto: o clique curto chega ao radio, segurado o minimo (' + IntToStr(Telas) + ' ms)');
-    Confere((P = N) and (R.Fatias.Count > N) and Iguais(Ultima, R.Tela) and not R.Perdeu,
-            'remoto: com a tecla apertada nenhuma fatia vai, e depois de soltar a tela se refaz (' + IntToStr(N) + ', ' +
-            IntToStr(P) + ', ' + IntToStr(R.Fatias.Count) + ')');
+            'remoto: o clique curto chega ao rádio, segurado o mínimo (' + IntToStr(Telas) + ' ms)');
   finally
     Rem.Free;
   end;
 
-  // sem espelho (o Bluetooth), nada de tela; e o radio mudo da a mensagem do firmware
+  // sem tela (o Bluetooth do Windows), nada de retrato; e o rádio mudo dá a mensagem do firmware
   R := NovoRadio;
   T := R;
+  R.Retrato := Ret;
   Rem := TRemoto.Create;
   try
     Estados := 0;
@@ -908,7 +830,7 @@ begin
           Rem.Parar := True;
       end;
     Rem.Executa(T, False);
-    Confere(R.TelasInteiras = 0, 'remoto: sem espelho o radio nao manda tela');
+    Confere(R.Retratos = 0, 'remoto: sem a tela pedida o rádio não manda retrato');
   finally
     Rem.Free;
   end;
@@ -924,7 +846,8 @@ begin
       on Ex: ESemRadio do
         Msg := Ex.Message;
     end;
-    Confere(Pos('v159', Msg) > 0, 'remoto: o radio mudo da a mensagem que pede o firmware v159');
+    Confere((Pos('v159', Msg) > 0) and (Pos('v163', Msg) > 0),
+            'remoto: o rádio mudo dá a mensagem que pede o firmware v159 (e o v163 para a tela)');
   finally
     Rem.Free;
   end;
@@ -932,6 +855,264 @@ end;
 
 // A velocidade do cabo (v157, v160): 460800, e 115200 e 57600 com os firmwares de antes, na leitura; o remoto a 460800
 // e, sem resposta, a 115200 (v157 a v159).
+function Nota(Hz, Ms: Word): TNota;
+begin
+  Result.Hz := Hz;
+  Result.Ms := Ms;
+end;
+
+function MesmasNotas(const A, B: TArray<TNota>): Boolean;
+var
+  K: Integer;
+begin
+  Result := Length(A) = Length(B);
+  for K := 0 to High(A) do
+    Result := Result and (A[K].Hz = B[K].Hz) and (A[K].Ms = B[K].Ms);
+end;
+
+// O ROGER CUSTOM (firmware v164): o registro, a leitura, a gravação e os backups de antes.
+procedure TesteRoger;
+var
+  R: TRadioBJSimulado;
+  T: ITransporte;
+  M, N: TMemoriaBJ8300;
+  C: TCaboBJ;
+  Notas: TArray<TNota>;
+  Reg, Exemplo, B: TBytes;
+  Erro, Msg, Arq: string;
+  G: TArray<TGravar>;
+  Crc: Cardinal;
+  P, K: Integer;
+begin
+  // as notas do tests/teste_roger.py: o registro que o firmware toca, byte a byte
+  Notas := [Nota(988, 80), Nota(0, 20), Nota(1319, 81), Nota(2637, 150), Nota(300, 10), Nota(3000, 1000)];
+  Reg := RegistroDeNotas(Notas);
+  Exemplo := TFile.ReadAllBytes(TPath.Combine(Pasta, 'testes\roger-exemplo.bin'));
+  Confere(Iguais(Reg, Exemplo), 'roger: o registro é o que o firmware toca (o do tests/teste_roger.py)');
+  Confere(MesmasNotas(NotasDoRegistro(Reg), Notas), 'roger: e as notas voltam dele');
+  Reg[10] := Reg[10] xor 4;
+  Confere(NotasDoRegistro(Reg) = nil, 'roger: um byte estragado no começo, e ele não vale');
+  Confere(NotasValidas(Notas, Erro) and not NotasValidas(nil, Erro) and not NotasValidas([Nota(299, 100)], Erro) and
+          not NotasValidas([Nota(1000, 9)], Erro) and not NotasValidas([Nota(1000, 1000), Nota(1000, 1000),
+          Nota(1000, 1000), Nota(1000, 10)], Erro) and NotasValidas([Nota(1000, 1000), Nota(1000, 1000),
+          Nota(0, 1000)], Erro), 'roger: os limites do rádio (1 a 32 notas, 300 a 3000 Hz ou pausa, 10 a 1000 ms, 3 s)');
+
+  // o rádio sem o registro: nenhuma nota; gravar: só a área do roger, e a releitura vê as notas
+  R := NovoRadio;
+  T := R;
+  M := Le(T);
+  N := nil;
+  C := TCaboBJ.Create;
+  try
+    Confere(M.Notas = nil, 'roger: o rádio sem o registro, nenhuma nota');
+    M.Guarda;
+    M.PoeNotas(Notas);
+    G := M.Mudancas;
+    Confere((Length(G) = 1) and (G[0].Area = AREA_ROGER) and (G[0].Tamanho = $C0), 'roger: só a área do roger muda');
+    C.Sessao(T, procedure begin M.GravaNoRadio(C, False) end);
+    M.Gravou;
+    B := R.Pega($DA000, $C0);
+    Confere(Iguais(Copy(B, 0, ROGER_REGISTRO), Exemplo) and (B[ROGER_REGISTRO] = $FF) and (B[$BF] = $FF),
+            'roger: no rádio, o registro e o resto em FF');
+    N := Le(T);
+    Confere(MesmasNotas(N.Notas, Notas), 'roger: a releitura vê as notas');
+    // sem notas: a área apagada (o CUSTOM fica calado)
+    M.Guarda;
+    M.PoeNotas(nil);
+    C.Sessao(T, procedure begin M.GravaNoRadio(C, False) end);
+    M.Gravou;
+    B := R.Pega($DA000, $C0);
+    Confere((B[0] = $FF) and (B[$BF] = $FF) and (M.Notas = nil), 'roger: sem notas, a área apagada');
+  finally
+    C.Free;
+    M.Free;
+    N.Free;
+  end;
+
+  // o firmware até a v163 não grava ali (responde o ACK e ignora): a mensagem pede o v164
+  R := NovoRadio;
+  R.Limite := $D6000;
+  T := R;
+  M := Le(T);
+  C := TCaboBJ.Create;
+  try
+    M.Guarda;
+    M.PoeNotas(Notas);
+    Msg := '';
+    try
+      C.Sessao(T, procedure begin M.GravaNoRadio(C, False) end);
+    except
+      on E: EFalha do
+        Msg := E.Message;
+    end;
+    Confere(Pos('v164', Msg) > 0, 'roger: o firmware de antes não guarda as notas, e a mensagem pede o v164 (' + Msg + ')');
+  finally
+    C.Free;
+    M.Free;
+  end;
+
+  // o backup de antes da v164, sem a área do roger: abre, sem notas
+  R := NovoRadio;
+  T := R;
+  M := Le(T);
+  N := TMemoriaBJ8300.Create(Menu);
+  try
+    Arq := TPath.Combine(TPath.GetTempPath, 'tl-bj-roger' + EXTENSAO);
+    M.Salva(Arq);
+    B := TFile.ReadAllBytes(Arq);
+    // a última área é a do roger (8 bytes do endereço e do tamanho e os $C0), antes do CRC: sai, e uma área a menos
+    Delete(B, Length(B) - 4 - 8 - $C0, 8 + $C0 + 4);
+    P := 8;                                  // a marca; o modelo, a versão e a data, cada um com o tamanho na frente
+    for K := 1 to 3 do
+      Inc(P, 1 + B[P]);
+    Dec(B[P]);                               // quantas áreas
+    Crc := crc32(0, @B[0], Length(B));
+    B := B + TBytes.Create(Byte(Crc), Byte(Crc shr 8), Byte(Crc shr 16), Byte(Crc shr 24));
+    TFile.WriteAllBytes(Arq, B);
+    Msg := '';
+    try
+      N.Abre(Arq);
+    except
+      on E: Exception do
+        Msg := E.Message;
+    end;
+    Confere((Msg = '') and (N.Notas = nil) and (N.Canal(3).Nome = 'gmrs 3'),
+            'roger: o backup de antes, sem a área, abre sem notas (' + Msg + ')');
+    TFile.Delete(Arq);
+  finally
+    N.Free;
+    M.Free;
+  end;
+end;
+
+// A tela do rádio apagada pelo controle remoto (firmware v164): o bit 4 vai no quadro enquanto pedido, e sai no fim; e
+// (v165) a tecla do rádio que acende a tela acaba o pedido, e o pedido novo apaga de novo.
+procedure TesteTelaApagada;
+var
+  R: TRadioBJSimulado;
+  T: ITransporte;
+  Rem: TRemoto;
+  Estados, ComBit, SemBit, Acordou, DeNovo: Integer;
+begin
+  R := NovoRadio;
+  T := R;
+  Rem := TRemoto.Create;
+  try
+    Estados := 0;
+    ComBit := 0;
+    SemBit := 0;
+    Acordou := 0;
+    DeNovo := 0;
+    Rem.Apaga(True);
+    Rem.OnEstado :=
+      procedure(Es: TEstadoRadio)
+      begin
+        Inc(Estados);
+        case Estados of
+          5:
+            begin
+              if R.RemBits and BIT_APAGA <> 0 then
+                Inc(ComBit);
+              Rem.Apaga(False);
+            end;
+          10:
+            begin
+              if R.RemBits and BIT_APAGA = 0 then
+                Inc(SemBit);
+              Rem.Apaga(True);
+            end;
+          15:
+            R.Acorda := True;        // uma tecla do rádio
+          20:
+            begin
+              if not Rem.Apagando and (R.RemBits and BIT_APAGA = 0) then
+                Inc(Acordou);
+              Rem.Apaga(True);       // a chave de novo em Apagada
+            end;
+          25:
+            if Rem.Apagando and (R.RemBits and BIT_APAGA <> 0) and not R.Acorda then
+              Inc(DeNovo);
+          26:
+            Rem.Parar := True;
+        end;
+      end;
+    Rem.Executa(T, False);
+    Confere((ComBit = 1) and (SemBit = 1) and (R.RemBits = 0),
+            'remoto: a tela apagada vai no bit 4 enquanto pedida, sai quando não, e no fim nada fica');
+    Confere(Acordou = 1, 'remoto: v165, a tecla do rádio que acende a tela acaba o pedido (a chave volta a Acesa)');
+    Confere(DeNovo = 1, 'remoto: v165, e o pedido novo apaga de novo, sem o aviso velho');
+  finally
+    Rem.Free;
+  end;
+end;
+
+// O controle remoto que se reconecta (v165): a ligação cai (o rádio emudece: o USB do cabo caiu), a porta não abre na
+// primeira tentativa, e na seguinte o rádio volta; a primeira conexão que falha ainda dá o erro.
+procedure TesteReligando;
+var
+  R1, R2, R3: TRadioBJSimulado;
+  T1, T2, T3: ITransporte;
+  Rem: TRemoto;
+  Abertas, Quedas, Estados: Integer;
+  Msgs, Msg: string;
+begin
+  R1 := NovoRadio;
+  R2 := NovoRadio;
+  T1 := R1;
+  T2 := R2;
+  Rem := TRemoto.Create;
+  try
+    Rem.PausaReligaMs := 0;
+    Abertas := 0;
+    Quedas := 0;
+    Estados := 0;
+    Msgs := '';
+    Rem.OnRegistro := procedure(S: string) begin Msgs := Msgs + S + '|'; end;
+    Rem.OnQueda := procedure begin Inc(Quedas); end;
+    Rem.OnEstado :=
+      procedure(Es: TEstadoRadio)
+      begin
+        Inc(Estados);
+        if Estados = 10 then
+          R1.Mudo := True;
+        if Estados = 20 then
+          Rem.Parar := True;
+      end;
+    Rem.ExecutaReligando(
+      function: ITransporte
+      begin
+        Inc(Abertas);
+        case Abertas of
+          1: Result := T1;
+          2: raise EInOutError.Create('a porta sumiu');
+        else
+          Result := T2;
+        end;
+      end, False);
+    Confere((Abertas = 3) and (Quedas = 1) and (Estados = 20) and Msgs.Contains('caiu') and Msgs.Contains('reconectado'),
+            'remoto: v165, a ligação que cai se refaz sozinha, e a porta que não abre se tenta de novo (' + Msgs + ')');
+  finally
+    Rem.Free;
+  end;
+  R3 := NovoRadio;
+  R3.Mudo := True;
+  T3 := R3;
+  Rem := TRemoto.Create;
+  try
+    Rem.PausaReligaMs := 0;
+    Msg := '';
+    try
+      Rem.ExecutaReligando(function: ITransporte begin Result := T3; end, False);
+    except
+      on E: ESemRadio do
+        Msg := E.Message;
+    end;
+    Confere(Pos('v159', Msg) > 0, 'remoto: v165, o rádio que nunca respondeu ainda dá o erro, sem ficar tentando');
+  finally
+    Rem.Free;
+  end;
+end;
+
 procedure TesteVelocidade;
 var
   R: TRadioBJSimulado;
@@ -978,9 +1159,10 @@ begin
         if Estados = 20 then
           Rem.Parar := True;
       end;
+    R.Retrato := TFile.ReadAllBytes(TPath.Combine(Pasta, 'testes\retrato-9-menu-roger.bin'));
     Rem.Executa(R, True);
-    Confere((R.Porta = BAUD_CABO) and (R.Ruido = 0) and (R.TelasInteiras > 0),
-            'velocidade: o remoto fala a 460800 com o firmware v160');
+    Confere((R.Porta = BAUD_CABO) and (R.Ruido = 0) and (R.Retratos > 0),
+            'velocidade: o remoto fala a 460800 com o firmware v160, e a tela vem');
   finally
     Rem.Free;
   end;
@@ -997,8 +1179,8 @@ begin
           Rem.Parar := True;
       end;
     Rem.Executa(R, True);
-    Confere((R.Porta = BAUD_CABO_V157) and (Estados = 20) and (R.TelasInteiras > 0),
-            'velocidade: o remoto desce a 115200 com o firmware v157 a v159, e a tela vem');
+    Confere((R.Porta = BAUD_CABO_V157) and (Estados = 20) and (R.RemQuadros > 0),
+            'velocidade: o remoto desce a 115200 com o firmware v157 a v159');
   finally
     Rem.Free;
   end;
@@ -1034,6 +1216,9 @@ begin
       TesteCsv;
       TesteLogo;
       TesteRemoto;
+      TesteRoger;
+      TesteTelaApagada;
+      TesteReligando;
       TesteVelocidade;
     finally
       Menu.Free;

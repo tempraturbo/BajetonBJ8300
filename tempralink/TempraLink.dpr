@@ -18,6 +18,8 @@ uses
   Visual in 'Visual.pas',
   PortaSerial in 'PortaSerial.pas',
   Bluetooth in 'Bluetooth.pas',
+  Melodia in 'Melodia.pas',
+  EditorRoger in 'EditorRoger.pas',
   Principal in 'Principal.pas' {FormPrincipal};
 
 begin

@@ -18,7 +18,10 @@
     estreito (6), o ENCRYPT (5-4), o BCL (3), a varredura (2) e o AM (1); 16-19 o FHSS, que fica como está; 20-31 o
     nome, completado com FF. Vazio: o primeiro byte FF, ou a RX zero.
   Os bancos (bancos.c): o cabeçalho "BNK3" (os ligados em 4-5, o escolhido em 6, a soma em 8-9) e um setor por banco,
-  "BCO1" com o nome (12 bytes, completado com 0), o mapa (120 bytes, um bit por canal) e a soma. }
+  "BCO1" com o nome (12 bytes, completado com 0), o mapa (120 bytes, um bit por canal) e a soma.
+  As notas do ROGER CUSTOM (firmware v164, o roger_custom do bancos.c), num setor próprio, 0xDA000: "BCO1", quantas (1
+  a 32), um byte 0, as 32 notas (Hz e ms, u16, byte baixo primeiro; as que sobram em 0) e a soma, 136 bytes. A soma é
+  0x1234 mais as 67 palavras de 16 bits de antes dela (não a dos outros registros, que só vê os últimos bytes). }
 
 interface
 
@@ -34,6 +37,10 @@ const
   // a posição é o código que o rádio guarda (o DTMF_CHARS do radtel_rt900.py; o 10 é um espaço, que não se digita)
   DIGITOS_DTMF = '0123456789 *#ABCD';
   EXTENSAO = '.tempra';
+  // o ROGER CUSTOM (v164), os limites do firmware e do UV-17L
+  ROGER_NOTAS = 32;
+  ROGER_TOTAL_MS = 3000;
+  ROGER_REGISTRO = 136;
 
 type
   TPotencia = (ptAlta, ptMedia, ptBaixa);
@@ -54,8 +61,13 @@ type
     Endereco, Tamanho: Cardinal;
   end;
 
+  // uma nota do ROGER CUSTOM
+  TNota = record
+    Hz, Ms: Word;      // Hz 0 = pausa
+  end;
+
 const
-  AREAS: array[0..28] of TArea = (
+  AREAS: array[0..29] of TArea = (
     (Endereco: $00000; Tamanho: $7800), (Endereco: $08000; Tamanho: $40), (Endereco: $09000; Tamanho: $40),
     (Endereco: $0A000; Tamanho: $140), (Endereco: $0B000; Tamanho: $400), (Endereco: $0C000; Tamanho: $400),
     (Endereco: $0D000; Tamanho: $40), (Endereco: $0F000; Tamanho: $280),
@@ -67,7 +79,8 @@ const
     (Endereco: $CE000; Tamanho: $C0), (Endereco: $CF000; Tamanho: $C0), (Endereco: $D0000; Tamanho: $C0),
     (Endereco: $D1000; Tamanho: $C0),
     (Endereco: $D2000; Tamanho: $40), (Endereco: $D3000; Tamanho: $80), (Endereco: $D4000; Tamanho: $40),
-    (Endereco: $D5000; Tamanho: $40));
+    (Endereco: $D5000; Tamanho: $40),
+    (Endereco: $DA000; Tamanho: $C0));
   AREA_CANAIS = 0;
   AREA_VFOS = 1;
   AREA_AJUSTES = 2;
@@ -77,6 +90,7 @@ const
   AREA_BANCO1 = 9;
   AREA_WATCH = 25;
   AREA_VFC = 26;
+  AREA_ROGER = 29;  // v164: falta nos backups de antes, e vale apagada
 
 type
   EArquivo = class(Exception);
@@ -146,6 +160,9 @@ type
     // os códigos dos 15 grupos DTMF
     function GrupoDtmf(K: Integer): string;
     procedure PoeGrupoDtmf(K: Integer; const Digitos: string);
+    // as notas do ROGER CUSTOM: nil sem registro que confira (o CUSTOM fica calado); PoeNotas com nil apaga o registro
+    function Notas: TArray<TNota>;
+    procedure PoeNotas(const N: TArray<TNota>);
     // a gravação: as regras do rádio, o que mudou, e a gravação disso pelo cabo, conferida contra o que o rádio tem
     procedure PreparaGravacao;
     function Mudancas: TArray<TGravar>;
@@ -171,6 +188,11 @@ function TextoScramble(V: Byte): string;
 function TextoEncrypt(V: Byte): string;
 // O texto como o rádio o aceita no campo (o _clean_text do driver), ou EConvertError.
 function TextoDoCampo(const Nome, S: string; Maximo: Integer): string;
+// As notas como o rádio as toca: de 1 a 32, cada uma de 0 (pausa) ou 300 a 3000 Hz e de 10 a 1000 ms, até 3 s.
+function NotasValidas(const N: TArray<TNota>; out Erro: string): Boolean;
+// O registro de 136 bytes (o formato no alto) e as notas dele (nil se não confere).
+function RegistroDeNotas(const N: TArray<TNota>): TBytes;
+function NotasDoRegistro(const B: TBytes): TArray<TNota>;
 
 const
   // o código do tom: 0 sem tom; de 1 a 105 o DCS normal e de 106 a 210 o invertido (nesta ordem de códigos); 600 ou
@@ -191,7 +213,7 @@ const
 implementation
 
 uses
-  System.IOUtils, System.ZLib, System.DateUtils, System.Math, Idioma, Logo, Transporte;
+  System.IOUtils, System.ZLib, System.DateUtils, System.Math, Idioma, LogoFormato, Transporte;
 
 const
   MAGIA: array[0..7] of Byte = (Ord('T'), Ord('E'), Ord('M'), Ord('P'), Ord('R'), Ord('A'), 0, 1);
@@ -200,6 +222,85 @@ const
   BANCO_TAM = 4 + BANCO_NOME + 120 + 2;
   MAPA_INICIO = 4 + BANCO_NOME;
   WATCH_SINGLE = 1;
+
+const
+  ROGER_MARCA: array[0..3] of Byte = (Ord('B'), Ord('C'), Ord('O'), Ord('1'));
+
+// 0x1234 mais as palavras de 16 bits dos primeiros N bytes (N par), a soma do roger do firmware
+function SomaRoger(const B: TBytes; N: Integer): Word;
+var
+  K: Integer;
+  S: Cardinal;
+begin
+  S := $1234;
+  K := 0;
+  while K < N do
+  begin
+    Inc(S, B[K] or B[K + 1] shl 8);
+    Inc(K, 2);
+  end;
+  Result := Word(S);
+end;
+
+function NotasValidas(const N: TArray<TNota>; out Erro: string): Boolean;
+var
+  Nota: TNota;
+  Total: Integer;
+begin
+  Erro := '';
+  Total := 0;
+  if (Length(N) < 1) or (Length(N) > ROGER_NOTAS) then
+    Erro := Format(Tr('De 1 a %d notas.', 'From 1 to %d notes.'), [ROGER_NOTAS]);
+  for Nota in N do
+  begin
+    if (Nota.Hz <> 0) and ((Nota.Hz < 300) or (Nota.Hz > 3000)) then
+      Erro := Tr('Os tons vão de 300 a 3000 Hz (0 é pausa).', 'Tones go from 300 to 3000 Hz (0 is a pause).');
+    if (Nota.Ms < 10) or (Nota.Ms > 1000) then
+      Erro := Tr('Cada nota vai de 10 a 1000 ms.', 'Each note goes from 10 to 1000 ms.');
+    Inc(Total, Nota.Ms);
+  end;
+  if Total > ROGER_TOTAL_MS then
+    Erro := Format(Tr('O ROGER passa de %d ms (tem %d).', 'The ROGER exceeds %d ms (it has %d).'), [ROGER_TOTAL_MS, Total]);
+  Result := Erro = '';
+end;
+
+function RegistroDeNotas(const N: TArray<TNota>): TBytes;
+var
+  K: Integer;
+begin
+  Result := nil;
+  SetLength(Result, ROGER_REGISTRO);   // zerado: o byte livre e as notas que sobram
+  Move(ROGER_MARCA[0], Result[0], 4);
+  Result[4] := Length(N);
+  for K := 0 to High(N) do
+  begin
+    PWord(@Result[6 + K * 4])^ := N[K].Hz;
+    PWord(@Result[8 + K * 4])^ := N[K].Ms;
+  end;
+  PWord(@Result[ROGER_REGISTRO - 2])^ := SomaRoger(Result, ROGER_REGISTRO - 2);
+end;
+
+function NotasDoRegistro(const B: TBytes): TArray<TNota>;
+var
+  K, N: Integer;
+  Erro: string;
+begin
+  Result := nil;
+  if (Length(B) < ROGER_REGISTRO) or not CompareMem(@B[0], @ROGER_MARCA[0], 4) or
+     (PWord(@B[ROGER_REGISTRO - 2])^ <> SomaRoger(B, ROGER_REGISTRO - 2)) then
+    Exit;
+  N := B[4];
+  if (N < 1) or (N > ROGER_NOTAS) then
+    Exit;
+  SetLength(Result, N);
+  for K := 0 to N - 1 do
+  begin
+    Result[K].Hz := PWord(@B[6 + K * 4])^;
+    Result[K].Ms := PWord(@B[8 + K * 4])^;
+  end;
+  if not NotasValidas(Result, Erro) then
+    Result := nil;
+end;
 
 function BlocosDaLeitura: Integer;
 var
@@ -1059,12 +1160,40 @@ begin
     begin
       NoRadio := C.Le(AREAS[G.Area].Endereco, G.Tamanho);
       if not CompareMem(@NoRadio[0], @FAtual[G.Area][0], G.Tamanho) then
-        raise EFalha.CreateFmt(Tr('O rádio não guardou o que foi gravado em %.6X: ele precisa do firmware V3.7T ou ' +
-                                  'mais novo.',
-                                  'The radio did not keep what was written at %.6X: it needs firmware V3.7T or ' +
-                                  'newer.'), [AREAS[G.Area].Endereco]);
+        if G.Area = AREA_ROGER then
+          raise EFalha.Create(Tr('O rádio não guardou as notas do ROGER CUSTOM: elas precisam do firmware v164 ou mais ' +
+                                 'novo.',
+                                 'The radio did not keep the ROGER CUSTOM notes: they need firmware v164 or newer.'))
+        else
+          raise EFalha.CreateFmt(Tr('O rádio não guardou o que foi gravado em %.6X: ele precisa do firmware V3.7T ou ' +
+                                    'mais novo.',
+                                    'The radio did not keep what was written at %.6X: it needs firmware V3.7T or ' +
+                                    'newer.'), [AREAS[G.Area].Endereco]);
     end;
   end;
+end;
+
+{ As notas do ROGER CUSTOM }
+
+function TMemoriaBJ8300.Notas: TArray<TNota>;
+begin
+  Result := NotasDoRegistro(FAtual[AREA_ROGER]);
+end;
+
+// a área inteira: o registro e o resto do que se grava (os 56 bytes até o fim do terceiro bloco) em FF, como o setor
+// apagado; sem notas, a área toda em FF (o firmware não toca nada)
+procedure TMemoriaBJ8300.PoeNotas(const N: TArray<TNota>);
+var
+  B, R: TBytes;
+begin
+  SetLength(B, AREAS[AREA_ROGER].Tamanho);
+  FillChar(B[0], Length(B), $FF);
+  if N <> nil then
+  begin
+    R := RegistroDeNotas(N);
+    Move(R[0], B[0], ROGER_REGISTRO);
+  end;
+  FAtual[AREA_ROGER] := B;
 end;
 
 procedure TMemoriaBJ8300.Gravou;
@@ -1170,6 +1299,12 @@ begin
       if (AREAS[A].Endereco = End_) and (AREAS[A].Tamanho = Tam) then
         Novos[A] := Copy(B, P, Tam);
     Inc(P, Tam);
+  end;
+  // os backups de antes da v164 não têm o roger: o setor apagado, como num rádio que nunca o gravou
+  if Novos[AREA_ROGER] = nil then
+  begin
+    SetLength(Novos[AREA_ROGER], AREAS[AREA_ROGER].Tamanho);
+    FillChar(Novos[AREA_ROGER][0], AREAS[AREA_ROGER].Tamanho, $FF);
   end;
   for I := 0 to High(AREAS) do
     if Length(Novos[I]) <> Integer(AREAS[I].Tamanho) then

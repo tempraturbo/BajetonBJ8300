@@ -589,6 +589,8 @@ edits, keeps and writes through the cable a BJ-8300 running this firmware:
 - **Banks:** the name, whether it is on and how many channels each has.
 - **Settings:** the radio's menu folders, with its names and values, the frequency and OFFSET of VFOs A, B and C,
   the APRS and Morse texts and the 15 DTMF codes.
+- **ROGER CUSTOM** (firmware v164 or newer, not released yet): in the settings' TX folder, a piano and the notes'
+  timeline, with presets and MIDI and sound import (the approximate melody), listening on the PC.
 - **Boot logo:** reads it and saves it as PNG. Writing depends on the firmware: V3.7T does not write the logo over
   the cable yet, and the program checks by reading back and says so.
 - **Backup:** every read saves one by itself; save, open and restore. A backup from the Baofeng UV-17L's Tempra
@@ -599,8 +601,10 @@ that the radio did not change since it was read, and reads back what it wrote to
 writing the banks, turn the radio off and on: it builds the banks at power-up.
 
 **Remote control (after V3.7T, not released yet):** with a test firmware (v159 or newer), the Remote control page
-puts the radio's keypad and PTT on the PC and, over the cable, the radio's screen live; over Bluetooth, the status. The
-cable goes to 460800 in v160, and the program and the CHIRP driver drop to 115200 and 57600 by themselves with the
+puts the radio's keypad and PTT on the PC and, over the cable, the radio's screen live, drawn on the PC with the
+firmware's screen code (the program and the firmware of the same round); over Bluetooth, the status. The **Radio
+screen** switch turns its screen off, to save battery, and goes back to On when a key on the radio lights it. If the
+link drops (the PTT's RF can knock down the cable's USB), the remote reconnects by itself. The cable goes to 460800 in v160, and the program and the CHIRP driver drop to 115200 and 57600 by themselves with the
 older firmwares.
 
 **Bluetooth (experimental, not tested on the radio):** with the radio's BLUETOOTH (SYSTEM folder) ON, the last item

@@ -4,13 +4,10 @@
   seção 4): o magic, o 'F', a cifra, o 'R' que dispara com 4 bytes e o 'W' com 68, o 'E', e o estendido do TEMPRA
   (no firmware de fábrica, o estendido volta com o tamanho que chegou e mais bytes). O relógio é de mentira: cada
   leitura sem nada para ler anda 20 ms. A memória é a do chip de dados (1 MB), e o 0x9000 sai dela como do resto.
-  Fora da sessão, os quadros do controle remoto (v159, firmware/src/remoto.c): cada '~' 'R' com a soma certa vira o
-  estado de 9 bytes; com o pedido da tela inteira, fora da TX, o rádio redesenha a tela e, com o espelho, manda as
-  linhas do nó pedido (o 5o byte; o 0 é a tela toda) em quadros de uma linha, até a saída não ter mais lugar para o
-  pior caso de uma (Capacidade, 2400 B: ela não anda no redesenho); o que não coube, ou a fatia na TX, fica perdido, e o
-  estado vem depois das linhas, com a marca. O Redesenha faz o que uma tecla faz: manda as linhas mudadas até a saída
-  encher, e a perda vai na resposta seguinte (o bit 5 do lado, que ela limpa). EstragaLinha estraga o CRC de uma
-  linha. }
+  Fora da sessão, os quadros do controle remoto (v162, firmware/src/remoto.c): cada '~' 'R' com a soma certa vira o
+  estado de 9 bytes e, com a tela pedida, o Retrato logo depois (o que se puser nele: os testes usam os da prévia,
+  testes\retrato-*.bin). Com o Laco (o APRS ou o Morse no rádio), o estado vem e o retrato não. EstragaRetrato
+  estraga um byte do próximo. }
 
 interface
 
@@ -26,8 +23,6 @@ type
     procedure Processa;
     procedure Manda(const B: TBytes);
     procedure Remoto;
-    procedure EnviaFatia(No: Integer);
-    procedure EnviaLinhas(No, Y0, Y1: Integer);
   public
     Memoria: TBytes;              // o chip de dados, 1 MB
     Fabrica: Boolean;             // o firmware de fábrica: sem o estendido
@@ -42,20 +37,16 @@ type
     Ruido: Integer;
     // o controle remoto
     RemTecla, RemBits: Integer;   // o último quadro do PC (-1 nenhum)
+    Acorda: Boolean;              // v165: uma tecla do rádio acendeu a tela (o ACORDADO); o pedido novo de apagar o zera
     ToqueDesde, UltimoToque: UInt64;  // quando a tecla segura mudou, e quanto a última ficou segura (ms)
-    RemQuadros, TelasInteiras: Integer;   // TelasInteiras: os redesenhos pedidos e feitos
-    Fatias: TList<Integer>;       // os nós desses redesenhos, na ordem
-    Perdeu: Boolean;              // a marca da fatia que não coube (o bit 6 do CONTA)
-    Sujo: Boolean;                // a perda de fora das fatias, até a resposta (o bit 5 do CONTA)
-    Capacidade: Integer;          // a saída do rádio, em bytes
-    Status: TBytes;               // os bytes 2..7 do estado (rem é o do quadro), na ordem do firmware
-    Tela: TBytes;                 // 160 x 128, o byte baixo primeiro
-    EstragaLinha: Integer;        // a linha cujo quadro sai com o CRC errado na próxima tela inteira, -1 nenhuma
+    RemQuadros, Retratos: Integer;   // Retratos: os mandados
+    Status: TBytes;               // os bytes 3..7 do estado (rem é o do quadro), na ordem do firmware
+    Retrato: TBytes;              // o que vai depois do estado com a tela pedida (nil, nada)
+    Laco: Boolean;                // o laço do APRS ou do Morse: o estado vem, e o retrato não
+    EstragaRetrato: Boolean;      // o próximo retrato sai com um byte trocado
     constructor Create;
     destructor Destroy; override;
     function NaSessao: Boolean;
-    // O que uma tecla faz: as linhas Y0 a Y1 - 1, com o espelho ligado, até a saída encher.
-    procedure Redesenha(Y0, Y1: Integer);
     procedure Poe(Endereco: Cardinal; const B: TBytes);
     function Pega(Endereco, N: Cardinal): TBytes;
     // ITransporte
@@ -82,22 +73,17 @@ begin
   SetLength(Memoria, $100000);
   FillChar(Memoria[0], Length(Memoria), $FF);
   Gravados := TList<Cardinal>.Create;
-  Fatias := TList<Integer>.Create;
-  Capacidade := 2400;
   Limite := ESTENDIDO_FIM;
   Serial := BAUD_CABO;
   Porta := BAUD_CABO;
   RemTecla := -1;
   RemBits := -1;
   Status := TBytes.Create(0, 4, 13, 4, 167);    // parado, recebendo, S7, a B (em evidência, DUAL), 7,4 V
-  SetLength(Tela, 160 * 128 * 2);
-  EstragaLinha := -1;
 end;
 
 destructor TRadioBJSimulado.Destroy;
 begin
   Gravados.Free;
-  Fatias.Free;
   inherited;
 end;
 
@@ -122,10 +108,10 @@ begin
   FSaida := FSaida + B;
 end;
 
-// Um quadro do remoto no começo da entrada: pedida, a fatia da tela inteira, e o estado.
+// Um quadro do remoto no começo da entrada: o estado e, com a tela pedida, o retrato.
 procedure TRadioBJSimulado.Remoto;
 var
-  K, No: Integer;
+  K: Integer;
   S: Byte;
   Q: TBytes;
 begin
@@ -147,84 +133,25 @@ begin
     ToqueDesde := FRelogio;
   end;
   RemTecla := K;
+  if (FEntrada[3] and BIT_APAGA <> 0) and ((RemBits < 0) or (RemBits and BIT_APAGA = 0)) then
+    Acorda := False;              // o pedido novo apaga na hora (firmware v165)
   RemBits := FEntrada[3];
-  No := FEntrada[4] and 63;
   Delete(FEntrada, 0, 7);
-  if RemBits and 4 <> 0 then
-    if Status[0] <> 0 then
-      Perdeu := True
-    else
-    begin
-      Inc(TelasInteiras);
-      Fatias.Add(No);
-      Perdeu := False;
-      if RemBits and 2 <> 0 then
-        EnviaFatia(No);
-    end;
   Q := TBytes.Create(Ord('~'), Ord('r'), IfThen(RemTecla < 0, 0, RemTecla + 1) or (RemBits and 3) shl 5 or
-                     IfThen(Perdeu, $80, 0), Status[0], Status[1], Status[2], Status[3] or IfThen(Sujo, 32, 0),
-                     Status[4], 0);
-  Sujo := False;
+                     IfThen(Acorda and (RemBits and BIT_APAGA <> 0), 128, 0), Status[0],
+                     Status[1], Status[2], Status[3], Status[4], 0);
   for K := 0 to 7 do
     Q[8] := Byte(Q[8] + Q[K]);
   Manda(Q);
-end;
-
-procedure TRadioBJSimulado.EnviaFatia(No: Integer);
-begin
-  EnviaLinhas(No, 0, 128);
-end;
-
-procedure TRadioBJSimulado.Redesenha(Y0, Y1: Integer);
-begin
-  if RemBits and 2 <> 0 then
-    EnviaLinhas(0, Y0, Y1);
-end;
-
-// As linhas Y0 a Y1 - 1 do nó No (o 0, todas), cada uma com o lugar do pior caso (160 corridas) na saída, como o
-// remoto_envia: a que não cabe se perde, com as duas marcas (a de fora, Sujo, só fora da fatia).
-procedure TRadioBJSimulado.EnviaLinhas(No, Y0, Y1: Integer);
-var
-  K, Y, X, N, U, Usado: Integer;
-  Q: TBytes;
-  Cor: Word;
-
-  function Pixel(X, Y: Integer): Word;
+  if (RemBits and BIT_TELA <> 0) and (Retrato <> nil) and not Laco then
   begin
-    Result := Tela[(Y * 160 + X) * 2] or Tela[(Y * 160 + X) * 2 + 1] shl 8;
+    Q := Copy(Retrato);
+    if EstragaRetrato then
+      Q[Length(Q) div 2] := Q[Length(Q) div 2] xor $10;
+    EstragaRetrato := False;
+    Manda(Q);
+    Inc(Retratos);
   end;
-
-begin
-  Usado := 0;
-  for Y := Y0 to Y1 - 1 do
-  begin
-    U := Y or 128;
-    while U > No do
-      U := U shr 1;
-    if U <> No then
-      Continue;
-    if Usado + 160 * 3 + 8 > Capacidade then
-    begin
-      Perdeu := True;
-      Sujo := Sujo or (No = 0);
-      Break;
-    end;
-    Q := TBytes.Create(1, Ord('T'), 0, 160, Y, Y + 1);
-    X := 0;
-    while X < 160 do
-    begin
-      Cor := Pixel(X, Y);
-      N := 1;
-      while (X + N < 160) and (Pixel(X + N, Y) = Cor) do
-        Inc(N);
-      Q := Q + TBytes.Create(N, Cor shr 8, Cor and $FF);
-      Inc(X, N);
-    end;
-    K := Crc16(Q, 1, Length(Q) - 1) xor IfThen(Y = EstragaLinha, 1, 0);
-    Manda(Q + TBytes.Create(K shr 8, K and $FF));
-    Inc(Usado, Length(Q) + 2);
-  end;
-  EstragaLinha := -1;
 end;
 
 procedure TRadioBJSimulado.Processa;

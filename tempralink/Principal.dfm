@@ -496,6 +496,217 @@ object FormPrincipal: TFormPrincipal
           Color = clWindow
           ParentBackground = False
           TabOrder = 1
+          object PainelRoger: TPanel
+            Left = 0
+            Top = 208
+            Width = 750
+            Height = 400
+            Align = alBottom
+            BevelOuter = bvNone
+            Color = clWindow
+            ParentBackground = False
+            TabOrder = 2
+            Visible = False
+            object LabelRoger: TLabel
+              Left = 16
+              Top = 6
+              Width = 460
+              Height = 17
+              AutoSize = False
+              Caption = 'ROGER CUSTOM'
+              Font.Charset = DEFAULT_CHARSET
+              Font.Color = clWindowText
+              Font.Height = -13
+              Font.Name = 'Segoe UI Semibold'
+              Font.Style = []
+              ParentFont = False
+            end
+            object LabelRogerInfo: TLabel
+              Left = 480
+              Top = 6
+              Width = 254
+              Height = 17
+              Alignment = taRightJustify
+              Anchors = [akTop, akRight]
+              AutoSize = False
+              Font.Charset = DEFAULT_CHARSET
+              Font.Color = clGrayText
+              Font.Height = -12
+              Font.Name = 'Segoe UI'
+              Font.Style = []
+              ParentFont = False
+            end
+            object LabelRogerDica: TLabel
+              Left = 16
+              Top = 26
+              Width = 718
+              Height = 30
+              Anchors = [akLeft, akTop, akRight]
+              AutoSize = False
+              Font.Charset = DEFAULT_CHARSET
+              Font.Color = clGrayText
+              Font.Height = -12
+              Font.Name = 'Segoe UI'
+              Font.Style = []
+              ParentFont = False
+              WordWrap = True
+            end
+            object BotaoOuvir: TButton
+              Left = 16
+              Top = 62
+              Width = 100
+              Height = 30
+              Caption = 'Tocar'
+              TabOrder = 0
+              OnClick = BotaoOuvirClick
+            end
+            object BotaoTocarDaqui: TButton
+              Left = 122
+              Top = 62
+              Width = 124
+              Height = 30
+              Caption = 'Da escolhida'
+              TabOrder = 1
+              OnClick = BotaoTocarDaquiClick
+            end
+            object LabelDuracaoNova: TLabel
+              Left = 262
+              Top = 69
+              Width = 74
+              Height = 17
+              AutoSize = False
+              Caption = 'Notas novas'
+            end
+            object ComboDuracaoNova: TComboBox
+              Left = 338
+              Top = 65
+              Width = 84
+              Height = 23
+              Style = csDropDownList
+              TabOrder = 2
+              OnChange = ComboDuracaoNovaChange
+            end
+            object BotaoPausa: TButton
+              Left = 432
+              Top = 62
+              Width = 84
+              Height = 30
+              Caption = '+ Pausa'
+              TabOrder = 3
+              OnClick = BotaoPausaClick
+            end
+            object BotaoApagarNota: TButton
+              Left = 522
+              Top = 62
+              Width = 84
+              Height = 30
+              Caption = 'Apagar'
+              TabOrder = 4
+              OnClick = BotaoApagarNotaClick
+            end
+            object LabelNotaEscolhida: TLabel
+              Left = 16
+              Top = 334
+              Width = 96
+              Height = 17
+              AutoSize = False
+              Caption = 'Nota escolhida'
+            end
+            object EditHz: TEdit
+              Left = 114
+              Top = 330
+              Width = 60
+              Height = 23
+              TabOrder = 5
+              Text = ''
+              OnChange = EditNotaChange
+            end
+            object LabelHz: TLabel
+              Left = 178
+              Top = 334
+              Width = 22
+              Height = 17
+              AutoSize = False
+              Caption = 'Hz'
+            end
+            object EditMs: TEdit
+              Left = 204
+              Top = 330
+              Width = 56
+              Height = 23
+              TabOrder = 6
+              Text = ''
+              OnChange = EditNotaChange
+            end
+            object LabelMs: TLabel
+              Left = 264
+              Top = 334
+              Width = 22
+              Height = 17
+              AutoSize = False
+              Caption = 'ms'
+            end
+            object LabelNomeNota: TLabel
+              Left = 292
+              Top = 334
+              Width = 120
+              Height = 17
+              AutoSize = False
+              Caption = ''
+            end
+            object BotaoImportarSom: TButton
+              Left = 16
+              Top = 362
+              Width = 180
+              Height = 30
+              Caption = 'Importar MIDI ou som...'
+              TabOrder = 7
+              OnClick = BotaoImportarSomClick
+            end
+            object LabelInicio: TLabel
+              Left = 208
+              Top = 369
+              Width = 92
+              Height = 17
+              AutoSize = False
+              Caption = 'Comecar em (s)'
+            end
+            object EditInicio: TEdit
+              Left = 302
+              Top = 365
+              Width = 50
+              Height = 23
+              TabOrder = 8
+              Text = '0'
+              OnChange = EditSomChange
+            end
+            object LabelDuracao: TLabel
+              Left = 364
+              Top = 369
+              Width = 74
+              Height = 17
+              AutoSize = False
+              Caption = 'Duracao (s)'
+            end
+            object EditDuracao: TEdit
+              Left = 440
+              Top = 365
+              Width = 50
+              Height = 23
+              TabOrder = 9
+              Text = '2'
+              OnChange = EditSomChange
+            end
+            object ComboModelos: TComboBox
+              Left = 504
+              Top = 365
+              Width = 150
+              Height = 23
+              Style = csDropDownList
+              TabOrder = 10
+              OnChange = ComboModelosChange
+            end
+          end
           object GradeAjustes: TStringGrid
             AlignWithMargins = True
             Left = 16
@@ -649,11 +860,19 @@ object FormPrincipal: TFormPrincipal
           Font.Style = []
           ParentFont = False
         end
-        object LabelControleNota: TLabel
+        object LabelTelaRadio: TLabel
           Left = 24
           Top = 460
+          Width = 96
+          Height = 17
+          AutoSize = False
+          Caption = 'Tela do radio'
+        end
+        object LabelControleNota: TLabel
+          Left = 24
+          Top = 488
           Width = 444
-          Height = 128
+          Height = 104
           AutoSize = False
           Font.Charset = DEFAULT_CHARSET
           Font.Color = clGrayText
@@ -684,7 +903,9 @@ object FormPrincipal: TFormPrincipal
           Height = 384
           BevelOuter = bvNone
           Color = 856074
+          DoubleBuffered = True
           ParentBackground = False
+          ParentDoubleBuffered = False
           TabOrder = 0
           object PaintVisor: TPaintBox
             Left = 0
@@ -865,6 +1086,11 @@ object FormPrincipal: TFormPrincipal
     Options = [ofOverwritePrompt, ofHideReadOnly, ofEnableSizing]
     Left = 1140
     Top = 600
+  end
+  object DialogoSom: TOpenDialog
+    Options = [ofHideReadOnly, ofFileMustExist, ofEnableSizing]
+    Left = 1020
+    Top = 640
   end
   object MenuCanais: TPopupMenu
     Left = 1140

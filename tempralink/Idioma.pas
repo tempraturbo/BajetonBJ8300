@@ -1,6 +1,7 @@
 ﻿unit Idioma;
 
-{ Os textos saem em português num Windows em português e em inglês nos outros. }
+{ Os textos saem em português num sistema em português e em inglês nos outros: no Windows pela língua da interface,
+  nos outros (o celular) pelo locale. }
 
 interface
 
@@ -9,7 +10,11 @@ function Tr(const Pt, En: string): string;
 implementation
 
 uses
+{$IFDEF MSWINDOWS}
   Winapi.Windows;
+{$ELSE}
+  System.SysUtils;
+{$ENDIF}
 
 var
   Portugues: Boolean;
@@ -23,5 +28,9 @@ begin
 end;
 
 initialization
+{$IFDEF MSWINDOWS}
   Portugues := GetUserDefaultUILanguage and $3FF = LANG_PORTUGUESE;
+{$ELSE}
+  Portugues := TLanguages.UserDefaultLocale.ToLower.StartsWith('pt');
+{$ENDIF}
 end.

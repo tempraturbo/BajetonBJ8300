@@ -585,6 +585,8 @@ guarda e grava pelo cabo o BJ-8300 com este firmware:
 - **Bancos:** o nome, o ligado e quantos canais cada um tem.
 - **Ajustes:** as pastas do menu do rádio, com os nomes e os valores dele, as frequências e o OFFSET dos VFOs A, B e
   C, os textos do APRS e do Morse e os 15 códigos DTMF.
+- **ROGER CUSTOM** (firmware v164 ou mais novo, ainda sem release): na pasta TX dos ajustes, um piano e a linha do
+  tempo das notas, com modelos e a importação de MIDI e de som (a melodia aproximada), ouvindo no PC.
 - **Logo de abertura:** lê e salva em PNG. Gravar depende do firmware: a V3.7T ainda não grava o logo pelo cabo, e o
   programa confere lendo de volta e avisa.
 - **Backup:** cada leitura guarda um sozinha; salvar, abrir e restaurar. O backup do Tempra Link do Baofeng UV-17L
@@ -595,8 +597,10 @@ não mudou desde a leitura, e lê de volta o que gravou nos setores dos bancos e
 bancos, desligue e ligue o rádio: ele monta os bancos na partida.
 
 **Controle remoto (depois da V3.7T, ainda sem release):** com um firmware de teste (v159 ou mais novo), a página
-Controle remoto põe o teclado e o PTT do rádio no PC e, pelo cabo, a tela do rádio ao vivo; pelo Bluetooth, o estado.
-O cabo passa a 460800 na v160, e o programa e o driver do CHIRP descem sozinhos a 115200 e a 57600 com os firmwares de
+Controle remoto põe o teclado e o PTT do rádio no PC e, pelo cabo, a tela do rádio ao vivo, desenhada no PC com o
+código da tela do firmware (o programa e o firmware da mesma rodada); pelo Bluetooth, o estado. A chave **Tela do
+rádio** apaga a tela dele, para poupar a bateria, e volta a Acesa quando uma tecla do rádio a acende. Se a ligação
+cai (o RF do PTT pode derrubar o USB do cabo), o remoto se reconecta sozinho. O cabo passa a 460800 na v160, e o programa e o driver do CHIRP descem sozinhos a 115200 e a 57600 com os firmwares de
 antes.
 
 **Bluetooth (experimental, sem teste no rádio):** com o BLUETOOTH do rádio (pasta SYSTEM) em ON, o último item da

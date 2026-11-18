@@ -51,7 +51,7 @@ function ProcuraRadios(EsperaMs: Cardinal): TArray<TRadioBLE>;
 implementation
 
 uses
-  Winapi.Windows, Idioma;
+  Idioma;
 
 const
   PEDACO = 20;
@@ -285,12 +285,12 @@ end;
 
 function TTransporteBLE.Agora: UInt64;
 begin
-  Result := GetTickCount64;
+  Result := TThread.GetTickCount64;
 end;
 
 procedure TTransporteBLE.Dorme(Ms: Cardinal);
 begin
-  Sleep(Ms);
+  TThread.Sleep(Ms);
 end;
 
 // Pelo BLE não há velocidade de serial: a de sempre, sem mudar nada.

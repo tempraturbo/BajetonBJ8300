@@ -14,8 +14,9 @@
   Abaixo de 0xF000 os dados vão cifrados com "CO 7". O estendido usa o bit 7 do tamanho: 'R' ou 'W', os 16 bits de
   baixo do endereço e 0x80 + os 8 de cima; o bloco é sempre de 64 bytes, cru. O firmware de fábrica responde o
   estendido com o tamanho que recebeu, e é assim que se sabe que o rádio não está com o TEMPRA. O TEMPRA grava pelo
-  estendido só de 0xC1000 a 0xD5FFF (os bancos, o WATCH, o VFO C, o Morse e o APRS), e o primeiro bloco de um setor
-  o apaga; um endereço fora disso ele ignora, e responde o ACK do mesmo jeito.
+  estendido só de 0xC1000 a 0xD5FFF (os bancos, o WATCH, o VFO C, o Morse e o APRS) e, desde a v164, até 0xDAFFF (os
+  históricos e as notas do ROGER CUSTOM), e o primeiro bloco de um setor o apaga; um endereço fora disso ele ignora,
+  e responde o ACK do mesmo jeito.
 
   Três cuidados que vêm do rádio: nada vai antes do magic (ele termina em 'U', que é comando do modo UPDATE, e fora de
   sincronia o rádio entra em UPDATE sozinho); todo pacote tem 4 bytes ou 68, nunca 5 (o quinto fica pendente e engole
@@ -29,7 +30,7 @@ uses
 const
   BLOCO = 64;
   ESTENDIDO_INICIO = $C1000;  // o que o TEMPRA grava pelo estendido
-  ESTENDIDO_FIM = $D6000;
+  ESTENDIDO_FIM = $DB000;     // v164: até o roger (até a v163, $D6000)
 
 type
   ENaoTempra = class(Exception);

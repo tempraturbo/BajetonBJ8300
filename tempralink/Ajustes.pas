@@ -68,7 +68,7 @@ function ValorDoItem(const It: TItem; Le: TFunc<Cardinal, Byte>): Integer;
 implementation
 
 uses
-  System.Types, Winapi.Windows;
+  System.Types;
 
 { TItem }
 
