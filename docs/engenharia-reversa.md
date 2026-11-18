@@ -3053,3 +3053,38 @@ de `0x01E40628`: só a leitura em `0x01E40636` aponta para a faixa, e ela soma �
 
 No ar, medido pelo dono, o BJ lê até 15 WPM, e o melhor tom é 700 Hz. A 20 WPM o ponto e a pausa têm 60 ms, e a pausa quase some nos
 42 ms que o tom dura além da última amostra.
+
+## 37. O cabo do Tempra Link, o Bluetooth e o espaço para o controle remoto (estudo de 17/11)
+
+O Tempra Link do BJ (`tempralink/`) usa a seção 4 inteira: o magic, o `F`, a cifra, o `R` e o `W` de 64 bytes, o `E`
+e o estendido de 24 bits. Duas coisas do estendido ficaram registradas nele:
+
+- **O que se grava pelo estendido** é só `0xC1000..0xD5FFF` (o `gancho_cabo`): os bancos, o WATCH, o VFO C, o Morse e o
+  APRS. O logo (`0x10000`) se lê, mas não se grava: o rádio responde o ACK e não grava nada. O comentário do
+  `tools/cabo/logo.ps1`, que dava o logo como gravável desde a v13, estava errado.
+- **O 0x9000 vem da RAM** (seção 4), então o rádio que mudou um ajuste desde a leitura aparece como conflito, e o
+  programa não grava por cima.
+
+O que segue foi **lido no código da v155, sem nenhum teste no rádio**, por um levantamento para o controle remoto.
+
+**O Bluetooth é BLE GATT.** A tabela ATT em `0x01E61512` tem o serviço `FFE0` (a característica `FFE1`, handle `0x15`,
+de leitura, escrita e notificação; a `FF31`, escrita de 20 bytes, que conta como uma autenticação; e a `FF32`, de
+notificação) e o serviço da JieLi `AE00` (`AE01` de escrita e `AE02` de notificação). A escrita na `FFE1` (o tratador
+`0x01E4E272`, um `tbh` por handle) chama `0x01E41706`, que copia os bytes para o **mesmo buffer** do cabo e roda a mesma
+procura do magic (`0x01E41762`); a resposta sai por notificação no handle `0x15` (`0x01E4E884`). O SPP clássico não
+chega a esse buffer: só `0x01E4B438` (a UART) e `0x01E41718` (o BLE) escrevem nele. Qualquer escrita pelo BLE põe
+`b[0x153A0] = 1`, e a UART passa a ser ignorada (`0x01E4B47C`) até o fim da sessão (`0x01E4BAB8`) ou a partida
+(`0x01E56B04`).
+
+**Fora da sessão, a UART só procura o magic.** O laço da interface (`0x01E4B416`) lê a UART a cada volta, até 72 bytes,
+para `0x16671 + h[0x1666C]`; com 7 bytes ou mais chama `0x01E3FD12`, que procura o `G` e compara 7 bytes com
+`0x01E5BE40`, e sem magic zera o buffer. A sessão de programação para o rádio (`MODO_TELA = 8` e a tela de sessão), e
+por isso não serve para um controle remoto: ele teria de entrar pela chamada de `0x01E4B4B4`, com quadros próprios, e
+deixar o resto seguir para o `0x01E3FD12`.
+
+**O espaço.** Hoje sobram uns 50 bytes. Sem tirar função nenhuma, há código que os ganchos já deixaram sem chamador
+(conferido com quatro variantes de alcance, inclusive os ponteiros de dado para o código da RAM): restos das rotinas de
+espectro de fábrica, cerca de 1 KB em pedaços de 32 a 174 bytes; as funções de fábrica que só a tabela de menu antiga
+apontava, 556 bytes; e restos do G.729 e do MP3, 196 bytes. Um controle remoto mínimo (tecla, PTT e estado) foi estimado
+em uns 150 bytes, e com o espelho da tela em uns 340; a RAM livre para o estado seriam `b[0x14BED]` e `b[0x14BEE]`.
+Nada disso virou firmware: cada pedaço precisa da prova no desassemblado antes de ser reaproveitado.

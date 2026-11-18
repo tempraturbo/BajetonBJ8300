@@ -3108,3 +3108,37 @@ the area at the end of the image, and the box lives there. Factory item names wi
 
 On the air, measured by the owner, the BJ reads up to 15 WPM, and the best tone is 700 Hz. At 20 WPM the dot and the pause are 60 ms, and
 the pause nearly vanishes in the 42 ms the tone lasts past the last sample.
+
+## 37. Tempra Link's cable, Bluetooth and room for the remote control (study of Nov 17)
+
+The BJ's Tempra Link (`tempralink/`) uses all of section 4: the magic, `F`, the cipher, the 64-byte `R` and `W`, `E`
+and the 24-bit extended command. Two things about the extended command are recorded in it:
+
+- **What the extended command writes** is only `0xC1000..0xD5FFF` (`gancho_cabo`): banks, WATCH, VFO C, Morse and APRS.
+  The logo (`0x10000`) can be read but not written: the radio acknowledges and writes nothing. The comment in
+  `tools/cabo/logo.ps1`, which had the logo writable since v13, was wrong.
+- **0x9000 comes from RAM** (section 4), so a radio whose settings changed since the read shows up as a conflict, and
+  the program does not overwrite it.
+
+What follows was **read in v155's code, with no test on the radio**, by a survey for the remote control.
+
+**Bluetooth is BLE GATT.** The ATT table at `0x01E61512` has service `FFE0` (characteristic `FFE1`, handle `0x15`, read,
+write and notify; `FF31`, a 20-byte write that counts as an authentication; and `FF32`, notify) and JieLi's service
+`AE00` (`AE01` write and `AE02` notify). A write to `FFE1` (handler `0x01E4E272`, a `tbh` by handle) calls `0x01E41706`,
+which copies the bytes into the **same buffer** as the cable and runs the same magic search (`0x01E41762`); the answer
+goes out as a notification on handle `0x15` (`0x01E4E884`). Classic SPP does not reach that buffer: only `0x01E4B438`
+(the UART) and `0x01E41718` (BLE) write to it. Any BLE write sets `b[0x153A0] = 1`, and the UART is then ignored
+(`0x01E4B47C`) until the session ends (`0x01E4BAB8`) or power-up (`0x01E56B04`).
+
+**Outside a session, the UART only looks for the magic.** The interface loop (`0x01E4B416`) reads the UART every turn,
+up to 72 bytes, into `0x16671 + h[0x1666C]`; with 7 bytes or more it calls `0x01E3FD12`, which looks for `G` and
+compares 7 bytes with `0x01E5BE40`, and without the magic it clears the buffer. The programming session stops the
+radio (`MODO_TELA = 8` and the session screen), so it cannot serve a remote control: that would have to come in
+through the call at `0x01E4B4B4`, with its own frames, letting the rest go on to `0x01E3FD12`.
+
+**The room.** About 50 bytes are left today. Without removing any feature, there is code the hooks already left with no
+caller (checked with four reachability variants, including data pointers to the RAM code): leftovers of the stock
+spectrum routines, about 1 KB in pieces of 32 to 174 bytes; the stock functions only the old menu table pointed to,
+556 bytes; and leftovers of G.729 and MP3, 196 bytes. A minimal remote control (key, PTT and status) was estimated at
+about 150 bytes, and with the screen mirror at about 340; the free RAM for its state would be `b[0x14BED]` and
+`b[0x14BEE]`. None of it became firmware: every piece needs its proof in the disassembly before it is reused.

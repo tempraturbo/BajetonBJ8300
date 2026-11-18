@@ -6,3 +6,7 @@
 # o bash do Git para no CR de um script em CRLF, e o Git para Windows (autocrlf) poria CRLF no clone
 *.sh text eol=lf
 SHA256SUMS text eol=lf
+
+# o Tempra Link: o ícone e a memória do rádio de teste (testes/radio.bin)
+*.ico binary
+*.bin binary

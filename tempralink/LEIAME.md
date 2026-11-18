@@ -1,0 +1,112 @@
+# TempraLink-BJ8300.exe
+
+O Tempra Link do BJ-8300 para Windows, sem instalar nada: lê, edita, guarda e grava pelo cabo de programação os
+canais, os bancos, os ajustes do menu, os textos do APRS e do Morse, o DTMF e o logo de abertura de um BJ-8300 com o
+firmware TEMPRA (V3.7T ou mais novo), e tenta o mesmo pelo Bluetooth (experimental). É um `.exe` só, sem DLL, de 32
+bits. Como usar: [README](../README.md#-tempra-link-o-rádio-pelo-pc).
+
+É o irmão do Tempra Link do Baofeng UV-17L (no repositório dele), com a mesma janela, e separado de propósito: um
+não fala com o outro rádio, e um não abre o backup do outro. O que o BJ não tem fica de fora: o ROGER CUSTOM, o
+controle remoto (o firmware ainda não tem espaço para ele; ver a seção 37 da
+[engenharia reversa](../docs/engenharia-reversa.md)) e a gravação do firmware, que é pelo BinTe ANC Bootloader.
+
+## A memória pelo cabo
+
+O `CaboBJ.pas` fala o protocolo de fábrica que o driver do CHIRP usa (seção 4 da engenharia reversa): o magic
+`PROGRAMBT11U`, o `F` (16 bytes de identificação), a cifra, o `R` e o `W` de 64 bytes (cifrados com `CO 7` abaixo de
+`0xF000`) e o `E`; e o estendido do TEMPRA, com o bit 7 do tamanho ligando o endereço de 24 bits. A sessão, antes de
+tudo, lê o cabeçalho dos bancos pelo estendido: o TEMPRA responde 64 bytes, e o de fábrica, o tamanho que recebeu (aí
+o programa lê o resto, para o cabo não sair de sincronia, fecha a sessão com o `E` e recusa o rádio).
+
+O `BJ8300.pas` guarda as áreas que o driver do CHIRP lê (os canais, os VFOs A e B, os ajustes, o DTMF, o FM, o modo
+e os setores do TEMPRA: o cabeçalho e os 16 bancos, o WATCH, o VFO C, o Morse e o APRS) e a calibração, só para o
+backup.
+
+- **Os registros do TEMPRA** têm assinatura e soma (`le_registro` e `grava_registro`, `firmware/src/bancos.c`). Um que
+  não confere o rádio lê como zerado, com a assinatura, e o VFO C como cópia do VFO B; aqui é igual, e mudar um campo
+  grava o registro inteiro e refaz a soma.
+- **A gravação** manda só os blocos de 64 bytes de fábrica que mudaram e os setores do TEMPRA que mudaram, inteiros (o
+  primeiro bloco apaga o setor). Antes, ela lê o que o rádio tem: igual ao novo, pula; igual ao lido, grava; nem um
+  nem outro, o rádio mudou desde a leitura, e nada se grava (com um backup aberto, grava assim mesmo). Os setores do
+  TEMPRA se leem de volta depois, porque um firmware que não grava a área responde o ACK do mesmo jeito. O VFO C não se
+  grava com o C no lado B do rádio (TRIPLE): ali ele é do rádio.
+- **As regras do driver** antes de gravar (`sync_out`): o rádio sem zonas (`0x9028` = 1), sem o TRIPLE WATCH quando o
+  WATCH é SINGLE, e sem banco ligado que não tenha canal.
+- **O backup** (`.tempra`) é o mesmo formato do UV-17L, com o modelo `BJ-8300`: um recusa o do outro.
+
+## Os ajustes
+
+O `menu-bj8300.txt` (embutido no `.exe`) descreve cada item do menu: as pastas e os nomes do rádio
+(`firmware/scripts/montar.py`), o texto de cada valor e os bits que cada valor põe na memória. Quem o gera é o
+`gera_menu.py`, a partir do driver do CHIRP deste repositório, que foi conferido contra o rádio:
+
+```
+python -I tempralink/gera_menu.py      (precisa do CHIRP instalado; leva uns 3 minutos)
+```
+
+Ele aplica cada opção do ajuste correspondente do driver numa imagem e anota os bits que mudam de uma opção para outra:
+
+- o **byte inteiro** onde o driver grava o byte inteiro (cada opção dá o mesmo byte partindo dele em 00 e em FF), e aí
+  um valor fora da lista é outra coisa;
+- a **marca** dos bytes que o rádio só lê com ela (o EXPANDER e o DE-EMPHASIS em `0x9034`, o EQ em `0x903A` e `0x903C`, o
+  NOISE GATE em `0x9031` e o MODEM GAIN em `0x903D`), para um item não desfazer o vizinho que divide o byte;
+- o **valor de fora**: o que o rádio mostra quando o byte não bate com nenhum (o byte sem a marca, o de fábrica de um
+  RESET), lido pelo próprio driver.
+
+O texto de cada valor é o do rádio quando a lista do firmware diz a mesma coisa que a do CHIRP; senão, o do CHIRP em
+maiúsculas. O MIC GAIN põe o DEFAULT na ordem da calibração de cada rádio (`0xF210`), como o menu. Ficam fora do
+`menu-bj8300.txt` o que é ação ou tela (MESSAGES, CH MEMORY, RESET, VERSION, SCAN ADD), os bancos (página própria) e o
+RX GAIN, que fica em `0x9040`, fora do bloco que o cabo lê.
+
+## O Bluetooth (experimental)
+
+O `Bluetooth.pas` procura os aparelhos BLE pelo Bluetooth do Windows, conecta no escolhido, escreve no Registro todos os
+serviços e características que ele anuncia e usa a característica `FFE1` como cabo: pela leitura do firmware (seção
+37 da engenharia reversa), o que se escreve nela cai no mesmo buffer que o cabo enche, e a resposta volta por
+notificação. Sem a `FFE1`, ele tenta o primeiro serviço fora dos padrões com uma característica de escrita e uma de
+notificação. Nada disso foi testado no rádio.
+
+## Compilar e testar
+
+Dois cliques no `compilar.bat`: ele roda os testes e, se passarem, gera o `TempraLink-BJ8300.exe` na raiz do
+repositório. Precisa do Delphi (feito no RAD Studio 12; outra versão: defina `BDS` com a pasta dela). Com o Python e o
+CHIRP instalados, os testes conferem também contra o driver do CHIRP:
+
+- o `testes\fixtures.py gera` monta um BJ-8300 pelo próprio driver (canais com tons, deslocamentos, AM e sem TX, bancos,
+  ajustes, textos e VFOs) e escreve a memória dele (`radio.bin`) e o que se tem de ler dela (`esperado.txt`);
+- o `testes\TesteTempraLink.dpr` lê essa memória pelo rádio simulado (`testes\SimuladorBJ.pas`, que segue a seção 4) e
+  confere linha a linha; grava um conjunto de mudanças e guarda o resultado (`gravado.bin`); e confere as recusas (o
+  firmware de fábrica, o rádio mudo, o rádio que mudou, o firmware que confirma e não guarda, o VFO C com o C no lado
+  B), os registros apagados, o backup, o CSV e o logo;
+- o `testes\fixtures.py confere` lê o `gravado.bin` pelo driver e confere as mudanças.
+
+Sem o CHIRP, os testes usam o `radio.bin` e o `esperado.txt` que já estão no repositório.
+
+## Arquivos
+
+```
+TempraLink.dpr       o programa
+Principal.pas/.dfm   a janela: as páginas, a edição na célula e as tarefas na thread
+Visual.pas           o tema escuro, os botões e a marca "((T))" (o mesmo do UV-17L)
+BJ8300.pas           a memória do rádio, os canais, os bancos, os ajustes, os textos, o DTMF, o logo e o backup
+Ajustes.pas          o menu a partir do menu-bj8300.txt
+CaboBJ.pas           o protocolo do cabo
+Bluetooth.pas        o Bluetooth LE (experimental)
+Transporte.pas       o caminho até o rádio, que a serial, o Bluetooth e o simulado seguem
+PortaSerial.pas      a serial pela API do Windows e a lista das portas (o mesmo do UV-17L)
+Logo.pas             a imagem no formato do rádio, 160 x 138 em RGB565
+Csv.pas              o CSV do CHIRP
+Idioma.pas           português num Windows em português, inglês nos outros
+Recursos.rc          o manifesto, o ícone, o menu, o estilo e a versão
+gera_menu.py         gera o menu-bj8300.txt a partir do driver do CHIRP
+menu-bj8300.txt      a descrição do menu
+testes/              os testes, o rádio simulado e o lado do CHIRP
+```
+
+---
+
+**In English, in short:** Tempra Link for the BJ-8300 reads, edits, keeps and writes a TEMPRA-firmware BJ-8300 through
+the programming cable (and, experimentally, Bluetooth LE through the `FFE1` characteristic): channels, banks, menu
+settings, APRS and Morse texts, DTMF and the boot logo (read only on V3.7T). The menu description is generated from
+this repository's CHIRP driver by `gera_menu.py`, and the tests check, both ways, that the program and the driver read
+the same memory the same way. Build with `compilar.bat` (Delphi, RAD Studio 12).

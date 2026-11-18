@@ -577,6 +577,33 @@ git history. The full story, with what broke and why, is in the [changelog](docs
 
 ---
 
+## 💻 Tempra Link: the radio from the PC
+
+**`TempraLink-BJ8300.exe`**, at the root of the repository, is a Windows program, nothing to install, that reads,
+edits, keeps and writes through the cable a BJ-8300 running this firmware:
+
+- **Channels:** all 960, in a grid edited in the cell, like a spreadsheet (the name, RX and TX, the tones, the
+  power, the bandwidth, AM, BCL, scan, SCRAMBLE, ENCRYPT, the DTMF group, PTT-ID and the banks), with copy and
+  paste and CHIRP's CSV.
+- **Banks:** the name, whether it is on and how many channels each has.
+- **Settings:** the radio's menu folders, with its names and values, the frequency and OFFSET of VFOs A, B and C,
+  the APRS and Morse texts and the 15 DTMF codes.
+- **Boot logo:** reads it and saves it as PNG. Writing depends on the firmware: V3.7T does not write the logo over
+  the cable yet, and the program checks by reading back and says so.
+- **Backup:** every read saves one by itself; save, open and restore. A backup from the Baofeng UV-17L's Tempra
+  Link does not open here, and this one does not open there.
+
+It only goes on with a BJ-8300 that answers with the TEMPRA firmware. It writes only what changed, checking first
+that the radio did not change since it was read, and reads back what it wrote to the bank and record sectors. After
+writing the banks, turn the radio off and on: it builds the banks at power-up.
+
+**Bluetooth (experimental, not tested on the radio):** with the radio's BLUETOOTH (SYSTEM folder) ON, the last item
+of the port list searches for the radio over Bluetooth LE. From reading the firmware, the radio takes the same
+commands as the cable over BLE; while that session is open, it ignores the cable. The code and the tests are in
+[tempralink/](tempralink/) (in Portuguese).
+
+---
+
 ## Cable tools
 
 In [tools/cabo/](tools/cabo/), PowerShell, nothing to install:
@@ -679,6 +706,7 @@ compiler.
 
 ```
 compilar.bat    double-click build (Git for Windows and Python 3)
+TempraLink-BJ8300.exe  Tempra Link: programs the radio through the cable (or, experimentally, Bluetooth)
 firmware/
   src/          bancos.c (banks, menus, spectrum, cable), tela.c (main screen B) and bancos.ld
   fonte/        screen B's 5x7 font and icons, as text
@@ -696,6 +724,7 @@ tools/
   ghidra-scripts/  scripts used during analysis
 logo/           boot image (BMP) and converter
 tests/          CHIRP driver tests
+tempralink/     Tempra Link's source (Delphi), the menu generator and the tests
 docs/           reverse engineering, changelog, screen map, images and working notes
 ```
 

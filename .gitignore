@@ -11,3 +11,14 @@ logo/*.bin
 # Despejos da memoria do radio: contem os canais programados de quem rodou
 dump_*.bin
 *.dump
+
+# O Tempra Link: o que o tempralink/compilar.bat, os testes e o IDE do Delphi geram
+tempralink/dcu/
+tempralink/Recursos.res
+tempralink/estilo.vsf
+tempralink/testes/gravado.bin
+tempralink/__history/
+tempralink/Win32/
+tempralink/*.identcache
+tempralink/*.local
+tempralink/*.dsk

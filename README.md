@@ -573,6 +573,33 @@ histórico do git. A história completa, com o que quebrou e por quê, está no 
 
 ---
 
+## 💻 Tempra Link: o rádio pelo PC
+
+O **`TempraLink-BJ8300.exe`**, na raiz do repositório, é um programa para Windows, sem instalar nada, que lê, edita,
+guarda e grava pelo cabo o BJ-8300 com este firmware:
+
+- **Canais:** os 960, numa grade que se edita na célula, como numa planilha (o nome, o RX e o TX, os tons, a
+  potência, a largura, o AM, o BCL, a varredura, o SCRAMBLE, o ENCRYPT, o grupo DTMF, o PTT-ID e os bancos), com
+  copiar e colar e o CSV do CHIRP.
+- **Bancos:** o nome, o ligado e quantos canais cada um tem.
+- **Ajustes:** as pastas do menu do rádio, com os nomes e os valores dele, as frequências e o OFFSET dos VFOs A, B e
+  C, os textos do APRS e do Morse e os 15 códigos DTMF.
+- **Logo de abertura:** lê e salva em PNG. Gravar depende do firmware: a V3.7T ainda não grava o logo pelo cabo, e o
+  programa confere lendo de volta e avisa.
+- **Backup:** cada leitura guarda um sozinha; salvar, abrir e restaurar. O backup do Tempra Link do Baofeng UV-17L
+  não abre aqui, e o deste não abre lá.
+
+Ele só segue com um BJ-8300 que responda com o firmware TEMPRA. Grava só o que mudou, conferindo antes que o rádio
+não mudou desde a leitura, e lê de volta o que gravou nos setores dos bancos e dos registros. Depois de gravar os
+bancos, desligue e ligue o rádio: ele monta os bancos na partida.
+
+**Bluetooth (experimental, sem teste no rádio):** com o BLUETOOTH do rádio (pasta SYSTEM) em ON, o último item da
+lista de portas procura o rádio pelo Bluetooth LE. Pela leitura do firmware, o rádio recebe pelo BLE os mesmos
+comandos do cabo; enquanto essa sessão está aberta, ele ignora o cabo. O código e os testes estão em
+[tempralink/](tempralink/).
+
+---
+
 ## Ferramentas pelo cabo
 
 Em [tools/cabo/](tools/cabo/), em PowerShell, sem instalar nada:
@@ -676,6 +703,7 @@ de C.
 
 ```
 compilar.bat    compila com dois cliques (Git para Windows e Python 3)
+TempraLink-BJ8300.exe  o Tempra Link: programa o rádio pelo cabo (ou, experimental, pelo Bluetooth)
 firmware/
   src/          bancos.c (bancos, menus, espectro, cabo), tela.c (a tela principal B) e bancos.ld
   fonte/        a fonte 5x7 da tela B e os ícones, em texto
@@ -693,6 +721,7 @@ tools/
   ghidra-scripts/  scripts usados na análise
 logo/           imagem de abertura (BMP) e conversor
 tests/          testes do driver do CHIRP
+tempralink/     o código do Tempra Link (Delphi), o gerador do menu e os testes
 docs/           engenharia reversa, histórico, mapa da tela, imagens e notas de trabalho
 ```
 

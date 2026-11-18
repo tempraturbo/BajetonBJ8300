@@ -5,6 +5,32 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## BJ-8300 Tempra Link — Nov 17 — the radio from the PC (not tested on the radio)
+
+The Baofeng UV-17L's Tempra Link got its sibling here, at the owner's request: a separate program, in this
+repository, so nobody uses one radio's program on the other (`tempralink/`, and `TempraLink-BJ8300.exe` at the root).
+
+- **The protocol** (`CaboBJ.pas`) is the stock one CHIRP uses, with TEMPRA's extended command. The session checks the
+  identification and the TEMPRA firmware first, and closes with `E` even when the radio runs the stock firmware.
+- **The memory** (`BJ8300.pas`) follows the CHIRP driver's areas: channels, VFOs, settings, DTMF, FM, mode, the
+  calibration (backup only) and the TEMPRA sectors (banks, WATCH, VFO C, Morse and APRS). A record that does not check
+  out reads the way the radio reads it (zeroed with the magic, and VFO C as a copy of B). Before writing, the driver's
+  `sync_out` rules: no zones, no TRIPLE WATCH in SINGLE and no empty bank turned on.
+- **The settings** come from `tempralink/menu-bj8300.txt`, which `tempralink/gera_menu.py` takes from the CHIRP driver:
+  it applies each option and records the bits that change, with the mark of the audio bytes (EXPANDER, EQ, NOISE GATE,
+  MODEM GAIN), the whole byte where the driver writes the whole byte, and the value the radio shows when the byte
+  matches none. MIC GAIN follows each radio's calibration order (`0xF210`), as in the menu.
+- **The tests** (`tempralink/testes/`) build a BJ through the CHIRP driver (`fixtures.py`), read it through the
+  simulated radio and check 137 lines against what the driver reads; then they write changes, and the driver checks the
+  result. Also: the stock firmware, a silent radio, a radio that changed since it was read, a firmware that
+  acknowledges and does not keep, VFO C with C on side B, erased records, the backup, the CSV and the logo.
+- **The logo** can be read; V3.7T does not write it (the extended command only accepts `0xC1000..0xD5FFF`), and the
+  program says so.
+- **Bluetooth** is experimental: from reading the firmware (section 37 of the reverse engineering notes), BLE hands
+  the bytes to the same buffer as the cable, through the FFE1 characteristic.
+
+None of this was tested on the radio yet.
+
 ## v155 — Nov 8 — SCR on every scramble frequency (committed before testing)
 
 The UV-17L got the scramble SCR label, and the comparison showed a defect here. The stock routine `0x01E39184` copies the side's

@@ -1,0 +1,38 @@
+/* O manifesto (controles do Windows atuais, DPI, sem pedir administrador), a descricao do menu do radio que o
+   gera_menu.py tira do driver do CHIRP, o icone, o estilo e a versao do .exe.
+   Ao trocar a versao, trocar tambem o VERSAO_TEMPRA_LINK do Principal.pas. */
+
+1 24 "TempraLink.manifest"
+
+/* o icone: a marca do Tempra Link (Visual.DesenhaMarca), de 16 a 256 px */
+MAINICON ICON "tempralink.ico"
+
+MENU_BJ8300 RCDATA "menu-bj8300.txt"
+
+/* o estilo escuro da VCL (Visual.pas), que o compilar.bat copia do Delphi */
+ESTILO VCLSTYLE "estilo.vsf"
+
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEOS 0x4
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041604B0"
+    BEGIN
+      VALUE "FileDescription", "Tempra Link: programa o BJ-8300\0"
+      VALUE "FileVersion", "1.0\0"
+      VALUE "InternalName", "TempraLink\0"
+      VALUE "LegalCopyright", "0BSD, (C) 2026 tempraturbo\0"
+      VALUE "OriginalFilename", "TempraLink-BJ8300.exe\0"
+      VALUE "ProductName", "Tempra Link\0"
+      VALUE "ProductVersion", "1.0\0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0416, 1200
+  END
+END

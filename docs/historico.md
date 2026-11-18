@@ -5,6 +5,31 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Tempra Link do BJ-8300 — 17/11 — o rádio pelo PC (sem teste no rádio)
+
+O Tempra Link do Baofeng UV-17L ganhou o irmão daqui, a pedido do dono: um programa separado, neste repositório, para
+ninguém usar o de um rádio no outro (`tempralink/`, e o `TempraLink-BJ8300.exe` na raiz).
+
+- **O protocolo** (`CaboBJ.pas`) é o de fábrica que o CHIRP usa, com o estendido do TEMPRA. A sessão confere a
+  identificação e o firmware TEMPRA antes de tudo, e fecha com o `E` também quando o rádio é de fábrica.
+- **A memória** (`BJ8300.pas`) segue as áreas do driver do CHIRP: os canais, os VFOs, os ajustes, o DTMF, o FM, o modo,
+  a calibração (só no backup) e os setores do TEMPRA (os bancos, o WATCH, o VFO C, o Morse e o APRS). Um registro que
+  não confere vale como o rádio o lê (zerado com a assinatura, e o VFO C como cópia do B). Antes de gravar, as regras
+  do `sync_out` do driver: sem zonas, sem TRIPLE WATCH no SINGLE e sem banco ligado vazio.
+- **Os ajustes** vêm do `tempralink/menu-bj8300.txt`, que o `tempralink/gera_menu.py` tira do driver do CHIRP: aplica
+  cada opção e anota os bits que mudam, com a marca dos bytes de áudio (EXPANDER, EQ, NOISE GATE, MODEM GAIN), o byte
+  inteiro onde o driver grava o byte inteiro, e o valor que o rádio mostra quando o byte não bate com nenhum. O MIC GAIN
+  entra na ordem da calibração de cada rádio (`0xF210`), como no menu.
+- **Os testes** (`tempralink/testes/`) montam um BJ pelo driver do CHIRP (`fixtures.py`), leem pelo rádio simulado e
+  conferem 137 linhas contra o que o driver lê; depois gravam mudanças, e o driver confere o resultado. Também: o
+  firmware de fábrica, o rádio mudo, o rádio que mudou desde a leitura, o firmware que confirma e não guarda, o VFO C
+  com o C no lado B, os registros apagados, o backup, o CSV e o logo.
+- **O logo** se lê; gravar, a V3.7T não grava (o estendido só aceita `0xC1000..0xD5FFF`), e o programa avisa.
+- **O Bluetooth** vai experimental: pela leitura do firmware (seção 37 da engenharia reversa), o BLE entrega os bytes
+  ao mesmo buffer do cabo, pela característica FFE1.
+
+Nada disto foi testado no rádio ainda.
+
 ## v155 — 08/11 — o SCR em todas as frequências do scramble (commitada antes do teste)
 
 O UV-17L ganhou a etiqueta SCR do scramble, e a comparação mostrou um defeito aqui. A rotina de fábrica `0x01E39184` copia o scramble do

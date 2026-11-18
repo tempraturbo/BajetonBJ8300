@@ -7,9 +7,9 @@
 # 160 x 138 pixels em RGB565 = 44160 bytes (0xAC80), ou seja 11 setores de 4 KB (0x10000..0x1AFFF).
 # Quem grava isso de fabrica e o CPS11; aqui vai pelo comando estendido do firmware modificado.
 #
-# LEITURA funciona em qualquer endereco. GRAVACAO so se o firmware permitir a faixa do logo
-# (v13 em diante); no v12 a gravacao estendida so entra na area dos bancos e o radio IGNORA o
-# resto - o script avisa se os bytes nao mudarem.
+# LEITURA funciona em qualquer endereco. GRAVACAO so se o firmware permitir a faixa do logo, e
+# nenhum permite ainda: o gancho_cabo (firmware/src/bancos.c) so grava pelo estendido de 0xC1000 a
+# 0xD5FFF, e o radio IGNORA o resto (e responde o ACK) - o script avisa se os bytes nao mudarem.
 param(
     [string]$Porta = 'COM3',
     [string]$Saida = '',
