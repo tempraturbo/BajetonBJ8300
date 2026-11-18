@@ -79,6 +79,19 @@ MEMORY
     mortos18 (rx) : ORIGIN = 0x01E4AE02, LENGTH = 66
     mortos19 (rx) : ORIGIN = 0x01E4A9A0, LENGTH = 34
     mortos20 (rx) : ORIGIN = 0x01E4A9C6, LENGTH = 32
+    /* v164: as rotinas de fabrica dos itens do menu que sairam (o VOICE, o LANGUAGE, o Zone Or Channel) ou que
+     * trocaram de rotina (o CH-NAME, o ROGER, o NOISE REDUCTION e o get do SCRAMBLE): so a tabela de fabrica,
+     * morta desde a v43, apontava para elas (montar.py MORTOS). Recebem rotinas que so o nosso codigo chama. */
+    mortos21 (rx) : ORIGIN = 0x01E3E25A, LENGTH = 210   /* Zone Or Channel: o set */
+    mortos22 (rx) : ORIGIN = 0x01E3C6E8, LENGTH = 194   /* CH-NAME: a exibicao e o get */
+    mortos23 (rx) : ORIGIN = 0x01E3C7BE, LENGTH = 112   /* CH-NAME: o set */
+    mortos24 (rx) : ORIGIN = 0x01E3CDAA, LENGTH = 56    /* LANGUAGE: a exibicao */
+    mortos25 (rx) : ORIGIN = 0x01E39928, LENGTH = 46    /* VOICE: o get e o set */
+    mortos26 (rx) : ORIGIN = 0x01E3D0E0, LENGTH = 44    /* NOISE REDUCTION: o get e o set */
+    mortos27 (rx) : ORIGIN = 0x01E3C91E, LENGTH = 40    /* ROGER: o get e o set */
+    mortos28 (rx) : ORIGIN = 0x01E3C9A8, LENGTH = 40    /* LANGUAGE: o get e o set */
+    mortos29 (rx) : ORIGIN = 0x01E3D058, LENGTH = 20    /* SCRAMBLE: o get */
+    mortos30 (rx) : ORIGIN = 0x01E3E242, LENGTH = 20    /* Zone Or Channel: o get */
 }
 
 SECTIONS
@@ -130,6 +143,16 @@ SECTIONS
     .mortos18 : { *(.mortos18.*) } > mortos18
     .mortos19 : { *(.mortos19.*) } > mortos19
     .mortos20 : { *(.mortos20.*) } > mortos20
+    .mortos21 : { *(.mortos21.*) } > mortos21
+    .mortos22 : { *(.mortos22.*) } > mortos22
+    .mortos23 : { *(.mortos23.*) } > mortos23
+    .mortos24 : { *(.mortos24.*) } > mortos24
+    .mortos25 : { *(.mortos25.*) } > mortos25
+    .mortos26 : { *(.mortos26.*) } > mortos26
+    .mortos27 : { *(.mortos27.*) } > mortos27
+    .mortos28 : { *(.mortos28.*) } > mortos28
+    .mortos29 : { *(.mortos29.*) } > mortos29
+    .mortos30 : { *(.mortos30.*) } > mortos30
 
     /DISCARD/ : { *(.comment) *(.note*) *(.debug*) }
 }

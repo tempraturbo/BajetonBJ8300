@@ -1322,6 +1322,11 @@ FIRMWARE(TECLAS, 0x01E43D50);      unsigned TECLAS(void);     /* codigo cru, 255
 #ifndef TESTE_RX
 unsigned remoto_tecla(void);        /* remoto.c (v156): a varredura, ou a tecla do controle remoto com nenhuma apertada */
 #define TECLAS  remoto_tecla
+unsigned remoto_retrato(unsigned);  /* remoto.c (v162): o retrato da tela pendente, so no laco do sinal; devolve a tecla */
+void luz_aplica(void);              /* tela.c: a luz na hora (v164: a tela apagada pelo controle remoto, remoto.c) */
+#else
+#define remoto_retrato(k) (k)
+#define luz_aplica()
 #endif
 FIRMWARE(COLUNAS, 0x01E43CF4);     void COLUNAS(unsigned);    /* o laco repoe as colunas com 60 */
 FIRMWARE(DESARMA_DW, 0x01E3FDE4);  void DESARMA_DW(void);     /* a dupla escuta no lado em evidencia */
@@ -1505,6 +1510,8 @@ unsigned gancho_teclas(void)
 {
     unsigned k = TECLAS(), t = TELA_APRS, j = INJETA, editor = MENU_TIPO == 7 && MENU_EDITANDO == 1;
 
+    luz_aplica();                          /* v164: o PC apaga e acende a tela na hora; aqui, e nao no remoto_retrato, */
+    k = remoto_retrato(k);                 /* fora do quadro dele, que a pilha do laco nao comporta */
     if (TECLA_PRESA) {                     /* a tecla que ja agiu segurada: nada passa ate soltar de vez */
         TECLA_PRESA = k == 255 ? TECLA_PRESA - 1 : 5;
         k = 255;
@@ -2926,7 +2933,7 @@ __attribute__((noinline)) NA_RESERVA static unsigned morse_passo(struct morse_rx
 
 /* O meu indicativo em texto ("PY2ABC-7", em maiusculas: o editor tem o modo abc); devolve o tamanho.
  * Separada: o registro sai da pilha antes do laco. */
-__attribute__((noinline)) static unsigned meu_indicativo(char *meu)
+__attribute__((noinline)) NOS_MORTOS(22) static unsigned meu_indicativo(char *meu)   /* v165: o .livre cheio */
 {
     struct aprs a;
     unsigned n;

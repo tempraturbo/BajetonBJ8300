@@ -146,6 +146,16 @@ MORTOS = ((0x01E5A768, 0x01E5A7D0), (0x01E5A7E0, 0x01E5A82E), (0x01E5AA00, 0x01E
 MORTOS += ((0x01E4AB2E, 0x01E4ABDC), (0x01E4ABE0, 0x01E4AC74), (0x01E4AFC6, 0x01E4B04C), (0x01E4AD7C, 0x01E4ADFE),
            (0x01E4AAA8, 0x01E4AB2A), (0x01E4B050, 0x01E4B0A0), (0x01E45D9A, 0x01E45DE6), (0x01E4AE02, 0x01E4AE44),
            (0x01E4A9A0, 0x01E4A9C2), (0x01E4A9C6, 0x01E4A9E6))
+# v164: as rotinas de fabrica (o get, o set e a exibicao) dos itens do menu que sairam (o VOICE, o LANGUAGE e o Zone Or
+# Channel, ITENS_FORA) ou que trocaram de rotina na tabela nova (o CH-NAME, o ROGER, o NOISE REDUCTION e o get do
+# SCRAMBLE): so a tabela de fabrica, morta desde a v43 (o .reserva), apontava para elas. Cada faixa vai da entrada a
+# entrada seguinte, e a instrucao antes dela e um retorno ou um goto. Prova sobre a imagem de fabrica e a montada: nenhum
+# desvio de 2 ou de 4 bytes de fora cai dentro (os da copia da RAM pelo endereco de la, e os do codigo nosso), e nenhum
+# valor de 32 bits aponta para dentro, em nenhum deslocamento (docs/engenharia-reversa.md, secao 39). Recebem rotinas
+# que so o nosso codigo chama (o conferir.py 2b recusa as do PRECISA nelas), e o .text que elas deixam recebe o roger.
+MORTOS += ((0x01E3E25A, 0x01E3E32C), (0x01E3C6E8, 0x01E3C7AA), (0x01E3C7BE, 0x01E3C82E), (0x01E3CDAA, 0x01E3CDE2),
+           (0x01E39928, 0x01E39956), (0x01E3D0E0, 0x01E3D10C), (0x01E3C91E, 0x01E3C946), (0x01E3C9A8, 0x01E3C9D0),
+           (0x01E3D058, 0x01E3D06C), (0x01E3E242, 0x01E3E256))
 CAMINHOS_SHA256 = '8080d5e5e38c725b194295fa99e78806369f0dbda4ed50024e4568bba5fc3934'
 CAMINHOS_REMENDOS = ((0x01E60B58, bytes.fromhex('25ace501'), bytes.fromhex('f8b6e501'),
                       'editor 123: o "*" da tecla * no caminho do B0, fora da faixa'),)
@@ -266,8 +276,9 @@ PRECISA = ('gancho_cabo', 'gancho_scan', 'gancho_envia', 'gancho_limpa', 'gancho
            'titulo_ativo', 'titulo_canais', 'titulo_nome') + TELA_SIMBOLOS + ('radio_ajustes_fabrica',) + ENVIA_GANCHOS
 
 
-def codigo_ligado(elf, secao='.text'):
-    """(endereco, conteudo) de uma secao do bancos.elf, lidos do cabecalho de secoes do ELF32."""
+def codigo_ligado(elf, secao='.text', vazia=None):
+    """(endereco, conteudo) de uma secao do bancos.elf, lidos do cabecalho de secoes do ELF32. Com vazia (o comeco da
+    faixa), a secao que o ligador nao criou (nada foi posto nela) vale vazia ali."""
     e = open(elf, 'rb').read()
     shoff = struct.unpack_from('<I', e, 0x20)[0]
     tam, quantas, nomes = struct.unpack_from('<HHH', e, 0x2E)
@@ -276,12 +287,15 @@ def codigo_ligado(elf, secao='.text'):
     for nome, _, _, endereco, deslocamento, tamanho, *_ in secoes:
         if e[base_nomes + nome:e.index(b'\0', base_nomes + nome)] == secao.encode():
             return endereco, e[deslocamento:deslocamento + tamanho]
+    if vazia is not None:
+        return vazia, b''
     raise SystemExit(f'{elf} nao tem secao {secao}')
 
 
-def secao_ligada(codigo, secao, inicio, fim):
-    """Uma secao do bancos.elf, conferida: ligada para inicio e cabendo ate fim."""
-    endereco, conteudo = codigo_ligado(os.path.splitext(codigo)[0] + '.elf', secao)
+def secao_ligada(codigo, secao, inicio, fim, vazia=False):
+    """Uma secao do bancos.elf, conferida: ligada para inicio e cabendo ate fim (com vazia, a que nao existe vale
+    vazia: uma faixa morta que ainda nao recebeu nada, v164)."""
+    endereco, conteudo = codigo_ligado(os.path.splitext(codigo)[0] + '.elf', secao, inicio if vazia else None)
     if endereco != inicio or endereco + len(conteudo) > fim:
         raise SystemExit(f'{secao} ligada para {endereco:#x}..{endereco + len(conteudo):#x}, fora de '
                          f'{inicio:#x}..{fim:#x}. Recusado.')
@@ -448,7 +462,7 @@ MDF_A_ITEM = 42
 # e o set de fabrica (0x01E3CA30 / 0x01E3CA40) so copiam o byte b[0x14B7F] e ficam; o C so vale no
 # PTT, pelos ganchos da TX (bancos.c).
 TX_AB_ITEM = 44
-ITENS_MUDADOS = {ROGER_ITEM: dict(maximo=5, get='roger_le', set='roger_grava',
+ITENS_MUDADOS = {ROGER_ITEM: dict(maximo=6, get='roger_le', set='roger_grava',
                                   exibe='roger_opcoes', opcoes_cn='roger_opcoes'),
                  TDR_ITEM: dict(set='tdr_grava'),
                  SCRAMBLE_ITEM: dict(maximo=9, get='scramble_le', set='scramble_grava',
@@ -680,8 +694,8 @@ CHAMADAS_LIVRE += ((0x01E4B4B4, MAGIC_ERA, 'remoto_cabo', 'remoto: os quadros do
                    (0x01E43EBE, PORTA_ERA, 'ptt_porta', 'remoto: o PTT na ida do PTT'),
                    (0x01E46E78, PORTA_ERA, 'ptt_porta', 'remoto: o PTT no laco do sinal, TX recusada'),
                    (0x01E47988, PORTA_ERA, 'ptt_porta', 'remoto: o PTT no laco do sinal'))
-CHAMADAS_LIVRE += ((0x01E3C784, 0x021127C0, 'nome_tamanho', 'CH-NAME: o tamanho do nome, ate o 0 ou o 0xFF'),
-                   (0x01E3C792, 0x021127A8, 'nome_para_editor', 'CH-NAME: o nome no editor, que abre em ABC'))
+# v164: o get do CH-NAME de fabrica morreu (o CH NAME de hoje e nosso, das listas de canais), e as duas chamadas
+# sairam: a faixa dele e o .mortos22.
 # v52: o editor de nome so com ABC e 123. A tecla # (0x01E4A590..0x01E4A5AE) soma 1 ao modo
 # (b[0x14A38]: 0 abc, 1 ABC, 2 123) e o volta a 0 no 3 (no 4 em chines, que saiu na v37); voltando a 1,
 # ela alterna ABC e 123. O "r0 = 0" e a instrucao do "if (r2 >= r1) {...}", do mesmo tamanho. Ninguem
@@ -727,7 +741,7 @@ MENU_DESVIOS += ((0x01E4D48A, bytes.fromhex('40e0b703'), 'desvio_exit_apaga', 'b
                   'menu: EXIT fora da edicao nao apaga letra do editor'),)
 MENU_SIMBOLOS = ('menu_abre', 'gancho_menu_ok', 'gancho_menu_redesenha', 'gancho_menu_digito', 'desvio_menu_sai', 'b_menu_sai',
                  'desvio_menu_marca', 'b_menu_marca', 'desvio_menu_um', 'b_menu_um', 'desvio_exit_apaga',
-                 'b_exit_apaga', 'desvio_exit_lista', 'b_exit_lista', 'nome_tamanho', 'nome_para_editor')
+                 'b_exit_apaga', 'desvio_exit_lista', 'b_exit_lista', 'nome_tamanho')
 # Instrucoes trocadas por uma chamada e nop no resto: na ida do PTT, a leitura do TX-A/B ("r0 = 1279;
 # r0 = b[r4+r0]", 0x01E43F92) vira "call gancho_tx_abc; nop; nop". O r0 que ele devolve e o que o
 # trecho de fabrica testa em seguida (0x01E43F9A); r1..r3 sao escritos antes de lidos, e o r4 (a base
@@ -1311,7 +1325,7 @@ def main():
     caminhos = secao_ligada(codigo, '.caminhos', CAMINHOS, CAMINHOS_FIM)
     reserva = secao_ligada(codigo, '.reserva', RESERVA, RESERVA_FIM)
     sons = secao_ligada(codigo, '.sons', SONS, SONS_FIM)
-    mortos = [secao_ligada(codigo, f'.mortos{i + 1}', de, ate) for i, (de, ate) in enumerate(MORTOS)]
+    mortos = [secao_ligada(codigo, f'.mortos{i + 1}', de, ate, True) for i, (de, ate) in enumerate(MORTOS)]
 
     # Monta a lista de escritas no app.bin e passa pela trava antes de tocar em qualquer byte.
     escritas = [(GANCHO_EM, 4, 'gancho do filtro na partida'), (SCAN_EM, 4, 'gancho do redesenho no scan')]

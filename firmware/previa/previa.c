@@ -3,64 +3,12 @@
  * radio na RAM imitada, nos enderecos de verdade, e a tela o le de la como no radio. A tela de
  * 160 x 128 sai em RGB565 (byte alto primeiro, como o buffer de video) num arquivo .rgb565.
  *
+ * A maquina (a RAM, a janela, o envio, o chip e as tabelas do menu) esta no maquina.c (v162); aqui, o que cada
+ * cenario escolhe e os cenarios.
+ *
  * Uso: previa <pasta de saida>   (o previa.py compila, roda e converte para PNG)
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-typedef unsigned char u8;
-typedef unsigned short u16;
-typedef unsigned int u32;
-
-u8 memoria[0x20000];
-static u16 tela[128][160];
-
-#define VIDEO      0x00010190u
-#define TAM_VIDEO  10240u
-
-/* janela(x0, x1, y0, y1, limpar, cor) 0x01E3AD34: grava os limites e, com limpar, enche o buffer.
- * A do firmware nao tem trava; aqui, janela maior que o buffer para a previa com erro. */
-void JANELA(unsigned x0, unsigned x1, unsigned y0, unsigned y1, unsigned limpar, unsigned cor)
-{
-    unsigned n = (x1 - x0) * (y1 - y0), i;
-
-    if (x1 <= x0 || y1 <= y0 || x1 > 160 || y1 > 128 || n * 2 > TAM_VIDEO) {
-        fprintf(stderr, "janela invalida: x %u..%u y %u..%u\n", x0, x1, y0, y1);
-        exit(1);
-    }
-    memoria[0x14608] = x0;
-    memoria[0x1460A] = y0;
-    memoria[0x1460C] = x1;
-    memoria[0x1460E] = y1;
-    memoria[0x14610] = (x1 - x0) * 2 & 0xFF;
-    memoria[0x14611] = (x1 - x0) * 2 >> 8;
-    for (i = 0; limpar && i < n; i++) {
-        memoria[VIDEO + i * 2] = cor >> 8;
-        memoria[VIDEO + i * 2 + 1] = cor;
-    }
-}
-
-/* envia() 0x01E3ADBC: manda o buffer da janela aberta para a tela. */
-void tela_aprs(u32 a0, u32 a1, unsigned aberto, const u16 *num, unsigned faixas);   /* telas.c (v74) */
-void caixa_b(void);                                                                  /* telas.c (v112) */
-
-void ENVIA(void)
-{
-    unsigned x0 = memoria[0x14608], y0 = memoria[0x1460A], x1 = memoria[0x1460C], y1 = memoria[0x1460E];
-    unsigned x, y, o = 0;
-
-    for (y = y0; y < y1; y++)
-        for (x = x0; x < x1; x++, o += 2)
-            tela[y][x] = memoria[VIDEO + o] << 8 | memoria[VIDEO + o + 1];
-}
-
-/* le_flash() 0x01E390AC: le do chip de dados (aqui, imitado). */
-static u8 chip[0x10000];
-void LE_FLASH(u32 a, void *p, unsigned n)
-{
-    memcpy(p, chip + a, n);
-}
+#include "maquina.c"
 
 /* O WATCH (bancos.c le do cabecalho dos bancos): aqui cada cenario escolhe. */
 static unsigned previa_vista, previa_canal_c, previa_mdf_c, previa_c_no_lugar, previa_outro_rx;
@@ -117,7 +65,6 @@ unsigned outro_recebendo(void)
     return previa_outro_rx;
 }
 
-#include "../src/tela.c"
 
 static const char *pasta;
 
@@ -148,41 +95,6 @@ static void poe32(u32 a, u32 v)
     memoria[a + 3] = v >> 24;
 }
 
-/* Os grupos do menu (v53): a previa nao tem a tabela do firmware, e os nomes e as quantidades vem do
- * montar.py (o previa.py gera o menu_grupos.h). */
-#include "menu_grupos.h"
-
-unsigned previa_menu_grupos(void)
-{
-    return MENU_PREVIA_GRUPOS;
-}
-
-unsigned previa_menu_itens(unsigned g)
-{
-    return menu_previa_itens[g];
-}
-
-/* O menu do radio (v56): as duas tabelas de fabrica, como o motor as mostra (o item de memoria com o
- * titulo que 0x01E3D20E monta; flags so com o tipo, que e o que a tela le delas). */
-static const char *const previa_radio_fm_am[5] = {"MODULATION", "AMMEMCH", "WORK BAND", "FREQUENCY STEP", "LNA"};
-static const char *const previa_radio_ssb[6] = {"MODULATION", "SSBMEMCH", "FREQUENCY STEP", "BANDWIDTH", "LNA",
-                                                "BFO"};
-static const unsigned char previa_radio_tipos[6] = {0, 4, 0, 0, 0, 13};
-
-const char *previa_item_nome(u32 t, unsigned i)
-{
-    if (t == RADIO_FM_AM)
-        return previa_radio_fm_am[i];
-    if (t == RADIO_SSB)
-        return previa_radio_ssb[i];
-    return menu_previa_nomes[(t - MENU_BASE) / TAM_ITEM + i];
-}
-
-unsigned previa_item_flags(u32 t, unsigned i)
-{
-    return t == RADIO_FM_AM || t == RADIO_SSB ? previa_radio_tipos[i] : 0;
-}
-
 unsigned marcas_do_item(void);
 unsigned lista_item(void)
 {
@@ -194,11 +106,6 @@ static unsigned previa_canal = 1;       /* o lado em evidencia em canal: o aviso
 unsigned em_canal(void)
 {
     return previa_canal;
-}
-
-unsigned previa_menu_marcas(unsigned p)
-{
-    return menu_previa_marcas[p];
 }
 
 /* O menu no item i do grupo g (nos grupos com NOS_GRUPOS), como os ganchos do tela.c o poem. */
@@ -1138,8 +1045,10 @@ int main(int argc, char **argv)
 
         BASE_TELAS();
         memoria[0x1533D] = 17;
+        memoria[0x148D0] = 2;              /* o estado do scan QT, como o firmware o deixa (v162: o app o le) */
         telas_b(17, 1);
         grava("12-scanqt-rodando");
+        memoria[0x148D0] = 1;
         telas_b(17, 0);
         grava("13-scanqt-parado");
 

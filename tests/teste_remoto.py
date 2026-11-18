@@ -1,23 +1,21 @@
-"""Confere o controle remoto (firmware/src/remoto.c, v156 a v158) no PC: compila o C em 32 bits com o zig (pip install
-ziglang), com a RAM num vetor e o firmware imitado (tests/teste_remoto.h), roda os cenarios do tests/teste_remoto.c e
-confere:
-  1. o quadro do PC achado em qualquer posicao do buffer, o mais novo valendo, a soma, a tecla fora da tabela, e o
-     PROGRAMBT11U seguindo para o conferidor de fabrica;
+"""Confere o controle remoto (firmware/src/remoto.c, v156 a v162) no PC: compila o C em 32 bits com o zig (pip install
+ziglang), com a RAM e o chip de dados em vetores e o firmware imitado (tests/teste_remoto.h), roda os cenarios do
+tests/teste_remoto.c e confere:
+  1. o quadro do PC achado em qualquer posicao do buffer, o mais novo valendo, a soma, a tecla fora da tabela, o
+     PROGRAMBT11U seguindo para o conferidor de fabrica, e o CONTA so com o carimbo;
   2. a tecla do remoto so com nenhuma fisica apertada, e a resposta (9 bytes) uma vez por quadro, com a soma;
-  3. o vigia: a tecla e o PTT seguros ate 15 carimbos de 64 ms, soltos no 16o;
+  3. o vigia: a tecla e o PTT seguros ate 15 carimbos de 64 ms, soltos no 16o, com o retrato pendente ou nao;
   4. o PTT pela porta falsa, com o PA12 em 0; com o remoto pelo cabo, o fio do PTT (o RX da serial) nao vale (v157);
-  5. o pedido da tela inteira: so pelo cabo, fora da TX, a principal ou o menu, e a marca de perda limpa; senao a
-     fatia fica perdida (v158);
+  5. o retrato da tela (v162), decodificado aqui do formato do alto do remoto.c, contra o firmware/src/retrato.h: so
+     se pedido, pendente na resposta e mandado pelo remoto_retrato uma vez; o cabecalho, os valores, a flash (o canal
+     da terceira, o 0 com ela em 0xFFFF, e a memoria do radio nas bandas), cada faixa da RAM e as somas; os pedacos
+     de ate 20 bytes;
   6. os bits de quem recebe (a letra e do app desde a v159);
-  7. o espelho, decodificado aqui por um leitor escrito do formato (o mesmo do UV-17L: 01 'T' x0 x1 y0 y1, corridas
-     de quantos e a cor com o byte alto primeiro, e o CRC16-XMODEM do 'T' ao fim), com o anel dando a volta: a imagem
-     tem de voltar igual;
-  8. o anel cheio: a linha se perde na hora, sem esperar (v158); a fatia por no (as linhas do no, o vigia parado no
-     redesenho, a fatia que nao coube perdida); a perda de fora das fatias guardada ate a resposta (v159);
-  9. nada vai com a lanterna, na sessao, nem com o espelho desligado (pelo BLE, so se pedido).
+  7. a lanterna segurando o LCD.
 Uso: python -I tests/teste_remoto.py
 """
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -34,38 +32,42 @@ def confere(nome, obtido, esperado):
         falhas.append(nome)
 
 
-def crc16(b):
-    c = 0
-    for x in b:
-        c ^= x << 8
-        for _ in range(8):
-            c = (c << 1 ^ 0x1021 if c & 0x8000 else c << 1) & 0xFFFF
-    return c
+# o retrato.h: as constantes e as faixas
+H = open(os.path.join(RAIZ, 'firmware', 'src', 'retrato.h'), encoding='utf-8').read()
+K = {m.group(1): int(m.group(2)) for m in re.finditer(r'#define RETRATO_(\w+)\s+(\d+)u', H)}
+K['BASE'] = int(re.search(r'#define RETRATO_BASE\s+0x([0-9A-F]+)u', H).group(1), 16)
+FAIXAS = [(K['BASE'] + (int(a, 16) | int(b, 16) << 8), int(n))
+          for a, b, n in re.findall(r'\{0x([0-9A-F]{2}), 0x([0-9A-F]{2}),\s*(\d+)\}', H)]
+TAMANHO = K['VALORES'] + K['FLASH'] + K['RAM']
 
 
-def quadros(dados):
-    """Os quadros da tela num fluxo de bytes: (x0, x1, y0, y1, pixels) dos que conferem, e quantos nao conferiram."""
-    saida, ruins, i = [], 0, 0
-    while i < len(dados):
-        if dados[i] != 1 or i + 6 > len(dados) or dados[i + 1] != ord('T'):
-            i += 1
-            continue
-        x0, x1, y0, y1 = dados[i + 2:i + 6]
-        n, p, px = (x1 - x0) * (y1 - y0), i + 6, []
-        while n > 0 and p + 3 <= len(dados):
-            c = dados[p]
-            if c == 0 or c > n:
-                break
-            px += [dados[p + 1] << 8 | dados[p + 2]] * c
-            n -= c
-            p += 3
-        if n or p + 2 > len(dados) or crc16(dados[i + 1:p]) != dados[p] << 8 | dados[p + 1]:
-            ruins += 1
-            i += 1
-            continue
-        saida.append((x0, x1, y0, y1, px))
-        i = p + 2
-    return saida, ruins
+def ram(a):
+    """O padrao do teste_remoto.c na RAM."""
+    return (a * 7 + (a >> 8)) & 255
+
+
+def chip(a):
+    return (a * 13 + (a >> 9)) & 255
+
+
+def nome_radio(banda):
+    """O endereco do nome da memoria do radio na flash (o R_NOME do telas.c)."""
+    return 0xC110 if banda == 1 else 0xC010 if banda == 0 or banda > 4 else 0xC210
+
+
+def retrato(fluxo):
+    """O retrato depois da resposta: (cabecalho, valores, flash, RAM, somas certas) ou None."""
+    if len(fluxo) != 9 + 5 + TAMANHO + 2 or fluxo[9:11] != b'~S':
+        return None
+    r = fluxo[9:]
+    s1 = s2 = 0
+    for x in r[:-2]:
+        s1 = (s1 + x) & 255
+        s2 = (s2 + s1) & 255
+    v = r[5:5 + K['VALORES']]
+    f = r[5 + K['VALORES']:5 + K['VALORES'] + K['FLASH']]
+    m = r[5 + K['VALORES'] + K['FLASH']:-2]
+    return (r[2], r[3] | r[4] << 8), v, f, m, (s1, s2) == (r[-2], r[-1])
 
 
 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as pasta:
@@ -81,12 +83,14 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as pasta:
 linhas = {l.split()[0]: l.split()[1:] for l in saida.splitlines() if l.strip()}
 v = lambda nome: [int(x) for x in linhas[nome]]
 
-# 1. o quadro (REM: bits 4:0 a tecla + 1, 5 o PTT, 6 o espelho, 7 a resposta pendente)
+# 1. o quadro (REM: bits 4:0 a tecla + 1, 5 o PTT, 6 o retrato, 7 a resposta pendente)
 confere('1. o quadro mais novo, no meio do lixo, sem o conferidor', v('quadro_novo'), [0, 0, 18 | 32 | 128])
 confere('1. o PROGRAMBT11U segue para o conferidor (1 abre a sessao)', v('programbt'), [1, 1, 0])
 confere('1. a soma errada nao vale', v('soma_errada'), [7, 1, 0])
 confere('1. a tecla 18 (fora da tabela) e nenhuma', v('tecla_18'), [128])
 confere('1. com 6 bytes nao ha quadro', v('seis_bytes'), [7, 1, 0])
+confere('1. o CONTA com o carimbo (o retrato pendente e o ESCURO velho saem; o ACORDADO, v164, fica)', v('carimbo'),
+        [777 & 31 | 128])
 
 # 2. a tecla e a resposta
 confere('2. a tecla do remoto com nenhuma apertada; uma resposta de 9 bytes', v('tecla_remota'), [9, 1, 9])
@@ -96,8 +100,10 @@ confere('2. a soma da resposta', resp[8], sum(resp[:8]) & 255)
 confere('2. a tecla fisica vale mais, e a resposta nao se repete', v('tecla_fisica'), [2, 1])
 
 # 3. o vigia
-confere('3. aos 15 carimbos a tecla e o PTT seguem seguros', v('vigia_15'), [4, 0])
-confere('3. aos 16 (1 s) soltam, e o REM zera', v('vigia_16'), [255, 0x1000, 0])
+for k in (0, 1):
+    com = ' (com o retrato pendente)' if k else ''
+    confere(f'3. aos 15 carimbos a tecla e o PTT seguem seguros{com}', v(f'vigia_15_{k}'), [4, 0])
+    confere(f'3. aos 16 (1 s) soltam, e o REM zera{com}', v(f'vigia_16_{k}'), [255, 0x1000, 0])
 
 # 4. o PTT
 confere('4. o PTT do remoto: porta falsa com o PA12 em 0', v('ptt'), [0, 0])
@@ -107,14 +113,42 @@ confere('4. v157: com o remoto pelo cabo (reservados em 0xFF), o fio apertado na
 confere('4. v157: pelo BLE, o fio do radio vale', v('fio_ble'), [0])
 confere('4. v157: o PTT do quadro aperta pelo cabo', v('fio_cabo_ptt'), [0])
 
-# 5. a tela inteira
-confere('5. a principal (MODO_TELA 0), e a perda limpa', v('tela_principal'), [1, 0, 0])
-confere('5. o menu (MODO_TELA 1), e a perda limpa', v('tela_menu'), [0, 1, 0])
-confere('5. pelo BLE, nada, e a fatia perdida', v('tela_ble'), [0, 0, 64])
-confere('5. na TX, nada, e a fatia perdida', v('tela_tx'), [0, 64])
-confere('5. noutra tela (MODO_TELA 2), nada, e a fatia perdida', v('tela_outra'), [0, 0, 64])
-confere('5. no meio de uma digitacao (v161), nada, e a fatia perdida', v('tela_digitando'), [0, 64])
-confere('5. sem o pedido, a perda fica', v('perda_fica'), [64])
+# 5. o retrato
+confere('5. antes da resposta nada sai, e o remoto_retrato devolve a tecla', v('antes_da_resposta'), [77, 0])
+confere('5. a resposta sai so (9 B), e o retrato fica pendente; o REM leva o pedido', v('pendente'), [9, 32, 64])
+confere('5. o retrato sai: a tecla de volta, a marca limpa, pedacos de ate 20 B, nada fora do chip',
+        v('retrato_sai'), [5, 0, 20, 0])
+fluxo = bytes.fromhex(linhas['fluxo'][0])
+confere('5. a resposta vem antes, inteira', (fluxo[:2], len(fluxo) > 9 and sum(fluxo[:8]) & 255 == fluxo[8]),
+        (b'~r', True))
+rt = retrato(fluxo)
+confere('5. o retrato: ~ S, do tamanho do retrato.h, e as somas de Fletcher conferem', rt is not None and rt[4], True)
+if rt:
+    confere('5. o cabecalho: a versao e o tamanho do retrato.h', rt[0], (K['VERSAO'], TAMANHO))
+    esperado = (0x80000103).to_bytes(4, 'little') + (0x0102002A).to_bytes(4, 'little') + \
+        (0x08A1B2C3).to_bytes(4, 'little') + (0x00070203).to_bytes(4, 'little') +         (0x01E2AA74).to_bytes(4, 'little') + bytes([1, 1, 3, 4, 1, 6])
+    confere('5. os valores, na ordem do RETRATO_VALORES', rt[1], esperado)
+    c = 42 * 32
+    confere('5. a flash: o comeco e o nome do canal 42 (o da terceira, mesmo em VFO)', rt[2][:16],
+            bytes(chip(c + i) for i in range(4)) + bytes(chip(c + 20 + i) for i in range(12)))
+    confere('5. a flash: a memoria do radio (a banda e a memoria do padrao)', rt[2][16:],
+            bytes(chip(nome_radio(ram(0x12A1B)) + ram(0x14CB4) * 16 + i) for i in range(14)))
+    # o CONTA e o REM vao como estavam no envio (estado do remoto, nao o padrao da RAM)
+    vivo = dict(zip((0x14BED, 0x14BEE), v('estado_no_envio')))
+    esperado = b''.join(bytes(vivo.get(a + i, ram(a + i)) for i in range(n)) for a, n in FAIXAS)
+    confere(f'5. a RAM: as {len(FAIXAS)} faixas do retrato.h, na ordem', rt[3], esperado)
+confere('5. so uma vez: nem a pendencia de novo, nem a resposta seguinte sem quadro novo', v('uma_vez'), [1])
+confere('5. a frequencia da terceira pedida com o terceira() inteiro', v('freq_pedida'), [1])
+for k, banda in enumerate((0, 1, 2, 3, 4, 5, 255)):
+    rt = retrato(bytes.fromhex(linhas[f'banda{banda}'][0]))
+    c = 0 if k == 0 else 42 * 32
+    obtido = rt and (rt[4], rt[2][16:], rt[2][:4])
+    confere(f'5. a banda {banda}, a memoria {k * 3 + 1}: o nome em 0x{nome_radio(banda):X} + 16 x memoria'
+            + (', e a terceira em 0xFFFF lida do 0' if k == 0 else ''), obtido,
+            (True, bytes(chip(nome_radio(banda) + (k * 3 + 1) * 16 + i) for i in range(14)),
+             bytes(chip(c + i) for i in range(4))))
+confere('5. sem o pedido, so a resposta', v('sem_pedido'), [9])
+confere('5. o quadro novo sem pedido, antes da volta ao laco, tira o retrato pendente', v('substituido'), [9, 0])
 
 # 6. quem recebe, cru (v159; a letra e do app, tempralink/Remoto.pas): bits 1:0 a vista, 2 a evidencia no B, 3 a
 # dupla escuta parada no outro, 4 o rodizio com a terceira no lugar
@@ -124,41 +158,23 @@ for vis, b, dw, cl in ((0, 0, 0, 0), (0, 0, 1, 0), (0, 1, 0, 0), (0, 1, 1, 0), (
     esperado.append(vis | b << 2 | dw << 3 | cl << 4)
 confere('6. os bits de quem recebe: a vista, a evidencia, a dupla escuta no outro e o rodizio', v('quem'), esperado)
 
-# 7. o espelho
-confere('7. o espelho volta 0 (a de fabrica segue), solta a trava, sem perda', v('espelho'), [0, 0, 0])
-bruto, escrita = bytes.fromhex(linhas['anel'][0]), int(linhas['anel'][1])
-video = v('video')
-qs, ruins = quadros(bruto)
-confere('7. 8 quadros, um por linha, todos conferidos', (len(qs), ruins), (8, 0))
-imagem = [p for q in sorted(qs, key=lambda q: q[2]) for p in q[4]]
-confere('7. a janela (10..74) x (40..48)', sorted({q[:4] for q in qs}),
-        [(10, 74, y, y + 1) for y in range(40, 48)])
-confere('7. os pixels voltam iguais', imagem, video)
-confere('7. o anel deu a volta e a escrita esta no fim do quadro', escrita, (2300 + len(bruto)) % 2400)
+# 7. a lanterna
+confere('7. a lanterna segura o LCD (1); sem ela, a de fabrica segue (0)', v('lanterna'), [1, 0])
 
-# 8. o anel cheio (v158: sem esperar)
-confere('8. cheio: a linha se perde na hora, com as duas marcas (v159), e nada entra', v('anel_cheio'),
-        [96, 1, 2390])
-confere('8. com lugar para uma linha: ela vai, e a seguinte se perde', v('anel_uma'), [64, 1])
-
-# 8b. a fatia por no
-for no, linhas_no in ((11, range(48, 64)), (45, range(52, 56)), (1, range(128))):
-    confere(f'8b. o no {no}: um redesenho, o REM como o quadro (tecla 4 + 1, espelho, resposta), o CONTA sem marca e '
-            'com o carimbo, e no meio o REM vivo e o PTT do quadro', v(f'fatia{no}'), [1, 5 | 64 | 128, 0, 1, 3])
-    qs, ruins = quadros(bytes.fromhex(linhas[f'anel_fatia{no}'][0]))
-    confere(f'8b. o no {no}: so as linhas dele vao, inteiras, cada uma com a sua cor',
-            (ruins, [(q[2], q[4][0]) for q in qs]), (0, [(y, y << 8 | 0x55) for y in linhas_no]))
-confere('8b. a fatia que nao coube: perdida, sem a marca da fatia nem a de fora, e nada no anel', v('fatia_cheia'),
-        [64, 1])
-confere('8c. a perda de fora: marcada, passa pela fatia que coube, vai na resposta (sem a da fatia) e se limpa nela',
-        v('sujo'), [32, 32, 0, 0, 0])
-
-# 9. sem espelho
-confere('9. a lanterna segura o LCD (1) e nada vai', v('lanterna'), [1, 0])
-confere('9. pelo BLE o espelho so vai se pedido, e so a UART (o app so o pede pelo cabo)', v('ble')[0] == 0 and
-        v('ble')[1] > 0, True)
-confere('9. na sessao nada vai', v('sessao'), [0, 0])
-confere('9. com o espelho desligado nada vai', v('desligado'), [0, 0])
+# 8. a tela apagada (v164)
+confere('8. o bit 4 do quadro liga o ESCURO (64), com o carimbo', v('escuro'), [64, 2000 & 31])
+confere('8. sem tecla do radio, o ESCURO fica e nada acorda', v('escuro_remota'), [255, 64])
+confere('8. a tecla do radio vale e acorda a tela (ACORDADO, 128)', v('escuro_fisica'), [6, 192])
+confere('8. o quadro seguinte guarda o ACORDADO', v('escuro_guarda'), [192])
+confere('8. v165: a resposta diz que a tecla do radio acendeu a tela apagada (o bit 7 do rem)', v('escuro_avisa'), [128])
+confere('8. o PC acende: o ESCURO sai, e o ACORDADO fica so neste quadro', v('escuro_desliga'), [128])
+confere('8. sem o ESCURO a resposta nao fala do ACORDADO', v('escuro_desliga_avisa'), [0])
+confere('8. no quadro seguinte sem o escuro, o ACORDADO sai', v('escuro_segue_aceso'), [0])
+confere('8. v165: o pedido novo apaga na hora, sem o ACORDADO de uma tecla de antes', v('escuro_de_novo'), [64])
+confere('8. e a resposta nao diz que acordou', v('escuro_de_novo_avisa'), [0])
+confere('8. aos 15 carimbos sem quadro o ESCURO segue', v('escuro_15'), [64])
+confere('8. aos 16 (1 s) o vigia o apaga com o REM: a luz volta', v('escuro_16'), [0, 0])
+confere('8. e aos 33, com o bit 4 do tempo de volta a 0, ele nao volta', v('escuro_33'), [0])
 
 print('\ntodos os testes passaram' if not falhas else f'\n{len(falhas)} FALHARAM: ' + ', '.join(falhas))
 sys.exit(1 if falhas else 0)

@@ -83,8 +83,9 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | **`0xD5000–0xD5FFF`** | **o APRS**: indicativo, SSID, destinatário, mensagem e caminho (v65) |
 | **`0xD6000–0xD7FFF`** | **o histórico do APRS RX**: até 62 pacotes, em anel, um cabeçalho por setor (v70; o `0xD7000` desde a v74; o anel desde a v75) |
 | **`0xD8000–0xD9FFF`** | **o histórico do Morse**: o mesmo anel ([seção 36](#36-a-tela-messages-do-morse-v144-a-v148)) |
+| **`0xDA000–0xDAFFF`** | **o ROGER CUSTOM**: as notas que o Tempra Link grava (v164; [seção 39](#39-o-retrato-da-tela-a-tela-apagada-o-roger-custom-e-as-rotinas-mortas-do-menu-v162-a-v165)) |
 | `0xFA000` | 4 KB de uso do firmware |
-| livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
+| livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xDB000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **316 KB** |
 
 O firmware **não** mora nesse chip: nenhuma amostra bate com as imagens do `.anc`, nem cruas nem
 decifradas. Ou seja, sobra espaço de **dados** à vontade, mas espaço de **código** continua sendo
@@ -134,8 +135,8 @@ Cabe nos mesmos 4 bytes: **bit 7 do tamanho ligado** = endereço de 24 bits, com
 valendo o terceiro byte; o bloco é sempre de 64 B. Bit 7 em zero = comportamento de fábrica, byte a
 byte — o CHIRP não vê diferença. Alcance: 8 MB.
 
-Gravação estendida só em `0xC1000..0xD3FFF` (até a v45, `0xD1FFF`; a v46 incluiu o registro do
-WATCH e a v49 os VFOs da C), apagando o setor quando o bloco começa nele. Qualquer outro endereço é ignorado sem escrever
+Gravação estendida só em `0xC1000..0xDAFFF` (até a v45, `0xD1FFF`; a v46 incluiu o registro do
+WATCH, a v49 os VFOs da C, a v110 o Morse e o APRS e a v164 os históricos e o ROGER CUSTOM), apagando o setor quando o bloco começa nele. Qualquer outro endereço é ignorado sem escrever
 nada (provado com `tools/cabo/teste_cabo_grava.ps1`), e o ACK sai do mesmo jeito.
 
 **O bloco de ajustes `0x9000` vem da RAM.** O tratador do cabo trata o `0x9000` à parte
@@ -3154,3 +3155,80 @@ apaga (`0x01E46578`). E a fatia não se redesenha no meio de uma digitação (`b
 tela inteira mostra o lado normal, porque só as rotinas de digitação mostram os dígitos (o `tela.c`), e a digitação
 sumia do visor em menos de 1 s, pelo PC ou pelo teclado do rádio. Ela não se perdia por dentro (a tela inteira só
 zera o `b[0x14685]`, que vale 2 na TX).
+
+## 39. O retrato da tela, a tela apagada, o ROGER CUSTOM e as rotinas mortas do menu (v162 a v165)
+
+**O retrato (v162).** O espelho da seção 38 mandava a tela em pixels, e uma tela inteira passava de 8 KB. O retrato
+manda o que a tela lê: os valores que ela pede ao `bancos.c` e ao `mensagem.c`, o que ela lê do chip de dados (o
+começo e o nome do canal da terceira, o nome da memória do rádio) e 22 faixas da RAM, uns 500 B com as somas de
+Fletcher, em pedaços de 20 B (o que uma notificação do BLE leva sem MTU negociado). As faixas saem do
+`firmware/previa/retrato.py`, que roda as cenas da prévia com a `RAM()` instrumentada e junta os endereços constantes
+do código e as tabelas lidas com índice; ele gera o `src/retrato.h`, com a versão (um byte do sha256 das faixas e das
+tabelas do menu). O PC desenha com o mesmo código (`tela.c` e `telas.c`) sobre a máquina da prévia
+(`firmware/previa/maquina.c` e `tela_pc.c`), compilado pelo zig para o Delphi (os `.obj` de 32 e 64 bits) e para o
+Android (a `.so`). O `tests/teste_tela_pc.py` transforma cada cena da prévia no retrato que o firmware mandaria e
+confere o desenho do PC contra a imagem da prévia: 91 cenas iguais pixel a pixel, e as 6 caixas da MESSAGES iguais na
+região delas. Fica fora o que o firmware desenha com dado de parâmetro: as colunas do espectro, a tela do APRS e do
+Morse (o laço deles desenha o histórico da flash, e o laço do sinal, que manda o retrato, fica parado), a busca e a
+partida do rádio. O estado do scan QT (rodando ou parado) é o `b[0x148D0]` (`[0x14680 + 592]`, gravado em `0x01E46FE6`
+e `0x01E474FC`), lido do desmontado e não provado no rádio.
+
+**Quem manda o retrato.** O `remoto_tecla` responde e, com a tela pedida, marca o retrato pendente (o bit 5 do
+`CONTA`); quem o manda é o `remoto_retrato`, chamado pelo `gancho_teclas` no laço do sinal. O `remoto_tecla` também
+roda no fundo do Morse (o `tecla()` do `mensagem.c`), onde só sobravam 184 B de pilha, e a primeira versão, que
+mandava dali, passou 60 B.
+
+**O menu (v163).** O ponteiro do menu (`b[0x14BF4]`) traz o endereço do `menu_tabela` desta compilação
+(`0x01E2AA74` na v163), e a prévia usa `0x01E30000`: sem bater, o `menu_nivel` dava "fora" e o PC desenhava o menu de
+fábrica, sem as pastas. O retrato leva o endereço do `menu_tabela` nos valores, e o PC põe o ponteiro no mesmo lugar
+da tabela da prévia. O teste diferencial não pegou porque montava o retrato da RAM da prévia; desde então ele põe o
+ponteiro no endereço do `build/simbolos.txt`, e as 52 cenas de menu dependem disso.
+
+**A tela apagada (v164 e v165).** No laço do sinal (`0x01E464E4`), todo evento de tecla chama `0x01E3951C`, que
+acende a luz e recarrega o tempo do ABR; com a marca da luz (`b[0x15386]`) em 0, o evento se descarta
+(`b[r3] = 255`): por isso, apagada, a primeira tecla só acende. O bit 4 do quadro vira o bit 6 do `CONTA` (o
+ESCURO), e uma tecla do próprio rádio, o 7 (o ACORDADO). Com o ESCURO, a luz segue acesa para o firmware e as teclas
+do PC valem de primeira, mas o `luz_ciclo` dá 0 ao PWM (seção 23); com o ACORDADO, a tela acende pelo tempo do ABR, e
+o `gancho_luz`, a cada volta com o ABR vencido, o zera e reaplica a luz. O `gancho_teclas` reaplica a luz a toda volta
+(no `remoto_retrato` a chamada passava 16 B da pilha de fábrica, em cima do quadro de 80 B dele), e o vigia apaga o
+ESCURO com o REM. Na v164 o ACORDADO ficava até o fim do ABR, que cada tecla do PC recarrega: a tela acordada não
+voltava a apagar com o pedido novo. Na v165 o ACORDADO só fica se o ESCURO já estava (o pedido novo apaga na hora), e
+a resposta leva o ESCURO com o ACORDADO no bit 7 do rem, que o PC de antes ignora (o byte do lado acima de 63 ele
+recusaria).
+
+**O ROGER CUSTOM (v164).** O valor 5 no `0x9017`; o desvio do caminho do BEEP (`0x01E4461E`, "se for 0, pula", seção
+12) já o leva ao `gancho_roger_tons`, que chama o `roger_custom`. As notas ficam no setor `0xDA000`, livre no mapa:
+"BCO1" (a marca que o `MARCA_DE` dá a todo endereço que não é de outro registro), a quantidade, um byte livre, 32
+notas (Hz e ms, u16) e a soma, 136 B. A soma é a das palavras de 16 bits mais `0x1234`: a dos outros registros
+(`soma = (soma << 1) + byte`, em 16 bits) só enxerga os últimos 16 bytes, e o `tests/teste_roger.py` mostrou um byte
+estragado no começo passando; os registros de antes ficam com a deles, para não invalidar o que está gravado. O
+registro inteiro na pilha do fim da TX passava 16 B da de fábrica, e ele se lê nota a nota, duas vezes: uma confere a
+marca, a quantidade, a soma e o total (até 3 s, o que segura a TX), a outra toca. A faixa de cada nota o Tempra Link
+confere ao gravar. A janela da gravação estendida do cabo (`gancho_cabo`) vai até `0xDAFFF`.
+
+**As rotinas mortas dos itens do menu (v164).** A tabela de menu de fábrica morreu na v43 (o `.reserva` mora nela), e
+com ela as rotinas que só ela apontava: o get, o set e a exibição dos itens que saíram do menu ou que trocaram de
+rotina na tabela nova.
+
+| Faixa | Itens | B |
+|---|---|---|
+| `0x01E3E25A–0x01E3E32C` | Zone Or Channel: o set | 210 |
+| `0x01E3C6E8–0x01E3C7AA` | CH-NAME: a exibição e o get | 194 |
+| `0x01E3C7BE–0x01E3C82E` | CH-NAME: o set | 112 |
+| `0x01E3CDAA–0x01E3CDE2` | LANGUAGE: a exibição | 56 |
+| `0x01E39928–0x01E39956` | VOICE: o get e o set | 46 |
+| `0x01E3D0E0–0x01E3D10C` | NOISE REDUCTION: o get e o set | 44 |
+| `0x01E3C91E–0x01E3C946` | ROGER: o get e o set | 40 |
+| `0x01E3C9A8–0x01E3C9D0` | LANGUAGE: o get e o set | 40 |
+| `0x01E3D058–0x01E3D06C` | SCRAMBLE: o get | 20 |
+| `0x01E3E242–0x01E3E256` | Zone Or Channel: o get | 20 |
+
+Cada faixa vai da entrada da rotina à entrada seguinte, e a instrução de antes dela é um retorno ou um goto. A prova,
+sobre a imagem de fábrica e a montada: nenhum desvio de 2 ou de 4 bytes de fora cai dentro (os da cópia da RAM pelo
+endereço de lá, `0x02000000`, e os do código nosso pelo `bancos.dis`), e nenhum valor de 32 bits, em nenhum
+deslocamento, aponta para dentro, fora a própria tabela de fábrica. O `conferir.py` (2j) refaz a dos valores e a dos
+desvios de 4 bytes a cada build. Os dois remendos do `nome_tamanho` e do `nome_para_editor` (v52) estavam dentro do get
+do CH-NAME de fábrica e saíram com ele (o `nome_para_editor` também). As faixas recebem rotinas que só o nosso código
+chama (o 2b recusa as que o firmware chama): o `roger_custom` na 21, o `meu_indicativo` na 22 (v165) e o
+`grava_registro`, o `soma_de` e os bipes na 23; as outras ficam com os bytes de fábrica (o `montar.py` e o
+`conferir.py` aceitam a faixa vazia).

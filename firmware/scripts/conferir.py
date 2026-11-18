@@ -99,7 +99,7 @@ tela_gravada = montar.livre_com_menu(tela, tabela_esperada, textos_esperados)
 reserva_em, reserva = montar.codigo_ligado(elf, '.reserva')     # v140: na tabela de menu de fabrica, morta
 caminhos_em, caminhos = montar.codigo_ligado(elf, '.caminhos')   # v138: no lugar dos caminhos das vozes
 sons_em, sons = montar.codigo_ligado(elf, '.sons')               # v144: nas entradas mortas da tabela de caminhos
-mortos = [montar.codigo_ligado(elf, f'.mortos{i + 1}') for i in range(len(montar.MORTOS))]   # v152: nos nomes de item mortos
+mortos = [montar.codigo_ligado(elf, f'.mortos{i + 1}', de) for i, (de, _) in enumerate(montar.MORTOS)]   # v152: nos nomes de item mortos; v164: a vazia vale vazia
 blocos = [('codigo', montar.ENDERECO_CODIGO, blob), ('tela B', livre_em, tela_gravada),
           ('caminhos', caminhos_em, caminhos),
           ('reserva', reserva_em, reserva),

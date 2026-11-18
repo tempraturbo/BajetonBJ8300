@@ -5,6 +5,31 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v162 a v165 — 18/11 — a tela do rádio desenhada no PC, a tela apagada pelo remoto e o ROGER CUSTOM (sem release; a v165 sem teste no rádio)
+
+O remoto da seção 38 troca o espelho pelo retrato da tela, e a rodada traz o ROGER CUSTOM do UV-17L. O que o firmware
+mostrou está na [seção 39](engenharia-reversa.md#39-o-retrato-da-tela-a-tela-apagada-o-roger-custom-e-as-rotinas-mortas-do-menu-v162-a-v165)
+da engenharia reversa.
+
+- **v162:** o espelho sai; com a tela pedida, o rádio manda o retrato dela (uns 500 B: o que a tela lê da RAM e da
+  flash), e o PC a desenha com o mesmo código da tela (`tela.c` e `telas.c`, compilados para o PC). O retrato sai do
+  laço do sinal, e não da leitura de tecla, que também roda no fundo do Morse sem pilha para ele. No rádio, o visor
+  piscava e o menu saía sem as pastas.
+- **v163:** o retrato leva o endereço da tabela do menu, que muda a cada compilação (o PC comparava com o da prévia e
+  desenhava o menu de fábrica). No rádio, aprovada ("muito rápido e responsivo").
+- **v164:** a tela apagada pelo remoto (o LED em 0% pelo PWM, com a luz acesa para o firmware: as teclas do PC valem de
+  primeira, e uma tecla do rádio a acende pelo tempo do ABR) e o ROGER CUSTOM, como o do UV-17L (até 32 notas e 3 s,
+  num setor do chip de dados que o Tempra Link grava). Para caber, as rotinas de fábrica dos itens que saíram do menu
+  (782 B, sem chamador desde a v43) passaram a receber código. No rádio, a tela apagou, mas depois de uma tecla do
+  rádio o pedido de novo não a apagava mais.
+- **v165:** o pedido novo apaga na hora, e a resposta diz ao PC que uma tecla do rádio acendeu a tela. Só compilada e
+  testada no PC.
+
+Build deste commit (a v165): sha256 `250bc3dc…`, sem release. O `build.sh` dá "tudo certo", com a pilha igual à de
+fábrica e a imagem do mesmo tamanho. Testes: o `tests/teste_remoto.py` (56 conferências), os novos
+`tests/teste_tela_pc.py` (o desenho do PC contra a prévia) e `tests/teste_roger.py` (o `roger_custom` do próprio
+`bancos.c` sobre um chip imitado) e os de sempre.
+
 ## Tempra Link e driver do CHIRP — 18/11 — o controle remoto, o cabo a 460800 e as listas SIM/NÃO
 
 O Tempra Link do BJ acompanha a rodada da v156 à v161, num commit com o driver do CHIRP, porque os testes do programa

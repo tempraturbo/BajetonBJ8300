@@ -83,8 +83,9 @@ by looking for where content starts mirroring address 0:
 | **`0xD5000–0xD5FFF`** | **APRS**: callsign, SSID, addressee, message and path (v65) |
 | **`0xD6000–0xD7FFF`** | **the APRS RX history**: up to 62 packets, as a ring, one header per sector (v70; `0xD7000` since v74; the ring since v75) |
 | **`0xD8000–0xD9FFF`** | **the Morse history**: the same ring ([section 36](#36-the-morse-messages-screen-v144-to-v148)) |
+| **`0xDA000–0xDAFFF`** | **ROGER CUSTOM**: the notes the Tempra Link writes (v164; [section 39](#39-the-screen-portrait-the-dark-screen-roger-custom-and-the-menus-dead-routines-v162-to-v165)) |
 | `0xFA000` | 4 KB used by the firmware |
-| free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xC5000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **370 KB** |
+| free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xDB000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **316 KB** |
 
 The firmware does **not** live on this chip: no sample matches the `.anc` images, raw or decrypted.
 So there is plenty of room for **data**, while **code** space remains the 3295 bytes in the image.
@@ -132,8 +133,8 @@ It fits in the same 4 bytes: **bit 7 of the size byte set** means a 24-bit addre
 7 bits carrying the third address byte; the block is always 64 B. Bit 7 clear is byte-for-byte
 stock behaviour — CHIRP sees no difference. Reach: 8 MB.
 
-Extended writes are only accepted in `0xC1000..0xD3FFF` (up to v45, `0xD1FFF`; v46 added the
-WATCH record and v49 C's VFOs), erasing the sector when the block starts it. Any other address is ignored without
+Extended writes are only accepted in `0xC1000..0xDAFFF` (up to v45, `0xD1FFF`; v46 added the
+WATCH record, v49 C's VFOs, v110 Morse and APRS and v164 the histories and ROGER CUSTOM), erasing the sector when the block starts it. Any other address is ignored without
 writing anything (proven with `tools/cabo/teste_cabo_grava.ps1`), and the ACK goes out anyway.
 
 **The `0x9000` settings block comes from RAM.** The cable handler treats `0x9000` apart
@@ -3211,3 +3212,80 @@ only call that turns it off (`0x01E46578`). And the slice is not redrawn in the 
 the digits typed): the whole screen shows the normal side, because only the entry routines show the digits
 (`tela.c`), and the entry vanished from the display in under 1 s, from the PC or from the radio's keypad. It was not
 lost inside (the whole screen only zeroes `b[0x14685]`, which is 2 during TX).
+
+## 39. The screen portrait, the dark screen, ROGER CUSTOM and the menu's dead routines (v162 to v165)
+
+**The portrait (v162).** Section 38's mirror sent the screen in pixels, and a whole screen took over 8 KB. The
+portrait sends what the screen reads: the values it asks `bancos.c` and `mensagem.c` for, what it reads from the data
+chip (the start and the name of the third's channel, the radio memory's name) and 22 RAM ranges, about 500 B with
+Fletcher checksums, in 20 B pieces (what a BLE notification carries with no negotiated MTU). The ranges come from
+`firmware/previa/retrato.py`, which runs the preview's scenes with an instrumented `RAM()` and adds the code's constant
+addresses and the tables read by index; it writes `src/retrato.h`, with the version (one byte of the sha256 of the
+ranges and the menu tables). The PC draws with the same code (`tela.c` and `telas.c`) on top of the preview's machine
+(`firmware/previa/maquina.c` and `tela_pc.c`), compiled by zig for Delphi (the 32 and 64-bit `.obj`) and for Android
+(the `.so`). `tests/teste_tela_pc.py` turns every preview scene into the portrait the firmware would send and checks
+the PC's drawing against the preview image: 91 scenes identical pixel by pixel, and the 6 MESSAGES boxes identical in
+their area. What the firmware draws from parameters stays out: the spectrum's columns, the APRS and Morse screen
+(their loop draws the history from flash, and the signal loop, which sends the portrait, is stopped), and the radio's
+seek and startup. The QT scan's state (running or stopped) is `b[0x148D0]` (`[0x14680 + 592]`, written at
+`0x01E46FE6` and `0x01E474FC`), read from the disassembly and not proven on the radio.
+
+**Who sends the portrait.** `remoto_tecla` answers and, with the screen requested, marks the portrait pending (bit 5
+of `CONTA`); `remoto_retrato`, called by `gancho_teclas` in the signal loop, sends it. `remoto_tecla` also runs deep
+inside Morse (`mensagem.c`'s `tecla()`), where only 184 B of stack were left, and the first version, which sent it
+from there, went 60 B over.
+
+**The menu (v163).** The menu pointer (`b[0x14BF4]`) holds the address of this build's `menu_tabela`
+(`0x01E2AA74` in v163), and the preview uses `0x01E30000`: with no match, `menu_nivel` said "outside" and the PC drew
+the stock menu, without the folders. The portrait carries `menu_tabela`'s address in the values, and the PC moves the
+pointer to the same place in the preview's table. The differential test missed it because it built the portrait from
+the preview's RAM; since then it puts the pointer at the address from `build/simbolos.txt`, and the 52 menu scenes
+depend on it.
+
+**The dark screen (v164 and v165).** In the signal loop (`0x01E464E4`), every key event calls `0x01E3951C`, which
+lights the backlight and reloads the ABR time; with the backlight mark (`b[0x15386]`) at 0, the event is dropped
+(`b[r3] = 255`): that is why, when dark, the first key only lights it. Frame bit 4 becomes bit 6 of `CONTA` (DARK),
+and a key on the radio itself, bit 7 (AWAKE). With DARK, the backlight stays on for the firmware and the PC's keys
+work at once, but `luz_ciclo` gives 0 to the PWM (section 23); with AWAKE, the screen lights for the ABR time, and
+`gancho_luz`, on every pass with the ABR expired, clears it and reapplies the backlight. `gancho_teclas` reapplies the
+backlight on every pass (in `remoto_retrato` the call went 16 B over the stock stack, on top of its 80 B frame), and
+the watchdog clears DARK along with REM. In v164 AWAKE stayed until the end of the ABR, which every PC key reloads: the
+woken screen did not go dark again with a new request. In v165 AWAKE only stays if DARK was already set (a new
+request darkens at once), and the reply carries DARK with AWAKE in bit 7 of rem, which the older PC ignores (it would
+reject the side byte above 63).
+
+**ROGER CUSTOM (v164).** Value 5 at `0x9017`; the BEEP path's branch (`0x01E4461E`, "if 0, skip", section 12) already
+takes it to `gancho_roger_tons`, which calls `roger_custom`. The notes live in sector `0xDA000`, free in the map:
+"BCO1" (the mark `MARCA_DE` gives every address that is not another record's), the count, a spare byte, 32 notes (Hz
+and ms, u16) and the checksum, 136 B. The checksum is the sum of the 16-bit words plus `0x1234`: the other records'
+one (`soma = (soma << 1) + byte`, in 16 bits) only sees the last 16 bytes, and `tests/teste_roger.py` showed a
+corrupted byte at the start getting through; the older records keep theirs, so as not to invalidate what is stored.
+The whole record on the end-of-TX stack went 16 B over the stock one, so it is read note by note, twice: one pass
+checks the mark, the count, the checksum and the total (up to 3 s, which bounds the TX), the other plays. The Tempra
+Link checks each note's range when writing. The cable's extended write window (`gancho_cabo`) goes up to `0xDAFFF`.
+
+**The menu items' dead routines (v164).** The stock menu table died in v43 (`.reserva` lives in it), and with it the
+routines only it pointed to: the get, set and display of the items that left the menu or got new routines in the new
+table.
+
+| Range | Items | B |
+|---|---|---|
+| `0x01E3E25A–0x01E3E32C` | Zone Or Channel: set | 210 |
+| `0x01E3C6E8–0x01E3C7AA` | CH-NAME: display and get | 194 |
+| `0x01E3C7BE–0x01E3C82E` | CH-NAME: set | 112 |
+| `0x01E3CDAA–0x01E3CDE2` | LANGUAGE: display | 56 |
+| `0x01E39928–0x01E39956` | VOICE: get and set | 46 |
+| `0x01E3D0E0–0x01E3D10C` | NOISE REDUCTION: get and set | 44 |
+| `0x01E3C91E–0x01E3C946` | ROGER: get and set | 40 |
+| `0x01E3C9A8–0x01E3C9D0` | LANGUAGE: get and set | 40 |
+| `0x01E3D058–0x01E3D06C` | SCRAMBLE: get | 20 |
+| `0x01E3E242–0x01E3E256` | Zone Or Channel: get | 20 |
+
+Each range runs from the routine's entry to the next entry, and the instruction before it is a return or a goto. The
+proof, on the stock image and the built one: no 2 or 4-byte branch from outside lands inside (those of the RAM copy
+at its own address, `0x02000000`, and ours from `bancos.dis`), and no 32-bit value, at any offset, points inside,
+except the stock table itself. `conferir.py` (2j) redoes the value and 4-byte branch checks on every build. The two
+patches for `nome_tamanho` and `nome_para_editor` (v52) were inside the stock CH-NAME get and left with it
+(`nome_para_editor` too). The ranges take routines only our code calls (2b rejects the ones the firmware calls):
+`roger_custom` in 21, `meu_indicativo` in 22 (v165), and `grava_registro`, `soma_de` and the beeps in 23; the others
+keep the stock bytes (`montar.py` and `conferir.py` accept an empty range).

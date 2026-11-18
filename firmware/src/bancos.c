@@ -136,6 +136,10 @@ FIRMWARE(SCRAMBLE_SET, 0x01E3D06C);    void SCRAMBLE_SET(void);
  * so mais um call. */
 #define NA_LIVRE_COD   __attribute__((section(".livre.bancos.text")))
 #define DADO_NA_LIVRE  __attribute__((section(".livre.bancos.rodata")))
+/* v164: nas rotinas de fabrica mortas dos itens que sairam do menu (bancos.ld, montar.py MORTOS), so o que o nosso
+ * codigo chama ou le */
+#define NOS_MORTOS(n)       __attribute__((section(".mortos" #n ".bancos.text")))
+#define DADO_NOS_MORTOS(n)  __attribute__((section(".mortos" #n ".bancos.rodata")))
 unsigned watch_vista(void);
 void aplica_audio(void);                  /* as pastas MIC (v49, v59) e AUDIO (expansor e porta, v79) */
 void aplica_eq(void);                     /* o EQ das duas pastas (v108) */
@@ -331,7 +335,7 @@ static void acrescenta(char *destino, const char *texto)
     *d = 0;
 }
 
-static u16 soma_de(const u8 *p, unsigned n)
+NOS_MORTOS(23) static u16 soma_de(const u8 *p, unsigned n)
 {
     unsigned soma = 0x1234;
 
@@ -383,7 +387,7 @@ int le_registro(u32 endereco, void *buf, unsigned tam)
     return 0;
 }
 
-void grava_registro(u32 endereco, void *buf, unsigned tam)
+NOS_MORTOS(23) void grava_registro(u32 endereco, void *buf, unsigned tam)
 {
     u8 *p = (u8 *)buf;
 
@@ -820,41 +824,79 @@ NAS_VOZES unsigned long long gancho_tecla_espectro(unsigned tecla)
     return (unsigned long long)caso << 32 | tecla;
 }
 
-/* ---------- roger: BEEP 2 e COIN ----------
- * O item ROGER do menu passa a ter cinco opcoes, na ordem OFF, BEEP 1, BEEP 2, COIN, TONE1200. Os
- * valores gravados continuam os de fabrica (0 OFF, 1 BEEP, 2 TONE1200); o BEEP 2 fica com o 3 e o
- * COIN com o 4. No radio o ajuste e um byte inteiro, e no CHIRP o 0x9017 tem 6 bits sem uso acima
- * dos 2 do roger. O get e o set do item trocam posicao e valor pelas duas tabelas abaixo.
+/* ---------- roger: BEEP 2, COIN e CUSTOM ----------
+ * O item ROGER do menu passa a ter seis opcoes, na ordem OFF, BEEP 1, BEEP 2, COIN, TONE1200 e CUSTOM, as do
+ * UV-17L. Os valores gravados continuam os de fabrica (0 OFF, 1 BEEP, 2 TONE1200); o BEEP 2 fica com o 3, o
+ * COIN com o 4 e o CUSTOM (v164) com o 5. No radio o ajuste e um byte inteiro, e no CHIRP o 0x9017 tem 6 bits
+ * sem uso acima dos 2 do roger. O get e o set do item trocam posicao e valor pelas duas tabelas abaixo.
  *
  * O fim da transmissao (0x01E44604) le o byte inteiro e toca o roger antes de voltar a receber. O 2
  * desvia logo, para o TONE1200 (0x01E4461A, "se for 2"). O desvio seguinte foi trocado (0x01E4461E:
  * "se nao for 1, pula" virou "se for 0, pula"), entao o 3 e o 4 entram pelo mesmo caminho do BEEP -
  * liga o gerador, toca, desliga, mesmo final - e o laco dos tons (0x01E44638) virou uma chamada
- * para ca e um desvio por cima dele. */
-const char *const roger_opcoes[5] = {"OFF", "BEEP 1", "BEEP 2", "COIN", "TONE1200"};
-static const u8 roger_valor[5] = {0, 1, 3, 4, 2};      /* posicao no menu -> valor gravado */
-static const u8 roger_posicao[5] = {0, 1, 4, 2, 3};    /* valor gravado -> posicao no menu */
+ * para ca e um desvio por cima dele. O 5 (o CUSTOM) entra pelo mesmo caminho. */
+#define ROGER_CUSTOM   5
+const char *const roger_opcoes[6] = {"OFF", "BEEP 1", "BEEP 2", "COIN", "TONE1200", "CUSTOM"};
+static const u8 roger_valor[6] = {0, 1, 3, 4, 2, ROGER_CUSTOM};      /* posicao no menu -> valor gravado */
+static const u8 roger_posicao[6] = {0, 1, 4, 2, 3, 5};                /* valor gravado -> posicao no menu */
 /* Os tons, em pares (frequencia, espera em unidades de 2 ms), ate o 0. A frequencia vai em unidades
  * do gerador: Hz x 10.32444, a mesma conta que da 10324 para os 1000 Hz do BEEP e 12389 para o
  * TONE1200. Os dois sons vieram em mp3 do dono, medidos:
  *  - BEEP 2: 1125, 1857, 1359 e 931 Hz, 100 ms cada;
  *  - COIN, a moeda do Super Mario World: 2000 Hz por 70 ms e 2672 Hz por 330 ms. O gerador toca
  *    com volume constante, e no original a segunda nota cai 22 dB depois de uns 40 ms. */
-static const u16 beep2[] = {11615, 50, 19172, 50, 14031, 50, 9612, 50, 0};
-static const u16 beep3[] = {20649, 35, 27587, 165, 0};
+DADO_NOS_MORTOS(23) static const u16 beep2[] = {11615, 50, 19172, 50, 14031, 50, 9612, 50, 0};
+DADO_NOS_MORTOS(23) static const u16 beep3[] = {20649, 35, 27587, 165, 0};
 
 u16 roger_le(void)
 {
     unsigned v = ROGER;
 
-    return v < 5 ? roger_posicao[v] : 0;
+    return v < 6 ? roger_posicao[v] : 0;
 }
 
 void roger_grava(void)
 {
     unsigned p = VALOR;
 
-    ROGER = p < 5 ? roger_valor[p] : 0;
+    ROGER = p < 6 ? roger_valor[p] : 0;
+}
+
+/* O ROGER CUSTOM (v164), como o do UV-17L (o roger.c de la): ate 32 notas, cada uma em Hz (0 = pausa) e em ms, ate 3 s
+ * ao todo, que o Tempra Link grava pelo cabo (gancho_cabo) num setor proprio do chip de dados, livre no mapa
+ * (docs/engenharia-reversa.md, secao 3): a marca dos bancos ("BCO1"), a quantidade, um byte livre (0), as 32 notas e a
+ * soma, 136 B. A soma e a das 67 palavras de 16 bits de antes dela, mais 0x1234: a deslocada dos le_registro so ve os
+ * ultimos bytes de um registro deste tamanho. Ele nao cabe na pilha do fim da TX, e se le nota a nota, duas vezes: a
+ * primeira confere a marca, a quantidade, a soma e o total, e a segunda toca. O que nao confere nao vai ao ar. A faixa
+ * de cada nota (300 a 3000 Hz, 10 ms a 1 s) o Tempra Link confere ao gravar; aqui, so o total, que segura a TX. O tom
+ * na unidade do gerador (Hz x 10.32444, a conta do HZ: 10572 / 1024), a espera em unidades de 2 ms. */
+#define SETOR_ROGER    0x000DA000u
+#define ROGER_NOTAS    32
+#define ROGER_NOTA(k)  (SETOR_ROGER + 6 + (k) * 4)   /* Hz e ms, u16 cada; no lugar da 33a, a soma */
+
+NOS_MORTOS(21) static void roger_custom(void)
+{
+    u16 c[3], nota[2];
+    unsigned k, n, soma, total = 0, toca = 0;
+
+    LE_FLASH(SETOR_ROGER, c, sizeof c);
+    n = (u8)c[2];
+    soma = 0x1234u + c[0] + c[1] + c[2];
+    for (;;) {
+        for (k = 0; k < (toca ? n : ROGER_NOTAS + 1u); k++) {
+            LE_FLASH(ROGER_NOTA(k), nota, sizeof nota);
+            if (toca) {
+                TOM(nota[0] * 10572u >> 10, 0);
+                ESPERA_2MS((nota[1] + 1u) >> 1);
+            } else if (k < ROGER_NOTAS) {
+                soma += nota[0] + nota[1];
+                total += k < n ? nota[1] : 0;
+            }
+        }
+        /* depois de tocar, ou se a conferencia (a volta que leu a soma no lugar da 33a nota) falhou, acabou */
+        if (toca++ || !marca_ok(c, MARCA_BANCO) || n - 1u >= ROGER_NOTAS || total > 3000 || nota[0] != (u16)soma)
+            return;
+    }
 }
 
 /* ---------- WATCH: quantas frequencias a tela principal mostra (v42) ----------
@@ -1945,11 +1987,21 @@ NA_LIVRE_COD void gancho_ajustes(void)
  * espectro (modo 20, so a entrada por tecla o grava, 0x01E4CF7E) ela fica acesa. Nada e gravado: ao
  * sair do espectro, ou ao religar o radio, o ABR volta a valer. v161: com o controle remoto ligado (o REM do
  * remoto.c, que o vigia zera 1 s depois do ultimo quadro do PC) ela tambem fica acesa: apagada, a tecla seguinte so
- * a acende (docs/engenharia-reversa.md, secao 24), e a primeira tecla do PC se perdia sem ninguem ver a luz. */
+ * a acende (docs/engenharia-reversa.md, secao 24), e a primeira tecla do PC se perdia sem ninguem ver a luz.
+ * v164: com a tela apagada pelo remoto (o ESCURO do CONTA, remoto.c) tambem: para o firmware a luz segue acesa, e as
+ * teclas do PC valem de primeira, mas o PWM a deixa em 0 (luz_ciclo, tela.c). Aqui, a cada volta com o ABR vencido,
+ * a tecla do radio que a acendeu (o ACORDADO) deixa de valer, e a luz se reaplica. */
 #define MODO_TELA      (*(volatile u8 *)0x0001533D)
+#define REM_REMOTO     (*(volatile u8 *)0x00014BEE)
+#define CONTA_REMOTO   (*(volatile u8 *)0x00014BED)
+#define ESCURO         64u                 /* os bits do CONTA (remoto.c) */
+#define ACORDADO       128u
 NA_LIVRE_COD void gancho_luz(unsigned acende)
 {
-    if (MODO_TELA != 20 && !*(volatile u8 *)0x00014BEE)
+    CONTA_REMOTO &= ~ACORDADO;
+    if (MODO_TELA == 20 || REM_REMOTO || CONTA_REMOTO & ESCURO)
+        luz_aplica();
+    else
         LUZ(acende);
 }
 
@@ -2090,6 +2142,10 @@ void gancho_roger_tons(void)
     unsigned v = ROGER;
     const u16 *t;
 
+    if (v == ROGER_CUSTOM) {
+        roger_custom();
+        return;
+    }
     if (v == 3 || v == 4) {
         for (t = v == 3 ? beep2 : beep3; *t; t += 2) {
             TOM(t[0], 0);
@@ -2117,9 +2173,9 @@ void gancho_roger_tons(void)
  * O 'W' de fabrica tambem e de 64 B (0x01E4C0E8 espera 68 bytes no buffer), entao o pacote
  * estendido de gravacao tem exatamente o tamanho do de fabrica.
  *
- * Gravacao estendida **so na area dos bancos, no WATCH, nos VFOs da C e nos registros do Morse e do
- * APRS** (0xC1000..0xD5FFF; ate a v45, 0xD1FFF; da v46 a v48, 0xD2FFF; da v49 a v109, 0xD3FFF; o historico
- * do APRS RX, em 0xD6000, fica de fora),
+ * Gravacao estendida **so na area dos bancos, no WATCH, nos VFOs da C, nos registros do Morse e do APRS, nos
+ * historicos e no ROGER CUSTOM** (0xC1000..0xDAFFF; ate a v45, 0xD1FFF; da v46 a v48, 0xD2FFF; da v49 a v109,
+ * 0xD3FFF; da v110 a v163, 0xD5FFF, sem os historicos, que o Tempra Link nao grava: a faixa so vai ate o roger),
  * apagando o setor quando o bloco comeca nele; qualquer outro endereco e ignorado sem escrever nada.
  * Quem grava banco pelo cabo tem que desligar e ligar o radio depois: o filtro e montado na
  * partida.
@@ -2138,11 +2194,11 @@ void gancho_cabo(unsigned grava)
         p[3] = 0x40;                       /* a resposta do 'R' sai com 4 + este tamanho */
         if (!grava)
             LE_FLASH(endereco, (void *)(p + 4), 0x40);
-        /* A faixa 0xC1000..0xD5FFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
+        /* A faixa 0xC1000..0xDAFFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
          * 2026-10-24 mostra que nada mais mora ali, e o chip de 1 MB nao espelha nesse endereco.
          * Quem grava por aqui e o PC mandando registro de banco; o caminho do menu continua com a
          * trava do setor_livre. */
-        else if (setor - (SETOR_CAB >> 12) < NUM_BANCOS + 5u) {   /* o cabecalho, os bancos, o WATCH, os VFOs da C, o Morse e o APRS */
+        else if (setor - (SETOR_CAB >> 12) < NUM_BANCOS + 10u) {  /* o cabecalho, os bancos, o WATCH, os VFOs da C, o Morse, o APRS, os historicos e o roger */
             if (endereco == (u32)setor << 12)   /* bloco que abre o setor: apaga antes */
                 APAGA_SETOR(endereco);
             GRAVA_FLASH(endereco, (void *)(p + 4), 0x40);
@@ -2152,15 +2208,13 @@ void gancho_cabo(unsigned grava)
     DADOS_CABO(grava);
 }
 
-/* ---------- o editor de nome: o tamanho do nome e so ABC/123 (v52) ----------
- * O nome tem sempre 12 bytes na memoria, e o que sobra o radio completa com 0 (set do CH-NAME,
- * 0x01E3C7BE) e o CHIRP com 0xFF. O firmware para no primeiro dos dois (a exibicao do CH-NAME
- * 0x01E3C6E8, a tela principal, o lado C), menos o get do CH-NAME (0x01E3C732): ele media o nome com o
- * strlen da ROM e abria o editor com 12/12 e os 0xFF como letras. As duas chamadas da ROM no get passam
- * por aqui, e o BANK NAME usa as mesmas. */
+/* ---------- o tamanho do nome (v52) ----------
+ * O nome tem sempre 12 bytes na memoria, e o que sobra o radio completa com 0 e o CHIRP com 0xFF. O firmware para no
+ * primeiro dos dois (a tela principal, o lado C). Da v52 a v163 as duas chamadas da ROM no get do CH-NAME de fabrica
+ * (0x01E3C732) passavam por aqui; o CH NAME do menu de hoje e nosso (as listas de canais), e a v164 usa a
+ * faixa daquele get (o .mortos22). */
 
-/* As letras do nome, ate o primeiro 0 ou 0xFF; no lugar do strlen do get do CH-NAME (0x01E3C784), que
- * grava o resultado em b[0x14A35]. */
+/* As letras do nome, ate o primeiro 0 ou 0xFF. */
 NA_LIVRE_COD unsigned nome_tamanho(const char *nome)
 {
     unsigned n;
@@ -2168,16 +2222,6 @@ NA_LIVRE_COD unsigned nome_tamanho(const char *nome)
     for (n = 0; n < TAM_NOME && nome[n] && (u8)nome[n] != 0xFF; n++)
         ;
     return n;
-}
-
-/* No lugar da copia do nome para o editor no get do CH-NAME (0x01E3C792; tam = letras + 1, contando o
- * fim): as letras e zero ate o fim do buffer - o "%15s" de fabrica (0x01E476BE, 0x01E48FBA) le o texto
- * como cadeia, e a insercao de letra (0x01E49664) nao escreve o fim. E o editor abre em ABC. */
-NA_LIVRE_COD void nome_para_editor(char *destino, const char *nome, unsigned tam)
-{
-    zera(destino, TAM_NOME + 1);
-    COPIA_MEM(destino, nome, tam - 1);
-    EDITOR_MODO = MODO_ABC;
 }
 
 /* ---------- textos ---------- */

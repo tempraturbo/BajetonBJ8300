@@ -5,6 +5,31 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v162 to v165 — Nov 18 — the radio's screen drawn on the PC, the dark screen from the remote and ROGER CUSTOM (no release; v165 not tested on the radio)
+
+Section 38's remote swaps the mirror for the screen portrait, and the round brings the UV-17L's ROGER CUSTOM. What the
+firmware showed is in [section 39](reverse-engineering.md#39-the-screen-portrait-the-dark-screen-roger-custom-and-the-menus-dead-routines-v162-to-v165)
+of the reverse engineering.
+
+- **v162:** the mirror goes; with the screen requested, the radio sends its portrait (about 500 B: what the screen
+  reads from RAM and flash), and the PC draws it with the same screen code (`tela.c` and `telas.c`, compiled for the
+  PC). The portrait goes out from the signal loop, not from the key read, which also runs deep inside Morse with no
+  stack for it. On the radio, the display flickered and the menu came out without the folders.
+- **v163:** the portrait carries the menu table's address, which changes with every build (the PC compared it with
+  the preview's and drew the stock menu). On the radio, approved ("very fast and responsive").
+- **v164:** the dark screen from the remote (the LED at 0% through the PWM, with the backlight on for the firmware:
+  the PC's keys work at once, and a key on the radio lights it for the ABR time) and ROGER CUSTOM, like the UV-17L's
+  (up to 32 notes and 3 s, in a data chip sector the Tempra Link writes). To fit, the stock routines of the items that
+  left the menu (782 B, with no caller since v43) now take code. On the radio, the screen went dark, but after a key
+  on the radio a new request no longer darkened it.
+- **v165:** a new request darkens at once, and the reply tells the PC a key on the radio lit the screen. Only built
+  and tested on the PC.
+
+Build of this commit (v165): sha256 `250bc3dc…`, no release. `build.sh` gives "tudo certo", with the stack equal to stock
+and the image the same size. Tests: `tests/teste_remoto.py` (56 checks), the new `tests/teste_tela_pc.py` (the PC's
+drawing against the preview) and `tests/teste_roger.py` (`bancos.c`'s own `roger_custom` on an emulated chip) and the
+usual ones.
+
 ## Tempra Link and CHIRP driver — Nov 18 — remote control, the cable at 460800 and YES/NO lists
 
 The BJ's Tempra Link follows the v156 to v161 round, in one commit with the CHIRP driver, because the program's tests

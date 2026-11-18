@@ -1930,9 +1930,12 @@ static unsigned luz_prd_de(void)
     return luz_prd[LUZ_FREQ < 5 ? LUZ_FREQ : LUZ_PADRAO];
 }
 
-/* O ciclo do nivel, na escala do PRD de agora. */
+/* O ciclo do nivel, na escala do PRD de agora; 0 com a tela apagada pelo controle remoto (v164: o ESCURO do CONTA,
+ * remoto.c) sem uma tecla do radio desde o fim do ABR (o ACORDADO). */
 static unsigned luz_ciclo(void)
 {
+    if ((RAM(u8, 0x00014BED) & 0xC0) == 0x40)
+        return 0;
     return luz_ciclos[BRILHO < 5 ? BRILHO : 0] * T2_PRD / LUZ_PRD;
 }
 
