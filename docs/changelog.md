@@ -5,6 +5,11 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Nov 18 — ROGER CUSTOM
+
+- ROGER gets CUSTOM (value 5, in the roger's same 3 bits). CHIRP does not edit the notes: the Tempra Link writes them.
+  `tests/teste_chirp_real.py` checks that 5 opens as CUSTOM and that each option writes the radio's value.
+
 ## v162 to v165 — Nov 18 — the radio's screen drawn on the PC, the dark screen from the remote and ROGER CUSTOM (no release; v165 not tested on the radio)
 
 Section 38's remote swaps the mirror for the screen portrait, and the round brings the UV-17L's ROGER CUSTOM. What the

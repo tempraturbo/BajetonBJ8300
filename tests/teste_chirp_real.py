@@ -279,9 +279,9 @@ def main():
             (bj._sector_addresses()[0], bj._sector_addresses()[-1], len(bj._sector_addresses())),
             (0x0C1000, 0x0D1000, 17))
 
-    # 8. roger com o BEEP 2 e o COIN: os valores 3 e 4 (que a classe base nao conhece; o 4 passa
-    # dos 2 bits dela) abrem, mostram na ordem do radio e gravam o byte certo - e a lista da classe
-    # base, que outros radios usam, nao muda
+    # 8. roger com o BEEP 2, o COIN e o CUSTOM: os valores 3, 4 e 5 (que a classe base nao conhece; o 4
+    # e o 5 passam dos 2 bits dela) abrem, mostram na ordem do radio e gravam o byte certo - e a lista
+    # da classe base, que outros radios usam, nao muda
     from chirp.drivers import radtel_rt900
     radio = bj.BJ8300(imagem())
     ajuste = radio._memobj.settings
@@ -296,15 +296,18 @@ def main():
     roger = roger_de(radio)
     confere('8. ajuste do roger presente, uma vez so', len(roger), 1)
     roger = roger[0]
-    confere('8b. as cinco opcoes na ordem do radio', roger.value.get_options(),
-            ['OFF', 'BEEP 1', 'BEEP 2', 'COIN', 'TONE1200'])
+    confere('8b. as seis opcoes na ordem do radio', roger.value.get_options(),
+            ['OFF', 'BEEP 1', 'BEEP 2', 'COIN', 'TONE1200', 'CUSTOM'])
     confere('8c. valor 3 aparece como BEEP 2', str(roger.value), 'BEEP 2')
     confere('8d. a imagem continua com o valor 3', byte_9017(), 3)
     ajuste.roger, ajuste.unused_9017 = 0, 1
     confere('8g. valor 4 aparece como COIN', str(roger_de(radio)[0].value), 'COIN')
     confere('8h. a imagem continua com o valor 4', byte_9017(), 4)
+    ajuste.roger, ajuste.unused_9017 = 1, 1
+    confere('8i. valor 5 aparece como CUSTOM (v164)', str(roger_de(radio)[0].value), 'CUSTOM')
+    confere('8j. a imagem continua com o valor 5', byte_9017(), 5)
     gravados = []
-    for nome in ('OFF', 'BEEP 1', 'BEEP 2', 'COIN', 'TONE1200'):
+    for nome in ('OFF', 'BEEP 1', 'BEEP 2', 'COIN', 'TONE1200', 'CUSTOM'):
         ajustes = radio.get_settings()
         r = [x for x in ajustes.walk() if x.get_name() == 'settings_roger'][0]
         r.value.set_value(nome)
@@ -313,7 +316,7 @@ def main():
         # zerada deste teste
         ajustes.apply_to(radio._memobj)
         gravados.append(byte_9017())
-    confere('8e. OFF/BEEP 1/BEEP 2/COIN/TONE1200 gravam 0/1/3/4/2', gravados, [0, 1, 3, 4, 2])
+    confere('8e. OFF/BEEP 1/BEEP 2/COIN/TONE1200/CUSTOM gravam 0/1/3/4/2/5', gravados, [0, 1, 3, 4, 2, 5])
     nomes = [x.get_name() for x in radio.get_settings().walk()]
     confere('8g2. o Voice Prompts saiu (o firmware nao toca mais voz)', 'settings_voice' in nomes, False)
     confere('8g3. o Language saiu (o firmware fica sempre em ingles, v37)', 'settings_language' in nomes, False)

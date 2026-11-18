@@ -425,7 +425,7 @@ depois **OK** para ler.
   estão aqui.
 - **Banks (VHF/UHF):** uma coluna por banco; marque em quais bancos cada canal está. Para
   renomear um banco, **dê duplo clique no cabeçalho da coluna** dele.
-- **Settings:** os ajustes do rádio, com o roger de 4 opções e, no **BJ8300_v3.7TEMPRA Specific**,
+- **Settings:** os ajustes do rádio, com o roger de 6 opções e, no **BJ8300_v3.7TEMPRA Specific**,
   logo depois do Noise reduction, o **Expander**, a **Noise gate**, a **De-emphasis**, o **EQ bass (RX)** e o
   **EQ treble (RX)**, o **Mic Gain** (com o DEFAULT, na ordem do rádio), o **Compressor**, o **Mic AGC**, o **EQ bass (TX)** e o
   **EQ treble (TX)**, o **Crystal fine** (em Hz, em 435,5 MHz), o **Brightness**, o **Light PWM** e o
@@ -499,7 +499,7 @@ acrescenta:
 - Download e upload da área dos bancos pelo comando estendido, junto com os canais e **numa sessão
   só** (o firmware responde ao `E` de saída com um ACK e só fecha a sessão depois); no upload, só
   os setores que mudaram.
-- O roger com as quatro opções do rádio e o scramble com as nove, gravando os mesmos valores que o
+- O roger com as seis opções do rádio e o scramble com as nove, gravando os mesmos valores que o
   menu do rádio grava.
 - O WATCH, o CH-C, o SHOW C e o VFO C, gravados no registro do WATCH (`0xD2000`) e no setor dos
   VFOs da C (`0xD3000`). O upload só grava o que muda e confere lendo de volta, e o estado do rádio

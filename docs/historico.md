@@ -5,6 +5,11 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 18/11 — o ROGER CUSTOM
+
+- O ROGER ganha o CUSTOM (o valor 5, nos mesmos 3 bits do roger). As notas, o CHIRP não edita: quem as grava é o
+  Tempra Link. O `tests/teste_chirp_real.py` confere que o 5 abre como CUSTOM e que cada opção grava o valor do rádio.
+
 ## v162 a v165 — 18/11 — a tela do rádio desenhada no PC, a tela apagada pelo remoto e o ROGER CUSTOM (sem release; a v165 sem teste no rádio)
 
 O remoto da seção 38 troca o espelho pelo retrato da tela, e a rodada traz o ROGER CUSTOM do UV-17L. O que o firmware

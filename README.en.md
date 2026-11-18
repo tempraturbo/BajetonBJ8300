@@ -429,7 +429,7 @@ CHIRP shows the *"Experimental driver"* notice, with the module's instructions: 
   properties are here.
 - **Banks (VHF/UHF):** one column per bank; tick which banks each channel is in. To rename a
   bank, **double-click its column header**.
-- **Settings:** the radio settings, with the 4-option roger and, in **BJ8300_v3.7TEMPRA Specific**,
+- **Settings:** the radio settings, with the 6-option roger and, in **BJ8300_v3.7TEMPRA Specific**,
   right after Noise reduction, **Expander**, **Noise gate**, **De-emphasis**, **EQ bass (RX)** and **EQ treble
   (RX)**, **Mic Gain** (with DEFAULT, in the radio's order), **Compressor**, **Mic AGC**, **EQ bass (TX)** and **EQ treble (TX)**,
   **Crystal fine** (in Hz, at 435.5 MHz), **Brightness**, **Light PWM** and **Modem gain**, plus **PF3 Key (Long Press)**, right after PF3.
@@ -502,7 +502,7 @@ family, and adds:
 - Download and upload of the banks area through the extended command, together with the channels
   and **in a single session** (the firmware answers the closing `E` with an ACK and only closes the
   session afterwards); on upload, only the sectors that changed.
-- The roger with the radio's four options and the scramble with its nine, writing the same values
+- The roger with the radio's six options and the scramble with its nine, writing the same values
   the radio's menu writes.
 - WATCH, CH-C, SHOW C and VFO C, written to the WATCH record (`0xD2000`) and to C's VFO sector
   (`0xD3000`). The upload only writes what changes and checks it by reading it back, and the

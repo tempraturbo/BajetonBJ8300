@@ -640,15 +640,16 @@ class _BankCableMixin(object):
                 'Channels, settings, banks and WATCH were written.')
 
 
-# --- roger: the banks firmware adds BEEP 2 and COIN ---
+# --- roger: the banks firmware adds BEEP 2, COIN and CUSTOM ---
 # The radio keeps the roger in the whole byte at 0x9017: 0 OFF, 1 BEEP, 2 TONE1200, and the new
-# firmware uses 3 for BEEP 2 and 4 for COIN. The base class reads only the low 2 bits
-# (settings.roger; the 6 above are unused_9017), so here the value has 3 bits: bit 2 is the low
-# bit of unused_9017. The radio shows OFF, BEEP 1, BEEP 2, COIN, TONE1200, and CHIRP shows the
-# same. The base class list has only 3 names: with value 3 it does not even build the screen, so
-# the map below applies to this radio only.
-ROGER_OPTIONS = ['OFF', 'BEEP 1', 'BEEP 2', 'COIN', 'TONE1200']
-ROGER_VALUES = [0, 1, 3, 4, 2]                            # list position -> value in the radio
+# firmware uses 3 for BEEP 2, 4 for COIN and (v164) 5 for CUSTOM, the notes the Tempra Link writes
+# (CHIRP does not edit them). The base class reads only the low 2 bits (settings.roger; the 6 above
+# are unused_9017), so here the value has 3 bits: bit 2 is the low bit of unused_9017. The radio
+# shows OFF, BEEP 1, BEEP 2, COIN, TONE1200, CUSTOM, and CHIRP shows the same. The base class list
+# has only 3 names: with value 3 it does not even build the screen, so the map below applies to
+# this radio only.
+ROGER_OPTIONS = ['OFF', 'BEEP 1', 'BEEP 2', 'COIN', 'TONE1200', 'CUSTOM']
+ROGER_VALUES = [0, 1, 3, 4, 2, 5]                         # list position -> value in the radio
 
 
 def _roger_value(settings):
@@ -1208,7 +1209,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
 
     def get_settings(self):
         # The base class builds the roger with its 3-name list and breaks on value 3 (BEEP 2): it
-        # builds with 0, then the value goes back and the setting is replaced by our 5-option one.
+        # builds with 0, then the value goes back and the setting is replaced by our 6-option one.
         roger = _roger_value(self._memobj.settings)
         self._memobj.settings.roger = 0
         try:
