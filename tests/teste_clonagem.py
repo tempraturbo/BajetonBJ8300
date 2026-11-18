@@ -49,8 +49,12 @@ ACK = b'\x06'
 class RadioSimulado(object):
     """O lado do radio no cabo. Guarda o espaco de 64 KB do protocolo e o chip de dados de 1 MB."""
 
-    def __init__(self, bancos, espaco=None, chip=None, fim_gravacao=0x0D6000):
+    def __init__(self, bancos, espaco=None, chip=None, fim_gravacao=0x0D6000, velocidade=460800):
         self.bancos = bancos                       # True = firmware BJ8300_BANK
+        self.velocidade = velocidade               # a da serial do radio: 460800 da v160 em diante, 115200 da v157
+                                                   # a v159, 57600 antes
+        self.baudrate = velocidade                 # a da porta do PC (o CHIRP a abre com o BAUD_RATE do driver)
+        self.ruido = 0                             # bytes que chegaram na velocidade errada
         self.fim_gravacao = fim_gravacao           # v110: 0xD6000 (o Morse e o APRS); v49-v109 0xD4000;
                                                    # v46-v48 0xD3000; ate a v45, 0xD2000
         self.espaco = bytearray(espaco or b'\x00' * 0x10000)
@@ -72,12 +76,20 @@ class RadioSimulado(object):
 
     # ---- interface de "serial" que o CHIRP usa ----
     def write(self, dados):
+        if self.baudrate != self.velocidade:       # na velocidade errada vira ruido, e o radio nao responde
+            self.ruido += len(dados)
+            return
         self.entrada += dados
         self._processa()
 
     def read(self, n):
+        if self.baudrate != self.velocidade:
+            return b''
         dados, self.saida = bytes(self.saida[:n]), self.saida[n:]
         return dados
+
+    def reset_input_buffer(self):
+        self.saida = bytearray()
 
     def log(self, *_):
         pass
@@ -202,6 +214,7 @@ def espaco_de_fabrica(zona):
 
 def baixa(simulado):
     simulado.passa_tempo()
+    simulado.baudrate = bj.BJ8300.BAUD_RATE        # o CHIRP abre a porta na velocidade do driver
     radio = bj.BJ8300(simulado)
     radio.status_fn = lambda s: None
     radio.sync_in()
@@ -210,6 +223,7 @@ def baixa(simulado):
 
 def sobe(radio, simulado):
     simulado.passa_tempo()
+    simulado.baudrate = bj.BJ8300.BAUD_RATE
     radio.pipe = simulado
     radio.sync_out()
 
@@ -427,6 +441,31 @@ def main():
     confere('5d. e o cabo so ficou com o ACK do E (sem dessincronizar)', bytes(fab.saida), ACK)
     confere('5e. e nada foi gravado nele, nem canal (a conferencia vem antes)',
             fab.gravacoes_normais, 0)
+
+    # ---------- 9. a velocidade (v157, v160): 460800, 115200 e 57600 com os firmwares de antes ----------
+    novo = RadioSimulado(True, espaco_de_fabrica(0), chip_com_bancos())
+    baixa(novo)
+    confere('9. firmware v160 (460800): abre de primeira, sem ruido', (novo.sessoes, novo.ruido, novo.baudrate),
+            (1, 0, 460800))
+    v157 = RadioSimulado(True, espaco_de_fabrica(0), chip_com_bancos(), velocidade=115200)
+    lido = baixa(v157)
+    confere('9a. firmware v157 a v159 (115200): sem resposta a 460800, volta a 115200 e le numa sessao so',
+            (v157.sessoes, v157.ruido > 0, v157.baudrate, len(lido._mmap)),
+            (1, True, 115200, bj.BLOB_BASE + bj.BLOB_SIZE + 5 * 64))
+    antigo = RadioSimulado(True, espaco_de_fabrica(0), chip_com_bancos(), velocidade=57600)
+    lido = baixa(antigo)
+    confere('9b. firmware ate a v156 (57600): sem resposta a 460800 nem a 115200, volta a 57600 e le numa sessao so',
+            (antigo.sessoes, antigo.ruido > 0, antigo.baudrate, len(lido._mmap)),
+            (1, True, 57600, bj.BLOB_BASE + bj.BLOB_SIZE + 5 * 64))
+    sobe(lido, antigo)
+    confere('9c. e grava do mesmo jeito', (antigo.sessoes, antigo.baudrate), (2, 57600))
+    fab57 = RadioSimulado(False, espaco_de_fabrica(1), velocidade=57600)
+    try:
+        baixa(fab57)
+        confere('9d. fabrica a 57600 recusado', 'aceitou', 'recusou')
+    except errors.RadioError as e:
+        confere('9d. fabrica a 57600: acha a velocidade e recusa com a mensagem certa',
+                'not running the banks firmware' in str(e), True)
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')

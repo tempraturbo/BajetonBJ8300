@@ -1,26 +1,27 @@
 ﻿unit Principal;
 
-{ A janela do Tempra Link do BJ-8300: a navegação à esquerda (Canais, Bancos, Ajustes, Logo de abertura, Firmware,
-  Backup e Registro), o rádio, a porta e as ações no alto, e o andamento embaixo. O que fala com o rádio roda numa
-  thread. As grades se editam na própria célula: o texto e a frequência num campo, as escolhas numa lista, o sim e o
-  não com a barra de espaço ou dois cliques, e os bancos numa lista de marcar; com várias linhas escolhidas, o valor
-  vai para todas. A mesma janela do Tempra Link do UV-17L, sem o que o BJ não tem (o ROGER CUSTOM, o controle remoto e
-  a gravação do firmware pelo programa), e com o Bluetooth na lista das portas. }
+{ A janela do Tempra Link do BJ-8300: a navegação à esquerda (Canais, Bancos, Ajustes, Logo de abertura, Controle
+  remoto, Firmware, Backup e Registro), o rádio, a porta e as ações no alto, e o andamento embaixo. O que fala com o
+  rádio roda numa thread. As grades se editam na própria célula: o texto e a frequência num campo, as escolhas numa
+  lista (o sim e o não também, numa lista SIM/NÃO), e os bancos numa lista de marcar; com várias linhas
+  escolhidas, o valor vai para todas. A mesma janela do Tempra Link do UV-17L, sem o que o BJ não tem (o ROGER CUSTOM e
+  a gravação do firmware pelo programa), e com o Bluetooth na lista das portas. O controle remoto (v159) traz a tela
+  do rádio pelo cabo; pelo Bluetooth, o estado. }
 
 interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, System.Types, Vcl.Graphics, Vcl.Controls,
   Vcl.Forms, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls, Vcl.Dialogs, Vcl.Grids, Vcl.WinXPanels, Vcl.WinXCtrls,
-  Vcl.CheckLst, Vcl.Menus, Transporte, CaboBJ, Logo, Ajustes, BJ8300, PortaSerial, Bluetooth, Visual;
+  Vcl.CheckLst, Vcl.Menus, Transporte, CaboBJ, Logo, Ajustes, BJ8300, PortaSerial, Bluetooth, Visual, Remoto;
 
 const
   VERSAO_TEMPRA_LINK = '1.0';  // a mesma do Recursos.rc
 
 type
   TFim = (fOk, fCancelado, fFalha, fSemRadio, fConflito, fErro);
-  TAcao = (acLer, acGravar, acLerLogo, acGravarLogo, acProcurar);
-  TTipoCelula = (tcNada, tcTexto, tcLista, tcAlterna, tcBancos);
+  TAcao = (acLer, acGravar, acLerLogo, acGravarLogo, acProcurar, acRemoto);
+  TTipoCelula = (tcNada, tcTexto, tcLista, tcBancos);
 
   // uma linha da grade dos ajustes
   TTipoAjuste = (taItem, taTexto, taFrequencia, taOffset, taGrupoDtmf);
@@ -99,6 +100,14 @@ type
     BotaoSalvarLogo: TButton;
     BotaoGravarLogo: TButton;
     LabelLogoPassos: TLabel;
+    CartaoControle: TCard;
+    PainelVisor: TPanel;
+    PaintVisor: TPaintBox;
+    BotaoConectar: TButton;
+    LabelRemoto: TLabel;
+    PainelTeclado: TPanel;
+    LabelAvisoCabo: TLabel;
+    LabelControleNota: TLabel;
     CartaoFirmware: TCard;
     LabelInfo: TLabel;
     LabelPassos: TLabel;
@@ -156,11 +165,19 @@ type
     procedure BotaoAbrirBackupClick(Sender: TObject);
     procedure BotaoSalvarBackupClick(Sender: TObject);
     procedure BotaoPastaBackupsClick(Sender: TObject);
+    procedure BotaoConectarClick(Sender: TObject);
+    procedure PaintVisorPaint(Sender: TObject);
   private
     FMenu: TMenu;
     FPortas: TArray<TPorta>;
     FRadiosBle: TArray<TRadioBLE>;  // os achados pela última procura, que vêm na lista depois das portas
     FAchados: TArray<TRadioBLE>;    // o que a thread da procura achou
+    FRemoto: TRemoto;
+    FConectado: Boolean;            // o controle remoto já ouviu o rádio
+    FEstadoRemoto: TEstadoRadio;    // o último estado que ele mandou
+    FBotaoPtt: TTecla;
+    FSegurado: TTimer;              // anda enquanto uma tecla ou o PTT está apertado: solta se o mouse soltou fora
+    FTela: TBitmap;                 // a última tela do rádio que chegou
     FTarefa: TTarefa;
     FAcao: TAcao;
     FCabo: TCaboBJ;
@@ -208,6 +225,10 @@ type
     function NovoCabo: TCaboBJ;
     function DescartaMudancas: Boolean;
     procedure Terminou(Sender: TObject);
+    procedure TeclaDesce(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+    procedure TeclaSobe(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+    procedure SoltaTudo;
+    procedure ConfereSegurado(Sender: TObject);
     procedure WMDropFiles(var Msg: TWMDropFiles); message WM_DROPFILES;
     // a edição na célula
     function Celula(G: TStringGrid; Col, Lin: Integer; out Opcoes: TArray<string>; out Atual: string): TTipoCelula;
@@ -242,9 +263,10 @@ const
   CARTAO_BANCOS = 1;
   CARTAO_AJUSTES = 2;
   CARTAO_LOGO = 3;
-  CARTAO_FIRMWARE = 4;
-  CARTAO_BACKUP = 5;
-  CARTAO_REGISTRO = 6;
+  CARTAO_CONTROLE = 4;
+  CARTAO_FIRMWARE = 5;
+  CARTAO_BACKUP = 6;
+  CARTAO_REGISTRO = 7;
 
   COL_NOME = 1;
   COL_RX = 2;
@@ -277,7 +299,7 @@ begin
   if B then
     Result := Tr('Sim', 'Yes')
   else
-    Result := '';
+    Result := Tr('Não', 'No');
 end;
 
 function TextoBancos(B: Word): string;
@@ -347,6 +369,30 @@ begin
   Result := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'TempraLink\backups');
 end;
 
+type
+  TTeclaRadio = record
+    Texto, Letras: string;
+    Codigo: Byte;
+    Tipo: TTipoTecla;
+  end;
+
+const
+  // a linha de cima, os algarismos em 4 linhas de 3 e as laterais; o código é o cru da varredura (firmware/src/remoto.c)
+  TECLAS_RADIO: array[0..17] of TTeclaRadio = (
+    (Texto: 'MENU'; Letras: 'OK'; Codigo: TECLA_OK; Tipo: ttFuncao), (Texto: '▼'; Codigo: TECLA_BAIXO; Tipo: ttFuncao),
+    (Texto: '▲'; Codigo: TECLA_CIMA; Tipo: ttFuncao), (Texto: 'EXIT'; Codigo: TECLA_EXIT; Tipo: ttFuncao),
+    (Texto: '1'; Codigo: 6), (Texto: '2'; Letras: 'ABC'; Codigo: 7), (Texto: '3'; Letras: 'DEF'; Codigo: 8),
+    (Texto: '4'; Letras: 'GHI'; Codigo: 10), (Texto: '5'; Letras: 'JKL'; Codigo: 11), (Texto: '6'; Letras: 'MNO'; Codigo: 12),
+    (Texto: '7'; Letras: 'PQRS'; Codigo: 14), (Texto: '8'; Letras: 'TUV'; Codigo: 15), (Texto: '9'; Letras: 'WXYZ'; Codigo: 16),
+    (Texto: '*'; Codigo: TECLA_ESTRELA), (Texto: '0'; Codigo: TECLA_ZERO), (Texto: '#'; Codigo: TECLA_CERQUILHA),
+    (Texto: 'PF2'; Codigo: TECLA_PF2; Tipo: ttFuncao), (Texto: 'PF3'; Codigo: TECLA_PF3; Tipo: ttFuncao));
+  // em 96 dpi: o teclado tem a largura de 4 teclas de cima; os números, 3 por linha, na mesma largura
+  TECLA_LARGURA = 72;
+  TECLA_ALTURA = 46;
+  TECLA_VAO = 8;
+  TECLADO_LARGURA = 4 * TECLA_LARGURA + 3 * TECLA_VAO;
+  DIGITO_LARGURA = (TECLADO_LARGURA - 2 * TECLA_VAO) div 3;
+
 procedure TFormPrincipal.FormCreate(Sender: TObject);
 const
   COLUNAS: array[0..15] of array[Boolean] of string = (
@@ -358,6 +404,7 @@ const
 var
   I: Integer;
   B: TButton;
+  T: TTecla;
 begin
   AplicaTema(Self);
   KeyPreview := True;
@@ -367,10 +414,10 @@ begin
   LabelMarca.Caption := 'Tempra Link';
   LabelModelo.Caption := 'Baojie BJ-8300';
   LabelVersao.Caption := Tr('versão ', 'version ') + VERSAO_TEMPRA_LINK;
-  ListaNav.Items.Text := Tr('Canais'#13#10'Bancos'#13#10'Ajustes'#13#10'Logo de abertura'#13#10'Firmware'#13#10 +
-                            'Backup'#13#10'Registro',
-                            'Channels'#13#10'Banks'#13#10'Settings'#13#10'Boot logo'#13#10'Firmware'#13#10 +
-                            'Backup'#13#10'Log');
+  ListaNav.Items.Text := Tr('Canais'#13#10'Bancos'#13#10'Ajustes'#13#10'Logo de abertura'#13#10'Controle remoto'#13#10 +
+                            'Firmware'#13#10'Backup'#13#10'Registro',
+                            'Channels'#13#10'Banks'#13#10'Settings'#13#10'Boot logo'#13#10'Remote control'#13#10 +
+                            'Firmware'#13#10'Backup'#13#10'Log');
   BotaoAtualizar.Caption := Tr('Atualizar', 'Refresh');
   BotaoLer.Caption := Tr('Ler do rádio', 'Read from radio');
   BotaoGravarRadio.Caption := Tr('Gravar no rádio', 'Write to radio');
@@ -514,6 +561,69 @@ begin
   for var C: TControl in [FEditor, FLista, FPainelBancos] do
     AplicaTema(C);
 
+  // o controle remoto: o teclado como o do rádio, e o toque longo segurando o botão
+  FTela := TBitmap.Create;
+  LabelAvisoCabo.Caption := Tr(
+    'Pelo cabo vem a tela do rádio; pelo Bluetooth, só o estado (quem recebe, o S-meter e a tensão). Com o cabo ' +
+    'plugado, o microfone e o alto-falante podem passar a ser os do plugue: isso não foi testado no BJ.',
+    'Over the cable the radio screen comes along; over Bluetooth, only the state (who is receiving, the S-meter and ' +
+    'the voltage). With the cable plugged in, the microphone and speaker may become the plug''s: this was not tested ' +
+    'on the BJ.');
+  LabelControleNota.Caption := Tr(
+    'Com o rádio ligado normalmente (firmware v159 ou mais novo), Conectar liga o controle remoto; pelo cabo, a tela ' +
+    'do rádio vem junto e daí em diante muda com ela. As teclas daqui ficam apertadas no rádio enquanto o botão do ' +
+    'mouse está apertado nelas: segurar 1 s é o toque longo. O PTT transmite enquanto estiver apertado, e o TX TIMEOUT ' +
+    'do rádio vale também. Se o PC parar de mandar por 1 s, o rádio solta a tecla e o PTT sozinho.',
+    'With the radio on normally (firmware v159 or newer), Connect starts the remote control; over the cable, the radio ' +
+    'screen comes along and from then on changes with it. The keys here stay pressed on the radio while the mouse ' +
+    'button is pressed on them: holding 1 s is the long press. PTT transmits while pressed, and the radio''s TX TIMEOUT ' +
+    'also applies. If the PC stops sending for 1 s, the radio releases the key and the PTT by itself.');
+  LabelRemoto.Caption := '';
+  // a linha de cima com 4, os números em 4 linhas de 3, as laterais lado a lado e o PTT na largura toda
+  for I := 0 to High(TECLAS_RADIO) + 1 do
+  begin
+    T := TTecla.Create(Self);
+    T.Parent := PainelTeclado;
+    if I <= High(TECLAS_RADIO) then
+    begin
+      T.Caption := TECLAS_RADIO[I].Texto;
+      T.Letras := TECLAS_RADIO[I].Letras;
+      T.Tag := TECLAS_RADIO[I].Codigo;
+      T.Tipo := TECLAS_RADIO[I].Tipo;
+    end
+    else
+    begin
+      FBotaoPtt := T;
+      T.Caption := Tr('PTT  ·  segure para transmitir', 'PTT  ·  hold to transmit');
+      T.Tag := -1;
+      T.Tipo := ttPtt;
+    end;
+    if I < 4 then
+      T.SetBounds(I * (TECLA_LARGURA + TECLA_VAO), 0, TECLA_LARGURA, TECLA_ALTURA)
+    else if I < 16 then
+      T.SetBounds((I - 4) mod 3 * (TECLADO_LARGURA - DIGITO_LARGURA) div 2,
+                  (1 + (I - 4) div 3) * (TECLA_ALTURA + TECLA_VAO), DIGITO_LARGURA, TECLA_ALTURA)
+    else if I < 18 then
+      T.SetBounds((I - 16) * (TECLADO_LARGURA + TECLA_VAO) div 2, 5 * (TECLA_ALTURA + TECLA_VAO),
+                  (TECLADO_LARGURA - TECLA_VAO) div 2, TECLA_ALTURA)
+    else
+      T.SetBounds(0, 6 * (TECLA_ALTURA + TECLA_VAO), TECLADO_LARGURA, TECLA_ALTURA);
+    T.ScaleForPPI(CurrentPPI);
+    // os números grandes, as setas médias, os nomes menores
+    if Length(T.Caption) > 1 then
+      T.Font.Height := -MulDiv(12, CurrentPPI, 96)
+    else if T.Tipo = ttFuncao then
+      T.Font.Height := -MulDiv(16, CurrentPPI, 96)
+    else
+      T.Font.Height := -MulDiv(20, CurrentPPI, 96);
+    T.OnMouseDown := TeclaDesce;
+    T.OnMouseUp := TeclaSobe;
+  end;
+  FSegurado := TTimer.Create(Self);
+  FSegurado.Enabled := False;
+  FSegurado.Interval := 100;
+  FSegurado.OnTimer := ConfereSegurado;
+
   for B in [BotaoGravarRadio, BotaoGravarLogo] do
     Destaca(B, tbPrincipal);
   ListaNav.ItemIndex := CARTAO_CANAIS;
@@ -528,6 +638,7 @@ end;
 
 procedure TFormPrincipal.FormDestroy(Sender: TObject);
 begin
+  FTela.Free;
   FImagem.Free;
   FMemoria.Free;
   FMenu.Free;
@@ -1052,7 +1163,10 @@ begin
           Opcoes := ['FM', 'AM'];
         end;
       COL_BCL, COL_VARRE:
-        Result := tcAlterna;
+        begin
+          Result := tcLista;
+          Opcoes := [SimNao(True), SimNao(False)];
+        end;
       COL_SCRAMBLE:
         begin
           Result := tcLista;
@@ -1086,7 +1200,10 @@ begin
     if Col = 1 then
       Result := tcTexto
     else if Col = 2 then
-      Result := tcAlterna;
+    begin
+      Result := tcLista;
+      Opcoes := [SimNao(True), SimNao(False)];
+    end;
   end
   else if (G = GradeAjustes) and (Col = 1) and (Lin <= Length(FAjustes)) then
   begin
@@ -1171,9 +1288,9 @@ begin
     COL_MODULACAO:
       C.AM := Valor = 'AM';
     COL_BCL:
-      C.BCL := Valor <> '';
+      C.BCL := Valor = SimNao(True);
     COL_VARRE:
-      C.Varre := Valor <> '';
+      C.Varre := Valor = SimNao(True);
     COL_ENCRYPT:
       for K := 0 to 3 do
         if Valor = TextoEncrypt(K) then
@@ -1248,7 +1365,7 @@ begin
       if Col = 1 then
         FMemoria.PoeBancoNome(Lin - 1, NomeValido(UpperCase(Valor)))
       else
-        FMemoria.PoeBancoAtivo(Lin - 1, Valor <> '');
+        FMemoria.PoeBancoAtivo(Lin - 1, Valor = SimNao(True));
       PreencheBancos;
     end
     else if G = GradeAjustes then
@@ -1294,24 +1411,13 @@ var
   Opcoes: TArray<string>;
   Atual: string;
   R: TRect;
-  K: Integer;
+  K, Largura: Integer;
   Tipo: TTipoCelula;
 begin
   CancelaEdicao;
   Tipo := Celula(G, Col, Lin, Opcoes, Atual);
-  case Tipo of
-    tcNada:
-      Exit;
-    tcAlterna:
-      begin
-        // o sim e o não trocam na hora, sem editor
-        if Atual = '' then
-          Aplica(G, Col, Lin, Tr('Sim', 'Yes'))
-        else
-          Aplica(G, Col, Lin, '');
-        Exit;
-      end;
-  end;
+  if Tipo = tcNada then
+    Exit;
   FEdGrade := G;
   FEdCol := Col;
   FEdLin := Lin;
@@ -1339,8 +1445,14 @@ begin
         for K := 0 to High(Opcoes) do
           FLista.Items.Add(Opcoes[K]);
         FLista.ItemIndex := FLista.Items.IndexOf(Atual);
-        FLista.SetBounds(R.Left, R.Top, Max(R.Width, MulDiv(120, CurrentPPI, 96)), R.Height);
+        // do tamanho da célula; só a parte que abre cresce, até a opção mais comprida caber
+        FLista.SetBounds(R.Left, R.Top, R.Width, R.Height);
+        Largura := R.Width;
+        FLista.Canvas.Font := FLista.Font;
+        for K := 0 to High(Opcoes) do
+          Largura := Max(Largura, FLista.Canvas.TextWidth(Opcoes[K]) + MulDiv(16, CurrentPPI, 96));
         FLista.Visible := True;
+        SendMessage(FLista.Handle, CB_SETDROPPEDWIDTH, Largura, 0);
         FLista.SetFocus;
         FLista.DroppedDown := True;
       end;
@@ -1730,9 +1842,10 @@ end;
 
 procedure TFormPrincipal.Habilita;
 var
-  Livre, ComPorta, Ajusta, Edita: Boolean;
+  Livre, ComPorta, Ajusta, Edita, Remoto: Boolean;
 begin
   Livre := FTarefa = nil;
+  Remoto := (FTarefa <> nil) and (FAcao = acRemoto);
   ComPorta := Livre and (Escolhida >= 0);
   Edita := Livre and not FMemoria.Vazia;
   ComboPorta.Enabled := Livre;
@@ -1755,10 +1868,16 @@ begin
   BotaoLerLogo.Enabled := ComPorta;
   BotaoSalvarLogo.Enabled := Livre and (FLogo <> nil);
   BotaoGravarLogo.Enabled := ComPorta and (FLogo <> nil);
+  BotaoConectar.Enabled := ComPorta or Remoto;
+  if Remoto then
+    BotaoConectar.Caption := Tr('Desconectar', 'Disconnect')
+  else
+    BotaoConectar.Caption := Tr('Conectar', 'Connect');
+  PainelTeclado.Enabled := Remoto;
   BotaoAbrirBackup.Enabled := Livre;
   BotaoSalvarBackup.Enabled := Edita;
-  BotaoCancelar.Visible := not Livre and (FAcao <> acProcurar);
-  Barra.Visible := not Livre;
+  BotaoCancelar.Visible := not Livre and not (FAcao in [acProcurar, acRemoto]);
+  Barra.Visible := not Livre and (FAcao <> acRemoto);
 end;
 
 procedure TFormPrincipal.Registra(const Msg: string);
@@ -2069,10 +2188,179 @@ begin
   ShellExecute(Handle, 'open', PChar(PastaDosBackups), nil, nil, SW_SHOWNORMAL);
 end;
 
+{ O controle remoto }
+
+procedure TFormPrincipal.BotaoConectarClick(Sender: TObject);
+var
+  R: TRemoto;
+  Espelho: Boolean;
+begin
+  if (FTarefa <> nil) and (FAcao = acRemoto) then
+  begin
+    FRemoto.Parar := True;
+    Exit;
+  end;
+  // a tela só vem pelo cabo: pelo Bluetooth não há vazão nem prova de que o envio aguenta
+  Espelho := Escolhida < Length(FPortas);
+  FRemoto := TRemoto.Create;
+  R := FRemoto;
+  R.OnRegistro := Avisos();
+  R.OnEstado :=
+    procedure(E: TEstadoRadio)
+    begin
+      NaJanela(
+        procedure
+        var
+          S: string;
+        begin
+          FConectado := True;
+          FEstadoRemoto := E;
+          if E.TX = 1 then
+            S := Tr('Transmitindo', 'Transmitting')
+          else if E.RX = 4 then
+            S := Format(Tr('Recebendo na %s · %s', 'Receiving on %s · %s'), [E.Letra, TextoSinal(E.Sinal)])
+          else if E.RX = 5 then
+            S := Tr('Monitor', 'Monitor')
+          else
+            S := Tr('Em espera', 'Standby');
+          LabelRemoto.Caption := S + Format(' · %d,%d V', [E.Tensao div 10, E.Tensao mod 10]);
+          if FTela.Empty then
+            PaintVisor.Invalidate;
+        end);
+    end;
+  R.OnTela :=
+    procedure(Pixels: TBytes)
+    begin
+      NaJanela(
+        procedure
+        var
+          B: TBitmap;
+        begin
+          B := LogoParaBitmap(Pixels, TELA_LARGURA, TELA_ALTURA);
+          try
+            FTela.Assign(B);
+          finally
+            B.Free;
+          end;
+          PaintVisor.Invalidate;
+        end);
+    end;
+  FConectado := False;
+  FTela.Assign(nil);
+  Inicia(acRemoto,
+    procedure(T: ITransporte)
+    begin
+      R.Executa(T, Espelho);
+    end);
+  PaintVisor.Invalidate;
+end;
+
+{ As teclas e o PTT ficam apertados no rádio enquanto o botão esquerdo do mouse está apertado neles, como no teclado: o
+  longo de 1 s e a repetição das setas saem do próprio rádio. }
+procedure TFormPrincipal.TeclaDesce(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+  if (Button <> mbLeft) or (FRemoto = nil) then
+    Exit;
+  if Sender = FBotaoPtt then
+  begin
+    FRemoto.Ptt(True);
+    FBotaoPtt.Caption := Tr('TRANSMITINDO  ·  solte para parar', 'TRANSMITTING  ·  release to stop');
+  end
+  else
+    FRemoto.Aperta(TControl(Sender).Tag);
+  FSegurado.Enabled := True;
+end;
+
+procedure TFormPrincipal.TeclaSobe(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+  if Button = mbLeft then
+    SoltaTudo;
+end;
+
+procedure TFormPrincipal.SoltaTudo;
+begin
+  FSegurado.Enabled := False;
+  FBotaoPtt.Caption := Tr('PTT  ·  segure para transmitir', 'PTT  ·  hold to transmit');
+  if FRemoto <> nil then
+  begin
+    FRemoto.Solta;
+    FRemoto.Ptt(False);
+  end;
+end;
+
+// O soltar que o botão não viu (o mouse solto em outra janela, a janela que perdeu o foco): solta do mesmo jeito.
+procedure TFormPrincipal.ConfereSegurado(Sender: TObject);
+begin
+  if GetAsyncKeyState(VK_LBUTTON) and $8000 = 0 then
+    SoltaTudo;
+end;
+
+{ O visor: a tela do rádio, na proporção dela e no meio. Sem ela (o Bluetooth, ou antes de chegar), o estado: a letra
+  de quem recebe, o S-meter em 24 segmentos e a tensão; e antes de tudo, o que está acontecendo. }
+procedure TFormPrincipal.PaintVisorPaint(Sender: TObject);
+var
+  C: TCanvas;
+  W, H, K, X0, Y0, L: Integer;
+  Texto: string;
+  E: TEstadoRadio;
+begin
+  C := PaintVisor.Canvas;
+  C.Brush.Color := COR_NAV;
+  C.FillRect(PaintVisor.ClientRect);
+  if not FTela.Empty then
+  begin
+    W := Min(PaintVisor.Width, PaintVisor.Height * TELA_LARGURA div TELA_ALTURA);
+    H := W * TELA_ALTURA div TELA_LARGURA;
+    C.StretchDraw(System.Types.Rect((PaintVisor.Width - W) div 2, (PaintVisor.Height - H) div 2,
+                                    (PaintVisor.Width + W) div 2, (PaintVisor.Height + H) div 2), FTela);
+    Exit;
+  end;
+  C.Brush.Style := bsClear;
+  E := FEstadoRemoto;
+  if (FTarefa <> nil) and (FAcao = acRemoto) and E.Valido then
+  begin
+    // a letra grande, o medidor embaixo dela e o estado
+    C.Font.Height := -MulDiv(96, CurrentPPI, 96);
+    C.Font.Style := [fsBold];
+    C.Font.Color := IfThen(E.TX = 1, COR_AMBAR, IfThen(E.RX = 4, COR_VERDE, COR_TEXTO_FRACO));
+    Texto := IfThen(E.TX = 1, 'TX', E.Letra);
+    C.TextOut((PaintVisor.Width - C.TextWidth(Texto)) div 2, MulDiv(24, CurrentPPI, 96), Texto);
+    C.Font.Style := [];
+    L := MulDiv(12, CurrentPPI, 96);
+    X0 := (PaintVisor.Width - 24 * L) div 2;
+    Y0 := MulDiv(200, CurrentPPI, 96);
+    for K := 0 to 23 do
+    begin
+      if (E.Sinal > K) and (E.RX = 4) or (E.TX = 1) and (E.Sinal > K) then
+        C.Brush.Color := IfThen(K < 18, COR_VERDE, COR_AMBAR)
+      else
+        C.Brush.Color := COR_FUNDO;
+      C.FillRect(System.Types.Rect(X0 + K * L, Y0, X0 + K * L + L - 2, Y0 + MulDiv(28, CurrentPPI, 96)));
+    end;
+    C.Brush.Style := bsClear;
+    C.Font.Height := -MulDiv(16, CurrentPPI, 96);
+    C.Font.Color := COR_TEXTO;
+    Texto := LabelRemoto.Caption;
+    C.TextOut((PaintVisor.Width - C.TextWidth(Texto)) div 2, Y0 + MulDiv(44, CurrentPPI, 96), Texto);
+    Exit;
+  end;
+  if (FTarefa = nil) or (FAcao <> acRemoto) then
+    Texto := Tr('Clique em Conectar para ligar o controle remoto.', 'Click Connect to start the remote control.')
+  else if FConectado then
+    Texto := Tr('Esperando a tela do rádio...', 'Waiting for the radio screen...')
+  else
+    Texto := Tr('Conectando...', 'Connecting...');
+  C.Font.Height := -MulDiv(14, CurrentPPI, 96);
+  C.Font.Color := COR_TEXTO_FRACO;
+  C.TextOut((PaintVisor.Width - C.TextWidth(Texto)) div 2, (PaintVisor.Height - C.TextHeight(Texto)) div 2, Texto);
+end;
+
 procedure TFormPrincipal.BotaoCancelarClick(Sender: TObject);
 begin
   if FCabo <> nil then
     FCabo.Cancelar := True;
+  if FRemoto <> nil then
+    FRemoto.Parar := True;
 end;
 
 procedure TFormPrincipal.Terminou(Sender: TObject);
@@ -2104,7 +2392,7 @@ begin
                             [E.Message]));
         end;
         MostraMemoria;
-        if ListaNav.ItemIndex in [CARTAO_LOGO, CARTAO_FIRMWARE, CARTAO_BACKUP, CARTAO_REGISTRO] then
+        if ListaNav.ItemIndex in [CARTAO_LOGO, CARTAO_CONTROLE, CARTAO_FIRMWARE, CARTAO_BACKUP, CARTAO_REGISTRO] then
           Mostra(CARTAO_CANAIS);
       end
       else
@@ -2167,10 +2455,25 @@ begin
         ComboPorta.ItemIndex := -1;
         Registra(T.Mensagem);
       end;
+    acRemoto:
+      begin
+        FConectado := False;
+        FTela.Assign(nil);
+        FEstadoRemoto := Default(TEstadoRadio);
+        LabelRemoto.Caption := '';
+        PaintVisor.Invalidate;
+        FSegurado.Enabled := False;
+        FBotaoPtt.Caption := Tr('PTT  ·  segure para transmitir', 'PTT  ·  hold to transmit');
+        if T.Fim = fOk then
+          Registra(Tr('Controle remoto desconectado.', 'Remote control disconnected.'))
+        else
+          Registra(T.Mensagem);
+      end;
   end;
   if T.Fim in [fFalha, fSemRadio, fConflito, fErro] then
     Application.MessageBox(PChar(LabelEstado.Caption), PChar(Caption), MB_OK or MB_ICONWARNING);
   FreeAndNil(FCabo);
+  FreeAndNil(FRemoto);
   FTarefa := nil;
   Habilita;
   if FFechar then
@@ -2182,9 +2485,9 @@ begin
   if FTarefa <> nil then
   begin
     CanClose := False;
-    if Application.MessageBox(PChar(Tr('O rádio está ligado ao Tempra Link. Cancelar e sair?',
-                                       'The radio is busy with Tempra Link. Cancel and quit?')),
-                              PChar(Caption), MB_YESNO or MB_ICONQUESTION) = IDYES then
+    if (FAcao = acRemoto) or (Application.MessageBox(PChar(Tr('O rádio está ligado ao Tempra Link. Cancelar e sair?',
+                                                              'The radio is busy with Tempra Link. Cancel and quit?')),
+                                                     PChar(Caption), MB_YESNO or MB_ICONQUESTION) = IDYES) then
     begin
       FFechar := True;
       BotaoCancelarClick(nil);

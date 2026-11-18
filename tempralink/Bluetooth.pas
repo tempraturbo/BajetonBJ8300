@@ -42,6 +42,7 @@ type
     procedure LimpaEntrada;
     function Agora: UInt64;
     procedure Dorme(Ms: Cardinal);
+    function Velocidade(Baud: Cardinal = 0): Cardinal;
   end;
 
 // Os aparelhos BLE em volta, procurando por EsperaMs (fora da thread da janela: espera o fim da procura).
@@ -290,6 +291,12 @@ end;
 procedure TTransporteBLE.Dorme(Ms: Cardinal);
 begin
   Sleep(Ms);
+end;
+
+// Pelo BLE não há velocidade de serial: a de sempre, sem mudar nada.
+function TTransporteBLE.Velocidade(Baud: Cardinal): Cardinal;
+begin
+  Result := 0;
 end;
 
 end.

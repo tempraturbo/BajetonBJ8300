@@ -17,7 +17,7 @@ const
   LOGO_TAMANHO = LOGO_LARGURA * LOGO_ALTURA * 2;
 
 function ImagemParaLogo(Imagem: TGraphic; Inteira: Boolean): TBytes;
-function LogoParaBitmap(const Dados: TBytes; Largura: Integer = LOGO_VISIVEL): TBitmap;
+function LogoParaBitmap(const Dados: TBytes; Largura: Integer = LOGO_VISIVEL; Altura: Integer = LOGO_ALTURA): TBitmap;
 
 implementation
 
@@ -82,8 +82,9 @@ begin
   end;
 end;
 
-// As Largura colunas da esquerda do logo, para ver ou salvar.
-function LogoParaBitmap(const Dados: TBytes; Largura: Integer): TBitmap;
+// As Largura colunas da esquerda do logo, para ver ou salvar; com Altura 128, a tela do controle remoto, que vem no
+// mesmo formato.
+function LogoParaBitmap(const Dados: TBytes; Largura, Altura: Integer): TBitmap;
 var
   X, Y: Integer;
   P: PRGBTriple;
@@ -91,8 +92,8 @@ var
 begin
   Result := TBitmap.Create;
   Result.PixelFormat := pf24bit;
-  Result.SetSize(Largura, LOGO_ALTURA);
-  for Y := 0 to LOGO_ALTURA - 1 do
+  Result.SetSize(Largura, Altura);
+  for Y := 0 to Altura - 1 do
   begin
     P := Result.ScanLine[Y];
     for X := 0 to Largura - 1 do

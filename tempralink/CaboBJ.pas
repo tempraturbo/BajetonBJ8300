@@ -149,12 +149,28 @@ end;
 procedure TCaboBJ.Entra;
 var
   R: TBytes;
-  I: Integer;
+  I, K: Integer;
 begin
   FT.LimpaEntrada;
   FResto := nil;
   FT.Escreve(Bytes(MAGIA));
   R := Recebe(1, ESPERA_MS);
+  // Sem resposta, as velocidades mais baixas, uma a uma (Transporte.BAUDS_CABO): 115200 da v157 à v159, 57600 no de
+  // fábrica e no TEMPRA até a v156. O que foi na velocidade errada chega ao rádio como ruído, e o conferidor dele
+  // (0x01E3FD12) procura o primeiro 'G' e os 7 bytes seguintes: um 'G' no ruído estraga só a primeira tentativa, por
+  // isso vão duas. O Bluetooth não tem velocidade (0), e não volta.
+  for K := 1 to High(BAUDS_CABO) do
+    if (R = nil) and (FT.Velocidade > BAUDS_CABO[K]) then
+    begin
+      FT.Velocidade(BAUDS_CABO[K]);
+      for I := 1 to 2 do
+        if R = nil then
+        begin
+          FT.LimpaEntrada;
+          FT.Escreve(Bytes(MAGIA));
+          R := Recebe(1, ESPERA_MS);
+        end;
+    end;
   if R = nil then
     raise ESemRadio.Create(Tr('O rádio não respondeu. Confira se ele está ligado, com o cabo bem encaixado, e se a ' +
                               'porta é a do cabo.',

@@ -1048,6 +1048,40 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     # the channel scramble with the firmware's options, in menu order (see SCRAMBLE_OPTIONS)
     _scramble_map = [(name, v << 2) for name, v in zip(SCRAMBLE_OPTIONS, SCRAMBLE_VALUES)]
 
+    # The cable at 460800 from firmware v160 on and at 115200 from v157 to v159 (both set the UART at boot,
+    # 0x01E54A8E; the stock firmware and TEMPRA up to v156 keep 57600). The session opens at 460800 and, with no answer
+    # at all, at each slower speed in turn: the tries at the wrong speed reach the radio as noise, and its PROGRAM
+    # matcher (0x01E3FD12) looks for the first 'G' and the 7 bytes after it, so the five tries at the right speed
+    # still get through.
+    BAUD_RATE = 460800
+    _BAUDS_OLD = (115200, 57600)
+
+    def _open_session(self):
+        bauds = [b for b in self._BAUDS_OLD if b < self.pipe.baudrate]
+        while True:
+            try:
+                radtel_rt900._enter_programming_mode(self)
+                return
+            except errors.RadioNoResponse:
+                if not bauds:
+                    raise
+                LOG.info('No answer at %i, trying %i (an older firmware)', self.pipe.baudrate, bauds[0])
+                self.pipe.baudrate = bauds.pop(0)
+                self.pipe.reset_input_buffer()
+
+    def _download_stock(self):
+        """Channels and settings: radtel_rt900.do_download, with the session opened by _open_session."""
+        self._open_session()
+        status = chirp_common.Status()
+        status.msg = 'Cloning from radio'
+        status.max = self._memsize
+        data = b''
+        for address in range(0, self._memsize, self.BLOCK_SIZE):
+            status.cur = address + self.BLOCK_SIZE
+            self.status_fn(status)
+            data += radtel_rt900._read_block(self, address, self.BLOCK_SIZE)
+        return memmap.MemoryMapBytes(data)
+
     # Channels, settings, bands and protocol are the BJ7800's (960 channels of 32 bytes).
     #
     # ZONES: the modified firmware removed ZONE and "Zone Or Channel" from the menu - the banks do
@@ -1124,7 +1158,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     # only goes at the end.
     def sync_in(self):
         try:
-            data = radtel_rt900.do_download(self)      # opens the session; stock channels/settings
+            data = self._download_stock()              # opens the session; stock channels/settings
             self._check_firmware()
             blob = (self._download_banks() + self._read_extended(WATCH_SECTOR) + self._read_vfc() +
                     self._read_extended(MORSE_SECTOR) + self._read_extended(APRS_SECTOR))
@@ -1156,7 +1190,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
             self._memobj.settings.tdr = 0          # the firmware's rule: no dual watch in SINGLE
         _BankStore(self).disable_empty()           # never upload an enabled bank with no channel
         try:
-            radtel_rt900._enter_programming_mode(self)
+            self._open_session()
             self._check_firmware()                 # before writing anything
             self._upload_stock()
             self._upload_banks()

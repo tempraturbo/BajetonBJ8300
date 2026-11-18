@@ -5,6 +5,26 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Tempra Link e driver do CHIRP — 18/11 — o controle remoto, o cabo a 460800 e as listas SIM/NÃO
+
+O Tempra Link do BJ acompanha a rodada da v156 à v161, num commit com o driver do CHIRP, porque os testes do programa
+conferem as velocidades do cabo dele contra as do driver.
+
+- **O controle remoto** (página nova; o `Remoto.pas`, sem nada de janela, serve também ao app de Android): o teclado do
+  rádio, com o toque longo segurando, e o PTT; pelo cabo, a tela do rádio ao vivo; pelo Bluetooth, o estado. A tela
+  inteira vem por fatias, do tamanho que a imagem que se tem diz que cabe, a começar pela linha seguinte à última que
+  chegou antes da perda; a fatia sem nenhuma linha (a TX, uma digitação) se pede de novo sem se partir. Um clique fica
+  no rádio pelo menos 150 ms, e com uma tecla ou o PTT apertados, e 200 ms depois, nenhuma fatia vai (o redesenho
+  deixava o rádio sem ler o teclado, e cliques se perdiam). Precisa da v159 ou mais nova.
+- **O cabo a 460800**, com volta a 115200 (v157 a v159) e a 57600 (o de fábrica e o TEMPRA até a v156), na leitura, no
+  remoto e no driver do CHIRP. O primeiro Tempra Link abria a 115200, copiado do UV, e nunca falava com o rádio.
+- **As listas.** A caixa de escolha fica do tamanho da coluna (abria com pelo menos 120 pixels), e só a parte que abre
+  cresce até a opção mais comprida; o BCL, a varredura e o banco ligado viram uma lista SIM/NÃO, como os outros campos
+  (antes "Sim" ou vazio, trocados pela barra de espaço). O mesmo no Tempra Link do UV-17L.
+
+No rádio: a leitura e o remoto até a v160, com a tela lenta e cliques perdidos, o que esta rodada corrige; as
+correções desta rodada (e as listas) só no simulador e no PC.
+
 ## v156 a v161 — 18/11 — o controle remoto pelo cabo (sem release; a v161 sem teste no rádio)
 
 O controle remoto que a seção 37 estudou: as teclas, o PTT, um estado de 9 bytes (quem o medidor mede, o S-meter, a

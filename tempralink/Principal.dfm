@@ -628,14 +628,101 @@ object FormPrincipal: TFormPrincipal
           OnClick = BotaoGravarLogoClick
         end
       end
+      object CartaoControle: TCard
+        Left = 0
+        Top = 0
+        Width = 980
+        Height = 608
+        Caption = 'CartaoControle'
+        CardIndex = 4
+        TabOrder = 4
+        object LabelRemoto: TLabel
+          Left = 216
+          Top = 421
+          Width = 252
+          Height = 20
+          AutoSize = False
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -13
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+        end
+        object LabelControleNota: TLabel
+          Left = 24
+          Top = 460
+          Width = 444
+          Height = 128
+          AutoSize = False
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clGrayText
+          Font.Height = -12
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+          WordWrap = True
+        end
+        object LabelAvisoCabo: TLabel
+          Left = 492
+          Top = 398
+          Width = 312
+          Height = 80
+          AutoSize = False
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = 2408443
+          Font.Height = -12
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+          WordWrap = True
+        end
+        object PainelVisor: TPanel
+          Left = 24
+          Top = 16
+          Width = 444
+          Height = 384
+          BevelOuter = bvNone
+          Color = 856074
+          ParentBackground = False
+          TabOrder = 0
+          object PaintVisor: TPaintBox
+            Left = 0
+            Top = 0
+            Width = 444
+            Height = 384
+            Align = alClient
+            OnPaint = PaintVisorPaint
+          end
+        end
+        object BotaoConectar: TButton
+          Left = 24
+          Top = 412
+          Width = 180
+          Height = 36
+          Caption = 'Conectar'
+          TabOrder = 1
+          OnClick = BotaoConectarClick
+        end
+        object PainelTeclado: TPanel
+          Left = 492
+          Top = 16
+          Width = 312
+          Height = 370
+          BevelOuter = bvNone
+          Color = clWindow
+          ParentBackground = False
+          TabOrder = 2
+        end
+      end
       object CartaoFirmware: TCard
         Left = 0
         Top = 0
         Width = 980
         Height = 608
         Caption = 'CartaoFirmware'
-        CardIndex = 4
-        TabOrder = 4
+        CardIndex = 5
+        TabOrder = 5
         object LabelInfo: TLabel
           Left = 24
           Top = 16
@@ -665,8 +752,8 @@ object FormPrincipal: TFormPrincipal
         Width = 980
         Height = 608
         Caption = 'CartaoBackup'
-        CardIndex = 5
-        TabOrder = 5
+        CardIndex = 6
+        TabOrder = 6
         object LabelBackup: TLabel
           Left = 24
           Top = 16
@@ -723,8 +810,8 @@ object FormPrincipal: TFormPrincipal
         Width = 980
         Height = 608
         Caption = 'CartaoRegistro'
-        CardIndex = 6
-        TabOrder = 6
+        CardIndex = 7
+        TabOrder = 7
         object MemoRegistro: TMemo
           AlignWithMargins = True
           Left = 24

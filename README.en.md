@@ -597,6 +597,11 @@ It only goes on with a BJ-8300 that answers with the TEMPRA firmware. It writes 
 that the radio did not change since it was read, and reads back what it wrote to the bank and record sectors. After
 writing the banks, turn the radio off and on: it builds the banks at power-up.
 
+**Remote control (after V3.7T, not released yet):** with a test firmware (v159 or newer), the Remote control page
+puts the radio's keypad and PTT on the PC and, over the cable, the radio's screen live; over Bluetooth, the status. The
+cable goes to 460800 in v160, and the program and the CHIRP driver drop to 115200 and 57600 by themselves with the
+older firmwares.
+
 **Bluetooth (experimental, not tested on the radio):** with the radio's BLUETOOTH (SYSTEM folder) ON, the last item
 of the port list searches for the radio over Bluetooth LE. From reading the firmware, the radio takes the same
 commands as the cable over BLE; while that session is open, it ignores the cable. The code and the tests are in

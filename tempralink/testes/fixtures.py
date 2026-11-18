@@ -253,6 +253,13 @@ def confere():
         visto = bool(v) if isinstance(v, settings.RadioSettingValueBoolean) else (
             int(v) if isinstance(v, settings.RadioSettingValueInteger) else str(v).strip())
         igual(nome, visto, quer)
+    # as velocidades do cabo no app são as do driver: a do UV (115200) copiada sem o firmware v157 deixou o app sem
+    # falar com o rádio (18/11)
+    with open(os.path.join(os.path.dirname(AQUI), 'Transporte.pas'), encoding='utf-8-sig') as f:
+        baud = {l.split('=')[0].strip(): l.split('=')[1].strip(' ;\r\n') for l in f if l.strip().startswith('BAUD_CABO')}
+    igual('velocidades do cabo (Transporte.pas)', baud,
+          {'BAUD_CABO': str(bj.BJ8300.BAUD_RATE), 'BAUD_CABO_V157': str(bj.BJ8300._BAUDS_OLD[0]),
+           'BAUD_CABO_ANTIGA': str(bj.BJ8300._BAUDS_OLD[1])})
     for e in erros:
         print('FALHOU', e)
     print('conferido pelo driver: %s' % ('tudo certo' if not erros else '%d erros' % len(erros)))

@@ -6,11 +6,14 @@ firmware TEMPRA (V3.7T ou mais novo), e tenta o mesmo pelo Bluetooth (experiment
 bits. Como usar: [README](../README.md#-tempra-link-o-rádio-pelo-pc).
 
 É o irmão do Tempra Link do Baofeng UV-17L (no repositório dele), com a mesma janela, e separado de propósito: um
-não fala com o outro rádio, e um não abre o backup do outro. O que o BJ não tem fica de fora: o ROGER CUSTOM, o
-controle remoto (o firmware ainda não tem espaço para ele; ver a seção 37 da
-[engenharia reversa](../docs/engenharia-reversa.md)) e a gravação do firmware, que é pelo BinTe ANC Bootloader.
+não fala com o outro rádio, e um não abre o backup do outro. O que o BJ não tem fica de fora: o ROGER CUSTOM e a
+gravação do firmware, que é pelo BinTe ANC Bootloader. O controle remoto, que o firmware ganhou depois da V3.7T,
+tem página própria (abaixo).
 
 ## A memória pelo cabo
+
+A serial abre a 460800, a do firmware v160 em diante, e, sem resposta, desce a 115200 (v157 a v159) e a 57600 (o de
+fábrica e o TEMPRA até a v156), como o driver do CHIRP.
 
 O `CaboBJ.pas` fala o protocolo de fábrica que o driver do CHIRP usa (seção 4 da engenharia reversa): o magic
 `PROGRAMBT11U`, o `F` (16 bytes de identificação), a cifra, o `R` e o `W` de 64 bytes (cifrados com `CO 7` abaixo de
@@ -58,6 +61,28 @@ maiúsculas. O MIC GAIN põe o DEFAULT na ordem da calibração de cada rádio (
 `menu-bj8300.txt` o que é ação ou tela (MESSAGES, CH MEMORY, RESET, VERSION, SCAN ADD), os bancos (página própria) e o
 RX GAIN, que fica em `0x9040`, fora do bloco que o cabo lê.
 
+## O controle remoto
+
+A página Controle remoto liga o rádio ao PC com ele funcionando normalmente: o teclado do rádio, em que cada tecla fica
+apertada enquanto o botão do mouse está apertado nela (segurar 1 s é o toque longo), e o PTT, que transmite enquanto
+estiver apertado. Pelo cabo, a tela do rádio vem junto e muda com ela; pelo Bluetooth, só o estado (quem recebe, o
+S-meter e a tensão). Precisa do firmware v159 ou mais novo, que ainda não tem release. O protocolo está no alto do
+`firmware/src/remoto.c` e o que o firmware mostrou na seção 38 da engenharia reversa; o `Remoto.pas`, sem nada de
+janela, serve também ao app de Android.
+
+- **A tela.** O rádio manda cada linha que vai ao LCD, mas um redesenho só leva umas 28 linhas (a saída dele não anda
+  enquanto a tela se desenha), e o que não coube vem marcado na resposta seguinte. Aí o programa pede a tela inteira
+  por fatias, uma por vez, cada uma esperando a resposta: do tamanho que a imagem que ele já tem diz que cabe, a
+  começar pela linha seguinte à última que chegou antes da perda (o rádio desenha de cima para baixo). A fatia que
+  não coube se parte ao meio, até 4 linhas; a que volta sem nenhuma linha não foi redesenhada (o rádio na TX, ou no
+  meio de uma digitação) e se pede de novo.
+- **As teclas.** Um clique fica no rádio pelo menos 150 ms, e com uma tecla ou o PTT apertados, e até 200 ms depois de
+  soltar, nenhuma fatia vai: o redesenho deixa o rádio uns 65 ms sem ler o teclado, e a leitura dele quer a mesma tecla
+  em 3 voltas de 10 ms. Com o remoto ligado, a luz da tela não apaga, porque com ela apagada a primeira tecla só a
+  acende.
+- **O PTT.** O PTT do BJ é o fio do RX da serial do cabo: os bytes do PC o apertam. O firmware v157 em diante ignora o
+  PTT do fio com o remoto ligado pelo cabo, e o programa manda os bytes de reserva em 0xFF, com menos bits 0.
+
 ## O Bluetooth (experimental)
 
 O `Bluetooth.pas` procura os aparelhos BLE pelo Bluetooth do Windows, conecta no escolhido, escreve no Registro todos os
@@ -77,7 +102,9 @@ CHIRP instalados, os testes conferem também contra o driver do CHIRP:
 - o `testes\TesteTempraLink.dpr` lê essa memória pelo rádio simulado (`testes\SimuladorBJ.pas`, que segue a seção 4) e
   confere linha a linha; grava um conjunto de mudanças e guarda o resultado (`gravado.bin`); e confere as recusas (o
   firmware de fábrica, o rádio mudo, o rádio que mudou, o firmware que confirma e não guarda, o VFO C com o C no lado
-  B), os registros apagados, o backup, o CSV e o logo;
+  B), os registros apagados, o backup, o CSV e o logo; o controle remoto, com o rádio simulado falando o protocolo
+  dele (as teclas, o PTT, a tela por fatias, a perda que chega no meio da tela inteira, a TX, o clique curto e a tecla
+  segurada); e as três velocidades do cabo;
 - o `testes\fixtures.py confere` lê o `gravado.bin` pelo driver e confere as mudanças.
 
 Sem o CHIRP, os testes usam o `radio.bin` e o `esperado.txt` que já estão no repositório.
@@ -91,6 +118,7 @@ Visual.pas           o tema escuro, os botões e a marca "((T))" (o mesmo do UV-
 BJ8300.pas           a memória do rádio, os canais, os bancos, os ajustes, os textos, o DTMF, o logo e o backup
 Ajustes.pas          o menu a partir do menu-bj8300.txt
 CaboBJ.pas           o protocolo do cabo
+Remoto.pas           o controle remoto: os quadros, o estado, a tela por fatias (sem janela)
 Bluetooth.pas        o Bluetooth LE (experimental)
 Transporte.pas       o caminho até o rádio, que a serial, o Bluetooth e o simulado seguem
 PortaSerial.pas      a serial pela API do Windows e a lista das portas (o mesmo do UV-17L)
@@ -107,6 +135,7 @@ testes/              os testes, o rádio simulado e o lado do CHIRP
 
 **In English, in short:** Tempra Link for the BJ-8300 reads, edits, keeps and writes a TEMPRA-firmware BJ-8300 through
 the programming cable (and, experimentally, Bluetooth LE through the `FFE1` characteristic): channels, banks, menu
-settings, APRS and Morse texts, DTMF and the boot logo (read only on V3.7T). The menu description is generated from
+settings, APRS and Morse texts, DTMF and the boot logo (read only on V3.7T); and, with firmware v159 or newer (not
+released yet), it is a remote control, with the radio's screen live over the cable. The menu description is generated from
 this repository's CHIRP driver by `gera_menu.py`, and the tests check, both ways, that the program and the driver read
 the same memory the same way. Build with `compilar.bat` (Delphi, RAD Studio 12).

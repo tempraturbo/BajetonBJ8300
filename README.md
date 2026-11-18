@@ -593,6 +593,11 @@ Ele só segue com um BJ-8300 que responda com o firmware TEMPRA. Grava só o que
 não mudou desde a leitura, e lê de volta o que gravou nos setores dos bancos e dos registros. Depois de gravar os
 bancos, desligue e ligue o rádio: ele monta os bancos na partida.
 
+**Controle remoto (depois da V3.7T, ainda sem release):** com um firmware de teste (v159 ou mais novo), a página
+Controle remoto põe o teclado e o PTT do rádio no PC e, pelo cabo, a tela do rádio ao vivo; pelo Bluetooth, o estado.
+O cabo passa a 460800 na v160, e o programa e o driver do CHIRP descem sozinhos a 115200 e a 57600 com os firmwares de
+antes.
+
 **Bluetooth (experimental, sem teste no rádio):** com o BLUETOOTH do rádio (pasta SYSTEM) em ON, o último item da
 lista de portas procura o rádio pelo Bluetooth LE. Pela leitura do firmware, o rádio recebe pelo BLE os mesmos
 comandos do cabo; enquanto essa sessão está aberta, ele ignora o cabo. O código e os testes estão em

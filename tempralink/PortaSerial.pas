@@ -27,6 +27,7 @@ type
     procedure LimpaEntrada;
     function Agora: UInt64;
     procedure Dorme(Ms: Cardinal);
+    function Velocidade(Baud: Cardinal = 0): Cardinal;
   end;
 
 function ListaPortas: TArray<TPorta>;
@@ -47,11 +48,13 @@ begin
   FH := CreateFile(PChar('\\.\' + Nome), GENERIC_READ or GENERIC_WRITE, 0, nil, OPEN_EXISTING, 0, 0);
   if FH = INVALID_HANDLE_VALUE then
     Erro(Tr('abrir', 'open'));
-  // DTR e RTS baixos: com eles altos o rádio fica mudo (medido em 26/10), e o PTT é o mesmo fio do RX da serial.
+  // 460800, a do firmware v160 (Transporte.BAUD_CABO), e o CaboBJ e o remoto descem sem resposta. DTR e RTS baixos, como
+  // no UV-17L; com eles assim o BJ responde (medido em 18/11). O PTT do BJ é o fio do RX da serial: os bytes do PC o
+  // apertam, e só o firmware v157 o ignora com o controle remoto ligado.
   D.DCBlength := SizeOf(D);
   if not GetCommState(FH, D) then
     Erro(Tr('configurar', 'configure'));
-  D.BaudRate := 115200;
+  D.BaudRate := BAUD_CABO;
   D.Flags := 1;  // só o fBinary: sem paridade, sem controle de fluxo, DTR_CONTROL_DISABLE e RTS_CONTROL_DISABLE
   D.ByteSize := 8;
   D.Parity := NOPARITY;
@@ -113,6 +116,23 @@ end;
 procedure TPortaSerial.Dorme(Ms: Cardinal);
 begin
   Sleep(Ms);
+end;
+
+function TPortaSerial.Velocidade(Baud: Cardinal): Cardinal;
+var
+  D: TDCB;
+begin
+  D.DCBlength := SizeOf(D);
+  if not GetCommState(FH, D) then
+    Erro(Tr('configurar', 'configure'));
+  if Baud <> 0 then
+  begin
+    D.BaudRate := Baud;
+    if not SetCommState(FH, D) then
+      Erro(Tr('configurar', 'configure'));
+    PurgeComm(FH, PURGE_RXCLEAR);
+  end;
+  Result := D.BaudRate;
 end;
 
 

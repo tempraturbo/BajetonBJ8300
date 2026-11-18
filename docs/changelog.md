@@ -5,6 +5,27 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Tempra Link and CHIRP driver — Nov 18 — remote control, the cable at 460800 and YES/NO lists
+
+The BJ's Tempra Link follows the v156 to v161 round, in one commit with the CHIRP driver, because the program's tests
+check its cable speeds against the driver's.
+
+- **Remote control** (new page; `Remoto.pas`, with no window code, also serves the Android app): the radio's keypad,
+  long press by holding, and the PTT; over the cable, the radio's screen live; over Bluetooth, the status. The whole
+  screen comes in slices, as large as the image already at hand says will fit, starting at the line after the last one
+  that arrived before the loss; a slice with no line at all (TX, digit entry) is asked again without splitting. A click
+  stays on the radio at least 150 ms, and with a key or the PTT pressed, and 200 ms after, no slice goes (the redraw
+  left the radio without reading the keypad, and clicks were lost). Needs v159 or newer.
+- **The cable at 460800**, falling back to 115200 (v157 to v159) and 57600 (stock and TEMPRA up to v156), when reading,
+  in the remote and in the CHIRP driver. The first Tempra Link opened at 115200, copied from the UV, and never talked to
+  the radio.
+- **Lists.** The choice box is as wide as the column (it opened at 120 pixels at least), and only the dropdown grows to
+  the longest option; BCL, scan and bank on become a YES/NO list, like the other fields (before, "Sim" or empty,
+  toggled by the space bar). The same in the Baofeng UV-17L's Tempra Link.
+
+On the radio: reading and the remote up to v160, with a slow screen and lost clicks, which this round fixes; this
+round's fixes (and the lists) only on the simulator and the PC.
+
 ## v156 to v161 — Nov 18 — remote control over the cable (no release; v161 not tested on the radio)
 
 The remote control that section 37 studied: the keys, the PTT, a 9-byte status (what the meter measures, the S-meter,
