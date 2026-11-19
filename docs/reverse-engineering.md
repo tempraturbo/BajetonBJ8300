@@ -3445,3 +3445,38 @@ cancelling); checking both `.anc` files; the radio's firmware over the simulated
 downloads against the real GitHub. **Flashing through Tempra Link has not been tested on a radio yet.** What the radio
 does when flashing stops halfway is not known either; what is known is that the PTT2 + shortcut combo brought the
 radio back from a bootloop (history).
+
+## 43. The version over the cable and compatibility (v170)
+
+Up to v169 the firmware told its version to nobody: the VERSION item showed V3.7T on every test build, and over the
+cable all one could tell apart was stock from TEMPRA (from the reply to the extended read) and a version range, from
+the serial speed; over Bluetooth, not even that. From v170 on the version lives in one place, `firmware/src/versao.h`:
+`montar.py` writes it into the VERSION item (in place of `V0.12`, at `0x01E5FD10`, at most 5 letters), and the cable
+answers it.
+
+**The question:** the extended read of any address from `0x3F0000` to `0x3FFFFF` (size `0xBF`) comes back with the
+64-byte block starting with `TEMPRA ` and the version (`TEMPRA V3.8T`); the rest of the block keeps what the packet
+had. The address was chosen so nothing changes on the older firmwares:
+
+- the range sits near 4 MB, far from the 1 MB data chip: `LE_FLASH` (`0x01E390AC`) sends command `0x03` and the three
+  address bytes without checking anything, and the chip ignores the top bits, so an older firmware reads the end of
+  the chip there (`0x0F0000`), with no `TEMPRA ` at the start;
+- bit 22 stays clear: from v31 to v110 it turned on the diagnostic that returned the processor's memory.
+
+**The code**, in `gancho_cabo`: with size `0xBF`, a tail call to the ROM memcpy (`COPIA_MEM`, `0x021127A8`) with the
+`versao_cabo` text (13 bytes, in `.mortos23`); with any other, the usual `LE_FLASH`. In the disassembly:
+`r0 = r1.b0 (s)` and `if (r0 != -65) goto` (the `LE_FLASH`); otherwise `r0 = p + 4`, `r1 = versao_cabo`, `r2 = 13` and
+`goto COPIA_MEM`. The hook grew 28 bytes and the end of the image had 22: `zera` (12 bytes, called only by our code)
+moved to `.mortos21`, which is now full, and the end of the image uses 3254 of its 3260 bytes. The build says
+`tudo certo`.
+
+**Who asks:** Tempra Link (Windows and Android, `CaboBJ.pas`) and the CHIRP driver read the version right after seeing
+the firmware is TEMPRA, and each one only works with the versions it knows (the program's `FAIXA` and the driver's
+`FIRMWARES`, whose top end is always the one in `versao.h`; the tests check it). With the stock firmware, a TEMPRA
+that does not report its version (the ones before v170) or a version outside the range, nothing is read or written,
+because the radio may keep something else where they write. The remote control checks in a short cable session before
+the first frame, and waits for the silence that closes the session (1.5 s). When what the firmware keeps or answers
+changes, the version changes, and the program and the driver change with it.
+
+Not tested on the radio: v170 answering is still to be seen, and an older firmware (v169) reading the new address
+with nothing changing.

@@ -5,6 +5,14 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v170 — Nov 19 — the firmware tells its version (not tested on the radio)
+
+The extended read of `0x3F0000` answers `TEMPRA V3.8T`, so Tempra Link and the CHIRP driver know which firmware they
+are talking to ([section 43](reverse-engineering.md#43-the-version-over-the-cable-and-compatibility-v170)). The version now lives in `firmware/src/versao.h`, and the VERSION item shows
+V3.8T, the next release. The rest is v169.
+
+- v170 `BJ8300_BANK.anc` (not in `firmware/releases/`): sha256 `4e6a9a9568fb5e05d023deb67ad3a9698c8b79e958ae25c112b0ed99b0053ce3`
+
 ## Tempra Link — Nov 19 — flashing the firmware, the newest release and going back to factory (not tested on the radio)
 
 The protocol is in [section 42](reverse-engineering.md#42-flashing-the-firmware-over-the-cable-the-bintalk-protocol)

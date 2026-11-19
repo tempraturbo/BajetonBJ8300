@@ -28,6 +28,7 @@ aparelho. Os limites foram lidos no Ghidra e estao em PROTEGIDAS.
 """
 import hashlib
 import os
+import re
 import struct
 import sys
 
@@ -35,6 +36,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import jlfw
 
 BASE_APP = 0x01E00100
+# a versao do firmware, a mesma que o cabo responde (src/versao.h, v170)
+VERSAO = re.search(r'#define VERSAO "([^"]+)"',
+                   open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', 'versao.h')).read())[1]
 
 PROTEGIDAS = [
     (0x01E57472, 0x01E57A40, 'main do app: inicializa o hardware e escolhe o modo'),
@@ -596,7 +600,7 @@ TEXTOS = [
     (0x01E5A60F, 'All', 'ALL'),
     (0x01E5AA81, 'RX Modulation', 'RX MODULATION'),
     # versao do firmware, que o item VERSION mostra (o hardware V01T32 fica como esta)
-    (0x01E5FD10, 'V0.12', 'V3.7T'),
+    (0x01E5FD10, 'V0.12', VERSAO),
     # o nome chines do item e 语音加密 (criptografia de voz): VOICEPRI engana
     (0x01E5A82F, 'VOICEPRI', 'ENCRYPT'),
     # a dupla escuta virou tripla com o TRIPLE (v42): TDR -> TTR, pedido do dono (v48). A cadeia e

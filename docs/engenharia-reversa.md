@@ -3384,3 +3384,35 @@ e o `03`, a resposta perdida, o CRC errado, o comando desconhecido, o rádio mud
 a conferência dos dois `.anc`; o firmware do rádio pelo cabo simulado; e o release e os downloads contra o GitHub de
 verdade. **A gravação pelo Tempra Link num rádio ainda não foi testada.** O que o rádio faz quando a gravação para no
 meio também não se sabe; o que se sabe é que o combo PTT2 + atalho trouxe o rádio de volta de um bootloop (histórico).
+
+## 43. A versão pelo cabo e a compatibilidade (v170)
+
+Até a v169 o firmware não dizia a versão a ninguém: o item VERSION mostrava V3.7T em todas as versões de teste, e pelo
+cabo só dava para separar o de fábrica do TEMPRA (pela resposta à leitura estendida) e uma faixa da versão, pela
+velocidade da serial; pelo Bluetooth, nem isso. Desde a v170 a versão mora num lugar só, o `firmware/src/versao.h`: o
+`montar.py` a grava no item VERSION (no lugar do `V0.12`, em `0x01E5FD10`, com no máximo 5 letras), e o cabo a responde.
+
+**A pergunta:** a leitura estendida de qualquer endereço de `0x3F0000` a `0x3FFFFF` (o tamanho `0xBF`) volta com o
+bloco de 64 bytes começando por `TEMPRA ` e a versão (`TEMPRA V3.8T`); o resto do bloco fica com o que o pacote tinha.
+O endereço foi escolhido para não mudar nada nos firmwares de antes:
+
+- a faixa fica perto dos 4 MB, longe do chip de dados de 1 MB: o `LE_FLASH` (`0x01E390AC`) manda o comando `0x03` e os
+  três bytes do endereço sem conferir nada, e o chip ignora os bits de cima, então um firmware de antes lê ali o fim do
+  chip (`0x0F0000`), sem o `TEMPRA ` no começo;
+- o bit 22 fica em zero: da v31 à v110 ele ligava o diagnóstico que devolvia a memória do processador.
+
+**O código**, no `gancho_cabo`: com o tamanho `0xBF`, uma cauda para o memcpy da ROM (`COPIA_MEM`, `0x021127A8`) com o
+texto `versao_cabo` (13 bytes, no `.mortos23`); com qualquer outro, o `LE_FLASH` de sempre. No desmontado:
+`r0 = r1.b0 (s)` e `if (r0 != -65) goto` (o `LE_FLASH`); senão, `r0 = p + 4`, `r1 = versao_cabo`, `r2 = 13` e
+`goto COPIA_MEM`. O gancho cresceu 28 bytes e o fim da imagem tinha 22: o `zera` (12 bytes, chamado só pelo nosso
+código) foi para o `.mortos21`, que ficou cheio, e o fim da imagem usa 3254 dos 3260 bytes. O build dá `tudo certo`.
+
+**Quem pergunta:** o Tempra Link (Windows e Android, `CaboBJ.pas`) e o driver do CHIRP leem a versão logo depois de
+ver que o firmware é TEMPRA, e cada um só trabalha com as versões que conhece (a `FAIXA` do programa e os `FIRMWARES`
+do driver, cuja ponta de cima é sempre a do `versao.h`; os testes conferem). Com o de fábrica, com um TEMPRA que não
+diz a versão (o de antes da v170) ou com uma versão de fora da faixa, nada se lê nem se grava, porque o rádio pode
+guardar outra coisa onde eles gravam. O controle remoto confere numa sessão curta do cabo antes do primeiro quadro, e
+espera o silêncio que fecha a sessão (1,5 s). Mudou o que o firmware guarda ou responde, muda a versão, e o programa e
+o driver mudam junto.
+
+Sem teste no rádio: falta ver a v170 responder, e um firmware de antes (a v169) ler o endereço novo sem nada mudar.

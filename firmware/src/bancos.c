@@ -31,6 +31,8 @@
  * precisar da tabela inteira em RAM.
  */
 
+#include "versao.h"
+
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -314,7 +316,7 @@ typedef char confere_banco[sizeof(struct banco) == 4 + TAM_NOME + TAM_MAPA + 2 ?
  * Os ponteiros sao volatile de proposito: impede o clang de trocar o laco por uma chamada a
  * memset/memcpy, que nao existem aqui.
  */
-static void zera(void *destino, unsigned n)
+NOS_MORTOS(21) static void zera(void *destino, unsigned n)
 {
     volatile u8 *d = (volatile u8 *)destino;
 
@@ -2267,7 +2269,15 @@ void gancho_roger_tons(void)
  * partida.
  *
  * Da v31 a v110 a leitura com o bit 22 do endereco ligado devolvia a memoria do processador a partir de
- * 0x01E00000 (um diagnostico); saiu na v111, para abrir espaco. */
+ * 0x01E00000 (um diagnostico); saiu na v111, para abrir espaco.
+ *
+ * v170: a leitura de 0x3F0000 a 0x3FFFFF (o terceiro byte em 0x3F) devolve "TEMPRA " e a versao (versao.h), para o
+ * Tempra Link e o CHIRP saberem com qual firmware falam; o resto do bloco fica com o que o pacote tinha. A faixa e de
+ * quase 4 MB, longe do chip de dados de 1 MB: os firmwares de antes leem ali o chip (o endereco da a volta), sem o
+ * "TEMPRA " no comeco, e o bit 22 do diagnostico fica em zero. */
+#define VERSAO_CABO 0x3F
+DADO_NOS_MORTOS(23) static const char versao_cabo[] = "TEMPRA " VERSAO;
+
 void gancho_cabo(unsigned grava)
 {
     volatile u8 *p = CABO;
@@ -2278,8 +2288,12 @@ void gancho_cabo(unsigned grava)
         endereco = ((tam & 0x7F) << 16) | ((u32)p[1] << 8) | p[2];
         setor = endereco >> 12;            /* contas por setor: constantes pequenas, codigo menor */
         p[3] = 0x40;                       /* a resposta do 'R' sai com 4 + este tamanho */
-        if (!grava)
-            LE_FLASH(endereco, (void *)(p + 4), 0x40);
+        if (!grava) {
+            if (tam == (0x80 | VERSAO_CABO))
+                COPIA_MEM((void *)(p + 4), versao_cabo, sizeof versao_cabo);
+            else
+                LE_FLASH(endereco, (void *)(p + 4), 0x40);
+        }
         /* A faixa 0xC1000..0xDAFFF e exclusivamente nossa - o mapa do chip lido pelo cabo em
          * 2026-10-24 mostra que nada mais mora ali, e o chip de 1 MB nao espelha nesse endereco.
          * Quem grava por aqui e o PC mandando registro de banco; o caminho do menu continua com a

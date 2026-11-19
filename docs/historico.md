@@ -5,6 +5,14 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v170 — 19/11 — o firmware diz a versão (sem teste no rádio)
+
+A leitura estendida de `0x3F0000` responde `TEMPRA V3.8T`, para o Tempra Link e o driver do CHIRP saberem com qual
+firmware falam ([seção 43](engenharia-reversa.md#43-a-versão-pelo-cabo-e-a-compatibilidade-v170)). A versão passa a morar no `firmware/src/versao.h`, e o item VERSION mostra a
+V3.8T, a próxima release. O resto é a v169.
+
+- `BJ8300_BANK.anc` da v170 (fora de `firmware/releases/`): sha256 `4e6a9a9568fb5e05d023deb67ad3a9698c8b79e958ae25c112b0ed99b0053ce3`
+
 ## Tempra Link — 19/11 — a gravação do firmware, o release mais novo e a volta ao de fábrica (sem teste no rádio)
 
 O protocolo está na [seção 42](engenharia-reversa.md#42-a-gravação-do-firmware-pelo-cabo-o-protocolo-do-bintalk) da
