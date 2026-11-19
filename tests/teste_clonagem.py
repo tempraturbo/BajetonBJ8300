@@ -49,8 +49,10 @@ ACK = b'\x06'
 class RadioSimulado(object):
     """O lado do radio no cabo. Guarda o espaco de 64 KB do protocolo e o chip de dados de 1 MB."""
 
-    def __init__(self, bancos, espaco=None, chip=None, fim_gravacao=0x0D6000, velocidade=460800):
+    def __init__(self, bancos, espaco=None, chip=None, fim_gravacao=0x0D6000, velocidade=460800,
+                 versao=bj.FIRMWARES[1]):
         self.bancos = bancos                       # True = firmware BJ8300_BANK
+        self.versao = versao                       # a que a leitura de 0x3F0000 responde (v170); '' nos de antes
         self.velocidade = velocidade               # a da serial do radio: 460800 da v160 em diante, 115200 da v157
                                                    # a v159, 57600 antes
         self.baudrate = velocidade                 # a da porta do PC (o CHIRP a abre com o BAUD_RATE do driver)
@@ -152,7 +154,11 @@ class RadioSimulado(object):
         if tam & 0x80 and self.bancos:
             self.comandos_estendidos += 1
             endereco = ((tam & 0x7F) << 16) | end16
-            self.saida += pacote[:3] + b'\x40' + self.chip[endereco:endereco + 64]
+            if self.versao and tam & 0x7F == bj.VERSION_ADDRESS >> 16:
+                self.saida += pacote[:3] + b'\x40' + (b'TEMPRA ' + self.versao.encode()).ljust(64, b'\x00')
+            else:
+                endereco &= 0xFFFFF                    # o chip de 1 MB: o endereco da a volta
+                self.saida += pacote[:3] + b'\x40' + self.chip[endereco:endereco + 64]
             return
         dados = bytes(self.espaco[end16:end16 + 64])
         if end16 < 0xF000:
@@ -466,6 +472,26 @@ def main():
     except errors.RadioError as e:
         confere('9d. fabrica a 57600: acha a velocidade e recusa com a mensagem certa',
                 'not running the banks firmware' in str(e), True)
+
+    # ---------- 10. a versao (v170): so a FAIXA do driver, recusada antes de gravar qualquer coisa ----------
+    confere('10. a faixa do driver vai ate a versao do firmware/src/versao.h',
+            bj.FIRMWARES[1] in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'firmware', 'src',
+                                                 'versao.h'), encoding='utf-8').read(), True)
+    for versao in ('', 'V3.7T', 'V9.9T'):
+        fora = RadioSimulado(True, espaco_de_fabrica(0), chip_com_bancos(), versao=versao)
+        try:
+            baixa(fora)
+            confere('10a. firmware "%s": download recusado' % versao, 'aceitou', 'recusou')
+        except errors.RadioError as e:
+            confere('10a. firmware "%s": download recusado, dizendo por que' % versao,
+                    ('does not report its version' if versao == '' else versao) in str(e), True)
+        bom = baixa(RadioSimulado(True, espaco_de_fabrica(0), chip_com_bancos()))
+        try:
+            sobe(bom, fora)
+            confere('10b. firmware "%s": upload recusado' % versao, 'aceitou', 'recusou')
+        except errors.RadioError:
+            confere('10b. firmware "%s": upload recusado, sem gravar nada' % versao,
+                    (fora.gravacoes_estendidas, fora.gravacoes_normais), ([], 0))
 
     print()
     print('FALHAS: %d' % len(falhas) if falhas else 'tudo certo')

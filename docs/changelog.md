@@ -5,6 +5,14 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Nov 19 — only the versions it knows
+
+The driver reads the radio's version (from v170 on the radio answers it) and only works with the ones in its range,
+`FIRMWARES`, today only V3.8T: with a TEMPRA that does not report its version, an older one or a newer one, it refuses
+before writing, saying why. The stock firmware is still refused. `tests/teste_clonagem.py` checks the refusal on
+download and upload, and that nothing was written. The module keeps the name `bj8300_v3.7TEMPRA.py` until the V3.8T
+release.
+
 ## v170 — Nov 19 — the firmware tells its version (not tested on the radio)
 
 The extended read of `0x3F0000` answers `TEMPRA V3.8T`, so Tempra Link and the CHIRP driver know which firmware they

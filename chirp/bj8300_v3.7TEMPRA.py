@@ -133,6 +133,31 @@ NUM_CHANNELS = 960
 CHANNEL_SIZE = 32                              # channel records start at 0x0000 of the image
 ACK = b'\x06'
 
+# The firmware versions this driver works with, both ends included (the top one is firmware/src/versao.h): the memory
+# map here is theirs. From v170 (V3.8T) on, the extended read of 0x3F0000 answers b'TEMPRA ' and the version; the
+# firmwares before it answer what the chip has there, without that prefix, and are refused like any other one outside
+# the range: the radio could keep something else where this driver writes.
+FIRMWARES = ('V3.8T', 'V3.8T')
+VERSION_ADDRESS = 0x3F0000
+
+
+def _numbers(version):
+    return tuple(int(n) if n.isdigit() else 0 for n in version.strip().lstrip('vV').rstrip('tT').split('.'))
+
+
+def compatible(version):
+    return version != '' and _numbers(FIRMWARES[0]) <= _numbers(version) <= _numbers(FIRMWARES[1])
+
+
+# The version in the reply to the VERSION_ADDRESS read ('' when the firmware does not tell it).
+def firmware_version(block):
+    if not block.startswith(b'TEMPRA '):
+        return ''
+    end = 7
+    while end < len(block) and 32 < block[end] < 127:
+        end += 1
+    return block[7:end].decode('ascii')
+
 
 def _checksum(data):
     """The firmware's checksum (soma_de in bancos.c): starts at 0x1234 and shifts on every byte."""
@@ -530,8 +555,9 @@ class _BankCableMixin(object):
             self.pipe.read(head[3])
             raise errors.RadioError(
                 'This radio is not running the banks firmware (the 24-bit address is not '
-                'accepted). Flash BJ8300_BANK V3.7T, or use the stock Bajeton BJ7800 or '
-                'Radtel RT-920 driver for the channels only.')
+                'accepted). Flash the TEMPRA firmware of the same release as this module (Tempra '
+                'Link downloads and flashes it), or use the stock Bajeton BJ7800 or Radtel RT-920 '
+                'driver for the channels only.')
         data = self.pipe.read(EXT_BLOCK)
         if len(data) != EXT_BLOCK:
             raise errors.RadioError('The radio did not answer the read at %06X' % address)
@@ -554,6 +580,14 @@ class _BankCableMixin(object):
         only held because the stock firmware's long reply threw the cable out of sync.)
         """
         self._read_extended(HEADER_SECTOR)
+        version = firmware_version(self._read_extended(VERSION_ADDRESS))
+        if not compatible(version):
+            raise errors.RadioError(
+                ('This radio runs firmware %s, which this driver does not work with.' % version if version else
+                 'This radio runs an old TEMPRA firmware that does not report its version, and this driver does '
+                 'not work with it.') +
+                ' Flash the TEMPRA firmware of the same release as this module (Tempra Link downloads and '
+                'flashes it).')
 
     def _download_banks(self):
         """Reads the 17 sectors (header + 16 banks) and returns the blob that goes into the .img."""

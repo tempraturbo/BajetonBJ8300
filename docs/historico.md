@@ -5,6 +5,13 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 19/11 — só as versões que ele conhece
+
+O driver lê a versão do rádio (da v170 em diante ele a responde) e só trabalha com as da faixa dele, `FIRMWARES`, hoje
+só a V3.8T: com um TEMPRA que não diz a versão, com um mais velho ou com um mais novo, ele recusa antes de gravar,
+dizendo o motivo. A recusa do firmware de fábrica continua. O `tests/teste_clonagem.py` confere a recusa no download e
+no upload, e que nada foi gravado. O módulo segue com o nome `bj8300_v3.7TEMPRA.py` até a release da V3.8T.
+
 ## v170 — 19/11 — o firmware diz a versão (sem teste no rádio)
 
 A leitura estendida de `0x3F0000` responde `TEMPRA V3.8T`, para o Tempra Link e o driver do CHIRP saberem com qual
