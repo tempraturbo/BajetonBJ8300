@@ -3323,3 +3323,64 @@ cru da tecla (o `*` é o 9). Na v168 a entrada do 23 (`0x01E4BD7C`) passa de `0x
 **O espaço.** O `.livre` não coube por 30 bytes com o código novo do `tela.c`: o `volta_fim` do `mensagem.c` (34 B, só
 o nosso código o chama) foi para a faixa morta 28 (seção 39), e sobram 4 B no `.livre`. As rotinas novas do `bancos.c`
 ficam no `.text`.
+
+## 42. A gravação do firmware pelo cabo (o protocolo do BinTalk)
+
+O gravador da fabricante (`tools/anc-bootloader/BinTe ANC Bootloader.exe`, a janela BinTalk V1.1) é um programa .NET,
+e o protocolo saiu do CIL dele (o `KDH_Bootloader.BootHelper`, o `PackageFmt` e o `BootHelper.Decrypt`); os pacotes do
+`PackageFmt.Packing`, chamado por reflexão, são os vetores do teste. O `tempralink/GravadorBJ.pas` faz o mesmo, e a
+página Firmware do Tempra Link o usa.
+
+**O pacote**, nos dois sentidos: `AA 55`, o tamanho da carga (2 bytes, o baixo primeiro), a carga e o CRC16-XMODEM
+(polinômio `0x1021`, começo 0) de tudo o que vem antes dele, também com o byte baixo primeiro. O primeiro byte da carga
+é o comando.
+
+| Sentido | Carga | O que é |
+|---|---|---|
+| PC → rádio | `06` | começa (o botão Update) |
+| | `01` + velocidade (4 B) | 10000 duas vezes, e depois a de trabalho (115200) |
+| | `02` + endereço (4 B) + n (4 B) + os bytes | o pedaço pedido do `.anc`, sem a camada KDH |
+| | `03` | o fim |
+| rádio → PC | `01` | pronto: anda um passo |
+| | `02` + endereço (4 B) + n (4 B) | pede n bytes do arquivo a partir do endereço |
+| | `03` | terminou |
+| | `04` | pede o `03` |
+
+**A conversa.** A serial abre a 9600 8N1, sem controle de fluxo, com o DTR e o RTS ligados, e o PC manda o `06`. A
+cada `01` do rádio, um passo: no primeiro (o modo UPDATE respondeu) o PC manda `01 10000` e passa a serial a 10000; no
+segundo (a velocidade valeu) manda `01 10000` de novo, e o rádio pede o carregador em pedaços; no terceiro (o rádio
+pulou para o carregador) manda `01 115200` e, 20 ms depois, passa a serial a 115200; daí em diante o `01` é só o
+andamento, e o PC manda de novo a última carga montada. Quem decide o que gravar é o rádio, que pede os pedaços do
+arquivo: o carregador e uma das seis imagens de flash, uns 1/6 do arquivo, que é a conta do andamento do BinTalk. Perto
+do fim do arquivo o PC manda o que há, com a carga do tamanho pedido completada com zeros e o n com os bytes que vieram
+do arquivo. No fim, o rádio manda `04`, o PC responde `03`, e o rádio termina com `03`.
+
+**Os tempos.** O BinTalk tem um temporizador de 2 s que nasce ligado, que o envio liga se estiver parado, que o `AA`
+recomeça e que o pacote certo para; sem pacote certo em 2 s, o último pacote vai de novo, até 5 vezes, e então
+"Failure". O Tempra Link faz igual, com duas diferenças: um comando que o BinTalk não conhece (que o deixaria esperando
+para sempre) também conta como falta de resposta, e a gravação inteira tem um limite de 15 minutos. Ele troca a
+velocidade pelo `SetCommState`, sem fechar a porta (o BinTalk fecha e abre). O Cancelar só vale antes de o rádio
+responder: depois, parar no meio deixaria o carregador esperando, e a janela não fecha enquanto grava.
+
+**A conferência do `.anc`, antes de gravar.** O `ConfereAnc` refaz o que o `firmware/scripts/jlfw.py` confere: o
+tamanho do `.anc` do BJ-8300 (4063840 bytes, o de fábrica e os deste projeto); a camada KDH (o `BootHelper.Decrypt`:
+KDHT e RBGI por bloco de 1 KB conforme o bloco % 3, nos blocos 2 a n-3); o cabeçalho UFW com o CRC dele e o da tabela
+de entradas; o chip AC695X; cada entrada dentro do arquivo; as seis imagens de flash (os tipos 0 e `0x20` a `0x24`) com
+os CRCs delas; a chave do chip, achada na entrada `app_area_head` do diretório da primeira imagem; o CRC de cada uma
+das outras entradas, decifradas pelo SFC com essa chave; e no `app.bin` a marca do hardware do BJ-8300 (`V01T32`) e a
+versão (o texto do item VERSION, no deslocamento `0x5FC10`: `V0.12` no de fábrica). O de fábrica passa igual, e é por
+ele que se volta. Um byte trocado em qualquer lugar do arquivo, um byte a menos e o arquivo vazio são recusados
+(testado). O download do GitHub se confere antes pelo tamanho e pelo SHA-256 que o GitHub dá; o de fábrica, pelo
+SHA-256 fixo no programa (`49525854…`).
+
+**O firmware do rádio, pelo cabo.** A versão em si não vem pelo cabo: o firmware não mora no chip de dados (seção 3), e
+a leitura da memória do processador saiu na v111. O que a conversa mostra é se ele é o de fábrica (o estendido responde
+com o tamanho pedido) ou o TEMPRA, e a velocidade em que respondeu dá a faixa: 57600 até a v156 (a V3.7T ou anterior),
+115200 da v157 à v159 e 460800 da v160 em diante. A versão exata está no rádio, em SYSTEM > VERSION.
+
+**O que se testou.** Os pacotes contra os do `PackageFmt.Packing`; a conversa inteira contra um rádio simulado no modo
+UPDATE (`tempralink/testes/SimuladorUpdate.pas`: as velocidades na ordem, os pedaços pedidos iguais ao arquivo, o `04`
+e o `03`, a resposta perdida, o CRC errado, o comando desconhecido, o rádio mudo, o que cala no meio e o cancelamento);
+a conferência dos dois `.anc`; o firmware do rádio pelo cabo simulado; e o release e os downloads contra o GitHub de
+verdade. **A gravação pelo Tempra Link num rádio ainda não foi testada.** O que o rádio faz quando a gravação para no
+meio também não se sabe; o que se sabe é que o combo PTT2 + atalho trouxe o rádio de volta de um bootloop (histórico).

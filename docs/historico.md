@@ -5,6 +5,27 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Tempra Link — 19/11 — a gravação do firmware, o release mais novo e a volta ao de fábrica (sem teste no rádio)
+
+O protocolo está na [seção 42](engenharia-reversa.md#42-a-gravação-do-firmware-pelo-cabo-o-protocolo-do-bintalk) da
+engenharia reversa.
+
+- **A página Firmware grava o `.anc`** pelo cabo, com o rádio no modo UPDATE (PTT2 + atalho), pelo mesmo protocolo do
+  BinTe ANC Bootloader (BinTalk V1.1), lido no CIL dele: as mesmas velocidades, os mesmos pacotes, as 5 repetições de
+  2 s. A janela não fecha enquanto grava, e o Cancelar só vale antes de o rádio responder.
+- **O arquivo se confere inteiro antes de gravar:** o tamanho, a camada KDH, os CRCs do cabeçalho, da tabela e de cada
+  entrada (as do SFC decifradas com a chave do chip), a marca do hardware do BJ-8300 e a versão. O que não passa não vai
+  para o rádio; o de fábrica (V0.12) passa igual.
+- **O release mais novo do GitHub,** procurado sozinho ao abrir o programa, e o botão **Baixar e gravar**: o download
+  se confere pelo tamanho e pelo SHA-256 do GitHub, e depois pela conferência do `.anc`. **Voltar ao de fábrica** usa o
+  `firmware/original/BJ8300_V0.12.anc` ao lado do programa ou o baixa do repositório, conferido pelo SHA-256 fixo.
+- **O firmware do rádio:** em qualquer conversa pelo cabo (e no botão Verificar), o programa diz se o rádio está com o
+  de fábrica ou com o TEMPRA, e a faixa da versão pela velocidade do cabo.
+
+Testado no PC: os pacotes contra os do próprio BinTalk, a gravação inteira contra um rádio simulado no modo UPDATE
+(com as falhas), a conferência dos dois `.anc`, e o release e os downloads contra o GitHub de verdade. A gravação num
+rádio ainda não foi testada.
+
 ## Tempra Link — 19/11 — a tela do remoto com o retrato da v168
 
 - A tela do controle remoto acompanha o retrato da v168 (o número do canal na busca; versão 141), no Windows e no

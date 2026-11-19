@@ -6,9 +6,8 @@ firmware TEMPRA (V3.7T ou mais novo), e tenta o mesmo pelo Bluetooth (experiment
 bits. Como usar: [README](../README.md#-tempra-link-o-rádio-pelo-pc).
 
 É o irmão do Tempra Link do Baofeng UV-17L (no repositório dele), com a mesma janela, e separado de propósito: um
-não fala com o outro rádio, e um não abre o backup do outro. O que o BJ não tem fica de fora: o ROGER CUSTOM e a
-gravação do firmware, que é pelo BinTe ANC Bootloader. O controle remoto, que o firmware ganhou depois da V3.7T,
-tem página própria (abaixo).
+não fala com o outro rádio, e um não abre o backup do outro. O controle remoto, que o firmware ganhou depois da V3.7T,
+e a gravação do firmware têm páginas próprias (abaixo).
 
 ## A memória pelo cabo
 
@@ -83,6 +82,19 @@ janela, serve também ao app de Android.
 - **O PTT.** O PTT do BJ é o fio do RX da serial do cabo: os bytes do PC o apertam. O firmware v157 em diante ignora o
   PTT do fio com o remoto ligado pelo cabo, e o programa manda os bytes de reserva em 0xFF, com menos bits 0.
 
+## O firmware
+
+A página Firmware grava o `.anc` pelo cabo (`GravadorBJ.pas`), pelo protocolo do BinTe ANC Bootloader, lido no CIL
+dele ([seção 42](../docs/engenharia-reversa.md#42-a-gravação-do-firmware-pelo-cabo-o-protocolo-do-bintalk)): o rádio no
+modo UPDATE (ligado segurando o PTT2 e o atalho), a serial a 9600, depois a 10000 e a 115200, e o rádio pedindo os
+pedaços do arquivo. Antes, o arquivo se confere inteiro (o tamanho, a camada KDH, todos os CRCs e a marca do hardware
+do BJ-8300); o de fábrica passa igual. Ao abrir, o programa procura no GitHub o release mais novo (`Atualizacao.pas`, a
+API dos releases, sem login); **Baixar e gravar** baixa o `.anc` dele, confere pelo tamanho e pelo SHA-256 que o
+GitHub dá e grava; **Voltar ao de fábrica** usa o `firmware/original/BJ8300_V0.12.anc` ao lado do programa, ou o baixa
+do repositório, conferido pelo SHA-256 fixo. Os downloads ficam em `%LOCALAPPDATA%\TempraLink\firmware`. Em qualquer
+conversa pelo cabo, e no **Verificar**, o programa diz se o rádio está com o de fábrica ou com o TEMPRA, e a faixa da
+versão pela velocidade em que ele respondeu. A gravação num rádio ainda não foi testada.
+
 ## O Bluetooth (experimental)
 
 O `Bluetooth.pas` procura os aparelhos BLE pelo Bluetooth do Windows, conecta no escolhido, escreve no Registro todos os
@@ -119,7 +131,9 @@ CHIRP instalados, os testes conferem também contra o driver do CHIRP:
   firmware de fábrica, o rádio mudo, o rádio que mudou, o firmware que confirma e não guarda, o VFO C com o C no lado
   B), os registros apagados, o backup, o CSV e o logo; o controle remoto, com o rádio simulado falando o protocolo
   dele (as teclas, o PTT, a tela por fatias, a perda que chega no meio da tela inteira, a TX, o clique curto e a tecla
-  segurada); e as três velocidades do cabo;
+  segurada); as três velocidades do cabo e o firmware que o cabo mostra; e a gravação do firmware, contra um rádio
+  simulado no modo UPDATE (`testes\SimuladorUpdate.pas`), com os pacotes do próprio BinTalk, a conferência dos dois
+  `.anc` (o de fábrica e o da release) e a leitura do release do GitHub (`testes\github-release.json`);
 - o `testes\fixtures.py confere` lê o `gravado.bin` pelo driver e confere as mudanças.
 
 Sem o CHIRP, os testes usam o `radio.bin` e o `esperado.txt` que já estão no repositório.
@@ -133,6 +147,8 @@ Visual.pas           o tema escuro, os botões e a marca "((T))" (o mesmo do UV-
 BJ8300.pas           a memória do rádio, os canais, os bancos, os ajustes, os textos, o DTMF, o logo e o backup
 Ajustes.pas          o menu a partir do menu-bj8300.txt
 CaboBJ.pas           o protocolo do cabo
+GravadorBJ.pas       a gravação do firmware e a conferência do .anc (sem janela)
+Atualizacao.pas      o release mais novo no GitHub e o download conferido (o mesmo do UV-17L)
 Remoto.pas           o controle remoto: os quadros, o estado, a tela por fatias (sem janela)
 Bluetooth.pas        o Bluetooth LE (experimental)
 Transporte.pas       o caminho até o rádio, que a serial, o Bluetooth e o simulado seguem

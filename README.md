@@ -335,6 +335,12 @@ o firmware nem chega a ligar, mas ele **nunca foi testado**.
 
 ## 📥 Como gravar o firmware, passo a passo
 
+> [!TIP]
+> **Pelo Tempra Link** (depois da V3.7T, ainda sem teste no rádio): a página **Firmware** do `TempraLink-BJ8300.exe`
+> grava o `.anc` pelo mesmo protocolo do gravador abaixo, confere o arquivo inteiro antes (o de fábrica também), mostra
+> o firmware do rádio e o release mais novo do GitHub, e baixa e grava com um clique a versão nova ou a de fábrica. Os
+> passos abaixo, pelo BinTalk, continuam valendo.
+
 Precisa de um PC com Windows e do **cabo de programação USB** do rádio (o de chip CH340, o mesmo do
 CPS de fábrica).
 
@@ -593,6 +599,10 @@ guarda e grava pelo cabo o BJ-8300 com este firmware:
   programa confere lendo de volta e avisa.
 - **Backup:** cada leitura guarda um sozinha; salvar, abrir e restaurar. O backup do Tempra Link do Baofeng UV-17L
   não abre aqui, e o deste não abre lá.
+- **Firmware** (ainda sem teste no rádio): grava o `.anc` pelo cabo, com o rádio no modo UPDATE, como o BinTalk;
+  confere o arquivo inteiro antes de gravar (os CRCs do `.anc` e a marca do hardware), diz se o rádio está com o de
+  fábrica ou com o TEMPRA, procura sozinho o release mais novo no GitHub e baixa e grava com um clique a versão nova ou
+  a de fábrica (V0.12), conferidas pelo SHA-256 ([seção 42](docs/engenharia-reversa.md#42-a-gravação-do-firmware-pelo-cabo-o-protocolo-do-bintalk)).
 
 Ele só segue com um BJ-8300 que responda com o firmware TEMPRA. Grava só o que mudou, conferindo antes que o rádio
 não mudou desde a leitura, e lê de volta o que gravou nos setores dos bancos e dos registros. Depois de gravar os

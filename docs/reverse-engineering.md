@@ -3382,3 +3382,66 @@ raw code (`*` is 9). In v168, event 23's entry (`0x01E4BD7C`) goes from `0x395` 
 **Room.** `.livre` did not fit by 30 bytes with the new `tela.c` code: `mensagem.c`'s `volta_fim` (34 B, only our code
 calls it) went to dead range 28 (section 39), and 4 B are left in `.livre`. The new `bancos.c` routines stay in
 `.text`.
+
+## 42. Flashing the firmware over the cable (the BinTalk protocol)
+
+The maker's flasher (`tools/anc-bootloader/BinTe ANC Bootloader.exe`, the BinTalk V1.1 window) is a .NET program, and
+the protocol came out of its CIL (`KDH_Bootloader.BootHelper`, `PackageFmt` and `BootHelper.Decrypt`); the packets of
+`PackageFmt.Packing`, called through reflection, are the test vectors. `tempralink/GravadorBJ.pas` does the same, and
+Tempra Link's Firmware page uses it.
+
+**The packet**, both ways: `AA 55`, the payload length (2 bytes, low first), the payload and the CRC16-XMODEM
+(polynomial `0x1021`, start 0) of everything before it, also low byte first. The payload's first byte is the command.
+
+| Direction | Payload | What it is |
+|---|---|---|
+| PC → radio | `06` | start (the Update button) |
+| | `01` + speed (4 B) | 10000 twice, then the working one (115200) |
+| | `02` + address (4 B) + n (4 B) + the bytes | the requested piece of the `.anc`, without the KDH layer |
+| | `03` | the end |
+| radio → PC | `01` | ready: one step forward |
+| | `02` + address (4 B) + n (4 B) | asks for n bytes of the file from the address |
+| | `03` | finished |
+| | `04` | asks for the `03` |
+
+**The conversation.** The serial port opens at 9600 8N1, no flow control, with DTR and RTS on, and the PC sends `06`.
+Each `01` from the radio is a step: on the first (UPDATE mode answered) the PC sends `01 10000` and switches the port to
+10000; on the second (the speed took) it sends `01 10000` again, and the radio asks for the loader in pieces; on the
+third (the radio jumped to the loader) it sends `01 115200` and, 20 ms later, switches the port to 115200; from then on
+`01` is only progress, and the PC sends the last built payload again. The radio decides what to write, asking for the
+file's pieces: the loader and one of the six flash images, about 1/6 of the file, which is BinTalk's progress
+arithmetic. Near the end of the file the PC sends what there is, with the payload of the requested size padded with
+zeros and n holding the bytes that came from the file. At the end the radio sends `04`, the PC answers `03`, and the
+radio finishes with `03`.
+
+**The timing.** BinTalk has a 2 s timer that starts running, that sending starts if it is stopped, that `AA` restarts
+and that a valid packet stops; without a valid packet in 2 s, the last packet goes again, up to 5 times, and then
+"Failure". Tempra Link does the same, with two differences: a command BinTalk does not know (which would leave it
+waiting forever) also counts as no answer, and the whole flash has a 15-minute limit. It changes the speed with
+`SetCommState`, without closing the port (BinTalk closes and reopens it). Cancel only works before the radio answers:
+after that, stopping halfway would leave the loader waiting, and the window does not close while flashing.
+
+**Checking the `.anc` before flashing.** `ConfereAnc` redoes what `firmware/scripts/jlfw.py` checks: the size of the
+BJ-8300 `.anc` (4063840 bytes, the factory one and this project's); the KDH layer (`BootHelper.Decrypt`: KDHT and RBGI
+per 1 KB block according to block % 3, on blocks 2 to n-3); the UFW header with its CRC and the entry table's; the
+AC695X chip; every entry inside the file; the six flash images (types 0 and `0x20` to `0x24`) with their CRCs; the chip
+key, found in the `app_area_head` entry of the first image's directory; the CRC of each of the other entries, decrypted
+through SFC with that key; and in `app.bin` the BJ-8300 hardware tag (`V01T32`) and the version (the VERSION item's
+text, at offset `0x5FC10`: `V0.12` on the factory one). The factory one passes the same way, and it is how one goes
+back. A byte changed anywhere in the file, one byte short and the empty file are refused (tested). A download from
+GitHub is checked first by its size and the SHA-256 GitHub gives; the factory one, by the SHA-256 fixed in the program
+(`49525854…`).
+
+**The radio's firmware, over the cable.** The version itself does not come over the cable: the firmware does not live
+on the data chip (section 3), and reading the processor's memory left in v111. What the conversation shows is whether
+it is the factory one (the extended read answers with the requested size) or TEMPRA, and the speed it answered at gives
+the range: 57600 up to v156 (V3.7T or older), 115200 from v157 to v159 and 460800 from v160 on. The exact version is on
+the radio, in SYSTEM > VERSION.
+
+**What was tested.** The packets against `PackageFmt.Packing`'s; the whole conversation against a radio simulated in
+UPDATE mode (`tempralink/testes/SimuladorUpdate.pas`: the speeds in order, the requested pieces equal to the file, the
+`04` and the `03`, a lost answer, a bad CRC, an unknown command, a mute radio, one that goes quiet halfway and
+cancelling); checking both `.anc` files; the radio's firmware over the simulated cable; and the release and the
+downloads against the real GitHub. **Flashing through Tempra Link has not been tested on a radio yet.** What the radio
+does when flashing stops halfway is not known either; what is known is that the PTT2 + shortcut combo brought the
+radio back from a bootloop (history).

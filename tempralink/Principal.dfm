@@ -944,19 +944,26 @@ object FormPrincipal: TFormPrincipal
         Caption = 'CartaoFirmware'
         CardIndex = 5
         TabOrder = 5
-        object LabelInfo: TLabel
+        object LabelArquivo: TLabel
           Left = 24
           Top = 16
+          Width = 96
+          Height = 15
+          Caption = 'Firmware (.anc)'
+        end
+        object LabelInfo: TLabel
+          Left = 24
+          Top = 70
           Width = 680
-          Height = 40
+          Height = 48
           AutoSize = False
           WordWrap = True
         end
         object LabelPassos: TLabel
           Left = 24
-          Top = 64
+          Top = 126
           Width = 680
-          Height = 320
+          Height = 150
           AutoSize = False
           Font.Charset = DEFAULT_CHARSET
           Font.Color = clGrayText
@@ -965,6 +972,67 @@ object FormPrincipal: TFormPrincipal
           Font.Style = []
           ParentFont = False
           WordWrap = True
+        end
+        object LabelVersoes: TLabel
+          Left = 24
+          Top = 340
+          Width = 680
+          Height = 48
+          AutoSize = False
+          WordWrap = True
+        end
+        object EditArquivo: TEdit
+          Left = 24
+          Top = 36
+          Width = 580
+          Height = 23
+          ReadOnly = True
+          TabOrder = 0
+        end
+        object BotaoEscolher: TButton
+          Left = 614
+          Top = 35
+          Width = 90
+          Height = 25
+          Caption = 'Escolher...'
+          TabOrder = 1
+          OnClick = BotaoEscolherClick
+        end
+        object BotaoGravar: TButton
+          Left = 24
+          Top = 286
+          Width = 130
+          Height = 33
+          Caption = 'Gravar'
+          TabOrder = 2
+          OnClick = BotaoGravarClick
+        end
+        object BotaoVerificar: TButton
+          Left = 24
+          Top = 396
+          Width = 200
+          Height = 33
+          Caption = 'Verificar'
+          TabOrder = 3
+          OnClick = BotaoVerificarClick
+        end
+        object BotaoBaixar: TButton
+          Left = 234
+          Top = 396
+          Width = 230
+          Height = 33
+          Caption = 'Baixar e gravar'
+          TabOrder = 4
+          OnClick = BotaoBaixarClick
+        end
+        object BotaoFabrica: TButton
+          Left = 474
+          Top = 396
+          Width = 230
+          Height = 33
+          Caption = 'Fabrica'
+          TabOrder = 5
+          OnClick = BotaoFabricaClick
         end
       end
       object CartaoBackup: TCard
@@ -1086,6 +1154,12 @@ object FormPrincipal: TFormPrincipal
     Options = [ofOverwritePrompt, ofHideReadOnly, ofEnableSizing]
     Left = 1140
     Top = 600
+  end
+  object DialogoFirmware: TOpenDialog
+    DefaultExt = 'anc'
+    Options = [ofHideReadOnly, ofFileMustExist, ofEnableSizing]
+    Left = 1060
+    Top = 640
   end
   object DialogoSom: TOpenDialog
     Options = [ofHideReadOnly, ofFileMustExist, ofEnableSizing]

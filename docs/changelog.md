@@ -5,6 +5,28 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Tempra Link — Nov 19 — flashing the firmware, the newest release and going back to factory (not tested on the radio)
+
+The protocol is in [section 42](reverse-engineering.md#42-flashing-the-firmware-over-the-cable-the-bintalk-protocol)
+of the reverse engineering.
+
+- **The Firmware page flashes the `.anc`** over the cable, with the radio in UPDATE mode (PTT2 + shortcut), through
+  the same protocol as BinTe ANC Bootloader (BinTalk V1.1), read from its CIL: the same speeds, the same packets, the 5
+  retries of 2 s. The window does not close while flashing, and Cancel only works before the radio answers.
+- **The whole file is checked before flashing:** the size, the KDH layer, the CRCs of the header, the table and every
+  entry (the SFC ones decrypted with the chip key), the BJ-8300 hardware tag and the version. What fails does not go to
+  the radio; the factory one (V0.12) passes the same way.
+- **The newest release on GitHub,** looked up by itself when the program opens, and the **Download and flash** button:
+  the download is checked by its size and GitHub's SHA-256, and then by the `.anc` check. **Back to factory** uses
+  `firmware/original/BJ8300_V0.12.anc` next to the program or downloads it from the repository, checked by the fixed
+  SHA-256.
+- **The radio's firmware:** on any conversation over the cable (and on the Check button), the program says whether the
+  radio has the factory firmware or TEMPRA, and the version range from the cable's speed.
+
+Tested on the PC: the packets against BinTalk's own, the whole flash against a radio simulated in UPDATE mode (with the
+failures), checking both `.anc` files, and the release and the downloads against the real GitHub. Flashing a radio has
+not been tested yet.
+
 ## Tempra Link — Nov 19 — the remote's screen with v168's portrait
 
 - The remote control's screen follows v168's portrait (the channel number while scanning; version 141), on Windows and

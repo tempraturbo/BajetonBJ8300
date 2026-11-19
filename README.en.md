@@ -339,6 +339,12 @@ the firmware does not even start, but it has **never been tested**.
 
 ## 📥 How to flash the firmware, step by step
 
+> [!TIP]
+> **Through Tempra Link** (after V3.7T, not tested on the radio yet): the **Firmware** page of `TempraLink-BJ8300.exe`
+> flashes the `.anc` through the same protocol as the flasher below, checks the whole file first (the factory one
+> too), shows the radio's firmware and the newest release on GitHub, and downloads and flashes the new version or the
+> factory one in one click. The steps below, through BinTalk, still apply.
+
 You need a Windows PC and the radio's **USB programming cable** (the CH340 one, the same the stock
 CPS uses).
 
@@ -597,6 +603,10 @@ edits, keeps and writes through the cable a BJ-8300 running this firmware:
   the cable yet, and the program checks by reading back and says so.
 - **Backup:** every read saves one by itself; save, open and restore. A backup from the Baofeng UV-17L's Tempra
   Link does not open here, and this one does not open there.
+- **Firmware** (not tested on the radio yet): flashes the `.anc` over the cable, with the radio in UPDATE mode, like
+  BinTalk; checks the whole file before flashing (the `.anc` CRCs and the hardware tag), says whether the radio has the
+  factory firmware or TEMPRA, looks up the newest release on GitHub by itself and downloads and flashes the new version
+  or the factory one (V0.12) in one click, checked by SHA-256 ([section 42](docs/reverse-engineering.md#42-flashing-the-firmware-over-the-cable-the-bintalk-protocol)).
 
 It only goes on with a BJ-8300 that answers with the TEMPRA firmware. It writes only what changed, checking first
 that the radio did not change since it was read, and reads back what it wrote to the bank and record sectors. After

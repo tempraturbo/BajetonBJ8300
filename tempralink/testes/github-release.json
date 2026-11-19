@@ -1,0 +1,33 @@
+{
+ "tag_name": "v3.7T",
+ "name": "V3.7T — a tela MESSAGES do Morse, o SENDING, o PF3 LONG e a lanterna de tela / the Morse MESSAGES screen, SENDING, PF3 LONG and the flashlight screen",
+ "html_url": "https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.7T",
+ "draft": false,
+ "prerelease": false,
+ "assets": [
+  {
+   "name": "BinTalk-V1.1.zip",
+   "size": 83057,
+   "digest": "sha256:9219ddba76907660e149dfce4c1ffe07bfe4d941d796b85165033033b4577588",
+   "browser_download_url": "https://github.com/tempraturbo/BajetonBJ8300/releases/download/v3.7T/BinTalk-V1.1.zip"
+  },
+  {
+   "name": "BJ8300_BANK_v3.7T.anc",
+   "size": 4063840,
+   "digest": "sha256:fc0890e41baac86ab2af503612a0452277ba7613271d71f5cdc2e67297538342",
+   "browser_download_url": "https://github.com/tempraturbo/BajetonBJ8300/releases/download/v3.7T/BJ8300_BANK_v3.7T.anc"
+  },
+  {
+   "name": "bj8300_v3.7TEMPRA.py",
+   "size": 90296,
+   "digest": "sha256:d278109780f0107adf08a2be1d6200e65e926aa310f7f60351a1aeda27b8b8a2",
+   "browser_download_url": "https://github.com/tempraturbo/BajetonBJ8300/releases/download/v3.7T/bj8300_v3.7TEMPRA.py"
+  },
+  {
+   "name": "CH340-driver.zip",
+   "size": 155964,
+   "digest": "sha256:86e100d358f916539dce9256eaea35325bc7be38b74c9567aeb7be6dda819168",
+   "browser_download_url": "https://github.com/tempraturbo/BajetonBJ8300/releases/download/v3.7T/CH340-driver.zip"
+  }
+ ]
+}

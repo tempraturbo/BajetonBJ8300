@@ -10,7 +10,7 @@
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.ZLib, System.Math, Idioma, Transporte, CaboBJ, Ajustes,
-  BJ8300, Csv, Logo, LogoFormato, Remoto, TelaBJ, SimuladorBJ;
+  BJ8300, Csv, Logo, LogoFormato, Remoto, TelaBJ, SimuladorBJ, GravadorBJ, SimuladorUpdate, Atualizacao;
 
 var
   Pasta: string;
@@ -1351,6 +1351,206 @@ begin
   end;
 end;
 
+{ O firmware que a conversa pelo cabo mostra (o Verificar da página Firmware): o TEMPRA com a velocidade em que
+  respondeu, que dá a faixa da versão, o de fábrica e o rádio mudo. }
+procedure TesteFirmwareNoRadio;
+var
+  R: TRadioBJSimulado;
+  T: ITransporte;
+  C: TCaboBJ;
+  Baud: Cardinal;
+
+  function Ve(Radio: TRadioBJSimulado): TCaboBJ;
+  begin
+    T := Radio;
+    Result := TCaboBJ.Create;
+    try
+      Result.Sessao(T, procedure begin end);
+    except
+      on ENaoTempra do ;
+      on ESemRadio do ;
+    end;
+  end;
+
+begin
+  for Baud in BAUDS_CABO do
+  begin
+    R := NovoRadio;
+    R.Serial := Baud;
+    C := Ve(R);
+    Confere((C.Firmware = fnTempra) and (C.Velocidade = Baud) and not R.NaSessao,
+            Format('firmware no rádio: o TEMPRA, com o cabo a %d', [Baud]));
+    C.Free;
+  end;
+  R := NovoRadio;
+  R.Fabrica := True;
+  R.Serial := BAUD_CABO_ANTIGA;
+  C := Ve(R);
+  Confere((C.Firmware = fnFabrica) and not R.NaSessao and not R.Lixo, 'firmware no rádio: o de fábrica');
+  C.Free;
+  R := NovoRadio;
+  R.Mudo := True;
+  C := Ve(R);
+  Confere(C.Firmware = fnNenhum, 'firmware no rádio: o mudo não mostra nenhum');
+  C.Free;
+end;
+
+{ A gravação do firmware (GravadorBJ): os pacotes iguais aos do próprio BinTalk, a conferência do .anc (o de fábrica e
+  o da release passam, um byte trocado e o tamanho errado não) e a conversa inteira contra o rádio simulado no modo
+  UPDATE, com as falhas: resposta perdida, CRC errado, comando desconhecido, rádio mudo, rádio que cala no meio e o
+  cancelamento. }
+procedure TesteGravadorBJ;
+const
+  // o PackageFmt.Packing do BinTe ANC Bootloader.exe, chamado por reflexão no .NET do Windows
+  VETORES: array[0..6, 0..1] of string = (
+    ('06', 'AA5501000642F2'), ('0110270000', 'AA55050001102700000BBF'), ('0100C20100', 'AA5505000100C201005CDC'),
+    ('03', 'AA55010003E7A2'), ('02001000000400000000DEADBEEF', 'AA550E0002001000000400000000DEADBEEF976E'),
+    ('02', 'AA55010002C6B2'), ('0400', 'AA5502000400E370'));
+var
+  Fab, Rel, B: TBytes;
+  A, A2, X: TAnc;
+  I: Integer;
+
+  function DeHex(const S: string): TBytes;
+  var
+    K: Integer;
+  begin
+    SetLength(Result, Length(S) div 2);
+    for K := 0 to High(Result) do
+      Result[K] := StrToInt('$' + Copy(S, 2 * K + 1, 2));
+  end;
+
+  function ParaHex(const D: TBytes): string;
+  var
+    V: Byte;
+  begin
+    Result := '';
+    for V in D do
+      Result := Result + IntToHex(V, 2);
+  end;
+
+  function Pedacos(Inicio, Tamanho, Quantos: Cardinal): TArray<TPedaco>;
+  var
+    K: Integer;
+  begin
+    SetLength(Result, Quantos);
+    for K := 0 to Quantos - 1 do
+    begin
+      Result[K].Endereco := Inicio + Cardinal(K) * Tamanho;
+      Result[K].Tamanho := Tamanho;
+    end;
+  end;
+
+  // uma gravação contra o rádio simulado; devolve a classe da exceção ('' se terminou)
+  function Grava(Falha: TProc<TRadioUpdate>; Cancela: Boolean; out R: TRadioUpdate; out Porta: IPortaGravacao): string;
+  var
+    G: TGravadorBJ;
+  begin
+    R := TRadioUpdate.Create(A2.Claro);
+    Porta := R;
+    R.Carregador := Pedacos($100000, 512, 3);
+    // a imagem, com o último pedaço passando do fim do arquivo
+    R.Imagem := Pedacos($200000, 1024, 4) + Pedacos(Length(A2.Claro) - 300, 512, 1);
+    if Assigned(Falha) then
+      Falha(R);
+    G := TGravadorBJ.Create;
+    try
+      G.Cancelar := Cancela;
+      try
+        G.Grava(Porta, A2);
+        Result := '';
+      except
+        on E: Exception do
+          Result := E.ClassName;
+      end;
+    finally
+      G.Free;
+    end;
+  end;
+
+var
+  R: TRadioUpdate;
+  Porta: IPortaGravacao;
+  Antes: UInt64;
+begin
+  for I := 0 to High(VETORES) do
+    Confere(ParaHex(Empacota(DeHex(VETORES[I, 0]))) = VETORES[I, 1],
+            'gravador: o pacote de ' + VETORES[I, 0] + ' é o do BinTalk');
+
+  Fab := TFile.ReadAllBytes(TPath.Combine(Pasta, '..\firmware\original\BJ8300_V0.12.anc'));
+  Rel := TFile.ReadAllBytes(TPath.Combine(Pasta, '..\firmware\releases\BJ8300_BANK_v3.7T.anc'));
+  Confere((ConfereAnc(Fab, A) = '') and (A.Versao = 'V0.12') and A.Fabrica,
+          'gravador: o .anc de fábrica (V0.12) confere');
+  Confere((ConfereAnc(Rel, A2) = '') and (A2.Versao = 'V3.7T') and not A2.Fabrica,
+          'gravador: o .anc da release (V3.7T) confere');
+  B := Copy(Fab);
+  Kdh(B);
+  Kdh(B);
+  Confere(Iguais(B, Fab), 'gravador: a camada KDH, posta duas vezes, volta ao arquivo');
+  Confere(not Iguais(A.Claro, Fab), 'gravador: e tirada, muda o arquivo');
+  for I in TArray<Integer>.Create(3, $40 + 7, Length(Rel) div 2, Length(Rel) - 30) do
+  begin
+    B := Copy(Rel);
+    B[I] := B[I] xor $10;
+    Confere(ConfereAnc(B, X) <> '', Format('gravador: um byte trocado em %x é recusado', [I]));
+  end;
+  Confere(ConfereAnc(Copy(Rel, 0, Length(Rel) - 1), X) <> '', 'gravador: um byte a menos é recusado');
+  Confere(ConfereAnc(nil, X) <> '', 'gravador: o arquivo vazio é recusado');
+
+  Confere(Grava(nil, False, R, Porta) = '', 'gravador: a gravação inteira termina');
+  Confere(R.Erros.Count = 0, 'gravador: o rádio não viu nada fora do protocolo ' + R.Erros.CommaText);
+  Confere(R.Servidos = 8, 'gravador: os 8 pedaços pedidos vieram iguais ao arquivo sem a camada KDH');
+  Confere(R.Terminou and (R.Fins = 1), 'gravador: o 04 leva o 03, e o rádio termina');
+  Confere((R.Velocidades.Count = 2) and (R.Velocidades[0] = VELOCIDADE_TROCA) and
+          (R.Velocidades[1] = VELOCIDADE_TRABALHO), 'gravador: a serial vai de 9600 a 10000 e a 115200, na hora certa');
+  Confere(R.Repetidos = 1, 'gravador: o 01 de andamento faz o PC mandar de novo a última carga (uma vez)');
+
+  Confere(Grava(procedure(X: TRadioUpdate) begin X.PerdeResposta := 6 end, False, R, Porta) = '',
+          'gravador: uma resposta perdida no meio do carregador: repete e termina');
+  Confere((R.Erros.Count = 0) and (R.Servidos = 8) and (R.Repetidos >= 2), 'gravador: e serve tudo certo');
+  Confere(Grava(procedure(X: TRadioUpdate) begin X.PerdeResposta := 1 end, False, R, Porta) = '',
+          'gravador: a primeira resposta perdida: repete o 06 e termina');
+  Confere(Grava(procedure(X: TRadioUpdate) begin X.EstragaResposta := 9 end, False, R, Porta) = '',
+          'gravador: uma resposta com o CRC errado: repete e termina');
+  Confere((R.Erros.Count = 0) and (R.Servidos = 8), 'gravador: e serve tudo certo');
+  Confere(Grava(procedure(X: TRadioUpdate) begin X.DesconhecidoAntes := 4 end, False, R, Porta) = '',
+          'gravador: um comando desconhecido não trava: repete e termina');
+  Confere((R.Erros.Count = 0) and (R.Servidos = 8), 'gravador: e serve tudo certo');
+
+  Confere(Grava(procedure(X: TRadioUpdate) begin X.Mudo := True end, False, R, Porta) = 'ESemRadio',
+          'gravador: o rádio mudo dá "não respondeu"');
+  Antes := R.Agora;
+  Confere((Antes > 6 * ESPERA_PACOTE) and (Antes < 8 * ESPERA_PACOTE),
+          'gravador: depois de 5 repetições, de 2 s em 2 s (como o BinTalk)');
+  Confere(Grava(procedure(X: TRadioUpdate) begin X.CalaDepois := 7 end, False, R, Porta) = 'EFalha',
+          'gravador: o rádio que cala no meio dá falha no meio da gravação');
+  Confere(Grava(procedure(X: TRadioUpdate) begin X.Mudo := True end, True, R, Porta) = 'ECancelado',
+          'gravador: antes de o rádio responder, dá para cancelar');
+end;
+
+{ O último release pelo GitHub (Atualizacao), sem internet: a resposta de verdade do /releases/latest (sem as notas,
+  testes/github-release.json), o arquivo de firmware dela com o SHA-256 que o GitHub dá, igual ao do .anc da release
+  no repositório, e a comparação das versões. }
+procedure TesteAtualizacao;
+var
+  R: TRelease;
+  Json: string;
+begin
+  Json := TFile.ReadAllText(TPath.Combine(Pasta, 'testes\github-release.json'), TEncoding.UTF8);
+  Confere(LeRelease(Json, 'BJ8300_BANK_v', '.anc', R) = '', 'atualização: o release do GitHub se lê');
+  Confere((R.Tag = 'v3.7T') and (R.Arquivo = 'BJ8300_BANK_v3.7T.anc') and (R.Tamanho = TAMANHO_ANC) and
+          R.Url.EndsWith('/v3.7T/BJ8300_BANK_v3.7T.anc'), 'atualização: o arquivo de firmware dele, com o tamanho');
+  Confere(R.Sha256 = Sha256De(TFile.ReadAllBytes(TPath.Combine(Pasta, '..\firmware\releases\BJ8300_BANK_v3.7T.anc'))),
+          'atualização: o SHA-256 que o GitHub dá é o do .anc da release no repositório');
+  Confere(LeRelease(Json, 'UV17L_v', '.kdhx', R) <> '', 'atualização: sem o arquivo pedido, o release é recusado');
+  Confere(LeRelease('{"message": "Not Found"}', 'BJ8300_BANK_v', '.anc', R) <> '',
+          'atualização: a resposta sem release é recusada');
+  Confere(LeRelease('isto não é json', 'BJ8300_BANK_v', '.anc', R) <> '', 'atualização: o que não é JSON é recusado');
+  Confere((ComparaVersoes('v3.7T', 'V3.7T') = 0) and (ComparaVersoes('V0.12', 'v3.7T') < 0) and
+          (ComparaVersoes('1.10T', '1.9T') > 0) and (ComparaVersoes('v1.6T', '1.6') = 0) and
+          (ComparaVersoes('V3.8T', 'v3.7T') > 0), 'atualização: as versões se comparam número a número');
+end;
+
 begin
   try
     Pasta := ParamStr(1);
@@ -1371,6 +1571,9 @@ begin
       TesteReligando;
       TesteVelocidade;
       TestePttMudo;
+      TesteFirmwareNoRadio;
+      TesteGravadorBJ;
+      TesteAtualizacao;
     finally
       Menu.Free;
     end;

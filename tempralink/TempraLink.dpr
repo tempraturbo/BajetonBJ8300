@@ -20,6 +20,8 @@ uses
   Bluetooth in 'Bluetooth.pas',
   Melodia in 'Melodia.pas',
   EditorRoger in 'EditorRoger.pas',
+  GravadorBJ in 'GravadorBJ.pas',
+  Atualizacao in 'Atualizacao.pas',
   Principal in 'Principal.pas' {FormPrincipal};
 
 begin

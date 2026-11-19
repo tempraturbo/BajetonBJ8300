@@ -4,10 +4,10 @@
   remoto, Firmware, Backup e Registro), o rádio, a porta e as ações no alto, e o andamento embaixo. O que fala com o
   rádio roda numa thread. As grades se editam na própria célula: o texto e a frequência num campo, as escolhas numa
   lista (o sim e o não também, numa lista SIM/NÃO), e os bancos numa lista de marcar; com várias linhas
-  escolhidas, o valor vai para todas. A mesma janela do Tempra Link do UV-17L, sem o que o BJ não tem (a gravação do
-  firmware pelo programa), e com o Bluetooth na lista das portas. O ROGER CUSTOM (firmware v164) se edita na pasta TX
-  dos ajustes, com o editor do UV-17L. O controle remoto (v159) traz a tela do rádio pelo cabo; pelo Bluetooth, o
-  estado. }
+  escolhidas, o valor vai para todas. A mesma janela do Tempra Link do UV-17L, com o Bluetooth na lista das portas. O
+  ROGER CUSTOM (firmware v164) se edita na pasta TX dos ajustes, com o editor do UV-17L. O controle remoto (v159) traz
+  a tela do rádio pelo cabo; pelo Bluetooth, o estado. O firmware se grava pelo cabo, como o BinTe ANC Bootloader faz
+  (GravadorBJ), o arquivo escolhido, o do último release do GitHub ou o de fábrica, sempre conferido antes. }
 
 interface
 
@@ -15,14 +15,14 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, System.Types, Vcl.Graphics, Vcl.Controls,
   Vcl.Forms, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls, Vcl.Dialogs, Vcl.Grids, Vcl.WinXPanels, Vcl.WinXCtrls,
   Vcl.CheckLst, Vcl.Menus, Transporte, CaboBJ, Logo, LogoFormato, Ajustes, BJ8300, PortaSerial, Bluetooth, Visual, Remoto,
-  TelaBJ, EditorRoger;
+  TelaBJ, EditorRoger, GravadorBJ, Atualizacao;
 
 const
   VERSAO_TEMPRA_LINK = '1.0';  // a mesma do Recursos.rc
 
 type
   TFim = (fOk, fCancelado, fFalha, fSemRadio, fConflito, fErro);
-  TAcao = (acLer, acGravar, acLerLogo, acGravarLogo, acProcurar, acRemoto);
+  TAcao = (acLer, acGravar, acLerLogo, acGravarLogo, acProcurar, acRemoto, acVerificar, acBaixar, acFirmware);
   TTipoCelula = (tcNada, tcTexto, tcLista, tcBancos);
 
   // uma linha da grade dos ajustes
@@ -134,8 +134,16 @@ type
     LabelAvisoCabo: TLabel;
     LabelControleNota: TLabel;
     CartaoFirmware: TCard;
+    LabelArquivo: TLabel;
     LabelInfo: TLabel;
     LabelPassos: TLabel;
+    LabelVersoes: TLabel;
+    EditArquivo: TEdit;
+    BotaoEscolher: TButton;
+    BotaoGravar: TButton;
+    BotaoVerificar: TButton;
+    BotaoBaixar: TButton;
+    BotaoFabrica: TButton;
     CartaoBackup: TCard;
     LabelBackup: TLabel;
     BotaoAbrirBackup: TButton;
@@ -151,6 +159,7 @@ type
     DialogoCsv: TOpenDialog;
     DialogoSalvarCsv: TSaveDialog;
     DialogoSom: TOpenDialog;
+    DialogoFirmware: TOpenDialog;
     MenuCanais: TPopupMenu;
     ItemCopiar: TMenuItem;
     ItemColar: TMenuItem;
@@ -167,6 +176,11 @@ type
     procedure BotaoGravarRadioClick(Sender: TObject);
     procedure BotaoDesfazerClick(Sender: TObject);
     procedure BotaoCancelarClick(Sender: TObject);
+    procedure BotaoEscolherClick(Sender: TObject);
+    procedure BotaoGravarClick(Sender: TObject);
+    procedure BotaoVerificarClick(Sender: TObject);
+    procedure BotaoBaixarClick(Sender: TObject);
+    procedure BotaoFabricaClick(Sender: TObject);
     procedure BuscaChange(Sender: TObject);
     procedure GradeDrawCell(Sender: TObject; ACol, ARow: Integer; Rect: TRect; State: TGridDrawState);
     procedure GradeDblClick(Sender: TObject);
@@ -236,6 +250,15 @@ type
     FLogo: TBytes;              // o logo da prévia, como vai para o rádio
     FLogoLido: TBytes;          // o que a thread leu do rádio
     FFechar: Boolean;
+    // o firmware
+    FAnc: TAnc;                 // o arquivo escolhido, conferido (Claro vazio quando não há ou não passou)
+    FGravador: TGravadorBJ;
+    FRelease: TRelease;         // o último release do GitHub (Tag vazia enquanto não se soube)
+    FErroRelease: string;       // por que não se soube
+    FNoRadio: string;           // o firmware que o rádio mostrou na última conversa pelo cabo
+    FRadioFirmware: TFirmwareNoRadio;
+    FRadioVelocidade: Cardinal;
+    FBaixado: string;           // onde o download deixa o arquivo
     // a edição na célula
     FEditor: TEdit;
     FLista: TComboBox;
@@ -244,6 +267,13 @@ type
     FEdGrade: TStringGrid;
     FEdCol, FEdLin: Integer;
     procedure Mostra(Cartao: Integer);
+    procedure AbreFirmware(const Caminho: string);
+    procedure GravaFirmware;
+    procedure BaixaFirmware(const Url, Sha256: string; Tamanho: Int64; const Nome: string);
+    procedure ProcuraRelease;
+    procedure MostraRelease(const R: TRelease; const Erro: string);
+    procedure AnotaRadio(C: TCaboBJ);
+    procedure MostraVersoes;
     procedure AbreImagem(const Caminho: string);
     procedure AbreBackup(const Caminho: string);
     procedure MostraLogo(const L: TBytes; const Info: string);
@@ -319,6 +349,16 @@ const
   CARTAO_FIRMWARE = 5;
   CARTAO_BACKUP = 6;
   CARTAO_REGISTRO = 7;
+
+  // o firmware no GitHub: o último release do projeto, e o de fábrica, que o repositório guarda (com o SHA-256 dele,
+  // conferido no download e no arquivo local)
+  REPOSITORIO = 'tempraturbo/BajetonBJ8300';
+  PREFIXO_FIRMWARE = 'BJ8300_BANK_v';
+  VERSAO_FABRICA = 'V0.12';
+  ARQUIVO_FABRICA = 'BJ8300_V0.12.anc';
+  URL_FABRICA = 'https://raw.githubusercontent.com/' + REPOSITORIO + '/main/firmware/original/' + ARQUIVO_FABRICA;
+  SHA_FABRICA = '4952585480cab69c035804e748e512405763abedee966e795b25885e303cf52d';
+  VERSAO_CABO_ANTIGA = 'V3.7T';  // a última release com o cabo a 57600 (a v154; da v157 em diante ele é mais rápido)
 
   COL_NOME = 1;
   COL_RX = 2;
@@ -421,6 +461,34 @@ begin
   Result := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'TempraLink\backups');
 end;
 
+var
+  JanelaViva: Boolean;  // a procura do release em segundo plano só volta para a janela enquanto ela existe
+
+// onde fica o firmware baixado do GitHub
+function PastaDoFirmware: string;
+begin
+  Result := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'TempraLink\firmware');
+end;
+
+// a versão do nome do arquivo: BJ8300_BANK_v3.7T.anc -> 3.7T
+function VersaoDoNome(const Arquivo: string): string;
+begin
+  Result := Copy(TPath.GetFileNameWithoutExtension(Arquivo), Length(PREFIXO_FIRMWARE) + 1, MaxInt);
+end;
+
+// O .anc mais novo ao lado do programa (na raiz do repositório e na firmware\releases dele), para abrir já escolhido.
+function AncMaisNovo: string;
+var
+  Pasta, Arquivo: string;
+begin
+  Result := '';
+  for Pasta in [ExtractFilePath(ParamStr(0)), ExtractFilePath(ParamStr(0)) + 'firmware\releases\'] do
+    if TDirectory.Exists(Pasta) then
+      for Arquivo in TDirectory.GetFiles(Pasta, PREFIXO_FIRMWARE + '*.anc') do
+        if (Result = '') or (ComparaVersoes(VersaoDoNome(Arquivo), VersaoDoNome(Result)) > 0) then
+          Result := Arquivo;
+end;
+
 type
   TTeclaRadio = record
     Texto, Letras: string;
@@ -459,6 +527,7 @@ var
   I: Integer;
   B: TButton;
   T: TTecla;
+  Arquivo: string;
 begin
   AplicaTema(Self);
   KeyPreview := True;
@@ -591,26 +660,33 @@ begin
   DialogoSom.Filter := Tr('MIDI e sons|*.mid;*.midi;*.mp3;*.wav;*.wma;*.m4a;*.aac;*.flac|Todos os arquivos (*.*)|*.*',
                           'MIDI and sounds|*.mid;*.midi;*.mp3;*.wav;*.wma;*.m4a;*.aac;*.flac|All files (*.*)|*.*');
 
-  // o firmware: o gravador é o da BinTe, que o repositório traz
-  LabelInfo.Caption := Tr('O firmware do BJ-8300 se grava pelo BinTe ANC Bootloader, que vem no repositório ' +
-                          '(tools\anc-bootloader), com o arquivo .anc de firmware\releases.',
-                          'The BJ-8300 firmware is flashed with the BinTe ANC Bootloader, which comes in the repository ' +
-                          '(tools\anc-bootloader), with the .anc file from firmware\releases.');
+  // o firmware
+  LabelArquivo.Caption := Tr('Firmware (arquivo .anc)', 'Firmware (.anc file)');
+  BotaoEscolher.Caption := Tr('Escolher...', 'Browse...');
   LabelPassos.Caption := Tr(
-    '1. Ligue o cabo no PC e no rádio desligado.'#13#10 +
-    '2. Abra o BinTe ANC Bootloader.exe, escolha a porta do cabo, 115200, e o arquivo BJ8300_BANK_v*.anc.'#13#10 +
-    '3. Ligue o rádio segurando o PTT2 e o atalho até aparecer UPDATE na tela, e clique em Update.'#13#10 +
-    '4. O registro mostra Update Mode, Baudrate OK, o andamento e Finish. Desligue e ligue o rádio: em SYSTEM > ' +
-    'VERSION aparece a versão nova.'#13#10#13#10 +
-    'Antes de gravar o firmware, leia o rádio aqui, para ter o backup dos canais e dos ajustes. O passo a passo está ' +
-    'no README do repositório.',
-    '1. Connect the cable to the PC and to the radio, switched off.'#13#10 +
-    '2. Open BinTe ANC Bootloader.exe, choose the cable port, 115200, and the BJ8300_BANK_v*.anc file.'#13#10 +
-    '3. Turn the radio on holding PTT2 and the shortcut key until UPDATE shows on screen, and click Update.'#13#10 +
-    '4. The log shows Update Mode, Baudrate OK, the progress and Finish. Turn the radio off and on: SYSTEM > VERSION ' +
-    'shows the new version.'#13#10#13#10 +
-    'Before flashing the firmware, read the radio here, to have the backup of the channels and settings. The step by ' +
-    'step is in the repository''s README.');
+    '1. Leia o rádio antes, na página Canais, para ter o backup dos canais e dos ajustes.'#13#10 +
+    '2. Ligue o cabo no PC e no rádio, e escolha a porta do cabo no alto (o Bluetooth não grava firmware).'#13#10 +
+    '3. Desligue o rádio e ligue-o segurando o PTT2 e o atalho, até aparecer UPDATE na tela.'#13#10 +
+    '4. Clique em Gravar. Não desligue o rádio nem tire o cabo até o registro dizer que terminou; depois, desligue e ' +
+    'ligue o rádio: em SYSTEM > VERSION aparece a versão nova.'#13#10#13#10 +
+    'O arquivo é conferido inteiro antes de gravar (o tamanho, a camada KDH, os CRCs do cabeçalho, da tabela e de cada ' +
+    'parte, e a marca do hardware do BJ-8300): o que não passa não vai para o rádio. O de fábrica (V0.12) passa igual, ' +
+    'e com ele o rádio volta a ser como veio.',
+    '1. Read the radio first, on the Channels page, to have the backup of the channels and settings.'#13#10 +
+    '2. Connect the cable to the PC and to the radio, and choose the cable port at the top (Bluetooth does not flash ' +
+    'firmware).'#13#10 +
+    '3. Turn the radio off and turn it on holding PTT2 and the shortcut key, until UPDATE shows on screen.'#13#10 +
+    '4. Click Flash. Do not turn the radio off or pull the cable until the log says it finished; then turn the radio ' +
+    'off and on: SYSTEM > VERSION shows the new version.'#13#10#13#10 +
+    'The whole file is checked before flashing (the size, the KDH layer, the CRCs of the header, of the table and of ' +
+    'each part, and the BJ-8300 hardware tag): what fails does not go to the radio. The factory one (V0.12) passes the ' +
+    'same way, and with it the radio goes back to how it came.');
+  BotaoGravar.Caption := Tr('Gravar', 'Flash');
+  BotaoVerificar.Caption := Tr('Verificar o rádio e o GitHub', 'Check the radio and GitHub');
+  BotaoBaixar.Caption := Tr('Baixar e gravar a mais nova', 'Download and flash the newest');
+  BotaoFabrica.Caption := Format(Tr('Voltar ao de fábrica (%s)', 'Back to factory (%s)'), [VERSAO_FABRICA]);
+  DialogoFirmware.Filter := Tr('Firmware do BJ-8300 (*.anc)|*.anc|Todos os arquivos (*.*)|*.*',
+                               'BJ-8300 firmware (*.anc)|*.anc|All files (*.*)|*.*');
 
   // o logo
   BotaoImagem.Caption := Tr('Escolher imagem...', 'Choose image...');
@@ -749,20 +825,32 @@ begin
   FSegurado.Interval := 100;
   FSegurado.OnTimer := ConfereSegurado;
 
-  for B in [BotaoGravarRadio, BotaoGravarLogo] do
+  for B in [BotaoGravarRadio, BotaoGravarLogo, BotaoGravar] do
     Destaca(B, tbPrincipal);
   ListaNav.ItemIndex := CARTAO_CANAIS;
   Mostra(CARTAO_CANAIS);
   ListaPastas.ItemIndex := 0;
   ListaAsPortas;
-  // um .tempra na linha de comando (ou com dois cliques) abre o backup
+  // um .tempra na linha de comando (ou com dois cliques) abre o backup; um .anc vai para o firmware
+  Arquivo := AncMaisNovo;
   if (ParamCount > 0) and SameText(ExtractFileExt(ParamStr(1)), EXTENSAO) then
-    AbreBackup(ParamStr(1));
+    AbreBackup(ParamStr(1))
+  else if (ParamCount > 0) and SameText(ExtractFileExt(ParamStr(1)), '.anc') then
+    Arquivo := ParamStr(1);
+  if Arquivo <> '' then
+    AbreFirmware(Arquivo)
+  else
+    LabelInfo.Caption := Tr('Escolha o arquivo .anc do firmware, ou baixe abaixo o mais novo.',
+                            'Choose the firmware .anc file, or download the newest below.');
   MostraMemoria;
+  MostraVersoes;
+  JanelaViva := True;
+  ProcuraRelease;
 end;
 
 procedure TFormPrincipal.FormDestroy(Sender: TObject);
 begin
+  JanelaViva := False;
   FTela.Free;
   FImagem.Free;
   FMemoria.Free;
@@ -791,6 +879,11 @@ begin
         Mostra(CARTAO_CANAIS);
         AbreBackup(Nome);
       end;
+    end
+    else if SameText(Ext, '.anc') then
+    begin
+      Mostra(CARTAO_FIRMWARE);
+      AbreFirmware(Nome);
     end
     else if SameText(Ext, '.csv') and not FMemoria.Vazia then
     begin
@@ -2227,7 +2320,7 @@ end;
 
 procedure TFormPrincipal.Habilita;
 var
-  Livre, ComPorta, Ajusta, Edita, Remoto: Boolean;
+  Livre, ComPorta, Ajusta, Edita, Remoto, PeloCabo: Boolean;
 begin
   Livre := FTarefa = nil;
   Remoto := (FTarefa <> nil) and (FAcao = acRemoto);
@@ -2271,6 +2364,13 @@ begin
   PainelTeclado.Enabled := Remoto;
   BotaoAbrirBackup.Enabled := Livre;
   BotaoSalvarBackup.Enabled := Edita;
+  // o firmware só se grava pelo cabo
+  PeloCabo := ComPorta and (Escolhida < Length(FPortas));
+  BotaoEscolher.Enabled := Livre;
+  BotaoGravar.Enabled := PeloCabo and (FAnc.Claro <> nil);
+  BotaoVerificar.Enabled := Livre;
+  BotaoBaixar.Enabled := PeloCabo and (FRelease.Url <> '');
+  BotaoFabrica.Enabled := PeloCabo;
   BotaoCancelar.Visible := not Livre and not (FAcao in [acProcurar, acRemoto]);
   Barra.Visible := not Livre and (FAcao <> acRemoto);
 end;
@@ -2376,7 +2476,9 @@ begin
   CancelaEdicao;
   FAcao := Acao;
   Barra.Position := 0;
-  if Acao in [acProcurar, acRemoto] then   // o remoto abre o transporte ele mesmo, e de novo depois de uma queda
+  // o remoto abre o transporte ele mesmo, e de novo depois de uma queda; a gravação do firmware abre a serial do jeito
+  // dela; o download não usa o rádio; e o Verificar sem porta só pergunta ao GitHub
+  if (Acao in [acProcurar, acRemoto, acBaixar, acFirmware]) or (Escolhida < 0) then
     FTarefa := TTarefa.Create(nil, Corpo)
   else
     FTarefa := TTarefa.Create(AbreTransporte(), Corpo);
@@ -2844,16 +2946,306 @@ procedure TFormPrincipal.BotaoCancelarClick(Sender: TObject);
 begin
   if FCabo <> nil then
     FCabo.Cancelar := True;
+  if FGravador <> nil then
+    FGravador.Cancelar := True;
   if FRemoto <> nil then
     FRemoto.Parar := True;
+end;
+
+{ O firmware }
+
+procedure TFormPrincipal.AbreFirmware(const Caminho: string);
+var
+  Erro: string;
+  Dados: TBytes;
+begin
+  EditArquivo.Text := Caminho;
+  FAnc := Default(TAnc);
+  Dados := nil;
+  try
+    // o que não tem o tamanho do .anc nem se lê
+    if TFile.GetSize(Caminho) <> TAMANHO_ANC then
+      Erro := Format(Tr('Não é um firmware do BJ-8300: o arquivo tem %d bytes, e o .anc do BJ-8300 tem %d.',
+                        'Not a BJ-8300 firmware: the file has %d bytes, and the BJ-8300 .anc has %d.'),
+                     [TFile.GetSize(Caminho), TAMANHO_ANC])
+    else
+    begin
+      Dados := TFile.ReadAllBytes(Caminho);
+      Erro := ConfereAnc(Dados, FAnc);
+    end;
+  except
+    on E: Exception do
+      Erro := Format(Tr('Não deu para ler o arquivo: %s', 'Could not read the file: %s'), [E.Message]);
+  end;
+  if Erro = '' then
+  begin
+    LabelInfo.Font.Color := COR_TEXTO;
+    LabelInfo.Caption := Format(Tr('Firmware %s do BJ-8300%s, conferido: o tamanho, a camada KDH, os CRCs e a marca do ' +
+                                   'hardware batem.',
+                                   'BJ-8300 firmware %s%s, checked: the size, the KDH layer, the CRCs and the hardware ' +
+                                   'tag match.'),
+                                [FAnc.Versao, IfThen(FAnc.Fabrica, Tr(' (o de fábrica)', ' (the factory one)'), '')]) +
+                         #13#10'SHA-256: ' + Sha256De(Dados);
+  end
+  else
+  begin
+    FAnc := Default(TAnc);
+    LabelInfo.Font.Color := COR_VERMELHO;
+    LabelInfo.Caption := Erro;
+  end;
+  Habilita;
+end;
+
+// Grava o arquivo conferido (FAnc) pela porta do cabo, com o rádio no modo UPDATE.
+procedure TFormPrincipal.GravaFirmware;
+var
+  Nome: string;
+  A: TAnc;
+  G: TGravadorBJ;
+  Progresso_: TProc<Integer, Integer>;
+begin
+  if (FAnc.Claro = nil) or (FTarefa <> nil) then
+    Exit;
+  if (Escolhida < 0) or (Escolhida >= Length(FPortas)) then
+  begin
+    Avisa(Tr('Escolha no alto a porta do cabo: o firmware só se grava pelo cabo.',
+             'Choose the cable port at the top: firmware only flashes over the cable.'));
+    Exit;
+  end;
+  if not Confirma(Format(Tr(
+       'Gravar o firmware %s no rádio pela %s?'#13#10#13#10 +
+       'Antes de clicar em Sim, desligue o rádio e ligue-o segurando o PTT2 e o atalho, até aparecer UPDATE na tela. ' +
+       'Depois, não desligue o rádio nem tire o cabo até o registro dizer que terminou.',
+       'Flash firmware %s to the radio on %s?'#13#10#13#10 +
+       'Before clicking Yes, turn the radio off and turn it on holding PTT2 and the shortcut key, until UPDATE shows ' +
+       'on screen. Then do not turn the radio off or pull the cable until the log says it finished.'),
+       [FAnc.Versao, Porta]) +
+       IfThen(FAnc.Fabrica, #13#10#13#10 + Tr('É o firmware de fábrica: com ele, o Tempra Link deixa de falar com o ' +
+                                             'rádio (os canais se editam pelo CHIRP), até gravar de novo o TEMPRA.',
+                                             'This is the factory firmware: with it, Tempra Link no longer talks to ' +
+                                             'the radio (channels are edited with CHIRP), until TEMPRA is flashed ' +
+                                             'again.'), '')) then
+    Exit;
+  Nome := FPortas[Escolhida].Nome;
+  A := FAnc;
+  FGravador := TGravadorBJ.Create;
+  FGravador.OnRegistro := Avisos();
+  Progresso_ := Andamento();
+  FGravador.OnProgresso :=
+    procedure(Porcento: Integer)
+    begin
+      Progresso_(Porcento, 100);
+    end;
+  G := FGravador;
+  Registra(Format(Tr('Firmware %s, %s.', 'Firmware %s, %s.'), [A.Versao, EditArquivo.Text]));
+  Inicia(acFirmware,
+    procedure(T: ITransporte)
+    var
+      P: IPortaGravacao;
+    begin
+      P := TPortaGravacao.Create(Nome);
+      G.Grava(P, A);
+    end);
+end;
+
+// Baixa um firmware para a PastaDoFirmware, conferido pelo tamanho e pelo SHA-256; no fim (Terminou) ele abre e vai
+// para a gravação. O que já está lá e confere não se baixa de novo.
+procedure TFormPrincipal.BaixaFirmware(const Url, Sha256: string; Tamanho: Int64; const Nome: string);
+var
+  Endereco, Sha, Destino: string;
+begin
+  Endereco := Url;
+  Sha := Sha256;
+  Destino := TPath.Combine(PastaDoFirmware, Nome);
+  FBaixado := Destino;
+  Registra(Format(Tr('Baixando %s...', 'Downloading %s...'), [Nome]));
+  Inicia(acBaixar,
+    procedure(T: ITransporte)
+    var
+      Dados: TBytes;
+      Erro: string;
+    begin
+      if (Sha <> '') and TFile.Exists(Destino) and SameText(Sha256De(TFile.ReadAllBytes(Destino)), Sha) then
+        Exit;
+      Erro := Atualizacao.Baixa(Endereco, Tamanho, Sha, Dados);
+      if Erro <> '' then
+        raise EFalha.Create(Erro);
+      TDirectory.CreateDirectory(ExtractFilePath(Destino));
+      TFile.WriteAllBytes(Destino, Dados);
+    end);
+end;
+
+// Pergunta ao GitHub, em segundo plano, qual é o último release; a resposta volta para a janela.
+procedure TFormPrincipal.ProcuraRelease;
+begin
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      R: TRelease;
+      Erro: string;
+      Volta: TThreadProcedure;
+    begin
+      Erro := UltimoRelease(REPOSITORIO, PREFIXO_FIRMWARE, '.anc', R);
+      // direto na fila, sem passar pela janela, que pode já ter fechado
+      Volta :=
+        procedure
+        begin
+          if JanelaViva then
+            MostraRelease(R, Erro);
+        end;
+      TThread.Queue(nil, Volta);
+    end).Start;
+end;
+
+procedure TFormPrincipal.MostraRelease(const R: TRelease; const Erro: string);
+begin
+  FRelease := R;
+  FErroRelease := Erro;
+  if Erro = '' then
+    Registra(Format(Tr('O firmware mais novo no GitHub é a %s.', 'The newest firmware on GitHub is %s.'), [R.Tag]))
+  else
+    Registra('GitHub: ' + Erro);
+  MostraVersoes;
+  Habilita;
+end;
+
+// O firmware que o rádio mostrou na conversa pelo cabo. A versão em si o cabo não diz: diz se é o de fábrica ou o
+// TEMPRA, e a velocidade em que ele respondeu dá a faixa (Transporte.BAUDS_CABO).
+procedure TFormPrincipal.AnotaRadio(C: TCaboBJ);
+begin
+  if C.Firmware = fnNenhum then
+    Exit;
+  FRadioFirmware := C.Firmware;
+  FRadioVelocidade := C.Velocidade;
+  if C.Firmware = fnFabrica then
+    FNoRadio := Tr('o firmware de fábrica', 'the factory firmware')
+  else
+    case C.Velocidade of
+      BAUD_CABO_ANTIGA:
+        FNoRadio := Format(Tr('o TEMPRA %s ou anterior (o cabo responde a 57600)',
+                              'TEMPRA %s or older (the cable answers at 57600)'), [VERSAO_CABO_ANTIGA]);
+      BAUD_CABO_V157:
+        FNoRadio := Tr('um TEMPRA de teste, da v157 à v159 (o cabo responde a 115200)',
+                       'a TEMPRA test build, v157 to v159 (the cable answers at 115200)');
+      BAUD_CABO:
+        FNoRadio := Format(Tr('um TEMPRA mais novo que a %s (o cabo responde a 460800)',
+                              'a TEMPRA newer than %s (the cable answers at 460800)'), [VERSAO_CABO_ANTIGA]);
+    else
+      FNoRadio := Tr('o TEMPRA (pelo Bluetooth não se sabe a faixa da versão)',
+                     'TEMPRA (over Bluetooth the version range is unknown)');
+    end;
+  MostraVersoes;
+end;
+
+procedure TFormPrincipal.MostraVersoes;
+var
+  S: string;
+begin
+  if FNoRadio = '' then
+    S := Tr('No rádio: ainda não visto. Com ele ligado normalmente, clique em Verificar.',
+            'On the radio: not seen yet. With it turned on normally, click Check.')
+  else
+    S := Tr('No rádio: ', 'On the radio: ') + FNoRadio + '.';
+  if FRelease.Tag <> '' then
+  begin
+    S := S + #13#10 + Format(Tr('No GitHub: a mais nova é a %s.', 'On GitHub: the newest is %s.'), [FRelease.Tag]);
+    if FRadioFirmware = fnFabrica then
+      S := S + ' ' + Tr('Com ela, o rádio passa a falar com o Tempra Link.',
+                        'With it, the radio starts talking to Tempra Link.')
+    else if (FRadioFirmware = fnTempra) and (FRadioVelocidade = BAUD_CABO_ANTIGA) and
+            (ComparaVersoes(FRelease.Tag, VERSAO_CABO_ANTIGA) > 0) then
+      S := S + ' ' + Tr('É mais nova que a do rádio.', 'It is newer than the radio''s.');
+    BotaoBaixar.Caption := Format(Tr('Baixar e gravar a %s', 'Download and flash %s'), [FRelease.Tag]);
+  end
+  else if FErroRelease <> '' then
+    S := S + #13#10 + Tr('No GitHub: ', 'On GitHub: ') + FErroRelease
+  else
+    S := S + #13#10 + Tr('No GitHub: procurando o release mais novo...', 'On GitHub: looking for the newest release...');
+  if FRadioFirmware <> fnNenhum then
+    S := S + #13#10 + Tr('A versão exata do rádio aparece nele, em SYSTEM > VERSION.',
+                         'The radio''s exact version shows on it, in SYSTEM > VERSION.');
+  LabelVersoes.Caption := S;
+end;
+
+procedure TFormPrincipal.BotaoEscolherClick(Sender: TObject);
+begin
+  if EditArquivo.Text <> '' then
+    DialogoFirmware.InitialDir := ExtractFilePath(EditArquivo.Text);
+  if DialogoFirmware.Execute then
+    AbreFirmware(DialogoFirmware.FileName);
+end;
+
+procedure TFormPrincipal.BotaoGravarClick(Sender: TObject);
+begin
+  GravaFirmware;
+end;
+
+// Pergunta ao GitHub de novo e, com a porta escolhida, conversa com o rádio pelo cabo para ver o firmware dele.
+procedure TFormPrincipal.BotaoVerificarClick(Sender: TObject);
+var
+  C: TCaboBJ;
+begin
+  FErroRelease := '';
+  FRelease := Default(TRelease);
+  MostraVersoes;
+  C := nil;
+  if Escolhida >= 0 then
+  begin
+    C := NovoCabo;
+    Registra(Tr('Vendo o firmware do rádio...', 'Checking the radio''s firmware...'));
+  end;
+  Inicia(acVerificar,
+    procedure(T: ITransporte)
+    var
+      R: TRelease;
+      Erro: string;
+    begin
+      if C <> nil then
+        try
+          C.Sessao(T, procedure begin end);
+        except
+          on ENaoTempra do ;  // o de fábrica: o C.Firmware já diz
+          on ESemRadio do ;   // o Terminou diz que ele não respondeu
+        end;
+      Erro := UltimoRelease(REPOSITORIO, PREFIXO_FIRMWARE, '.anc', R);
+      NaJanela(
+        procedure
+        begin
+          MostraRelease(R, Erro);
+        end);
+    end);
+end;
+
+procedure TFormPrincipal.BotaoBaixarClick(Sender: TObject);
+begin
+  if FRelease.Url <> '' then
+    BaixaFirmware(FRelease.Url, FRelease.Sha256, FRelease.Tamanho, FRelease.Arquivo);
+end;
+
+// O de fábrica: o do repositório ao lado do programa, se for ele mesmo (o SHA-256); senão, baixado do GitHub.
+procedure TFormPrincipal.BotaoFabricaClick(Sender: TObject);
+var
+  Local: string;
+begin
+  Local := ExtractFilePath(ParamStr(0)) + 'firmware\original\' + ARQUIVO_FABRICA;
+  if TFile.Exists(Local) and SameText(Sha256De(TFile.ReadAllBytes(Local)), SHA_FABRICA) then
+  begin
+    AbreFirmware(Local);
+    if FAnc.Fabrica then
+      GravaFirmware;
+  end
+  else
+    BaixaFirmware(URL_FABRICA, SHA_FABRICA, TAMANHO_ANC, ARQUIVO_FABRICA);
 end;
 
 procedure TFormPrincipal.Terminou(Sender: TObject);
 var
   T: TTarefa;
   Arq: string;
+  Gravar: Boolean;
 begin
   T := Sender as TTarefa;
+  Gravar := False;
   case FAcao of
     acLer:
       if T.Fim = fOk then
@@ -2956,19 +3348,85 @@ begin
         else
           Registra(T.Mensagem);
       end;
+    acVerificar:
+      begin
+        if (FCabo <> nil) and (FCabo.Firmware = fnNenhum) then
+        begin
+          FRadioFirmware := fnNenhum;
+          FNoRadio := Tr('não respondeu (ligue-o normalmente, fora do modo UPDATE, e confira o cabo e a porta)',
+                         'did not answer (turn it on normally, not in UPDATE mode, and check the cable and the port)');
+        end;
+        if T.Fim <> fOk then
+          Registra(T.Mensagem);
+        MostraVersoes;
+      end;
+    acBaixar:
+      if T.Fim = fOk then
+      begin
+        Registra(Format(Tr('Baixado e conferido: %s.', 'Downloaded and checked: %s.'), [FBaixado]));
+        AbreFirmware(FBaixado);
+        Gravar := FAnc.Claro <> nil;
+      end
+      else
+        Registra(T.Mensagem);
+    acFirmware:
+      case T.Fim of
+        fOk:
+          begin
+            Registra(Format(Tr('Firmware %s gravado. Desligue e ligue o rádio: em SYSTEM > VERSION aparece a %s.',
+                               'Firmware %s flashed. Turn the radio off and on: SYSTEM > VERSION shows %s.'),
+                            [FAnc.Versao, FAnc.Versao]) +
+                     IfThen(FAnc.Fabrica, ' ' + Tr('Com o de fábrica, o Tempra Link não fala com o rádio: os canais se ' +
+                                                   'editam pelo CHIRP, até gravar de novo o firmware TEMPRA.',
+                                                   'With the factory one, Tempra Link does not talk to the radio: ' +
+                                                   'channels are edited with CHIRP, until the TEMPRA firmware is ' +
+                                                   'flashed again.'), ''));
+            FRadioFirmware := fnNenhum;
+            FNoRadio := '';
+            MostraVersoes;
+          end;
+        fSemRadio:
+          Registra(T.Mensagem + ' ' + Tr('Confira se o rádio está no modo UPDATE (desligue-o e ligue segurando o PTT2 e ' +
+                                         'o atalho, até aparecer UPDATE na tela), o cabo e a porta escolhida.',
+                                         'Check that the radio is in UPDATE mode (turn it off and on holding PTT2 and ' +
+                                         'the shortcut key, until UPDATE shows on screen), the cable and the chosen ' +
+                                         'port.'));
+        fFalha:
+          Registra(T.Mensagem + ' ' + Tr('Desligue o rádio, ligue-o de novo no modo UPDATE (o PTT2 e o atalho) e grave ' +
+                                         'outra vez.',
+                                         'Turn the radio off, turn it on again in UPDATE mode (PTT2 and the shortcut ' +
+                                         'key) and flash again.'));
+      else
+        Registra(T.Mensagem);
+      end;
   end;
   if T.Fim in [fFalha, fSemRadio, fConflito, fErro] then
     Application.MessageBox(PChar(LabelEstado.Caption), PChar(Caption), MB_OK or MB_ICONWARNING);
+  if FCabo <> nil then
+    AnotaRadio(FCabo);
   FreeAndNil(FCabo);
   FreeAndNil(FRemoto);
+  FreeAndNil(FGravador);
   FTarefa := nil;
   Habilita;
   if FFechar then
-    PostMessage(Handle, WM_CLOSE, 0, 0);
+    PostMessage(Handle, WM_CLOSE, 0, 0)
+  else if Gravar then
+    GravaFirmware;
 end;
 
 procedure TFormPrincipal.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
+  if (FTarefa <> nil) and (FAcao = acFirmware) then
+  begin
+    CanClose := False;
+    Application.MessageBox(PChar(Tr('O firmware está sendo gravado. Espere terminar: parar no meio pode deixar o rádio ' +
+                                    'sem firmware. (Antes de o rádio responder, o Cancelar para.)',
+                                    'The firmware is being flashed. Wait for it to finish: stopping halfway could ' +
+                                    'leave the radio without firmware. (Before the radio answers, Cancel stops it.)')),
+                           PChar(Caption), MB_OK or MB_ICONWARNING);
+    Exit;
+  end;
   if FTarefa <> nil then
   begin
     CanClose := False;

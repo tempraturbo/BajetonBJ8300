@@ -35,6 +35,9 @@ const
 type
   ENaoTempra = class(Exception);
 
+  // o firmware que o rádio mostrou na sessão: nenhum (não respondeu), o de fábrica ou o TEMPRA
+  TFirmwareNoRadio = (fnNenhum, fnFabrica, fnTempra);
+
   TCaboBJ = class
   private
     FT: ITransporte;
@@ -51,6 +54,8 @@ type
     OnRegistro: TProc<string>;
     OnProgresso: TProc<Integer, Integer>;
     Identificacao: string;  // os 16 bytes do 'F', em hexadecimal
+    Firmware: TFirmwareNoRadio;
+    Velocidade: Cardinal;   // a da serial em que ele respondeu (0 pelo Bluetooth): diz a faixa da versão do TEMPRA
     Feito, Total: Integer;  // os blocos, para o progresso; o Total quem chama põe
     // Entra (conferindo que o rádio é um BJ-8300 com o firmware TEMPRA), faz o Corpo e sai, mesmo com erro no meio
     // (e mesmo quando o rádio não é TEMPRA: o 'E' fecha a sessão que o magic abriu).
@@ -183,6 +188,7 @@ begin
                               'The radio answered %.2X instead of entering programming mode. Turn the radio off ' +
                               'and on and try again.'), [R[0]]);
   FDentro := True;
+  Velocidade := FT.Velocidade;
   FT.Escreve([Ord('F')]);
   R := Recebe(16, ESPERA_MS);
   Identificacao := '';
@@ -203,6 +209,7 @@ begin
   if R[3] <> BLOCO then
   begin
     Recebe(R[3], ESPERA_MS);  // o resto da resposta, para o cabo não sair de sincronia
+    Firmware := fnFabrica;
     raise ENaoTempra.Create(Tr('Este BJ-8300 não está com o firmware TEMPRA (V3.7T ou mais novo): o Tempra Link só ' +
                                'trabalha com ele.',
                                'This BJ-8300 is not running the TEMPRA firmware (V3.7T or newer): Tempra Link only ' +
@@ -210,6 +217,7 @@ begin
   end;
   if Length(Recebe(BLOCO, ESPERA_MS)) <> BLOCO then
     raise EFalha.Create(Tr('O rádio não respondeu à leitura de teste.', 'The radio did not answer the test read.'));
+  Firmware := fnTempra;
 end;
 
 procedure TCaboBJ.Sai;
