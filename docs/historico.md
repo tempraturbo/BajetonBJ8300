@@ -5,6 +5,11 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Tempra Link — 19/11 — a tela do remoto com o retrato da v168
+
+- A tela do controle remoto acompanha o retrato da v168 (o número do canal na busca; versão 141), no Windows e no
+  celular. Com um firmware de outra rodada, o programa avisa que não conhece a tela dele.
+
 ## v168 e v169 — 19/11 — a busca que para no sinal, o número do canal na busca e o asterisco curto (sem release)
 
 O que o firmware mostrou está na [seção 41](engenharia-reversa.md#41-a-espera-por-canal-o-número-do-canal-na-busca-e-o-asterisco-curto-v168-e-v169)

@@ -5,6 +5,11 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Tempra Link — Nov 19 — the remote's screen with v168's portrait
+
+- The remote control's screen follows v168's portrait (the channel number while scanning; version 141), on Windows and
+  on the phone. With a firmware from another round, the program says it does not know its screen.
+
 ## v168 and v169 — Nov 19 — a scan that stops on the signal, the channel number while scanning and the short asterisk (no release)
 
 What the firmware showed is in [section 41](reverse-engineering.md#41-the-wait-per-channel-the-channel-number-while-scanning-and-the-short-asterisk-v168-and-v169)
