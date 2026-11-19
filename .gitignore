@@ -22,3 +22,8 @@ tempralink/Win32/
 tempralink/*.identcache
 tempralink/*.local
 tempralink/*.dsk
+
+# O Tempra Link do celular: o que o tempralink/celular/compilar.ps1 gera
+tempralink/celular/Android64/
+tempralink/celular/Win64/
+tempralink/celular/*.res

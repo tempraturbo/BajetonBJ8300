@@ -78,7 +78,8 @@ MENU = [
     ('MORSE', [('SPEED', '-', 'morse_speed', None), ('TONE', '-', 'morse_tone', None)]),
     ('REPEATER', [('RPT TAIL CUT', '-', 'settings_rpste', None), ('RPT TAIL DELAY', '-', 'settings_rptrl', None),
                   ('TONE BURST', '-', 'settings_tone', None)] + por_lado('TX SHIFT', 'sftd')),
-    ('SCAN', [('SCAN RESUME', '-', 'settings_screv', None)]),
+    ('SCAN', [('SCAN RESUME', '-', 'settings_screv', None),
+              ('THRESHOLD', '-', 'settings_unused_9022', None)]),   # v167
     ('SYSTEM', [('ALARM MODE', '-', 'settings_almode', None), ('BATTERY SAVE', '-', 'settings_save', None),
                 ('BLUETOOTH', '-', 'settings_bluetooth', None)]),
     ('TONES', por_lado('RX CTCSS', 'rxtone', 'ctcss', True) + por_lado('RX DCS', 'rxtone', 'dcs', True) +

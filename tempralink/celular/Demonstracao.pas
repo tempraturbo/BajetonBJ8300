@@ -1,8 +1,11 @@
-unit Demonstracao;
+﻿unit Demonstracao;
 
 { A demonstração, sem rádio: o BJ-8300 simulado dos testes (testes/SimuladorBJ.pas) no tempo de verdade, com o S-meter
   andando, para ver o app sem o rádio. O simulado tem o relógio dele (cada leitura vazia anda 20 ms); aqui a leitura
-  vazia espera 20 ms de verdade, e o tempo é o do sistema. }
+  vazia espera 20 ms de verdade, e o tempo é o do sistema. Com um Retrato (os da prévia, testes/retrato-*.bin), o
+  visor mostra a tela do rádio desenhada, sempre a mesma, com o S-meter andando. Com as Areas (o testes/radio.bin, que
+  o testes/fixtures.py monta pelo driver do CHIRP: uma área atrás da outra, com o endereço e o tamanho em 4 bytes
+  cada), o simulado tem canais, bancos e ajustes, e a leitura e a gravação funcionam nele como no rádio. }
 
 interface
 
@@ -13,11 +16,11 @@ type
   TDemonstracao = class(TInterfacedObject, ITransporte)
   private
     FRadio: TRadioBJSimulado;
+    FGuarda: ITransporte;   // o simulado é interface também: esta referência é a que o mantém vivo
     FInicio: UInt64;
     procedure Anda;
   public
-    constructor Create;
-    destructor Destroy; override;
+    constructor Create(const Retrato, Areas: TBytes);
     procedure Escreve(const B: TBytes);
     function Le: TBytes;
     procedure LimpaEntrada;
@@ -28,18 +31,24 @@ type
 
 implementation
 
-constructor TDemonstracao.Create;
+constructor TDemonstracao.Create(const Retrato, Areas: TBytes);
+var
+  P: Integer;
+  E, T: Cardinal;
 begin
-  inherited;
+  inherited Create;
   FRadio := TRadioBJSimulado.Create;
-  FRadio._AddRef;   // é interface também: a contagem fica com quem a criou
+  FGuarda := FRadio;
+  FRadio.Retrato := Retrato;
+  P := 0;
+  while P + 8 <= Length(Areas) do
+  begin
+    E := PCardinal(@Areas[P])^;
+    T := PCardinal(@Areas[P + 4])^;
+    FRadio.Poe(E, Copy(Areas, P + 8, T));
+    Inc(P, 8 + Integer(T));
+  end;
   FInicio := TThread.GetTickCount64;
-end;
-
-destructor TDemonstracao.Destroy;
-begin
-  FRadio._Release;
-  inherited;
 end;
 
 { A cada 6 s: 4 recebendo, com o sinal subindo e descendo (o lado B em evidência), e 2 em espera. }

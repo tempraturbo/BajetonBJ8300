@@ -75,8 +75,10 @@ def compila(alvos, pasta):
                 os.remove(r)
     if 'android' in alvos:
         feitos.append(os.path.join(pasta, 'libtelabj.so'))
+        # os segmentos alinhados em 16 KB: com os 4 KB de fábrica do NDK r21, o Android 15 em diante avisa que o app
+        # não é compatível com as páginas de 16 KB (e num aparelho delas ele não abre)
         subprocess.run([clang_ndk(), '--target=aarch64-linux-android23', '-shared', '-fPIC', '-fvisibility=hidden',
-                        *OPCOES, '-o', feitos[-1], FONTE], check=True)
+                        '-Wl,-z,max-page-size=16384', *OPCOES, '-o', feitos[-1], FONTE], check=True)
     return feitos
 
 

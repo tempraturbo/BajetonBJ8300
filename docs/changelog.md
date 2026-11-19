@@ -5,6 +5,26 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Tempra Link — Nov 18 — the phone app, THRESHOLD and a PTT that does not drop the remote
+
+- **The phone app** (Android, `tempralink/celular`): the first screen searches for the radio over Bluetooth (or opens
+  the demo, with a simulated BJ-8300), and then come four tabs: **Radio** (the remote control, with the radio's screen
+  and the Radio screen switch), **Channels** (the channels and the banks), **Settings** (the menu folders, the texts,
+  the VFOs, the DTMF codes and ROGER CUSTOM) and **More** (read, write, undo, backups, the receive alert, switching
+  radios and the log). The memory, menu, remote, Bluetooth and ROGER units are the Windows program's, and the radio's
+  screen is `libtelabj.so`, now aligned to 16 KB (Android 15 onwards warned that the app was not compatible).
+  `compilar.ps1` builds without the IDE and installs through adb; with `-Windows`, it builds for the PC, to test the
+  screens with the simulated radio.
+- **THRESHOLD** in the settings' SCAN folder, S1 to S9, on Windows and on the phone (the menu comes from the CHIRP
+  driver).
+- **PTT on the remote control:** with PTT held, a silent radio no longer drops the remote (the count restarts when it
+  is released), and the phone does not ask for the screen during TX. What dropped the link was the firmware (v166).
+- **The remote's screen** follows v167's portrait; with a firmware from another round, the program says it does not
+  know its screen.
+
+On the radio: the remote control over the phone's Bluetooth worked, and PTT dropped the link (up to v165). Reading,
+writing and the alert over Bluetooth, and the remote with v166 and v167, were not tested yet.
+
 ## CHIRP driver — Nov 18 — THRESHOLD
 
 - **Scan threshold** (S1 to S9) right after Scan Resume Method, in byte `0x9022` (`0xD0` + the option; firmware v167 or

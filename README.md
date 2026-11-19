@@ -605,10 +605,17 @@ rádio** apaga a tela dele, para poupar a bateria, e volta a Acesa quando uma te
 cai (o RF do PTT pode derrubar o USB do cabo), o remoto se reconecta sozinho. O cabo passa a 460800 na v160, e o programa e o driver do CHIRP descem sozinhos a 115200 e a 57600 com os firmwares de
 antes.
 
-**Bluetooth (experimental, sem teste no rádio):** com o BLUETOOTH do rádio (pasta SYSTEM) em ON, o último item da
-lista de portas procura o rádio pelo Bluetooth LE. Pela leitura do firmware, o rádio recebe pelo BLE os mesmos
-comandos do cabo; enquanto essa sessão está aberta, ele ignora o cabo. O código e os testes estão em
+**Bluetooth (experimental):** com o BLUETOOTH do rádio (pasta SYSTEM) em ON, o último item da lista de portas procura
+o rádio pelo Bluetooth LE. Pela leitura do firmware, o rádio recebe pelo BLE os mesmos comandos do cabo; enquanto essa
+sessão está aberta, ele ignora o cabo. No rádio, o controle remoto pelo Bluetooth funcionou com o app do celular (até
+a v165, o PTT derrubava a ligação: o firmware de fábrica desliga o Bluetooth no TX, e a v166 o mantém com a ligação
+aberta); a leitura e a gravação por ele ainda não foram testadas. O código e os testes estão em
 [tempralink/](tempralink/).
+
+**App do celular (Android, depois da V3.7T, ainda sem release):** o Tempra Link no celular, pelo Bluetooth do rádio:
+o controle remoto com a tela do rádio, os canais e os bancos, os ajustes (com o ROGER CUSTOM), ler e gravar, os
+backups e um aviso de recepção, e uma demonstração sem rádio. Ainda sem APK publicado: compila pelo
+`tempralink/celular/compilar.ps1` (Delphi). No rádio, só o controle remoto foi testado.
 
 ---
 

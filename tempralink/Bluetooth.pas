@@ -1,6 +1,6 @@
 ﻿unit Bluetooth;
 
-{ O Bluetooth do BJ-8300 pelo Bluetooth LE do Windows: EXPERIMENTAL. Ninguém provou ainda que o rádio programa por
+{ O Bluetooth do BJ-8300 pelo Bluetooth LE do Windows e do Android: EXPERIMENTAL. Ninguém provou ainda que o rádio programa por
   ele. O que se sabe: o rádio tem o Bluetooth do próprio chip (JieLi AC695X, com JL_SPP e BLE no firmware), o item
   SYSTEM > BLUETOOTH o liga, e o driver do CHIRP diz que o RT-900 BT, o primo dele, programa por BLE com o mesmo
   protocolo do cabo.
@@ -54,6 +54,13 @@ uses
   Idioma;
 
 const
+{$IFDEF ANDROID}
+  AQUI_PT = 'celular';
+  AQUI_EN = 'phone';
+{$ELSE}
+  AQUI_PT = 'PC';
+  AQUI_EN = 'PC';
+{$ENDIF}
   PEDACO = 20;
   FFE1: TBluetoothUUID = '{0000FFE1-0000-1000-8000-00805F9B34FB}';  // o que cabe numa escrita com o MTU de 23 bytes, o menor que o BLE garante
 
@@ -75,13 +82,13 @@ begin
     Result := TBluetoothLEManager.Current;
   except
     on E: Exception do
-      raise ESemRadio.Create(Tr('O Bluetooth deste PC não respondeu (' + E.Message + '). Ele precisa de Bluetooth 4.0 ' +
-                                'ou mais novo, ligado.',
-                                'This PC''s Bluetooth did not answer (' + E.Message + '). It needs Bluetooth 4.0 or ' +
-                                'newer, turned on.'));
+      raise ESemRadio.Create(Tr('O Bluetooth deste ' + AQUI_PT + ' não respondeu (' + E.Message + '). Ele precisa de ' +
+                                'Bluetooth 4.0 ou mais novo, ligado.',
+                                'This ' + AQUI_EN + '''s Bluetooth did not answer (' + E.Message + '). It needs ' +
+                                'Bluetooth 4.0 or newer, turned on.'));
   end;
   if Result = nil then
-    raise ESemRadio.Create(Tr('Este PC não tem Bluetooth LE.', 'This PC has no Bluetooth LE.'));
+    raise ESemRadio.Create(Tr('Este ' + AQUI_PT + ' não tem Bluetooth LE.', 'This ' + AQUI_EN + ' has no Bluetooth LE.'));
 end;
 
 function ProcuraRadios(EsperaMs: Cardinal): TArray<TRadioBLE>;
@@ -98,8 +105,9 @@ begin
   try
     M.OnDiscoveryEnd := E.Acabou;
     if not M.StartDiscovery(EsperaMs) then
-      raise ESemRadio.Create(Tr('O Bluetooth não começou a procurar: confira se ele está ligado no Windows.',
-                                'Bluetooth did not start searching: check that it is turned on in Windows.'));
+      raise ESemRadio.Create(Tr('O Bluetooth não começou a procurar: confira se ele está ligado no ' + AQUI_PT + '.',
+                                'Bluetooth did not start searching: check that it is turned on on this ' + AQUI_EN +
+                                '.'));
     E.Fim.WaitFor(EsperaMs + 3000);
     M.OnDiscoveryEnd := nil;
     if M.LastDiscoveredDevices <> nil then

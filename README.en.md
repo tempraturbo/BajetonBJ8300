@@ -609,10 +609,17 @@ screen** switch turns its screen off, to save battery, and goes back to On when 
 link drops (the PTT's RF can knock down the cable's USB), the remote reconnects by itself. The cable goes to 460800 in v160, and the program and the CHIRP driver drop to 115200 and 57600 by themselves with the
 older firmwares.
 
-**Bluetooth (experimental, not tested on the radio):** with the radio's BLUETOOTH (SYSTEM folder) ON, the last item
-of the port list searches for the radio over Bluetooth LE. From reading the firmware, the radio takes the same
-commands as the cable over BLE; while that session is open, it ignores the cable. The code and the tests are in
+**Bluetooth (experimental):** with the radio's BLUETOOTH (SYSTEM folder) ON, the last item of the port list searches
+for the radio over Bluetooth LE. From reading the firmware, the radio takes the same commands as the cable over BLE;
+while that session is open, it ignores the cable. On the radio, the remote control over Bluetooth worked with the
+phone app (up to v165, PTT dropped the link: the stock firmware turns Bluetooth off during TX, and v166 keeps it on
+with the link open); reading and writing over it were not tested yet. The code and the tests are in
 [tempralink/](tempralink/) (in Portuguese).
+
+**Phone app (Android, after V3.7T, not released yet):** the Tempra Link on the phone, over the radio's Bluetooth: the
+remote control with the radio's screen, the channels and the banks, the settings (with ROGER CUSTOM), reading and
+writing, backups and a receive alert, plus a demo with no radio. No published APK yet: it builds with
+`tempralink/celular/compilar.ps1` (Delphi). On the radio, only the remote control was tested.
 
 ---
 

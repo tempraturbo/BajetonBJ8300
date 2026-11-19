@@ -39,8 +39,10 @@ function SomDasNotas(const N: TArray<TNota>; SilencioMs: Integer): TBytes;
 implementation
 
 uses
-  Winapi.Windows, Winapi.ActiveX, System.Classes, System.IOUtils, System.Math, System.Generics.Collections,
-  System.Generics.Defaults, Idioma;
+{$IFDEF MSWINDOWS}
+  Winapi.Windows, Winapi.ActiveX,
+{$ENDIF}
+  System.Classes, System.IOUtils, System.Math, System.Generics.Collections, System.Generics.Defaults, Idioma;
 
 type
   // um pedaço da melodia antes de virar nota do rádio: a altura em semitons do MIDI (69 = lá de 440 Hz), -1 pausa
@@ -666,7 +668,10 @@ begin
 end;
 
 { O Media Foundation: só o que a leitura usa, na ordem dos cabeçalhos do Windows (mfobjects.h e mfreadwrite.h); os
-  métodos que não se chamam ficam como marcadores do lugar. }
+  métodos que não se chamam ficam como marcadores do lugar. Fora do Windows (o app do celular, que só usa o
+  SomDasNotas), o som de um arquivo não se lê. }
+
+{$IFDEF MSWINDOWS}
 
 type
   IMFAttributes = interface(IUnknown)
@@ -897,5 +902,12 @@ begin
       CoUninitialize;
   end;
 end;
+
+{$ELSE}
+function AmostrasDoArquivo(const Caminho: string; InicioMs, MsLidos: Integer; out Taxa: Integer): TArray<Single>;
+begin
+  raise EMelodia.Create(Tr('O som de um arquivo só se lê no Windows.', 'A sound file can only be read on Windows.'));
+end;
+{$ENDIF}
 
 end.

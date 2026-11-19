@@ -89,7 +89,22 @@ O `Bluetooth.pas` procura os aparelhos BLE pelo Bluetooth do Windows, conecta no
 serviços e características que ele anuncia e usa a característica `FFE1` como cabo: pela leitura do firmware (seção
 37 da engenharia reversa), o que se escreve nela cai no mesmo buffer que o cabo enche, e a resposta volta por
 notificação. Sem a `FFE1`, ele tenta o primeiro serviço fora dos padrões com uma característica de escrita e uma de
-notificação. Nada disso foi testado no rádio.
+notificação. No rádio, o controle remoto pelo Bluetooth funcionou com o app do celular; a leitura e a gravação por ele
+ainda não foram testadas.
+
+## O app do celular (Android)
+
+A pasta `celular/` é o Tempra Link no Android, pelo Bluetooth do rádio, com as unidades do programa do Windows para a
+memória, o menu, o controle remoto, o Bluetooth, o ROGER CUSTOM e a tela do rádio (a `tela/libtelabj.so`). A primeira
+tela procura o rádio (ou abre a demonstração, com um BJ-8300 simulado); depois vêm quatro abas: **Rádio** (o controle
+remoto, com a tela do rádio e a chave Tela do rádio), **Canais** (os canais e os bancos), **Ajustes** (as pastas do
+menu, os textos, os VFOs, o DTMF e o ROGER CUSTOM) e **Mais** (ler, gravar, desfazer, os backups, o aviso de recepção,
+trocar de rádio e o registro). O registro (`registro.txt`, na pasta do app) guarda as quedas do remoto, o PTT e os
+erros, para o teste longe do PC.
+
+O `celular\compilar.ps1` compila sem a IDE (o msbuild do Delphi) o APK de depuração, porque no Android64 o Delphi só
+faz APK em Debug, e com `-Instala` o instala pelo adb; com `-Windows`, sai um `.exe` para testar as telas no PC com o
+rádio simulado. No rádio, só o controle remoto foi testado.
 
 ## Compilar e testar
 
@@ -129,12 +144,14 @@ Recursos.rc          o manifesto, o ícone, o menu, o estilo e a versão
 gera_menu.py         gera o menu-bj8300.txt a partir do driver do CHIRP
 menu-bj8300.txt      a descrição do menu
 testes/              os testes, o rádio simulado e o lado do CHIRP
+celular/             o app do Android (TempraLinkCelular.dpr; compila pelo compilar.ps1)
 ```
 
 ---
 
 **In English, in short:** Tempra Link for the BJ-8300 reads, edits, keeps and writes a TEMPRA-firmware BJ-8300 through
-the programming cable (and, experimentally, Bluetooth LE through the `FFE1` characteristic): channels, banks, menu
+the programming cable (and, experimentally, Bluetooth LE through the `FFE1` characteristic, also from an Android app
+in `celular/`): channels, banks, menu
 settings, APRS and Morse texts, DTMF and the boot logo (read only on V3.7T); and, with firmware v159 or newer (not
 released yet), it is a remote control, with the radio's screen live over the cable. The menu description is generated from
 this repository's CHIRP driver by `gera_menu.py`, and the tests check, both ways, that the program and the driver read

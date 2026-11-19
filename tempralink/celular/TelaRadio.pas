@@ -1,8 +1,8 @@
 ﻿unit TelaRadio;
 
 { A tela do rádio no celular: a frente do BJ-8300 para mexer nele à distância (o Remoto.pas, o mesmo do Windows). Em
-  cima o visor: a tela do rádio quando ela vem (pelo cabo), ou, pelo Bluetooth, o estado desenhado como o rádio o
-  mostraria (quem recebe, o S-meter de 24 segmentos, a TX e a tensão). Embaixo o teclado do rádio, na ordem dele, em
+  cima o visor: a tela do rádio, desenhada do retrato que o rádio manda (v162), ou, enquanto ele não vem, o estado
+  desenhado como o rádio o mostraria (quem recebe, o S-meter de 24 segmentos, a TX e a tensão). Embaixo o teclado do rádio, na ordem dele, em
   que cada tecla fica apertada enquanto o dedo está nela (segurar 1 s é o toque longo), e o PTT, que transmite
   enquanto está apertado. Tudo se mede pelo tamanho da tela do celular. }
 
@@ -11,6 +11,10 @@ interface
 uses
   System.SysUtils, System.Classes, System.Types, System.UITypes, System.Math, FMX.Types, FMX.Controls, FMX.Objects,
   FMX.Layouts, FMX.Graphics, Transporte, Remoto, LogoFormato, ModeloRadio, TemaCelular;
+
+const
+  // um intervalo maior que este entre dois estados vai ao registro (o rádio que para de responder no TX, 18/11)
+  INTERVALO_REGISTRO_MS = 1000;
 
 type
   TSituacao = (stDesligado, stConectando, stLigado);
@@ -30,6 +34,10 @@ type
     FSituacao: TSituacao;
     FAviso: string;
     FAvisoTela: string;      // o que da tela não vem do rádio, ou por que ela parou (Remoto.AvisoDaTela)
+    FApaga: Boolean;         // o pedido de apagar a tela do rádio (v164), que segue para o próximo Liga
+    FPttApertado: Boolean;
+    FUltimoEstado: UInt64;   // quando chegou o último estado, para o registro dos intervalos
+    FRodando: Integer;       // as threads do remoto vivas (a que o Desliga mandou parar pode ainda estar saindo)
     procedure Arruma(Sender: TObject);
     procedure PintaTela(Sender: TObject; Canvas: TCanvas);
     procedure PintaEstado(Canvas: TCanvas; const R: TRectF);
@@ -42,13 +50,25 @@ type
     procedure PttSolta(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Single);
     procedure PttSaiu(Sender: TObject);
     procedure MarcaPtt(Apertado: Boolean);
+    procedure VisorClick(Sender: TObject);
   public
     OnCaiu: TProc<string>;   // o controle remoto parou sozinho (o rádio sumiu): a mensagem
+    OnTentaDeNovo: TProc;    // com ele parado, o toque no visor
+    OnEstado: TProc<TEstadoRadio>;   // chegou o estado do rádio (e o TelaApagada, que uma tecla do rádio desfaz)
     constructor Create(Pai: TFmxObject);
     destructor Destroy; override;
-    // Liga o controle remoto no transporte (numa thread); com Tela, a tela do rádio vem junto (o retrato, v162).
-    procedure Liga(const T: ITransporte; Tela: Boolean);
+    // Liga o controle remoto (numa thread) no transporte que Abre dá, e de novo a cada queda, até o Desliga; com Tela,
+    // a tela do rádio vem junto (o retrato, v162), menos com o PTT apertado (o Remoto.PausaTelaNoPtt).
+    procedure Liga(const Abre: TFunc<ITransporte>; Tela: Boolean);
     procedure Desliga;
+    // Arruma a frente no tamanho de agora (a janela chama depois de mostrá-la: escondida, ela não ouve o tamanho).
+    procedure Rearruma;
+    // De qualquer thread: espera a thread do remoto terminar (depois do Desliga), até Ms; False se ela não terminou.
+    function EsperaParar(Ms: Cardinal): Boolean;
+    // A tela do rádio apagada enquanto o remoto estiver ligado, para poupar a bateria dele (firmware v164); uma tecla
+    // do próprio rádio a acende, e o TelaApagada volta a False (v165).
+    procedure ApagaTela(Liga: Boolean);
+    property TelaApagada: Boolean read FApaga;
     property Raiz: TLayout read FRaiz;
   end;
 
@@ -57,10 +77,11 @@ procedure Vibra;
 
 implementation
 
-{$IFDEF ANDROID}
 uses
-  Androidapi.Helpers, Androidapi.JNI.GraphicsContentViewText, Androidapi.JNI.Os, Androidapi.JNIBridge;
+{$IFDEF ANDROID}
+  Androidapi.Helpers, Androidapi.JNI.GraphicsContentViewText, Androidapi.JNI.Os, Androidapi.JNIBridge,
 {$ENDIF}
+  RegistroCelular;
 
 procedure Vibra;
 {$IFDEF ANDROID}
@@ -88,6 +109,7 @@ begin
 
   // o visor: a moldura escura e o vidro
   FVisor := Caixa(FRaiz, COR_NAV, 18, COR_DIVISA);
+  FVisor.OnClick := VisorClick;
   FTela := TPaintBox.Create(FVisor);
   FTela.Parent := FVisor;
   FTela.Align := TAlignLayout.Client;
@@ -266,6 +288,8 @@ begin
     Exit;
   MarcaPtt(True);
   Vibra;
+  FPttApertado := True;
+  Anota('PTT apertado');
   FRemoto.Ptt(True);
 end;
 
@@ -277,11 +301,16 @@ end;
 procedure TTelaRadio.PttSaiu(Sender: TObject);
 begin
   MarcaPtt(False);
+  if FPttApertado then
+  begin
+    FPttApertado := False;
+    Anota('PTT solto');
+  end;
   if FRemoto <> nil then
     FRemoto.Ptt(False);
 end;
 
-procedure TTelaRadio.Liga(const T: ITransporte; Tela: Boolean);
+procedure TTelaRadio.Liga(const Abre: TFunc<ITransporte>; Tela: Boolean);
 var
   R: TRemoto;
 begin
@@ -292,18 +321,53 @@ begin
   FAviso := '';
   FAvisoTela := '';
   FEstado := Default(TEstadoRadio);
+  FUltimoEstado := 0;
   FTela.Repaint;
-  R.OnEstado :=
-    procedure(E: TEstadoRadio)
+  R.Apaga(FApaga);
+  R.PausaTelaNoPtt := True;
+  R.OnRegistro :=
+    procedure(S: string)
+    begin
+      Anota(S);
+    end;
+  R.OnQueda :=
+    procedure
     begin
       TThread.Queue(nil,
         procedure
         begin
           if FRemoto <> R then
             Exit;
+          FSituacao := stConectando;
+          FAviso := '';
+          FTela.Repaint;
+        end);
+    end;
+  R.OnEstado :=
+    procedure(E: TEstadoRadio)
+    var
+      Apagando: Boolean;
+      Agora: UInt64;
+    begin
+      Apagando := R.Apagando;   // aqui, na thread do remoto: na janela o R pode já não existir
+      Agora := TThread.GetTickCount64;
+      TThread.Queue(nil,
+        procedure
+        begin
+          if FRemoto <> R then
+            Exit;
+          if (FUltimoEstado > 0) and (Agora > FUltimoEstado + INTERVALO_REGISTRO_MS) then
+            Anota(Format('%d ms sem estado do rádio (PTT %s, TX %d)',
+                         [Agora - FUltimoEstado, BoolToStr(FPttApertado, True), E.TX]));
+          if (E.TX <> FEstado.TX) or (E.RX <> FEstado.RX) and ((E.RX = 4) or (FEstado.RX = 4)) then
+            Anota(Format('estado: TX %d, RX %d, lado %s, sinal %d', [E.TX, E.RX, E.Letra, E.Sinal]));
+          FUltimoEstado := Agora;
           FEstado := E;
           FSituacao := stLigado;
+          FApaga := Apagando;
           FTela.Repaint;
+          if Assigned(OnEstado) then
+            OnEstado(E);
         end);
     end;
   R.OnTela :=
@@ -334,6 +398,7 @@ begin
           FTela.Repaint;
         end);
     end;
+  AtomicIncrement(FRodando);
   TThread.CreateAnonymousThread(
     procedure
     var
@@ -341,11 +406,14 @@ begin
     begin
       Msg := '';
       try
-        R.Executa(T, Tela);
+        R.ExecutaReligando(Abre, Tela);
       except
         on E: Exception do
           Msg := E.Message;
       end;
+      if Msg <> '' then
+        Anota('Controle remoto parou: ' + Msg);
+      AtomicDecrement(FRodando);
       TThread.Queue(nil,
         procedure
         begin
@@ -363,6 +431,24 @@ begin
     end).Start;
 end;
 
+procedure TTelaRadio.VisorClick(Sender: TObject);
+begin
+  if (FSituacao = stDesligado) and Assigned(OnTentaDeNovo) then
+    OnTentaDeNovo();
+end;
+
+procedure TTelaRadio.Rearruma;
+begin
+  Arruma(nil);
+end;
+
+procedure TTelaRadio.ApagaTela(Liga: Boolean);
+begin
+  FApaga := Liga;
+  if FRemoto <> nil then
+    FRemoto.Apaga(Liga);
+end;
+
 procedure TTelaRadio.Desliga;
 begin
   if FRemoto <> nil then
@@ -372,6 +458,17 @@ begin
   end;
   FSituacao := stDesligado;
   MarcaPtt(False);
+  FPttApertado := False;
+end;
+
+function TTelaRadio.EsperaParar(Ms: Cardinal): Boolean;
+var
+  Ate: UInt64;
+begin
+  Ate := TThread.GetTickCount64 + Ms;
+  while (FRodando > 0) and (TThread.GetTickCount64 < Ate) do
+    TThread.Sleep(20);
+  Result := FRodando = 0;
 end;
 
 procedure TTelaRadio.PintaTela(Sender: TObject; Canvas: TCanvas);
@@ -390,6 +487,17 @@ begin
     H := W * RADIO_TELA_ALTURA / RADIO_TELA_LARGURA;
     D := RectF(R.CenterPoint.X - W / 2, R.CenterPoint.Y - H / 2, R.CenterPoint.X + W / 2, R.CenterPoint.Y + H / 2);
     Canvas.DrawBitmap(FImagem, RectF(0, 0, FImagem.Width, FImagem.Height), D, 1, True);
+    if FEstado.TX = 1 then
+    begin
+      // transmitindo: o retrato não se pede com o PTT apertado, e a tela parada não mostraria o TX
+      Canvas.Fill.Color := COR_PTT;
+      Canvas.FillRect(RectF(D.Right - 58, D.Top + 6, D.Right - 6, D.Top + 32), 13, 13, AllCorners, 1);
+      Canvas.Fill.Color := TAlphaColors.White;
+      Canvas.Font.Size := 14;
+      Canvas.Font.Style := [TFontStyle.fsBold];
+      Canvas.FillText(RectF(D.Right - 58, D.Top + 6, D.Right - 6, D.Top + 32), 'TX', False, 1, [], TTextAlign.Center,
+                      TTextAlign.Center);
+    end;
     if FAvisoTela <> '' then
     begin
       // o aviso numa faixa no pé da tela, sobre ela
@@ -442,10 +550,12 @@ begin
     Escreve(Format('%d,%d V', [E.Tensao div 10, E.Tensao mod 10]), Linha, 12, COR_TEXTO, True, TTextAlign.Trailing);
   if FSituacao <> stLigado then
   begin
-    if FSituacao = stConectando then
+    if (FSituacao = stConectando) and (FUltimoEstado > 0) then
+      S := 'A ligação caiu. Reconectando...'
+    else if FSituacao = stConectando then
       S := 'Conectando ao rádio...'
     else if FAviso <> '' then
-      S := FAviso
+      S := FAviso + sLineBreak + sLineBreak + 'Toque aqui para tentar de novo.'
     else
       S := 'Desconectado';
     Canvas.Font.Size := 14;

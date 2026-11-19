@@ -1,7 +1,7 @@
 ﻿unit Idioma;
 
 { Os textos saem em português num sistema em português e em inglês nos outros: no Windows pela língua da interface,
-  nos outros (o celular) pelo locale. }
+  no Android pela do Locale do Java (o TLanguages do Delphi lá diz sempre en_US). }
 
 interface
 
@@ -12,8 +12,9 @@ implementation
 uses
 {$IFDEF MSWINDOWS}
   Winapi.Windows;
-{$ELSE}
-  System.SysUtils;
+{$ENDIF}
+{$IFDEF ANDROID}
+  Androidapi.Helpers, Androidapi.JNI.JavaTypes;
 {$ENDIF}
 
 var
@@ -30,7 +31,8 @@ end;
 initialization
 {$IFDEF MSWINDOWS}
   Portugues := GetUserDefaultUILanguage and $3FF = LANG_PORTUGUESE;
-{$ELSE}
-  Portugues := TLanguages.UserDefaultLocale.ToLower.StartsWith('pt');
+{$ENDIF}
+{$IFDEF ANDROID}
+  Portugues := JStringToString(TJLocale.JavaClass.getDefault.getLanguage) = 'pt';
 {$ENDIF}
 end.

@@ -111,8 +111,11 @@ begin
         for W := V + 1 to High(It.Valores) do
           Ok := Ok and (It.Valores[V].Texto <> It.Valores[W].Texto);
     end;
-  Confere((Menu.Pastas.Count = 15) and (Itens = 88), Format('menu: %d pastas e %d itens', [Menu.Pastas.Count, Itens]));
+  Confere((Menu.Pastas.Count = 15) and (Itens = 89), Format('menu: %d pastas e %d itens', [Menu.Pastas.Count, Itens]));
   Confere(Ok, 'menu: todo item com dois valores ou mais, de textos diferentes');
+  It := Menu.Item('SCAN', 'THRESHOLD', '-');
+  Confere((Length(It.Valores) = 9) and (It.Valores[0].Texto = 'S1') and (It.Valores[8].Texto = 'S9'),
+          'menu: o THRESHOLD na pasta SCAN, de S1 a S9 (v167)');
   Confere((Menu.Vfos[0] = $8000) and (Menu.Vfos[2] = $D3004) and (Length(Menu.Registros) = 4) and
           (Length(Menu.Textos) = 4), 'menu: os VFOs, os registros e os textos');
 end;
@@ -260,6 +263,7 @@ begin
   Escolhe(M, 'CHANNEL', 'TX POWER', 'B', 'LOW');
   Escolhe(M, 'MORSE', 'SPEED', '-', '25 WPM');
   Escolhe(M, 'APRS (SMS)', 'PATH', '-', 'NONE');
+  Escolhe(M, 'SCAN', 'THRESHOLD', '-', 'S6');
   M.PoeTexto('CALLSIGN', 'NOCALL');
   M.PoeTexto('MORSE MESSAGE', 'TESTE 73');
   M.PoeFrequencia(0, 14555000);
@@ -1201,6 +1205,152 @@ begin
   end;
 end;
 
+// Um transporte que avisa a cada leitura, com o relógio dele: o teste age no meio do Executa sem esperar resposta.
+type
+  TComRelogio = class(TInterfacedObject, ITransporte)
+  private
+    FT: ITransporte;
+    FCada: TProc<UInt64>;
+  public
+    constructor Create(const T: ITransporte; Cada: TProc<UInt64>);
+    procedure Escreve(const B: TBytes);
+    function Le: TBytes;
+    procedure LimpaEntrada;
+    function Agora: UInt64;
+    procedure Dorme(Ms: Cardinal);
+    function Velocidade(Baud: Cardinal = 0): Cardinal;
+  end;
+
+constructor TComRelogio.Create(const T: ITransporte; Cada: TProc<UInt64>);
+begin
+  inherited Create;
+  FT := T;
+  FCada := Cada;
+end;
+
+procedure TComRelogio.Escreve(const B: TBytes);
+begin
+  FT.Escreve(B);
+end;
+
+function TComRelogio.Le: TBytes;
+begin
+  Result := FT.Le;
+  FCada(FT.Agora);
+end;
+
+procedure TComRelogio.LimpaEntrada;
+begin
+  FT.LimpaEntrada;
+end;
+
+function TComRelogio.Agora: UInt64;
+begin
+  Result := FT.Agora;
+end;
+
+procedure TComRelogio.Dorme(Ms: Cardinal);
+begin
+  FT.Dorme(Ms);
+end;
+
+function TComRelogio.Velocidade(Baud: Cardinal): Cardinal;
+begin
+  Result := FT.Velocidade(Baud);
+end;
+
+// O rádio mudo com o PTT apertado (o TX pelo Bluetooth do celular, 18/11): a ligação não cai enquanto o PTT está
+// apertado, e cai QUEDA_MS depois de ele soltar; e, com o PausaTelaNoPtt, o retrato não se pede com o PTT.
+procedure TestePttMudo;
+var
+  R: TRadioBJSimulado;
+  T: ITransporte;
+  Rem: TRemoto;
+  Estados, RetratosNoPtt: Integer;
+  Apertou, Soltou, Falhou: UInt64;
+  Msg: string;
+  Tela: TBytes;
+begin
+  R := NovoRadio;
+  Rem := TRemoto.Create;
+  try
+    Estados := 0;
+    Apertou := 0;
+    Soltou := 0;
+    Falhou := 0;
+    T := TComRelogio.Create(R,
+      procedure(Agora: UInt64)
+      begin
+        if (Apertou > 0) and (Soltou = 0) and (Agora > Apertou + 6000) then
+        begin
+          Rem.Ptt(False);
+          Soltou := Agora;
+        end;
+      end);
+    Rem.OnEstado :=
+      procedure(Es: TEstadoRadio)
+      begin
+        Inc(Estados);
+        if Estados = 5 then
+        begin
+          Rem.Ptt(True);
+          R.Mudo := True;
+          Apertou := R.Agora;
+        end;
+      end;
+    Msg := '';
+    try
+      Rem.Executa(T, False);
+    except
+      on E: EFalha do
+      begin
+        Msg := E.Message;
+        Falhou := R.Agora;
+      end;
+    end;
+    Confere((Msg <> '') and (Soltou > 0) and (Falhou >= Soltou + QUEDA_MS) and (Falhou < Soltou + QUEDA_MS + 500),
+            Format('remoto: o rádio mudo com o PTT apertado não derruba a ligação; solto, ela cai em %d s ' +
+                   '(apertou %d, soltou %d, caiu %d: %s)', [QUEDA_MS div 1000, Apertou, Soltou, Falhou, Msg]));
+  finally
+    Rem.Free;
+  end;
+
+  // a pausa do retrato: com o PTT apertado, o quadro vai sem o pedido da tela, e o rádio não manda retrato
+  R := NovoRadio;
+  R.Retrato := Amostra('1-a-em-evidencia-recebendo', Tela);
+  T := R;
+  Rem := TRemoto.Create;
+  try
+    Rem.PausaTelaNoPtt := True;
+    Estados := 0;
+    RetratosNoPtt := -1;
+    Rem.OnEstado :=
+      procedure(Es: TEstadoRadio)
+      begin
+        Inc(Estados);
+        if Estados = 5 then
+          Rem.Ptt(True);
+        if Estados = 8 then
+          RetratosNoPtt := R.Retratos;
+        if Estados = 20 then
+        begin
+          Confere((R.RemBits and BIT_PTT <> 0) and (R.RemBits and BIT_TELA = 0) and (R.Retratos = RetratosNoPtt),
+                  'remoto: com o PausaTelaNoPtt, o PTT apertado vai sem o pedido da tela, e nenhum retrato vem');
+          Rem.Ptt(False);
+        end;
+        if Estados = 30 then
+        begin
+          Confere((R.RemBits and BIT_TELA <> 0) and (R.Retratos > RetratosNoPtt),
+                  'remoto: solto o PTT, o pedido da tela e o retrato voltam');
+          Rem.Parar := True;
+        end;
+      end;
+    Rem.Executa(T, True);
+  finally
+    Rem.Free;
+  end;
+end;
+
 begin
   try
     Pasta := ParamStr(1);
@@ -1220,6 +1370,7 @@ begin
       TesteTelaApagada;
       TesteReligando;
       TesteVelocidade;
+      TestePttMudo;
     finally
       Menu.Free;
     end;

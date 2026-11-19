@@ -5,6 +5,25 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Tempra Link — 18/11 — o app do celular, o THRESHOLD e o PTT que não derruba o remoto
+
+- **O app do celular** (Android, `tempralink/celular`): a primeira tela procura o rádio pelo Bluetooth (ou abre a
+  demonstração, com um BJ-8300 simulado), e depois vêm quatro abas: **Rádio** (o controle remoto, com a tela do rádio e
+  a chave Tela do rádio), **Canais** (os canais e os bancos), **Ajustes** (as pastas do menu, os textos, os VFOs, os
+  códigos DTMF e o ROGER CUSTOM) e **Mais** (ler, gravar, desfazer, os backups, o aviso de recepção, trocar de rádio e
+  o registro). As unidades da memória, do menu, do remoto, do Bluetooth e do ROGER são as do programa do Windows, e a
+  tela do rádio é a `libtelabj.so`, agora alinhada em 16 KB (o Android 15 em diante avisava que o app não era
+  compatível). O `compilar.ps1` compila sem a IDE e instala pelo adb; com `-Windows`, sai para o PC, para testar as
+  telas com o rádio simulado.
+- **O THRESHOLD** na pasta SCAN dos ajustes, de S1 a S9, no Windows e no celular (o menu sai do driver do CHIRP).
+- **O PTT no controle remoto:** com o PTT apertado, o rádio calado não derruba mais o remoto (a conta recomeça quando
+  ele solta), e o celular não pede a tela durante o TX. Quem derrubava a ligação era o firmware (v166).
+- **A tela do remoto** acompanha o retrato da v167; com um firmware de outra rodada, o programa avisa que não conhece a
+  tela dele.
+
+No rádio: o controle remoto pelo Bluetooth do celular funcionou, e o PTT derrubava a ligação (até a v165). A leitura,
+a gravação e o aviso pelo Bluetooth, e o remoto com a v166 e a v167, ainda não foram testados.
+
 ## Driver do CHIRP — 18/11 — o THRESHOLD
 
 - O **Scan threshold** (S1 a S9) logo depois do Scan Resume Method, no byte `0x9022` (`0xD0` + a opção; firmware v167

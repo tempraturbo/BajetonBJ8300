@@ -140,7 +140,8 @@ def monta():
                         ('aprs_path', 'WIDE1-1,WIDE2-1'), ('aprs_decode', 'Off'), ('aprs_callsign', 'N0CALL'),
                         ('aprs_to', 'APRS'), ('aprs_message', 'Ola, mundo!'), ('morse_message', 'CQ CQ DE N0CALL'),
                         ('pttid/0.code', '123A'), ('pttid/14.code', '*#0'), ('vfo.a.freq', '145.500000'),
-                        ('vfoc_freq', '438.500000'), ('vfoc_offset', '5.000000'), ('vfo.b.offset', '0.600000')):
+                        ('vfoc_freq', '438.500000'), ('vfoc_offset', '5.000000'), ('vfo.b.offset', '0.600000'),
+                        ('settings_unused_9022', 'S3')):
         ajuste(radio, nome, valor)
     return radio
 
@@ -248,7 +249,8 @@ def confere():
                        ('vfoc_step', '12.5 K'), ('vfo_b_txpower', 'Low'), ('morse_speed', '25 WPM'),
                        ('aprs_path', 'None'), ('aprs_callsign', 'NOCALL'), ('morse_message', 'TESTE 73'),
                        ('vfo.a.freq', '145.550000'), ('vfoc_freq', '433.000000'), ('vfoc_offset', '0.600000'),
-                       ('pttid/1.code', '9876'), ('noise_gate', 'High'), ('modem_gain', 'Low')):
+                       ('pttid/1.code', '9876'), ('noise_gate', 'High'), ('modem_gain', 'Low'),
+                       ('settings_unused_9022', 'S6')):
         v = gm.acha(arvore, nome).value
         visto = bool(v) if isinstance(v, settings.RadioSettingValueBoolean) else (
             int(v) if isinstance(v, settings.RadioSettingValueInteger) else str(v).strip())

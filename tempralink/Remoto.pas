@@ -56,7 +56,10 @@ const
   BIT_APAGA = 4;            // v164: a tela do rádio apagada (uma tecla no rádio a acende pelo tempo da luz)
   // o código do OnTela sem imagem: o retrato não veio (TelaBJ tem os outros)
   TELA_SEM_RETRATO = 100;
-  QUEDA_MS = 4000;          // conectado, nada do rádio por esse tempo: a ligação caiu (o roger mais longo tem 3 s)
+  QUEDA_MS = 4000;          // conectado, nada do rádio por esse tempo: a ligação caiu (o roger mais longo tem 3 s).
+                            // Com o PTT apertado não: conta a partir de quando ele solta. O rádio pode calar no TX
+                            // (até a v165 o início do TX desligava o BLE, 18/11); o PTT segue indo no quadro, e se a
+                            // ligação morreu mesmo, o vigia do rádio o solta em 1 s
 
 type
   TEstadoRadio = record
@@ -106,6 +109,7 @@ type
   public
     Parar: Boolean;
     PausaReligaMs: Cardinal;   // entre as tentativas de reconectar (os testes o zeram)
+    PausaTelaNoPtt: Boolean;   // o retrato não se pede com o PTT apertado (o celular: menos trabalho no rádio no TX)
     OnRegistro: TProc<string>;
     OnEstado: TProc<TEstadoRadio>;
     OnTela: TProcTela;
@@ -392,9 +396,9 @@ end;
 procedure TRemoto.Executa(const T: ITransporte; Tela: Boolean);
 var
   Leitor: TLeitorRemoto;
-  Agora, Inicio, Chegou, Proximo, UltimoRetrato, TeclaDesde: UInt64;
+  Agora, Inicio, Chegou, Proximo, UltimoRetrato, TeclaDesde, UltimoPtt: UInt64;
   Estados, Retratos, Tecla, Enviado, Apertos, Ativa, Codigo, Mostrado: Integer;
-  SemRetrato: Boolean;
+  SemRetrato, PedeTela: Boolean;
   Bits: Byte;
   B, Imagem, Mostrada: TBytes;
 begin
@@ -405,6 +409,7 @@ begin
     Chegou := Inicio;
     Proximo := Inicio;
     UltimoRetrato := Inicio;
+    UltimoPtt := 0;
     SemRetrato := False;
     Estados := 0;
     Retratos := 0;
@@ -427,13 +432,18 @@ begin
       else if (Ativa >= 0) and (FSegura <> Ativa) and (Agora >= TeclaDesde + TECLA_MIN_MS) then
         Ativa := -1;
       Tecla := IfThen(Ativa < 0, TECLA_NENHUMA, Ativa);
-      Bits := IfThen(FPtt, BIT_PTT, 0) or IfThen(Tela, BIT_TELA, 0) or IfThen(FApaga, BIT_APAGA, 0);
+      if FPtt then
+        UltimoPtt := Agora;
+      PedeTela := Tela and not (FPtt and PausaTelaNoPtt);
+      if not PedeTela then
+        UltimoRetrato := Agora;   // sem pedir, o retrato não falta
+      Bits := IfThen(FPtt, BIT_PTT, 0) or IfThen(PedeTela, BIT_TELA, 0) or IfThen(FApaga, BIT_APAGA, 0);
       if (Tecla or Bits shl 8 <> Enviado) or (Agora >= Proximo) then
       begin
         // duas vezes: um resto de quadro perdido no buffer do rádio não estraga o seguinte (o rádio usa o mais novo)
         T.Escreve(QuadroRemoto(Tecla, Bits) + QuadroRemoto(Tecla, Bits));
         Enviado := Tecla or Bits shl 8;
-        Proximo := Agora + UInt64(IfThen(Tela, TELA_MS, ESTADO_MS));
+        Proximo := Agora + UInt64(IfThen(PedeTela, TELA_MS, ESTADO_MS));
       end;
       B := T.Le;
       if B <> nil then
@@ -500,7 +510,7 @@ begin
           'rádio ligado normalmente (fora do modo de gravação).',
           'The radio did not answer. Remote control needs firmware v159 or newer (the screen, v163), with the radio ' +
           'on normally (not in programming mode).'));
-      if (Estados > 0) and (Agora > Chegou + QUEDA_MS) then
+      if (Estados > 0) and not FPtt and (Agora > Max(Chegou, UltimoPtt) + QUEDA_MS) then
         raise EFalha.CreateFmt(Tr('nada chegou do rádio em %d s', 'nothing came from the radio in %d s'),
                                [QUEDA_MS div 1000]);
     end;
