@@ -1235,6 +1235,14 @@ confere os dois byte a byte.
 gancho liga a edição, que a tela B desenha sem cursor; o OK e os números não fazem nada com ele
 aberto, e o EXIT de fábrica o fecha (cancela a edição, `0x01E4D500`).
 
+**O VERSION vazio (até a v170).** Editando, o motor desenha as linhas a partir de `h[0x14BFC]`, que ele copia para
+`h[0x14C18]` (`0x01E48A0C`); fora da edição, esse campo é o número do item na pasta, e o OK de fábrica o troca pelo valor
+antes de abrir (`0x01E49BB6`). O gancho do VERSION não passava por ali: com ele no 5º item do SYSTEM, as linhas
+começavam na 4, e a exibição dele (`0x01E3D006`) só tem duas, que o motor só pede abaixo do máximo (`h[0x14C0E]`, posto
+pelo `ITEM_MUDOU` ao andar na pasta, `0x01E48588`; `0x01E48BDE`). Só a seta, ao dar a volta e zerar o valor e o cursor
+(`0x01E49FD4`), trazia o firmware e o hardware. Desde a v171 o gancho zera o valor antes do motor, e o EXIT continua
+voltando ao item, porque devolve o número dele de `b[0x14BFA]` (`0x01E4D510`).
+
 **O menu do rádio** (v56) é o mesmo motor, no modo de menu: a entrada (`0x01E49000`) põe uma de duas
 tabelas de fábrica, `0x01E61168` (FM e AM) ou `0x01E6137C` (SSB e CW, 532 B adiante, `0x01E49026`), e
 a conta da banda vem de `0x01E3DE36` (FM 2, AM 5, SSB e CW 6). O item de memória tem `0x20` nas

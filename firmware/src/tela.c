@@ -1269,6 +1269,11 @@ de_novo:
         return 0;
     TEMPO_MENU();
     MENU_EDITANDO = 1;
+    /* v171: editando, o motor desenha as linhas a partir de h[0x14BFC] (copiado para h[0x14C18], 0x01E48A0C), que fora
+     * da edicao e o numero do item na pasta (o VERSION e o 5o do SYSTEM, 4); o OK de fabrica o troca pelo valor
+     * (0x01E49BB6), e sem isso as linhas comecavam na 4, alem das duas da exibicao do VERSION (0x01E3D006): abria vazio
+     * ate a seta zerar o valor (0x01E49FD4). O EXIT devolve o numero do item de b[0x14BFA] (0x01E4D510). */
+    MENU_ITEM = 0;
     return MOTOR_MENU();
 }
 

@@ -5,6 +5,18 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v171 — 19/11 — o VERSION abre com o firmware e o hardware (sem teste no rádio)
+
+O SYSTEM > VERSION abria vazio desde a v55, e o firmware e o hardware só apareciam depois de uma seta. Com o item aberto,
+o motor de menus desenha as linhas a partir do valor do item, e o gancho que abre o VERSION não o punha: o motor partia
+do número do item na pasta (4, o 5º do SYSTEM), além das duas linhas dele. Agora o gancho zera o valor antes de
+desenhar, como a seta fazia ([seção 21](engenharia-reversa.md#21-o-menu-em-pastas-v53-a-v57)). O item continua mostrando
+a V3.8T: nada muda no que o firmware guarda ou responde, e o Tempra Link e o driver do CHIRP ficam como estão.
+
+- `BJ8300_BANK.anc` da v171 (fora de `firmware/releases/`): sha256 `953d1bf51d72a258e23bee7c54d4003996a2e4c30a364ab1cbbd001b0395a644`
+
+Testado no PC: o build ("tudo certo", 4 bytes a mais no gancho do OK) e os testes do firmware. No rádio, ainda não.
+
 ## Tempra Link — 19/11 — os avisos de quando o GitHub não responde e de quando o rádio não responde
 
 - Com um firmware de fora da faixa e a procura no GitHub com erro (sem internet, ou o GitHub recusando), a caixa da

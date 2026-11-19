@@ -1255,6 +1255,15 @@ routine, one the stock path also goes through (the EXIT beep, the OK redraw), wi
 exists. The hook turns editing on, which screen B draws without a cursor; OK and the digits do
 nothing while it is open, and stock EXIT closes it (cancels the edit, `0x01E4D500`).
 
+**Empty VERSION (up to v170).** While editing, the engine draws the lines from `h[0x14BFC]`, which it copies to
+`h[0x14C18]` (`0x01E48A0C`); outside editing, that field is the item's number in the folder, and stock OK replaces it
+with the value before opening (`0x01E49BB6`). The VERSION hook did not go through there: with it as the 5th item in
+SYSTEM, the lines started at 4, and its display (`0x01E3D006`) has only two, which the engine only asks for below the
+maximum (`h[0x14C0E]`, set by `ITEM_MUDOU` when walking the folder, `0x01E48588`; `0x01E48BDE`). Only the arrow, by
+wrapping around and zeroing the value and the cursor (`0x01E49FD4`), brought the firmware and the hardware. Since v171
+the hook zeroes the value before the engine, and EXIT still goes back to the item, because it restores its number from
+`b[0x14BFA]` (`0x01E4D510`).
+
 **The radio menu** (v56) is the same engine, in menu mode: the entry (`0x01E49000`) sets one of two
 stock tables, `0x01E61168` (FM and AM) or `0x01E6137C` (SSB and CW, 532 B further, `0x01E49026`), and
 the band's count comes from `0x01E3DE36` (FM 2, AM 5, SSB and CW 6). The memory item has `0x20` in

@@ -5,6 +5,19 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v171 — Nov 19 — VERSION opens with the firmware and the hardware (not tested on the radio)
+
+SYSTEM > VERSION opened empty since v55, and the firmware and hardware only showed after an arrow. With the item open,
+the menu engine draws the lines from the item's value, and the hook that opens VERSION did not set it: the engine
+started from the item's number in the folder (4, the 5th in SYSTEM), past its two lines. Now the hook zeroes the value
+before drawing, as the arrow did ([section 21](reverse-engineering.md#21-the-menu-in-folders-v53-to-v57)). The item
+still shows V3.8T: nothing changes in what the firmware stores or answers, and Tempra Link and the CHIRP driver stay as
+they are.
+
+- v171 `BJ8300_BANK.anc` (outside `firmware/releases/`): sha256 `953d1bf51d72a258e23bee7c54d4003996a2e4c30a364ab1cbbd001b0395a644`
+
+Tested on the PC: the build ("tudo certo", 4 more bytes in the OK hook) and the firmware tests. Not on the radio yet.
+
 ## Tempra Link — Nov 19 — the messages for when GitHub does not answer and when the radio does not answer
 
 - With a firmware outside the range and the GitHub search failing (no internet, or GitHub refusing), the refusal box
