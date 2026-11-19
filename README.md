@@ -243,7 +243,7 @@ desenho que vai para o rádio.
 | 🎵 **ROGER CUSTOM** (depois da V3.7T, ainda sem release)<ul><li>O `ROGER` ganha o **CUSTOM**: até 32 notas, de 300 a 3000 Hz, e até 3 s, compostas no Tempra Link (o piano, a linha do tempo e a importação de MIDI e de som).</li><li>Como o do Baofeng UV-17L.</li></ul> | |
 | 🔎 **Busca mais rápida e THRESHOLD** (depois da V3.7T, ainda sem release)<ul><li>A busca (o SCAN, nos canais e no VFO) passa de 3 a 5 canais por segundo para **um canal a cada 50 ms**, como a do Baofeng UV-17L.</li><li>**THRESHOLD** na pasta SCAN, de **S1 a S9**: na busca, o canal que abre o squelch abaixo do S escolhido é pulado. S1 é como de fábrica.</li></ul> | |
 | 📊 **Espectro**<ul><li>**320 e 640 pontos** além dos 160 de fábrica, e **passo de 10 kHz**.</li><li>**Pico seguro**: a barra sobe na hora e desce aos poucos.</li><li>A coluna medida em branco, a frequência que roda no alto e a do pico de cada passada em verde, com o dBm.</li><li>A luz não apaga enquanto ele está na tela.</li></ul> | <img src="docs/imagens/tela-espectro.png" alt="Espectro" width="300"> |
-| 🔌 **Driver do CHIRP próprio**<ul><li>Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, o WATCH, o VFO C, a pasta MIC, o CRYSTAL FINE, o BRIGHTNESS, o LIGHT PWM, o MODEM GAIN, a pasta AUDIO, o EQ, a pasta **APRS (SMS)**, a pasta **Morse**, o DECODE e o PF3 LONG.</li><li>Tudo numa sessão só pelo cabo; fica na lista do **Bajeton**.</li><li>Recusa gravar num rádio com firmware de fábrica ([como usar](#-como-usar-o-chirp-com-este-firmware)).</li></ul> | |
+| 🔌 **Driver do CHIRP próprio**<ul><li>Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, o WATCH, o VFO C, a pasta MIC, o CRYSTAL FINE, o BRIGHTNESS, o LIGHT PWM, o MODEM GAIN, a pasta AUDIO, o EQ, a pasta **APRS (SMS)**, a pasta **Morse**, o DECODE, o PF3 LONG e o THRESHOLD.</li><li>Tudo numa sessão só pelo cabo; fica na lista do **Bajeton**.</li><li>Recusa gravar num rádio com firmware de fábrica ([como usar](#-como-usar-o-chirp-com-este-firmware)).</li></ul> | |
 | 🧰 **Comando estendido no cabo**<ul><li>Leitura do chip de dados inteiro (endereço de 24 bits).</li><li>Gravação só nas áreas do firmware novo: os bancos, o WATCH, o VFO C, o Morse e o APRS.</li><li>É o que o driver do CHIRP usa.</li></ul> | |
 
 ### 🖥️ A tela nova, tela por tela
@@ -430,7 +430,8 @@ depois **OK** para ler.
   logo depois do Noise reduction, o **Expander**, a **Noise gate**, a **De-emphasis**, o **EQ bass (RX)** e o
   **EQ treble (RX)**, o **Mic Gain** (com o DEFAULT, na ordem do rádio), o **Compressor**, o **Mic AGC**, o **EQ bass (TX)** e o
   **EQ treble (TX)**, o **Crystal fine** (em Hz, em 435,5 MHz), o **Brightness**, o **Light PWM** e o
-  **Modem gain**, além do **PF3 Key (Long Press)**, logo depois do PF3.
+  **Modem gain**, além do **PF3 Key (Long Press)**, logo depois do PF3, e do **Scan threshold**, logo depois do Scan
+  Resume Method (firmware v167 ou mais novo, ainda sem release).
 - **Settings → APRS (SMS) e Settings → Morse:** o indicativo, o SSID, o PATH, o destinatário, a mensagem e o DECODE do APRS, e
   a mensagem, a velocidade e o tom do Morse. As duas mensagens são a última enviada, com que as caixas do `#` abrem. Gravar o APRS e o Morse precisa da V3.0T, e o EQ, da V3.1T.
 - **Settings → Banks:** um bloco por banco, de **BANK 1** a **BANK 16**:

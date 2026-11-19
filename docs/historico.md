@@ -5,6 +5,12 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Driver do CHIRP — 18/11 — o THRESHOLD
+
+- O **Scan threshold** (S1 a S9) logo depois do Scan Resume Method, no byte `0x9022` (`0xD0` + a opção; firmware v167
+  ou mais novo). Sem a marca, S1, como no rádio. O `tests/teste_chirp_real.py` confere a leitura, a gravação e o
+  lugar na página.
+
 ## v166 e v167 — 18/11 — o Bluetooth que fica no TX, a busca no compasso do UV-17L e o THRESHOLD (sem release; sem teste no rádio)
 
 O que o firmware mostrou está na [seção 40](engenharia-reversa.md#40-o-bluetooth-no-tx-a-busca-no-compasso-do-uv-17l-e-o-threshold-v166-e-v167)

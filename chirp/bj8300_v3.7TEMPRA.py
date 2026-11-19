@@ -934,6 +934,31 @@ def _brightness_setting(level):
     return rs
 
 
+THRESHOLD_OPTIONS = ['S%d' % n for n in range(1, 10)]
+THRESHOLD_MARK = 0xD0
+
+
+class _ThresholdSetting(MemSetting):
+    """THRESHOLD (firmware v167): the whole 0x9022 byte, mark + option, which the base class splits into
+    unused_9022 (bits 7-1) and tailcode (bit 0)."""
+
+    def apply_to_memobj(self, memobj):
+        raw = THRESHOLD_MARK + int(self.value)
+        memobj.settings.unused_9022 = raw >> 1
+        memobj.settings.tailcode = raw & 1
+
+
+def _threshold_setting(settings):
+    n = (int(settings.unused_9022) << 1 | int(settings.tailcode)) - THRESHOLD_MARK
+    rs = _ThresholdSetting('settings.unused_9022', 'Scan threshold', RadioSettingValueList(
+        THRESHOLD_OPTIONS, current_index=n if 0 <= n < 9 else 0))
+    rs.set_doc('Minimum S level for the scan to stop on a signal, as the radio\'s SCAN > THRESHOLD item: a '
+               'channel that opens the squelch below it is skipped. S1 stops on any signal, as stock. Once '
+               'stopped, SCAN RESUME goes on with the squelch, as stock. Stored in the 0x9022 byte, which the '
+               'stock firmware does not use, as 0xD0 + the option. Needs firmware v167 or later.')
+    return rs
+
+
 class _LightPwmSetting(MemSetting):
     """LIGHT PWM in frequency order: it stores the radio's value, not the list position."""
 
@@ -1272,6 +1297,12 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
         _put(parent, _brightness_setting(self._memobj.settings.unknown_9039), after='settings_unknown_9037')
         _put(parent, _light_pwm_setting(self._memobj.settings.unknown_903b), after='settings_unknown_9039')
         _put(parent, self._modem_gain_setting(), after='settings_unknown_903b')
+        # THRESHOLD (firmware v167), the radio's SCAN folder, right after the scan resume method
+        screv = _find(settings, 'settings_screv')[0]
+        if screv is None:
+            LOG.warning('scan resume setting not found in the base class: Scan threshold goes to the end')
+            screv = parent
+        _put(screv, _threshold_setting(self._memobj.settings), after='settings_screv')
         if _take(settings, 'settings_voice') is None:
             LOG.warning('voice prompts setting not found in the base class')
         # The banks firmware (v37 onwards) is English only: the LANGUAGE menu item is gone and the

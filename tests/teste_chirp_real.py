@@ -703,7 +703,23 @@ def main():
                 (r._mmap[0x903A:0x903E], [str(w[n].value) for n in valores]),
                 (bytes([novo[0], 4, novo[1], 0xA2]), list(valores.values())))
 
-    NOMES_11 = ('aprs_callsign', 'aprs_ssid', 'aprs_path', 'aprs_to', 'aprs_message', 'aprs_decode',
+    # 10zu. THRESHOLD (firmware v167): o 0x9022 inteiro, 0xD0 + o S - 1 (bancos.c); sem a marca (o 0 das imagens de
+    # antes, o 0xFF) ou fora da lista, S1, como o limiar_le do radio. Gravar poe a marca, e ele fica logo depois do
+    # Scan resume, como no menu do radio
+    r = bj.BJ8300(imagem())
+    for v, nome in ((0x00, 'S1'), (0xFF, 'S1'), (0xD0, 'S1'), (0xD4, 'S5'), (0xD8, 'S9'), (0xD9, 'S1'), (0xCF, 'S1')):
+        r._mmap[0x9022] = bytes([v])
+        confere('10zu. o %#04x no 0x9022 le %s' % (v, nome), str(ajuste_de(r, 'settings_unused_9022').value), nome)
+    for nome, v in (('S1', 0xD0), ('S6', 0xD5), ('S9', 0xD8)):
+        r._mmap[0x9022] = bytes([0xFF])
+        muda_ajustes(r, settings_unused_9022=nome)
+        confere('10zv. %s grava %#04x no 0x9022' % (nome, v), r._mmap[0x9022], bytes([v]))
+    # na ordem em que a pagina mostra (a do iterador do grupo; o walk segue a da insercao)
+    nomes = [x.get_name() for x in bj._find(r.get_settings(), 'settings_screv')[0]]
+    confere('10zw. o Scan threshold logo depois do Scan resume', nomes[nomes.index('settings_screv') + 1],
+            'settings_unused_9022')
+
+    NOMES_11 =('aprs_callsign', 'aprs_ssid', 'aprs_path', 'aprs_to', 'aprs_message', 'aprs_decode',
                 'morse_message', 'morse_speed', 'morse_tone')
     # 11. APRS e MORSE (firmware v65; gravados pelo cabo desde a v110): os registros APR1 e MRS1, um bloco
     # cada depois do VFO C. Sem registro (o bloco apagado), o que o radio mostra: os padroes. A mensagem do

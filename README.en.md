@@ -247,7 +247,7 @@ drawing code that goes into the radio.
 | 🎵 **ROGER CUSTOM** (after V3.7T, not released yet)<ul><li>`ROGER` gets **CUSTOM**: up to 32 notes, 300 to 3000 Hz, up to 3 s, composed in the Tempra Link (the piano, the timeline and MIDI and sound import).</li><li>Like the Baofeng UV-17L's.</li></ul> | |
 | 🔎 **Faster scan and THRESHOLD** (after V3.7T, not released yet)<ul><li>The scan (SCAN, on channels and on the VFO) goes from 3 to 5 channels a second to **one channel every 50 ms**, like the Baofeng UV-17L's.</li><li>**THRESHOLD** in the SCAN folder, **S1 to S9**: while scanning, a channel that opens the squelch below the chosen S is skipped. S1 is as stock.</li></ul> | |
 | 📊 **Spectrum**<ul><li>**320 and 640 points** on top of the stock 160, and a **10 kHz step**.</li><li>**Peak hold**: the bar goes up at once and comes down slowly.</li><li>The measured column in white, the running frequency at the top and each sweep's peak frequency in green, with the dBm.</li><li>The light stays on while it is on screen.</li></ul> | <img src="docs/imagens/tela-espectro.png" alt="Spectrum" width="300"> |
-| 🔌 **Dedicated CHIRP driver**<ul><li>Reads and writes the banks (**Banks** tab), the names, the new roger and scramble, WATCH, VFO C, the MIC folder, CRYSTAL FINE, BRIGHTNESS, LIGHT PWM, MODEM GAIN, the AUDIO folder, the EQ, the **APRS (SMS)** folder, the **Morse** folder, DECODE and PF3 LONG.</li><li>All in a single cable session; it is listed under **Bajeton**.</li><li>It refuses to write to a radio running the stock firmware ([how to use](#-how-to-use-chirp-with-this-firmware)).</li></ul> | |
+| 🔌 **Dedicated CHIRP driver**<ul><li>Reads and writes the banks (**Banks** tab), the names, the new roger and scramble, WATCH, VFO C, the MIC folder, CRYSTAL FINE, BRIGHTNESS, LIGHT PWM, MODEM GAIN, the AUDIO folder, the EQ, the **APRS (SMS)** folder, the **Morse** folder, DECODE, PF3 LONG and THRESHOLD.</li><li>All in a single cable session; it is listed under **Bajeton**.</li><li>It refuses to write to a radio running the stock firmware ([how to use](#-how-to-use-chirp-with-this-firmware)).</li></ul> | |
 | 🧰 **Extended cable command**<ul><li>Reads the whole data chip (24-bit address).</li><li>Writes only to the new firmware's areas: the banks, WATCH, VFO C, Morse and APRS.</li><li>It is what the CHIRP driver uses.</li></ul> | |
 
 ### 🖥️ The new screen, screen by screen
@@ -433,7 +433,8 @@ CHIRP shows the *"Experimental driver"* notice, with the module's instructions: 
 - **Settings:** the radio settings, with the 6-option roger and, in **BJ8300_v3.7TEMPRA Specific**,
   right after Noise reduction, **Expander**, **Noise gate**, **De-emphasis**, **EQ bass (RX)** and **EQ treble
   (RX)**, **Mic Gain** (with DEFAULT, in the radio's order), **Compressor**, **Mic AGC**, **EQ bass (TX)** and **EQ treble (TX)**,
-  **Crystal fine** (in Hz, at 435.5 MHz), **Brightness**, **Light PWM** and **Modem gain**, plus **PF3 Key (Long Press)**, right after PF3.
+  **Crystal fine** (in Hz, at 435.5 MHz), **Brightness**, **Light PWM** and **Modem gain**, plus **PF3 Key (Long Press)**, right after PF3, and
+  **Scan threshold**, right after Scan Resume Method (firmware v167 or newer, not released yet).
 - **Settings → APRS (SMS) and Settings → Morse:** the APRS callsign, SSID, PATH, destination, message and DECODE, and the
   Morse message, speed and tone. Both messages are the last one sent, which the `#` boxes open with. Writing APRS and Morse needs V3.0T, and the EQ, V3.1T.
 - **Settings → Banks:** one block per bank, from **BANK 1** to **BANK 16**:

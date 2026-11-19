@@ -5,6 +5,12 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## CHIRP driver — Nov 18 — THRESHOLD
+
+- **Scan threshold** (S1 to S9) right after Scan Resume Method, in byte `0x9022` (`0xD0` + the option; firmware v167 or
+  newer). Without the mark, S1, as on the radio. `tests/teste_chirp_real.py` checks the reading, the writing and the
+  place on the page.
+
 ## v166 and v167 — Nov 18 — Bluetooth that stays on during TX, the scan at the UV-17L's pace and THRESHOLD (no release; not tested on the radio)
 
 What the firmware showed is in [section 40](reverse-engineering.md#40-bluetooth-during-tx-the-scan-at-the-uv-17ls-pace-and-threshold-v166-and-v167)
