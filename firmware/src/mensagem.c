@@ -1469,7 +1469,7 @@ NOS_SONS static unsigned rx_portadora(void)
 
 /* A volta acabou (a tela voltou, ou ela desistiu): o bipe como estava, e o estado zerado. Devolve o
  * FILTRO_OFF, que a tela usa. */
-static unsigned volta_fim(void)
+NOS_MORTOS(28) static unsigned volta_fim(void)
 {
     unsigned f = TELA_APRS / FILTRO_OFF & 1;
 

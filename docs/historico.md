@@ -5,6 +5,22 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v168 e v169 — 19/11 — a busca que para no sinal, o número do canal na busca e o asterisco curto (sem release)
+
+O que o firmware mostrou está na [seção 41](engenharia-reversa.md#41-a-espera-por-canal-o-número-do-canal-na-busca-e-o-asterisco-curto-v168-e-v169)
+da engenharia reversa.
+
+- **v168:** a v167 tirou a espera de cada canal, e a busca deixava o canal na primeira medida, antes de o squelch
+  abrir: no rádio, não parava nem num sinal S9+60 ao lado, e andava uns dois canais para cada um do UV-17L. Agora cada
+  canal fica pelo menos 100 ms, medidos no relógio de milissegundos do rádio, com as medidas e as quatro confirmações
+  de fábrica no meio. Na busca em canal, o número acompanha o canal visitado (ficava o de partida, desde a tela nova).
+  E o `*` curto para a busca, como o `#` curto (que já parava) e o `*` longo. No rádio: parou no sinal, o número anda,
+  e do canal 003 o BJ foi ao 022 no tempo em que o UV-17L foi ao 033.
+- **v169:** a espera vai a 60 ms, a do UV-17L. Só compilada e testada no PC.
+
+Build deste commit (a v169): sha256 `886568ad…`, sem release; a v168 deu `ac11afa2…`. O `build.sh` dá "tudo certo",
+com a pilha igual à de fábrica e a imagem do mesmo tamanho. Testes: o novo `tests/teste_busca.py` e os de sempre.
+
 ## Tempra Link — 18/11 — o app do celular, o THRESHOLD e o PTT que não derruba o remoto
 
 - **O app do celular** (Android, `tempralink/celular`): a primeira tela procura o rádio pelo Bluetooth (ou abre a

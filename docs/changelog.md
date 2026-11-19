@@ -5,6 +5,23 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v168 and v169 — Nov 19 — a scan that stops on the signal, the channel number while scanning and the short asterisk (no release)
+
+What the firmware showed is in [section 41](reverse-engineering.md#41-the-wait-per-channel-the-channel-number-while-scanning-and-the-short-asterisk-v168-and-v169)
+of the reverse engineering.
+
+- **v168:** v167 took away the wait on each channel, and the scan left the channel on the first measurement, before
+  the squelch opened: on the radio, it did not stop even on an S9+60 signal next to it, and moved about two channels
+  for each one of the UV-17L's. Now each channel stays at least 100 ms, measured on the radio's millisecond clock, with
+  the stock measurements and four confirmations in between. While scanning channels, the number follows the visited
+  channel (it stayed at the starting one, since the new screen). And short `*` stops the scan, like short `#` (which
+  already did) and long `*`. On the radio: it stopped on the signal, the number moves, and from channel 003 the BJ went
+  to 022 in the time the UV-17L went to 033.
+- **v169:** the wait goes to 60 ms, the UV-17L's. Only built and tested on the PC.
+
+Build of this commit (v169): sha256 `886568ad…`, no release; v168 gave `ac11afa2…`. `build.sh` says "tudo certo",
+with the stack equal to stock and the image the same size. Tests: the new `tests/teste_busca.py` and the usual ones.
+
 ## Tempra Link — Nov 18 — the phone app, THRESHOLD and a PTT that does not drop the remote
 
 - **The phone app** (Android, `tempralink/celular`): the first screen searches for the radio over Bluetooth (or opens

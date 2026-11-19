@@ -3245,9 +3245,9 @@ fica em `h[0x146D2]`, 0 sem ligação; e o `enable(1)` do fim, com a ligação a
 desligar do Bluetooth inteiro (`0x01E4F420`) é outro caminho: só o evento de tecla 133 (`0x01E55740`) e a partida o
 chamam.
 
-**A busca de fábrica.** O laço do sinal (`0x01E4622A`) roda a cada 10 ms e reparte o trabalho em 10 fases
+**A busca de fábrica.** O laço do sinal (`0x01E4622A`) reparte o trabalho em 10 fases
 (`b[0x14612]`, de 0 a 9; o tbh de `0x01E469EC`). Na fase 4 roda a tarefa da busca (`0x01E46AC0`), nos modos de tela 3
-(a busca nos canais e no VFO) e 11 (`b[0x1533D]`); a fase 9 (`0x01E46C1E`) só faz algo no modo 4, e a 0 leva ao
+(a busca nos canais e no VFO) e 11 (a do NOAA; `b[0x1533D]`); a fase 9 (`0x01E46C1E`) só faz algo no modo 4, e a 0 leva ao
 despachante lento (`0x01E46A38`). O passo da tarefa fica em `[0x148BC]`: 1 mede o squelch (`0x01E44818`: o bit 1 do
 registrador `0x0C`, ou 1 com o SQL em 0), 2 e 3 são a retomada, 4 avança e 5 para. As rotinas que avançam
 (`0x01E458E4` no modo 3, `0x01E45A42` no 11) voltam sem fazer nada enquanto `h[0x14618]` não é 0 e, depois de
@@ -3258,8 +3258,8 @@ avançar, o põem em 2; quem o desconta é o tique de 100 ms (`0x01E417B4`), e s
 **A busca da v167.** O `desvio_busca_fase9` (`tela.c`) troca os 4 primeiros bytes da fase 9 (`0x01E46C1E`, "r0 = r9;
 r0 = b[r6+r0]", que lê o modo): nos modos 3 e 11 segue para a tarefa da fase 4 (`0x01E46AC0`, que lê o modo de novo),
 com os mesmos registradores, porque os dois casos saem do mesmo tbh; nos outros volta a `0x01E46C24`. E o 2 das duas
-rotinas que avançam vira 0 (`0x01E45946` e `0x01E45A7C`). A tarefa roda a cada 50 ms, e cada canal se mede 50 ms
-depois de sintonizado: o do UV-17L leva 60 ms. Na tarefa, os passos que não são o 1 nem o 4 só vão às conferências
+rotinas que avançam vira 0 (`0x01E45946` e `0x01E45A7C`). A tarefa roda duas vezes por volta do laço, e cada canal
+ficou com uma medida só, na chamada seguinte à sintonia: foi por isso que a busca não parava (seção 41). Na tarefa, os passos que não são o 1 nem o 4 só vão às conferências
 dos modos 11 e 17 e ao fim (`0x01E4772E`); a retomada (o SCAN RESUME parado num sinal) espera o 50 que ela mesma põe
 no `h[0x14618]`, contado pelo tique de 100 ms, e o 0 das teclas e do fim da busca fica como era. Medido só no código.
 
@@ -3279,3 +3279,47 @@ possível, e não foi testado.
 faixa morta 22 (seção 39), com o `meu_indicativo`; e para o `.livre` caber, o `linha_poe`, o `troca_par`, o
 `editor_texto` e o `fcs` do `mensagem.c`, que só o nosso código chama, foram para as faixas 24 a 27. Sobram 18 B no
 `.livre` e 114 B no `.text`. O retrato muda de versão (195 para 57), porque a versão leva as tabelas do menu.
+
+## 41. A espera por canal, o número do canal na busca e o asterisco curto (v168 e v169)
+
+**Por que a busca da v167 não parava.** Na tarefa da busca, o passo 1 mede o squelch: aberto, a conta (`b[0x14691]`;
+`b[0x14695]` no modo 11) sobe, e a busca para na quarta medida aberta seguida (`0x01E46AFA`, `if (r0 > 2)`, para
+`0x01E47748`); fechado, chama o avanço (`0x01E46EB6`, `0x01E46F52`) e zera a conta. De fábrica o avanço volta sem fazer
+nada enquanto `h[0x14618]` não é 0, e o 2 que ele mesmo põe ali deixava cada canal de 100 a 200 ms, medido mais de uma
+vez. A v167 zerou esse 2: o primeiro "fechado" já levava ao canal seguinte, e cada canal ficava com uma medida só, logo
+depois da sintonia, antes de o squelch do chip abrir (o atraso de abertura do squelch do BK4819, no `0x4E`, vem de
+fábrica em `0x3815`, com o campo 13:11 em 7). No rádio, a busca não parava nem num sinal S9+60, e andava uns dois
+canais para cada um do UV-17L: a volta do laço do sinal é bem mais curta que os 10 ms por fase que a seção 40 supunha.
+
+**A espera em milissegundos (v168).** O relógio de `b[0x14810]` anda 2 a cada interrupção do timer (`0x01E51364`, com
+`b[0x14814]` ligado), e o `ESPERA_2MS` de fábrica (`0x01E36286`) espera `2n` nele: é milissegundo. O
+`r0 = 2; h[r4+0] = r0` de dentro dos dois avanços (`0x01E45946`, `0x01E45A7C`) vira `call busca_sintonizou`, que guarda
+ali a hora da sintonia (os 16 bits de baixo, ímpar, nunca 0) e devolve 0; a volta do avanço vem logo depois, e nenhum
+chamador lê o r0 (a tarefa o escreve em `0x01E46EBA` e `0x01E46F56`; as setas chamam em seguida `0x01E40BE6`, que
+também o escreve). Nos passos 1 e 4, o `gancho_scan` (o que já pedia o redesenho a cada canal, em `0x01E46EB6`) e o
+`noaa_avanca` (novo, em `0x01E46F52`) só deixam o canal quando a hora guardada tem `ESPERA_CANAL` ms, e zeram o
+`h[0x14618]` para a trava de fábrica deixar avançar; antes disso as medidas seguem, e o redesenho só se pede quando o
+canal sai. Nos passos 2 e 3 o `h[0x14618]` é a retomada: a parada num sinal põe ali 50 no TO e no CO (`0x01E480D8` e
+`0x01E46ECC`) e 10 no SE (`0x01E480C8`), e o avanço fica com a trava de fábrica. O tique de 100 ms desce a hora
+guardada de 1 (a espera fica 1% mais curta), e as setas (`0x01E4C2F4`, `0x01E4C30C`) zeram o `h[0x14618]` e chamam o
+avanço, que guarda a hora como na busca. O modo 11 é a busca do NOAA (o avanço roda `b[0x14BD3]` de 0 a 9, os 10
+canais do tempo). Com 100 ms, a v168 parou no sinal, e do canal 003 andou até o 022 no tempo em que o UV-17L andou até
+o 033. A v169 usa 60 ms, como o UV-17L. O `tests/teste_busca.py` roda o bloco da busca do `bancos.c` (com o
+`gancho_scan`) sobre uma imitação da tarefa de fábrica tirada do desmontado: o tempo por canal, a parada no sinal que
+abre antes da espera, a retomada TO, a seta e o THRESHOLD.
+
+**O número do canal na busca.** O nome e a frequência mudavam a cada canal, mas o número ficava o do canal de partida
+(desde a tela nova): na busca o avanço carrega o canal com `0x01E40B9E(1, 0)`, que volta em `0x01E40BC4` antes de
+gravar o `CANAL` do lado (`0x01E3A42A`). O canal que a busca visita é o `h[0x15E3C]`, e o lado só o recebe quando ela
+para (`0x01E40B9E(0, 1)`, na parada pelas teclas e pelo PTT). Desde a v168, com o modo de tela em 3 e o lado em
+evidência em canal, a tela mostra o `h[0x15E3C] + 1`, e o retrato ganha a faixa dele (23 faixas, versão 141).
+
+**O asterisco curto.** As teclas do modo de tela 3 caem no tbh de `0x01E4BD72`, com os eventos 19 a 28: o `#` curto
+(24), o 25 e o `*` longo (28) vão à parada (`0x01E4BD88`), e o `*` curto (23) ia ao caso que não faz nada
+(`0x01E4C49E`). Os eventos saem das tabelas de `0x01E60369` (o toque curto) e de `0x01E6037B` (o longo), mais o código
+cru da tecla (o `*` é o 9). Na v168 a entrada do 23 (`0x01E4BD7C`) passa de `0x395` a `0xA`, a da parada, a mesma do
+`#` curto; o `conferir.py` (4y) confere as duas.
+
+**O espaço.** O `.livre` não coube por 30 bytes com o código novo do `tela.c`: o `volta_fim` do `mensagem.c` (34 B, só
+o nosso código o chama) foi para a faixa morta 28 (seção 39), e sobram 4 B no `.livre`. As rotinas novas do `bancos.c`
+ficam no `.text`.

@@ -974,6 +974,16 @@ for sitio, antes, depois, oque in montar.SINAL_REMENDOS:
     if not ok:
         erros.append(f'laco do sinal: remendo errado em {sitio:#x}')
 previsto_tela += [(s_, s_ + len(a_) - 1, 'laco do sinal: ' + d_) for s_, a_, _, d_ in montar.SINAL_REMENDOS]
+# 4y. as teclas da busca (v168): a entrada do * curto (23) no tbh das teclas do modo 3 passa a ser a da parada, a
+# mesma da entrada seguinte, a do # curto (24), que fica como de fabrica.
+for sitio, antes, depois, oque in montar.TECLAS_REMENDOS:
+    o = sitio - montar.BASE_APP
+    ok = (bytes(app_velho[o:o + len(antes)]) == antes and bytes(app[o:o + len(antes)]) == depois
+          and bytes(app_velho[o + 2:o + 4]) == depois == bytes(app[o + 2:o + 4]))
+    print(f'4y. teclas {sitio:#x}: {oque}: ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append(f'teclas: remendo errado em {sitio:#x}')
+previsto_tela += [(s_, s_ + len(a_) - 1, 'teclas: ' + d_) for s_, a_, _, d_ in montar.TECLAS_REMENDOS]
 # 4w. o barramento do BK4819 (v125): as esperas de cada bit da escrita e da leitura vao de 7 a 1, e cada sitio e
 # o "r0 = 7" logo antes de uma chamada a espera 0x01E38554 (a instrucao seguinte, "call", de 4 bytes).
 for sitio, antes, depois, oque in montar.BARRAMENTO_REMENDOS:

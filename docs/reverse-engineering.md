@@ -3302,9 +3302,9 @@ link: the link's handle is at `h[0x146D2]`, 0 with no link; and `enable(1)` at t
 open (`0x01E3CE3E`). Turning the whole Bluetooth off (`0x01E4F420`) is another path: only key event 133
 (`0x01E55740`) and power-up call it.
 
-**The stock scan.** The signal loop (`0x01E4622A`) runs every 10 ms and splits the work into 10 phases (`b[0x14612]`,
+**The stock scan.** The signal loop (`0x01E4622A`) splits the work into 10 phases (`b[0x14612]`,
 0 to 9; the tbh at `0x01E469EC`). Phase 4 runs the scan task (`0x01E46AC0`) in screen modes 3 (scanning channels and
-the VFO) and 11 (`b[0x1533D]`); phase 9 (`0x01E46C1E`) only does something in mode 4, and phase 0 leads to the slow
+the VFO) and 11 (the NOAA one; `b[0x1533D]`); phase 9 (`0x01E46C1E`) only does something in mode 4, and phase 0 leads to the slow
 dispatcher (`0x01E46A38`). The task's step is at `[0x148BC]`: 1 measures the squelch (`0x01E44818`: bit 1 of
 register `0x0C`, or 1 with SQL at 0), 2 and 3 are the resume, 4 advances and 5 stops. The advancing routines
 (`0x01E458E4` in mode 3, `0x01E45A42` in 11) return without doing anything while `h[0x14618]` is not 0 and, after
@@ -3315,8 +3315,8 @@ to 5 channels a second, on channels and on the VFO. Holding the arrows is fast b
 **The v167 scan.** `desvio_busca_fase9` (`tela.c`) replaces the first 4 bytes of phase 9 (`0x01E46C1E`, "r0 = r9; r0 =
 b[r6+r0]", which reads the mode): in modes 3 and 11 it goes on to phase 4's task (`0x01E46AC0`, which reads the mode
 again), with the same registers, since both cases come from the same tbh; otherwise it returns to `0x01E46C24`. And the
-2 of both advancing routines becomes 0 (`0x01E45946` and `0x01E45A7C`). The task runs every 50 ms, and each channel is
-measured 50 ms after being tuned: the UV-17L takes 60 ms. In the task, the steps other than 1 and 4 only go to the
+2 of both advancing routines becomes 0 (`0x01E45946` and `0x01E45A7C`). The task runs twice per loop round, and each
+channel got a single measurement, on the call right after tuning: that is why the scan did not stop (section 41). In the task, the steps other than 1 and 4 only go to the
 mode 11 and 17 checks and to the end (`0x01E4772E`); the resume (SCAN RESUME stopped on a signal) waits for the 50 it
 puts in `h[0x14618]` itself, counted by the 100 ms tick, and the 0 from the keys and from the end of the scan stays as
 it was. Measured in the code only.
@@ -3336,3 +3336,49 @@ audio, through another path: below THRESHOLD, a short click before skipping is p
 (section 39), with `meu_indicativo`; and for `.livre` to fit, `mensagem.c`'s `linha_poe`, `troca_par`, `editor_texto`
 and `fcs`, which only our code calls, went to ranges 24 to 27. 18 B are left in `.livre` and 114 B in `.text`. The
 portrait changes version (195 to 57), because the version covers the menu tables.
+
+## 41. The wait per channel, the channel number while scanning and the short asterisk (v168 and v169)
+
+**Why the v167 scan did not stop.** In the scan task, step 1 measures the squelch: open, the count (`b[0x14691]`;
+`b[0x14695]` in mode 11) goes up, and the scan stops on the fourth open measurement in a row (`0x01E46AFA`,
+`if (r0 > 2)`, to `0x01E47748`); closed, it calls the advance (`0x01E46EB6`, `0x01E46F52`) and zeroes the count. Stock,
+the advance returns without doing anything while `h[0x14618]` is not 0, and the 2 it puts there itself kept each
+channel for 100 to 200 ms, measured more than once. v167 zeroed that 2: the first "closed" already moved to the next
+channel, and each channel got a single measurement, right after tuning, before the chip's squelch opened (the BK4819's
+squelch open delay, in `0x4E`, comes from the factory as `0x3815`, with field 13:11 at 7). On the radio, the scan did
+not stop even on an S9+60 signal, and moved about two channels for each one of the UV-17L's: the signal loop's round
+is much shorter than the 10 ms per phase section 40 assumed.
+
+**The wait in milliseconds (v168).** The clock at `b[0x14810]` moves 2 on every timer interrupt (`0x01E51364`, with
+`b[0x14814]` on), and the stock `ESPERA_2MS` (`0x01E36286`) waits `2n` on it: it is milliseconds. The
+`r0 = 2; h[r4+0] = r0` inside both advances (`0x01E45946`, `0x01E45A7C`) becomes `call busca_sintonizou`, which keeps
+the tuning time there (the low 16 bits, odd, never 0) and returns 0; the advance's return comes right after, and no
+caller reads r0 (the task writes it at `0x01E46EBA` and `0x01E46F56`; the arrows then call `0x01E40BE6`, which writes it
+too). In steps 1 and 4, `gancho_scan` (the one that already asked for a redraw on every channel, at `0x01E46EB6`) and
+`noaa_avanca` (new, at `0x01E46F52`) only leave the channel once the kept time is `ESPERA_CANAL` ms old, and zero
+`h[0x14618]` so the stock lock lets the advance through; until then the measurements go on, and the redraw is only
+asked for when the channel leaves. In steps 2 and 3, `h[0x14618]` is the resume: stopping on a signal puts 50 there in
+TO and CO (`0x01E480D8` and `0x01E46ECC`) and 10 in SE (`0x01E480C8`), and the advance keeps the stock lock. The 100 ms
+tick takes 1 off the kept time (the wait gets 1% shorter), and the arrows (`0x01E4C2F4`, `0x01E4C30C`) zero
+`h[0x14618]` and call the advance, which keeps the time as in the scan. Mode 11 is the NOAA scan (the advance cycles
+`b[0x14BD3]` from 0 to 9, the 10 weather channels). With 100 ms, v168 stopped on the signal, and from channel 003 it
+went to 022 in the time the UV-17L went to 033. v169 uses 60 ms, like the UV-17L. `tests/teste_busca.py` runs the scan
+block of `bancos.c` (with `gancho_scan`) over an imitation of the stock task taken from the disassembly: the time per
+channel, stopping on a signal that opens before the wait, the TO resume, the arrow and THRESHOLD.
+
+**The channel number while scanning.** The name and the frequency changed on every channel, but the number stayed at
+the starting channel (since the new screen): while scanning, the advance loads the channel with `0x01E40B9E(1, 0)`,
+which returns at `0x01E40BC4` before writing the side's `CANAL` (`0x01E3A42A`). The channel the scan visits is
+`h[0x15E3C]`, and the side only gets it when the scan stops (`0x01E40B9E(0, 1)`, on the stop by the keys and by PTT).
+Since v168, with screen mode 3 and the side in focus on a channel, the screen shows `h[0x15E3C] + 1`, and the portrait
+gets its range (23 ranges, version 141).
+
+**The short asterisk.** Screen mode 3's keys fall into the tbh at `0x01E4BD72`, with events 19 to 28: short `#` (24),
+25 and long `*` (28) go to the stop (`0x01E4BD88`), and short `*` (23) went to the case that does nothing
+(`0x01E4C49E`). The events come from the tables at `0x01E60369` (short press) and `0x01E6037B` (long), plus the key's
+raw code (`*` is 9). In v168, event 23's entry (`0x01E4BD7C`) goes from `0x395` to `0xA`, the stop's, the same as short
+`#`; `conferir.py` (4y) checks both.
+
+**Room.** `.livre` did not fit by 30 bytes with the new `tela.c` code: `mensagem.c`'s `volta_fim` (34 B, only our code
+calls it) went to dead range 28 (section 39), and 4 B are left in `.livre`. The new `bancos.c` routines stay in
+`.text`.

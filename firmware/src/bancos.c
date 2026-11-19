@@ -581,10 +581,15 @@ void gancho_partida(void)
  * SC-REV), mas nada marca a tela como suja: a barra de qualidade do sinal fica congelada no nivel
  * e na cor do ultimo canal que o scan achou, e o numero do canal chega a descasar do nome. Aqui
  * fazemos o que a chamada fazia e pedimos o redesenho. FUN_01E458E4 nao recebe argumento e o que
- * devolve e descartado pelo chamador, entao um gancho sem parametros basta.
+ * devolve e descartado pelo chamador, entao um gancho sem parametros basta. Desde a v168 o canal so sai
+ * depois da espera (busca_espera, na secao da busca), e o redesenho so se pede quando ele sai.
  */
+static unsigned busca_espera(void);
+
 void gancho_scan(void)
 {
+    if (busca_espera())
+        return;
     AVANCA_SCAN();
     REDESENHA1 = 1;
     REDESENHA2 = 1;
@@ -1821,16 +1826,56 @@ NOS_MORTOS(22) unsigned segmentos_rssi(void)
     return v < 116 ? (v < 102 ? 1 + v / 6 : 18) : v < 216 ? 18 + (v - 96) / 20 : 24;
 }
 
-/* ---------- a busca: o compasso do UV e o THRESHOLD (v167, a pasta SCAN) ----------
- * A busca de fabrica (os modos de tela 3 e 11, a tarefa da fase 4 do laco do sinal, 0x01E46AC0) mede o squelch
- * (0x01E44818: o bit 1 do reg 0x0C, ou 1 com o SQL em 0) uma vez a cada 100 ms, e cada canal novo ainda esperava
- * 2 tiques de 100 ms (h[0x14618] = 2, em 0x01E45946 e 0x01E45A7C): 3 a 5 canais por segundo. A tarefa roda agora
- * tambem na fase 9 (o desvio_busca_fase9 do tela.c), que nesses modos nao fazia nada, e a espera vai a 0: um canal
- * a cada 50 ms, medido 50 ms depois de sintonizado, como no UV-17L (60 ms). O THRESHOLD (o 0x9022 dos ajustes,
- * b[0x14BCE], que nada de fabrica le nem grava: 0xD0 + o S - 1; fora disso, S1) faz a medida que decide parar
- * (busca_sinal, nas duas chamadas do squelch do passo 1, 0x01E46AEC no modo 3 e 0x01E46F20 no 11) contar o sinal
- * abaixo do S escolhido como silencio. O S e o do medidor: S n com 2n - 1 segmentos ou mais. Parada num sinal, a
- * retomada (o SCAN RESUME) segue com o squelch, como de fabrica. */
+/* ---------- a busca: a espera por canal e o THRESHOLD (v167 e v168, a pasta SCAN) ----------
+ * A busca de fabrica (o modo de tela 3, e o 11, a do NOAA) e a tarefa da fase 4 do laco do sinal (0x01E46AC0), com
+ * o passo em [0x148BC] (1 mede, 2 e 3 a retomada, 4 avanca, 5 para). No passo 1 ela mede o squelch (0x01E44818: o
+ * bit 1 do reg 0x0C, ou 1 com o SQL em 0): aberto, conta (b[0x14691], b[0x14695] no 11) e para na quarta seguida;
+ * fechado, chama o avanco (0x01E46EB6 e 0x01E46F52) e zera a conta. O avanco (0x01E458E4, 0x01E45A42) volta sem
+ * fazer nada enquanto h[0x14618] nao e 0 e, depois de sintonizar, o poe em 2, que o tique de 100 ms desce: cada
+ * canal ficava de 100 a 200 ms, 3 a 5 por segundo. A v167 rodou a tarefa tambem na fase 9 (o desvio_busca_fase9 do
+ * tela.c), que nesses modos nao fazia nada, e tirou a espera: cada canal ficou com uma medida so, logo depois de
+ * sintonizado, antes de o squelch do chip abrir, e a busca nao parava nem num sinal forte. Na v168 a espera e em
+ * milissegundos: o avanco guarda a hora da sintonia no h[0x14618] (busca_sintonizou, no lugar do "r0 = 2; h = r0"),
+ * e nos passos 1 e 4 o gancho_scan (e o noaa_avanca, no modo 11) so deixa o canal ESPERA_CANAL ms depois dela; no
+ * meio, as medidas seguem, e as quatro confirmacoes sao as de fabrica. Nos passos 2 e 3 o h[0x14618] e a retomada (o 50 que a
+ * parada poe, 0x01E46ECC, ou o 10 do SE), e o avanco fica com a trava de fabrica. O tique (0x01E417B4) desce a hora
+ * guardada de 1 a cada 100 ms: a espera fica 1% mais curta, e uma hora 1 (a cada 32768 sintonias) chega a 0 e
+ * deixa o canal mais cedo, uma vez. As setas zeram o h[0x14618] e chamam o avanco direto (0x01E4C320, 0x01E4C46E),
+ * que guarda a hora como na busca.
+ * O THRESHOLD (o 0x9022 dos ajustes, b[0x14BCE], que nada de fabrica le nem grava: 0xD0 + o S - 1; fora disso, S1)
+ * faz a medida que decide parar (busca_sinal, nas duas chamadas do squelch do passo 1, 0x01E46AEC no modo 3 e
+ * 0x01E46F20 no 11) contar o sinal abaixo do S escolhido como silencio. O S e o do medidor: S n com 2n - 1
+ * segmentos ou mais. Parada num sinal, a retomada (o SCAN RESUME) segue com o squelch, como de fabrica. */
+#define BUSCA_PASSO    (*(volatile u32 *)0x000148BC)
+#define BUSCA_TEMPO    (*(volatile u16 *)0x00014618)
+#define TIQUE_MS       (*(volatile u32 *)0x00014810)   /* milissegundos, de 2 em 2 (mensagem.c) */
+#define ESPERA_CANAL   60u      /* v169: como o UV-17L; na v168, 100 (parava no sinal, uns 10 canais por segundo) */
+FIRMWARE(AVANCA_NOAA, 0x01E45A42);  void AVANCA_NOAA(void);   /* o do modo 3 e o AVANCA_SCAN */
+
+u32 busca_sintonizou(void)
+{
+    BUSCA_TEMPO = (u16)TIQUE_MS | 1;
+    return 0;                       /* o r0 com que o avanco volta (era 2; ninguem o le) */
+}
+
+static unsigned busca_espera(void)
+{
+    unsigned p = BUSCA_PASSO;
+
+    if (p != 1 && p != 4)
+        return 0;
+    if (BUSCA_TEMPO && (u16)(TIQUE_MS - BUSCA_TEMPO) < ESPERA_CANAL)
+        return 1;
+    BUSCA_TEMPO = 0;                /* para a trava de fabrica do avanco */
+    return 0;
+}
+
+void noaa_avanca(void)
+{
+    if (!busca_espera())
+        AVANCA_NOAA();
+}
+
 #define LIMIAR         (*(volatile u8 *)0x00014BCE)
 FIRMWARE(SQL_ABERTO, 0x01E44818);   unsigned SQL_ABERTO(void);   /* 1 = o squelch abriu (ou o SQL em 0) */
 DADO_NA_LIVRE const char titulo_limiar[] = "THRESHOLD";

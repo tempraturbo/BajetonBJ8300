@@ -44,6 +44,7 @@ FIRMWARE(ENVIA, 0x01E3ADBC);   void ENVIA(void);
 #define MODO_TRABALHO    RAM(u8, 0x00014B86)             /* nibble de cada lado: 1 = canal */
 #define EXIBICAO(lado)   RAM(u8, 0x00014B79 + (lado))    /* 0 nome, 1 frequencia, 2 numero */
 #define CANAL(lado)      RAM(u16, 0x00015E0C + (lado) * 4) /* base 0 */
+#define CANAL_BUSCA      RAM(u16, 0x00015E3C)            /* o que a busca visita, base 0 (v168) */
 #define POTENCIA(lado)   RAM(u8, 0x00015E30 + (lado))    /* 0 H, 1 M, 2 L */
 #define RT(lado)         RAM(u8, 0x00015E28 + (lado))    /* 1 R, 2 T */
 #define MODO_ZONA        RAM(u8, 0x00014BD4)             /* 0 = navega por zona */
@@ -241,6 +242,10 @@ static void le_estado(struct estado *e)
         e->lado[1].exibicao = v >> 8;
     if (v >> 31)                        /* TX-A/B/C (v51): a terceira no lado B, com o canal dela */
         e->lado[1].canal = v >> 16 & 0x7FFF;
+    /* a busca em canal (v168): o canal que ela visita, que o lado so recebe quando ela para (o carregamento dela,
+     * 0x01E40B9E(1, 0), volta em 0x01E40BC4 antes de gravar o CANAL) */
+    if (MODO_TELA == 3 && e->lado[e->evidencia].canal)
+        e->lado[e->evidencia].canal = CANAL_BUSCA + 1;
 }
 
 /* ---------- desenho ---------- */

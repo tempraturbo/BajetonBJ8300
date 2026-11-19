@@ -869,6 +869,7 @@ PRECISA += REMOTO
 BUSCA = ('busca_sinal', 'limiar_le', 'limiar_grava', 'limiar_opcoes', 'titulo_limiar')   # v167: a busca e o THRESHOLD
 NA_LIVRE += BUSCA
 PRECISA += BUSCA
+PRECISA += ('busca_sintonizou', 'noaa_avanca')   # v168: a espera por canal (no .text; a do modo 3 e o gancho_scan)
 
 # v65: o Morse e o APRS (src/mensagem.c, inteiro no .livre). Duas pastas novas, e o envio pela TX de
 # fabrica: o SEND so arma, a chamada da ida do PTT no laco do sinal (0x01E46540) liga a TX como o PTT,
@@ -982,14 +983,25 @@ SINAL_REMENDOS = ((0x01E46A40, bytes.fromhex('7a06'), bytes.fromhex('2001'),
                   (0x01E46A42, bytes.fromhex('7a06'), bytes.fromhex('2001'),
                    'tique lento 5: o medidor, no lugar de nada'))
 SINAL_REMENDOS += MO_REMENDOS
-# v167: a busca no compasso do UV-17L (bancos.c). Cada canal novo da busca carregava 2 tiques de 100 ms no h[0x14618]
-# (r0 = 2 nas duas rotinas que avancam, a do modo 3 e a do 11), que elas mesmas esperam zerar antes do proximo: com a
-# tarefa rodando nas fases 4 e 9 (o desvio_busca_fase9), a medida 50 ms depois de sintonizar ja e a espera. O 50 da
-# retomada (o SCAN RESUME parado num sinal) e o 0 das teclas e do fim da busca ficam.
-SINAL_REMENDOS += ((0x01E45946, bytes.fromhex('4022'), bytes.fromhex('4020'),
-                    'busca: sem a espera de 2 tiques depois de cada canal (modo 3)'),
-                   (0x01E45A7C, bytes.fromhex('4022'), bytes.fromhex('4020'),
-                    'busca: sem a espera de 2 tiques depois de cada canal (modo 11)'))
+# v168: a espera por canal em milissegundos (bancos.c). Cada canal novo carregava 2 tiques de 100 ms no h[0x14618]
+# ("r0 = 2; h[r4+0] = r0" nas duas rotinas que avancam, a do modo 3 e a do 11, que esperam ele zerar); a v167 o zerou,
+# e cada canal ficou com uma medida so, antes de o squelch abrir. Agora o avanco guarda ali a hora da sintonia, e as
+# duas chamadas dele no passo 1 da tarefa (fechado) passam pelo gancho_scan (o SCAN_EM, no modo 3) e pelo noaa_avanca
+# (no 11), que so deixam o canal ESPERA_CANAL ms depois. Nos passos 2 e 3 (a retomada, com o 50 que a parada poe) a
+# trava de fabrica fica. Depois do
+# "h = r0" vem a volta ({pc, r5, r4} = [sp++]): o r0 que o busca_sintonizou devolve (0, como na v167) e o que o avanco
+# devolve, e nenhum chamador o le: na tarefa, 0x01E46EBA e 0x01E46F56 o escrevem; nas setas (0x01E4C324, 0x01E4C472) vem
+# a 0x01E40BE6, que tambem o escreve antes de ler.
+CHAMADAS_NO_LUGAR += ((0x01E45946, bytes.fromhex('4022c860'), 'busca_sintonizou',
+                       'busca: a hora da sintonia no h[0x14618] (modo 3)'),
+                      (0x01E45A7C, bytes.fromhex('4022c860'), 'busca_sintonizou',
+                       'busca: a hora da sintonia no h[0x14618] (modo 11, o NOAA)'))
+AVANCA_NOAA_ERA = 0x01E45A42
+CHAMADAS_LIVRE += ((0x01E46F52, AVANCA_NOAA_ERA, 'noaa_avanca', 'busca: o canal so sai depois da espera (modo 11)'),)
+# v168: o * curto (evento 23) para a busca, como o # curto (24) e o * longo (28): a entrada dele no tbh das teclas do
+# modo 3 (0x01E4BD72, eventos 19 a 28) vai do caso que nao faz nada (0x395, 0x01E4C49E) ao da parada (0xA, 0x01E4BD88),
+# o mesmo da entrada seguinte, a do # curto (o conferir.py 4y confere as duas).
+TECLAS_REMENDOS = ((0x01E4BD7C, bytes.fromhex('9503'), bytes.fromhex('0a00'), 'busca: o * curto para, como o # curto'),)
 # v167: o THRESHOLD (bancos.c): as duas medidas do squelch do passo 1 da busca, as que decidem parar, passam pelo
 # busca_sinal. As das retomadas (0x01E46EAA, 0x01E46EC2, 0x01E46F46, 0x01E46F5E) ficam com o squelch.
 SQL_ABERTO_ERA = 0x01E44818
@@ -1370,6 +1382,7 @@ def main():
     escritas += [(s, len(a), f'editor de nome: {d}') for s, a, _, d in EDITOR_REMENDOS]
     escritas += [(s, len(a), f'ajustes: {d}') for s, a, _, d in AJUSTES_REMENDOS]
     escritas += [(s, len(a), f'laco do sinal: {d}') for s, a, _, d in SINAL_REMENDOS]
+    escritas += [(s, len(a), f'teclas: {d}') for s, a, _, d in TECLAS_REMENDOS]
     escritas += [(s, len(a), f'barramento: {d}') for s, a, _, d in BARRAMENTO_REMENDOS]
     escritas += [(s, len(a), f'serial: {d}') for s, a, _, d in SERIAL_REMENDOS]
     escritas += [(s, 4, d) for s, _, _, d in PONTEIROS_LIVRE]
@@ -1473,7 +1486,7 @@ def main():
     # 3b2. vozes fora: os tres caminhos que tocam voz viram o "sem voz" de cada um; e (v52) a tecla #
     # do editor de nome
     for rotulo, remendos in (('vozes', VOZES_REMENDOS), ('editor de nome', EDITOR_REMENDOS),
-                             ('ajustes', AJUSTES_REMENDOS), ('laco do sinal', SINAL_REMENDOS),
+                             ('ajustes', AJUSTES_REMENDOS), ('laco do sinal', SINAL_REMENDOS), ('teclas', TECLAS_REMENDOS),
                              ('barramento', BARRAMENTO_REMENDOS), ('serial', SERIAL_REMENDOS)):
         for sitio, antes, depois, oque in remendos:
             o = sitio - BASE_APP
