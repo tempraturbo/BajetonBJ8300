@@ -48,6 +48,7 @@ type
     Erros: TStringList;            // o que não bateu com o protocolo
     Servidos: Integer;             // pedaços conferidos com o arquivo
     Repetidos: Integer;            // pacotes do PC que vieram de novo
+    Vazias: Integer;               // leituras que esperaram os 20 ms sem nada chegar
     Terminou: Boolean;             // mandou o 03 final
     Fins: Integer;                 // os 03 que o PC mandou
     constructor Create(const Claro: TBytes);
@@ -291,6 +292,7 @@ begin
   if FSaida.Count = 0 then
   begin
     Inc(FAgora, 20);  // a leitura espera uns 20 ms pelo primeiro byte
+    Inc(Vazias);
     Exit(nil);
   end;
   // aos pedaços, como a serial entrega: no máximo 7 bytes por leitura

@@ -1534,6 +1534,8 @@ begin
   Confere((R.Velocidades.Count = 2) and (R.Velocidades[0] = VELOCIDADE_TROCA) and
           (R.Velocidades[1] = VELOCIDADE_TRABALHO), 'gravador: a serial vai de 9600 a 10000 e a 115200, na hora certa');
   Confere(R.Repetidos = 1, 'gravador: o 01 de andamento faz o PC mandar de novo a última carga (uma vez)');
+  Confere(R.Vazias = 0, Format('gravador: com o pacote do rádio já na fila, nenhuma leitura espera os 20 ms à toa (%d)',
+                               [R.Vazias]));
 
   Confere(Grava(procedure(X: TRadioUpdate) begin X.PerdeResposta := 6 end, False, R, Porta) = '',
           'gravador: uma resposta perdida no meio do carregador: repete e termina');

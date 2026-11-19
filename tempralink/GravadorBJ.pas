@@ -556,7 +556,7 @@ const
   CABECALHO = 18;
   CORPO = 19;
 var
-  Estado, Passo, Restam, Tam, N, Porcento, UltimaPorcento: Integer;
+  Estado, Passo, Restam, Tam, N, Porcento, UltimaPorcento, Falta: Integer;
   Carga, Pacote, Rx, Fila, Chegou: TBytes;
   Prazo, Limite: UInt64;
   Ligado, Repete, Respondeu, AvisouCancelar: Boolean;
@@ -622,19 +622,21 @@ var
         case Passo of
           0:
             begin
-              Registra(Tr('O rádio respondeu no modo UPDATE.', 'The radio answered in UPDATE mode.'));
+              Registra(Tr('O rádio respondeu. Preparando a gravação: não desligue o rádio nem tire o cabo.',
+                          'The radio answered. Getting ready to flash: do not turn the radio off or pull the cable.'));
               Estado := VELOCIDADE;
             end;
           1:
             begin
-              Registra(Tr('A velocidade valeu; o carregador vai para o rádio.',
-                          'The speed took; the loader goes to the radio.'));
+              Registra(Tr('Mandando ao rádio o programa que grava o firmware (leva uns 30 segundos)...',
+                          'Sending the radio the program that flashes the firmware (takes about 30 seconds)...'));
               Estado := VELOCIDADE;
             end;
           2:
             begin
-              Registra(Tr('O rádio pulou para o carregador: a gravação começa.',
-                          'The radio jumped to the loader: flashing begins.'));
+              Registra(Tr('Gravando o firmware no rádio. Não desligue o rádio nem tire o cabo até terminar.',
+                          'Flashing the firmware to the radio. Do not turn the radio off or pull the cable until it ' +
+                          'finishes.'));
               Estado := VELOCIDADE;
             end;
           3:
@@ -686,8 +688,8 @@ begin
   Tam := 0;
   Ligado := True;  // o temporizador do BinTalk nasce ligado
   Prazo := P.Agora + Espera;
-  Registra(Format(Tr('Gravando o firmware %s: chamando o rádio no modo UPDATE, a %d.',
-                     'Flashing firmware %s: calling the radio in UPDATE mode, at %d.'), [A.Versao, VELOCIDADE_INICIO]));
+  Registra(Format(Tr('Gravando o firmware %s: chamando o rádio no modo UPDATE...',
+                     'Flashing firmware %s: calling the radio in UPDATE mode...'), [A.Versao]));
   Limite := P.Agora + LIMITE_MS;
   while True do
   begin
@@ -705,9 +707,21 @@ begin
                              'UPDATE e grave outra vez.',
                              'Flashing went past 15 minutes without finishing. Turn the radio off, put it in UPDATE ' +
                              'mode again and flash again.'));
-    Chegou := P.Le;
-    if Length(Chegou) > 0 then
-      Fila := Fila + Chegou;
+    // lê só quando o estado espera bytes que ainda não chegaram: com o pacote do rádio inteiro na fila, cada leitura a
+    // mais esperaria 20 ms à toa (três por pacote, com o rádio parado esperando a resposta)
+    case Estado of
+      ESPERA_AA: Falta := 1;
+      CABECALHO: Falta := 3;
+      CORPO: Falta := Tam + 2;
+    else
+      Falta := 0;
+    end;
+    if Length(Fila) < Falta then
+    begin
+      Chegou := P.Le;
+      if Length(Chegou) > 0 then
+        Fila := Fila + Chegou;
+    end;
     if Ligado and (P.Agora >= Prazo) then
     begin
       Repete := True;
@@ -824,7 +838,8 @@ begin
       if Pacote <> nil then
         P.Escreve(Pacote);
       Rx := nil;
-      Registra(Format(Tr('Sem resposta: tentativa %d.', 'No answer: retry %d.'), [TENTATIVAS - Restam]));
+      Registra(Format(Tr('O rádio não respondeu: tentando de novo (%d de %d).', 'The radio did not answer: trying again ' +
+                         '(%d of %d).'), [TENTATIVAS - Restam, TENTATIVAS]));
     end;
   end;
 end;

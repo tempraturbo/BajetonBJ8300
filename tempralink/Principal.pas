@@ -240,6 +240,8 @@ type
     FCabo: TCaboBJ;
     FMemoria: TMemoriaBJ8300;   // o que se lê, se mostra, se edita e se grava; vazia até ler ou abrir um backup
     FChaveTela: TChave;         // a tela do rádio no controle remoto: Ligada, acesa (o pedido de apagar desligado)
+    FRoda: TRoda;               // a roda da barra de baixo, girando enquanto o firmware grava
+    FDestaque: Boolean;         // a barra de baixo em vermelho, com o texto claro: o firmware gravando
     FNotas: TArray<TNota>;      // o que o editor do ROGER mostra (pode estar inválido enquanto se edita)
     FArquivoSom: string;        // o MIDI ou o som do ROGER, que se lê de novo quando o começo ou a duração mudam
     FLinhaRoger: TLinhaDoTempo;
@@ -283,8 +285,10 @@ type
     procedure MostraRelease(const P: TProcura; const Erro: string);
     procedure AnotaRadio(Firmware: TFirmwareNoRadio; const Versao: string);
     procedure MostraVersoes;
+    function SemFirmware: string;
     procedure OfereceFirmware(Motivo: TIncompativel; const Msg: string);
     procedure AtualizaPrograma;
+    procedure DestacaGravacao(Liga: Boolean);
     procedure AbreImagem(const Caminho: string);
     procedure AbreBackup(const Caminho: string);
     procedure MostraLogo(const L: TBytes; const Info: string);
@@ -306,6 +310,7 @@ type
     procedure Habilita;
     procedure Registra(const Msg: string);
     procedure Avisa(const Msg: string);
+    procedure Alerta(const Msg: string);
     procedure NaJanela(P: TThreadProcedure);
     function Avisos: TProc<string>;
     function Andamento: TProc<Integer, Integer>;
@@ -795,6 +800,13 @@ begin
   FChaveTela.TextoLigada := Tr('Acesa', 'On');
   FChaveTela.TextoDesligada := Tr('Apagada', 'Off');
   FChaveTela.OnClick := ChaveTelaClick;
+  // a roda da gravação do firmware, no começo da barra de baixo, que se desenha toda fora da tela antes de aparecer
+  // (sem isso, a roda pisca: a tela pega a barra apagada antes de a roda se desenhar por cima)
+  PainelBase.DoubleBuffered := True;
+  FRoda := TRoda.Create(Self);
+  FRoda.Parent := PainelBase;
+  FRoda.SetBounds(LabelEstado.Left, LabelEstado.Top + (LabelEstado.Height - MulDiv(20, CurrentPPI, 96)) div 2,
+                  MulDiv(20, CurrentPPI, 96), MulDiv(20, CurrentPPI, 96));
   // a linha de cima com 4, os números em 4 linhas de 3, as laterais lado a lado e o PTT na largura toda
   for I := 0 to High(TECLAS_RADIO) + 1 do
   begin
@@ -2396,7 +2408,36 @@ procedure TFormPrincipal.Registra(const Msg: string);
 begin
   MemoRegistro.Lines.Add(FormatDateTime('hh:nn:ss  ', Now) + Msg);
   LabelEstado.Caption := Msg;
-  LabelEstado.Font.Color := COR_TEXTO_FRACO;
+  if FDestaque then
+    LabelEstado.Font.Color := COR_TEXTO
+  else
+    LabelEstado.Font.Color := COR_TEXTO_FRACO;
+end;
+
+// A gravação do firmware: a barra de baixo em vermelho, com o texto claro e em negrito e a roda girando, para ninguém
+// desligar o rádio nem tirar o cabo no meio, nem achar que travou quando a barra de andamento para.
+procedure TFormPrincipal.DestacaGravacao(Liga: Boolean);
+var
+  Esquerda: Integer;
+begin
+  FDestaque := Liga;
+  FRoda.Girando := Liga;
+  if Liga then
+  begin
+    PainelBase.Color := COR_GRAVANDO;
+    LabelEstado.Font.Style := [fsBold];
+    LabelEstado.Font.Color := COR_TEXTO;
+    Esquerda := FRoda.BoundsRect.Right + MulDiv(10, CurrentPPI, 96);
+  end
+  else
+  begin
+    PainelBase.Color := COR_NAV;
+    LabelEstado.Font.Style := [];
+    LabelEstado.Font.Color := COR_TEXTO_FRACO;
+    Esquerda := FRoda.Left;
+  end;
+  // o rótulo abre lugar para a roda, com a ponta direita onde estava
+  LabelEstado.SetBounds(Esquerda, LabelEstado.Top, LabelEstado.BoundsRect.Right - Esquerda, LabelEstado.Height);
 end;
 
 // um aviso de uma ação na janela: embaixo, em destaque, e no registro
@@ -2404,6 +2445,12 @@ procedure TFormPrincipal.Avisa(const Msg: string);
 begin
   Registra(Msg);
   LabelEstado.Font.Color := COR_AMBAR;
+end;
+
+// um aviso de mais de uma linha, numa caixa (a barra de baixo só mostra a primeira)
+procedure TFormPrincipal.Alerta(const Msg: string);
+begin
+  Application.MessageBox(PChar(Msg), PChar(Caption), MB_OK or MB_ICONWARNING);
 end;
 
 // O que chega da thread vai para a janela pela fila da thread principal. (Com o método anônimo direto no
@@ -2493,6 +2540,8 @@ begin
   CancelaEdicao;
   FAcao := Acao;
   Barra.Position := 0;
+  if Acao = acFirmware then
+    DestacaGravacao(True);
   // o remoto abre o transporte ele mesmo, e de novo depois de uma queda; a gravação do firmware abre a serial do jeito
   // dela; os downloads não usam o rádio; e o Verificar sem porta só pergunta ao GitHub
   if (Acao in [acProcurar, acRemoto, acBaixar, acFirmware, acPrograma]) or (Escolhida < 0) then
@@ -3135,8 +3184,7 @@ begin
     Registra(Format(Tr('O firmware mais novo do GitHub com que este Tempra Link trabalha é a V%s.',
                        'The newest firmware on GitHub this Tempra Link works with is V%s.'), [FRelease.Versao]))
   else
-    Registra(Tr('No GitHub não há firmware com que este Tempra Link trabalhe.',
-                'On GitHub there is no firmware this Tempra Link works with.'));
+    Registra(SemFirmware);
   MostraVersoes;
   Habilita;
   // o Tempra Link novo: a pergunta uma vez por abertura, com a janela livre (senão, fica o botão na página Firmware)
@@ -3187,10 +3235,10 @@ begin
   else if FErroRelease <> '' then
     S := S + #13#10 + Tr('No GitHub: ', 'On GitHub: ') + FErroRelease
   else if FProcurou then
-    S := S + #13#10 + Tr('No GitHub: nenhum firmware com que ele trabalhe.', 'On GitHub: no firmware it works with.')
+    S := S + #13#10 + SemFirmware
   else
     S := S + #13#10 + Tr('No GitHub: procurando...', 'On GitHub: looking...');
-  if (FMaisNovo.Url <> '') and (ComparaVersoes(FMaisNovo.Versao, FAIXA.Maxima) > 0) then
+  if (FRelease.Url <> '') and (FMaisNovo.Url <> '') and (ComparaVersoes(FMaisNovo.Versao, FAIXA.Maxima) > 0) then
     S := S + ' ' + Format(Tr('A V%s, mais nova, pede um Tempra Link mais novo.', 'V%s, newer, needs a newer Tempra Link.'),
                           [FMaisNovo.Versao]);
   LabelVersoes.Caption := S;
@@ -3225,8 +3273,8 @@ begin
         AtualizaPrograma;
     end
     else
-      Avisa(Msg + ' ' + Tr('Baixe o Tempra Link mais novo na página de releases do projeto, no GitHub.',
-                           'Download the newest Tempra Link on the project''s releases page, on GitHub.'));
+      Alerta(Msg + #13#10#13#10 + Tr('Baixe o Tempra Link mais novo na página de releases do projeto, no GitHub.',
+                                     'Download the newest Tempra Link on the project''s releases page, on GitHub.'));
     Exit;
   end;
   Mostra(CARTAO_FIRMWARE);
@@ -3238,16 +3286,38 @@ begin
       BotaoBaixarClick(nil);
   end
   else if FErroRelease <> '' then
-    Avisa(Msg + #13#10#13#10 + Tr('Não deu para procurar no GitHub o firmware com que ele trabalha. ',
-                                  'Could not look on GitHub for the firmware it works with. ') + FErroRelease +
-          #13#10#13#10 + Tr('Clique em Verificar para tentar de novo, ou escolha o arquivo nesta página.',
-                            'Click Check to try again, or choose the file on this page.'))
+    Alerta(Msg + #13#10#13#10 + Tr('Não deu para procurar no GitHub o firmware com que ele trabalha. ',
+                                   'Could not look on GitHub for the firmware it works with. ') + FErroRelease +
+           #13#10#13#10 + Tr('Clique em Verificar para tentar de novo, ou escolha o arquivo nesta página.',
+                             'Click Check to try again, or choose the file on this page.'))
   else if FProcurou then
-    Avisa(Msg + ' ' + Tr('No GitHub não há firmware com que ele trabalhe: escolha o arquivo nesta página.',
-                         'On GitHub there is no firmware it works with: choose the file on this page.'))
+    Alerta(Msg + #13#10#13#10 + SemFirmware + ' ' + Tr('Escolha o arquivo .anc nesta página.',
+                                                       'Choose the .anc file on this page.'))
   else
-    Avisa(Msg + ' ' + Tr('Clique em Verificar para procurar no GitHub o firmware com que ele trabalha.',
-                         'Click Check to look on GitHub for the firmware it works with.'));
+    Alerta(Msg + #13#10#13#10 + Tr('Clique em Verificar para procurar no GitHub o firmware com que ele trabalha.',
+                                   'Click Check to look on GitHub for the firmware it works with.'));
+end;
+
+// Por que o GitHub não oferece firmware a este Tempra Link: não tem nenhum, só tem mais novos que ele, ou ainda não tem
+// o da FAIXA.
+function TFormPrincipal.SemFirmware: string;
+var
+  Versoes: string;
+begin
+  if FMaisNovo.Url = '' then
+    Exit(Tr('O GitHub ainda não tem nenhum firmware do projeto.', 'GitHub has no firmware of the project yet.'));
+  if ComparaVersoes(FMaisNovo.Versao, FAIXA.Maxima) > 0 then
+    Exit(Format(Tr('O GitHub só tem firmware mais novo que este Tempra Link: a V%s pede um Tempra Link mais novo.',
+                   'GitHub only has firmware newer than this Tempra Link: V%s needs a newer Tempra Link.'),
+                [FMaisNovo.Versao]));
+  if SameText(FAIXA.Minima, FAIXA.Maxima) then
+    Versoes := FAIXA.Maxima
+  else
+    Versoes := Format(Tr('%s a %s', '%s to %s'), [FAIXA.Minima, FAIXA.Maxima]);
+  Result := Format(Tr('O GitHub ainda não tem o firmware com que este Tempra Link trabalha (%s): o mais novo de lá é a ' +
+                      'V%s.',
+                      'GitHub does not have the firmware this Tempra Link works with yet (%s): the newest there is V%s.'),
+                   [Versoes, FMaisNovo.Versao]);
 end;
 
 // Baixa o Tempra Link mais novo, conferido pelo tamanho e pelo SHA-256 do GitHub, e o põe no lugar deste; no fim
@@ -3358,6 +3428,8 @@ var
   Gravar, Abrir: Boolean;
 begin
   T := Sender as TTarefa;
+  if FDestaque then
+    DestacaGravacao(False);
   Gravar := False;
   Abrir := False;
   case FAcao of

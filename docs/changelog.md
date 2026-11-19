@@ -5,6 +5,27 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Tempra Link — Nov 19 — flashing stands out and does not wait for nothing, and GitHub without the firmware yet
+
+- **Flashing stands out:** while the firmware flashes, the bottom bar turns red, with light text and a wheel that spins
+  the whole time, because the progress bar can stop for a few seconds (sending the flashing program to the radio, at
+  10000 baud, took 29 s when flashing V3.7T). The log lines say what is happening in plain words ("Sending the radio the
+  program that flashes the firmware...") and remind not to turn the radio off or pull the cable.
+- **No waiting for nothing:** the flasher only reads the serial port when a byte of the radio's request is missing.
+  Before, with the request already whole in memory, each processing step waited the 20 ms of the read, about three
+  times per request, with the radio stopped waiting for the answer
+  ([section 42](reverse-engineering.md#42-flashing-the-firmware-over-the-cable-the-bintalk-protocol)). On the tests'
+  simulated radio, the empty reads of one flash went from 26 to 0; how much the real flash shortens (2 min 08 s after
+  the loader, with V3.7T) has not been measured yet.
+- **GitHub without the firmware in range:** the Firmware page and the log say why ("GitHub does not have the firmware
+  this Tempra Link works with yet (V3.8T): the newest there is V3.7T."), instead of "no firmware".
+- **The refusal warnings in a box:** the ones that ask nothing (the GitHub error, the newer Tempra Link, Check) only went
+  to the bottom bar, which shows one line, and their second part did not show.
+
+Tested on the PC: the program's tests, with the new proof that the flasher does not wait for nothing, and, in a copy of
+the program that turns the highlight on by itself, the red bar and the spinning wheel on screen (in 20 of 20 screen
+copies; without drawing off screen, the wheel flickered and showed in 14). Nothing on the radio yet.
+
 ## v171 — Nov 19 — VERSION opens with the firmware and the hardware (not tested on the radio)
 
 SYSTEM > VERSION opened empty since v55, and the firmware and hardware only showed after an arrow. With the item open,

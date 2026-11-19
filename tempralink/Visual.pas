@@ -10,7 +10,7 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.StdCtrls,
-  Vcl.Forms, Vcl.Themes, Winapi.GDIPOBJ;
+  Vcl.Forms, Vcl.Themes, Vcl.ExtCtrls, Winapi.GDIPOBJ;
 
 const
   // em BGR, como o TColor
@@ -26,6 +26,7 @@ const
   COR_VERDE = $0099D334;           // #34D399
   COR_AMBAR = $0024BFFB;           // #FBBF24
   COR_VERMELHO = $007171F8;        // #F87171
+  COR_GRAVANDO = $001B1B99;        // #991B1B, a barra de baixo enquanto o firmware grava
 
 type
   TTipoBotao = (tbComum, tbPrincipal, tbPerigo);
@@ -85,6 +86,22 @@ type
     property OnClick;
   end;
 
+  // A roda que gira na barra de baixo enquanto o firmware grava: mostra que o programa segue vivo mesmo quando a barra
+  // de andamento para.
+  TRoda = class(TGraphicControl)
+  private
+    FRelogio: TTimer;
+    FAngulo: Integer;
+    procedure Anda(Sender: TObject);
+    function GetGirando: Boolean;
+    procedure SetGirando(V: Boolean);
+  protected
+    procedure Paint; override;
+  public
+    constructor Create(AOwner: TComponent); override;
+    property Girando: Boolean read GetGirando write SetGirando;  // e só aparece girando
+  end;
+
 procedure Destaca(B: TButton; Tipo: TTipoBotao);
 // As cores do tema nos painéis, grades, listas, campos e rótulos de dentro de Raiz (os de cor própria ficam). Antes
 // de as janelas existirem: mudar o estilo de um controle que já tem janela faz a VCL recriá-la.
@@ -103,7 +120,7 @@ procedure ItemDeLista(L: TCustomListBox; Index: Integer; const R: TRect; Escolhi
 implementation
 
 uses
-  System.Generics.Collections, System.Math, Vcl.Styles, Vcl.ExtCtrls, Vcl.Grids, Vcl.WinXPanels, Vcl.ComCtrls, Vcl.CheckLst, Vcl.WinXCtrls,
+  System.Generics.Collections, System.Math, Vcl.Styles, Vcl.Grids, Vcl.WinXPanels, Vcl.ComCtrls, Vcl.CheckLst, Vcl.WinXCtrls,
   Winapi.GDIPAPI;
 
 type
@@ -441,6 +458,59 @@ begin
     if Enabled and not FApertada then
       Canvas.Font.Color := COR_TEXTO_FRACO;
     DrawText(Canvas.Handle, PChar(FLetras), -1, RLetras, DT_CENTER or DT_TOP or DT_SINGLELINE);
+  end;
+end;
+
+{ TRoda }
+
+constructor TRoda.Create(AOwner: TComponent);
+begin
+  inherited;
+  FRelogio := TTimer.Create(Self);
+  FRelogio.Enabled := False;
+  FRelogio.Interval := 40;
+  FRelogio.OnTimer := Anda;
+  Visible := False;
+end;
+
+procedure TRoda.Anda(Sender: TObject);
+begin
+  FAngulo := (FAngulo + 12) mod 360;
+  Invalidate;
+end;
+
+function TRoda.GetGirando: Boolean;
+begin
+  Result := FRelogio.Enabled;
+end;
+
+procedure TRoda.SetGirando(V: Boolean);
+begin
+  FRelogio.Enabled := V;
+  Visible := V;
+end;
+
+// o anel apagado e, por cima, um arco claro de 100 graus que dá a volta
+procedure TRoda.Paint;
+var
+  G: TGPGraphics;
+  Caneta: TGPPen;
+  Grossura, Lado: Single;
+begin
+  G := TGPGraphics.Create(Canvas.Handle);
+  Caneta := nil;
+  try
+    G.SetSmoothingMode(SmoothingModeAntiAlias);
+    Grossura := Max(2, Min(Width, Height) / 8);
+    Lado := Min(Width, Height) - Grossura - 1;
+    Caneta := TGPPen.Create(MakeColor(70, 255, 255, 255), Grossura);
+    G.DrawEllipse(Caneta, Grossura / 2, Grossura / 2, Lado, Lado);
+    Caneta.SetColor(CorGdi(COR_TEXTO));
+    Caneta.SetLineCap(LineCapRound, LineCapRound, DashCapRound);
+    G.DrawArc(Caneta, Grossura / 2, Grossura / 2, Lado, Lado, FAngulo, 100);
+  finally
+    Caneta.Free;
+    G.Free;
   end;
 end;
 

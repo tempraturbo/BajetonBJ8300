@@ -3427,7 +3427,10 @@ radio finishes with `03`.
 and that a valid packet stops; without a valid packet in 2 s, the last packet goes again, up to 5 times, and then
 "Failure". Tempra Link does the same, with two differences: a command BinTalk does not know (which would leave it
 waiting forever) also counts as no answer, and the whole flash has a 15-minute limit. It changes the speed with
-`SetCommState`, without closing the port (BinTalk closes and reopens it). Cancel only works before the radio answers:
+`SetCommState`, without closing the port (BinTalk closes and reopens it). And it only reads the serial port when the
+state waits for bytes that have not arrived yet: a read waits up to 20 ms for the first byte, and with the radio's
+request whole in the queue each processing step waited that time for nothing, about three times per request, with the
+radio stopped waiting for the answer (the tests' simulated radio checks that no empty read is left). Cancel only works before the radio answers:
 after that, stopping halfway would leave the loader waiting, and the window does not close while flashing.
 
 **Checking the `.anc` before flashing.** `ConfereAnc` redoes what `firmware/scripts/jlfw.py` checks: the size of the

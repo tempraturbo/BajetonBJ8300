@@ -3367,7 +3367,10 @@ do arquivo. No fim, o rádio manda `04`, o PC responde `03`, e o rádio termina 
 recomeça e que o pacote certo para; sem pacote certo em 2 s, o último pacote vai de novo, até 5 vezes, e então
 "Failure". O Tempra Link faz igual, com duas diferenças: um comando que o BinTalk não conhece (que o deixaria esperando
 para sempre) também conta como falta de resposta, e a gravação inteira tem um limite de 15 minutos. Ele troca a
-velocidade pelo `SetCommState`, sem fechar a porta (o BinTalk fecha e abre). O Cancelar só vale antes de o rádio
+velocidade pelo `SetCommState`, sem fechar a porta (o BinTalk fecha e abre). E só lê a serial quando o estado espera
+bytes que ainda não chegaram: a leitura espera até 20 ms pelo primeiro byte, e com o pedido do rádio inteiro na fila
+cada passo do processamento esperava esse tempo à toa, umas três vezes por pedido, com o rádio parado esperando a
+resposta (o rádio simulado dos testes confere que não sobra nenhuma leitura vazia). O Cancelar só vale antes de o rádio
 responder: depois, parar no meio deixaria o carregador esperando, e a janela não fecha enquanto grava.
 
 **A conferência do `.anc`, antes de gravar.** O `ConfereAnc` refaz o que o `firmware/scripts/jlfw.py` confere: o

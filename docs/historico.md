@@ -5,6 +5,26 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Tempra Link — 19/11 — a gravação em destaque e sem espera à toa, e o GitHub que ainda não tem o firmware
+
+- **A gravação em destaque:** enquanto o firmware grava, a barra de baixo fica vermelha, com o texto claro e uma roda
+  que gira o tempo todo, porque a barra de andamento chega a parar por uns segundos (a ida do programa de gravação ao
+  rádio, a 10000 bauds, levou 29 s na gravação da V3.7T). As frases do registro dizem o que acontece em palavras simples
+  ("Mandando ao rádio o programa que grava o firmware...") e lembram de não desligar o rádio nem tirar o cabo.
+- **Sem espera à toa:** o gravador só lê a serial quando falta byte do pedido do rádio. Antes, com o pedido já inteiro na
+  memória, cada passo do processamento esperava os 20 ms da leitura, umas três vezes por pedido, com o rádio parado
+  esperando a resposta ([seção 42](engenharia-reversa.md#42-a-gravação-do-firmware-pelo-cabo-o-protocolo-do-bintalk)).
+  No rádio simulado dos testes, as leituras vazias de uma gravação foram de 26 a 0; quanto encurta a gravação de verdade
+  (2 min 08 s depois do carregador, na V3.7T) ainda não foi medido.
+- **O GitHub sem o firmware da faixa:** a página Firmware e o registro dizem por quê ("O GitHub ainda não tem o firmware
+  com que este Tempra Link trabalha (V3.8T): o mais novo de lá é a V3.7T."), no lugar de "não há firmware".
+- **Os avisos da recusa numa caixa:** os que não perguntam nada (o erro do GitHub, o Tempra Link mais novo, o Verificar)
+  iam só para a barra de baixo, que mostra uma linha, e a segunda parte deles não aparecia.
+
+Testado no PC: os testes do programa, com a prova nova de que o gravador não espera à toa, e, numa cópia do programa que
+liga o destaque sozinho, a barra vermelha e a roda girando na tela (em 20 de 20 cópias da tela; sem o desenho fora da
+tela, a roda piscava e aparecia em 14). No rádio, nada ainda.
+
 ## v171 — 19/11 — o VERSION abre com o firmware e o hardware (sem teste no rádio)
 
 O SYSTEM > VERSION abria vazio desde a v55, e o firmware e o hardware só apareciam depois de uma seta. Com o item aberto,
