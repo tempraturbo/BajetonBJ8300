@@ -20,7 +20,7 @@ static unsigned relogio(void)
  * fluxo, e guarda o maior pedaco e quantos foram. */
 static unsigned magic_devolve, magic_vezes, tecla_fisica = 255;
 static unsigned medidor = 255, vista, c_lugar, v_terceira, v_freq, v_tudo, v_outro, v_nr, v_porta, v_canal, v_lista;
-static unsigned freq_pedida, flash_fora;
+static unsigned freq_pedida, flash_fora, ble_desligou;
 static unsigned char fluxo[8192], resposta[64];
 static unsigned fluxo_n, resposta_n, respostas, maior;
 static unsigned porta_falsa[2] = {0, 0x1000};      /* o PA12 solto */
@@ -46,6 +46,7 @@ void LE_FLASH(unsigned a, void *p, unsigned n)
     }
     memcpy(p, chip + a, n);
 }
+void BLE_DESLIGA(void) { ble_desligou++; }
 unsigned medidor_s(void) { return medidor; }
 unsigned watch_tela(void) { return vista; }
 unsigned c_no_lugar(void) { return c_lugar; }

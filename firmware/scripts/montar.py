@@ -369,7 +369,7 @@ PONTEIRO_ANTES = bytes.fromhex('40e03834651c')     # r0 = 13368 ; r5 = r6 + r0
 # devolve a tabela e, se o menu foi fechado de dentro de um grupo, poe o grupo em [+6], que a entrada
 # le logo depois (0x01E4CBCA). Na chamada, r1..r3 estao mortos (escritos antes de lidos depois dela)
 # e o r4 (0, lido em 0x01E4CBC6) a chamada preserva.
-MENU_VAGAS = 96                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ; v112: 95; v113: 96; v144: 95
+MENU_VAGAS = 97                                    # v65: 87 com as pastas MORSE e APRS; v108: 97 com o EQ; v112: 95; v113: 96; v144: 95; v167: 97
 TABELA_SIMBOLO = 'menu_tabela'
 TEXTOS_SIMBOLO, TEXTOS_VAGAS = 'menu_textos', 544   # v111: o que o menu usa (era 640); v144: 532; v143: 536; v140: 528; v112: 520; v113: 524; item novo pede mais
 R5_R0 = bytes.fromhex('0516')
@@ -391,7 +391,7 @@ GRUPOS = {
     'MIC': ('COMPRESSOR', 'MIC AGC', 'MIC GAIN', 'NOISE REDUCTION',    # a NR e do microfone (v80)
             'EQ BASS TX', 'EQ TREBLE TX'),                             # v108
     'REPEATER': ('OFFSET', 'RPT TAIL CUT', 'RPT TAIL DELAY', 'TONE BURST', 'TX SHIFT'),
-    'SCAN': ('SCAN ADD', 'SCAN RESUME'),
+    'SCAN': ('SCAN ADD', 'SCAN RESUME', 'THRESHOLD'),                  # v167: o THRESHOLD
     'SYSTEM': ('ALARM MODE', 'BATTERY SAVE', 'BLUETOOTH', 'RESET', 'VERSION'),
     'TONES': ('RX CTCSS', 'RX DCS', 'TX CTCSS', 'TX DCS'),
     'TX': ('ROGER', 'TX TIMEOUT', 'VOX', 'VOX DELAY'),
@@ -501,6 +501,9 @@ ITENS = [
          titulo='titulo_nome', exibe='lista_exibe'),
     dict(nome='CHANNELS', molde=ZONE, flags=FLAGS_LISTA, maximo=960, get='lista_le', set='canais_grava',
          titulo='titulo_canais', exibe='lista_exibe'),
+    # v167: o S minimo para a busca parar (bancos.c), uma lista no molde do TDR, como o BRIGHTNESS
+    dict(nome='THRESHOLD', molde=TDR_ITEM, flags=0, maximo=9, get='limiar_le', set='limiar_grava',
+         titulo='titulo_limiar', exibe='limiar_opcoes', opcoes_cn='limiar_opcoes'),
 ]
 
 # Itens nossos logo depois de um de fabrica (indice original -> itens): o MDF-C na sequencia do MDF-A e
@@ -694,6 +697,11 @@ CHAMADAS_LIVRE += ((0x01E4B4B4, MAGIC_ERA, 'remoto_cabo', 'remoto: os quadros do
                    (0x01E43EBE, PORTA_ERA, 'ptt_porta', 'remoto: o PTT na ida do PTT'),
                    (0x01E46E78, PORTA_ERA, 'ptt_porta', 'remoto: o PTT no laco do sinal, TX recusada'),
                    (0x01E47988, PORTA_ERA, 'ptt_porta', 'remoto: o PTT no laco do sinal'))
+# v166: o inicio da TX, com o BLUETOOTH em ON, desliga o BLE (0x01E3CFD6, o ble_module_enable(0), so chamado ali, no
+# set do item e na partida), e o fim da TX o religa (0x01E3CFD2, em 0x01E473D4): o celular perdia o controle remoto a
+# cada PTT. A chamada do inicio passa pelo ble_tx, que so desliga sem ligacao aberta.
+BLE_DESLIGA_ERA = 0x01E3CFD6
+CHAMADAS_LIVRE += ((0x01E41212, BLE_DESLIGA_ERA, 'ble_tx', 'remoto: o BLE fica no TX com a ligacao aberta'),)
 # v164: o get do CH-NAME de fabrica morreu (o CH NAME de hoje e nosso, das listas de canais), e as duas chamadas
 # sairam: a faixa dele e o .mortos22.
 # v52: o editor de nome so com ABC e 123. A tecla # (0x01E4A590..0x01E4A5AE) soma 1 ao modo
@@ -739,7 +747,13 @@ MENU_DESVIOS += ((0x01E4D4F4, bytes.fromhex('40e07905'), 'desvio_exit_lista', 'b
 # edicao o desvio segue ao resto do EXIT (0x01E4D4F4), como com o cursor em 0.
 MENU_DESVIOS += ((0x01E4D48A, bytes.fromhex('40e0b703'), 'desvio_exit_apaga', 'b_exit_apaga', 0x01E4D4F4,
                   'menu: EXIT fora da edicao nao apaga letra do editor'),)
-MENU_SIMBOLOS = ('menu_abre', 'gancho_menu_ok', 'gancho_menu_redesenha', 'gancho_menu_digito', 'desvio_menu_sai', 'b_menu_sai',
+# v167: a fase 9 do laco do sinal ("r0 = r9; r0 = b[r6+r0]", o modo de tela, no caso 9 do tbh de 0x01E469EC, que so
+# faz algo no modo 4): nos modos da busca (3 e 11) segue para a tarefa da busca da fase 4 (0x01E46AC0), que de fabrica
+# so rodava a cada 100 ms. O goto cobre os 4 primeiros bytes; os 2 que sobram nao rodam (a volta e 0x01E46C24).
+MENU_DESVIOS += ((0x01E46C1E, bytes.fromhex('9016d8ee6000'), 'desvio_busca_fase9', 'b_busca_fase9', 0x01E46AC0,
+                  'busca: a fase 9 do laco do sinal roda a tarefa da busca nos modos 3 e 11'),)
+MENU_SIMBOLOS = ('desvio_busca_fase9', 'b_busca_fase9',
+                 'menu_abre', 'gancho_menu_ok', 'gancho_menu_redesenha', 'gancho_menu_digito', 'desvio_menu_sai', 'b_menu_sai',
                  'desvio_menu_marca', 'b_menu_marca', 'desvio_menu_um', 'b_menu_um', 'desvio_exit_apaga',
                  'b_exit_apaga', 'desvio_exit_lista', 'b_exit_lista', 'nome_tamanho')
 # Instrucoes trocadas por uma chamada e nop no resto: na ida do PTT, a leitura do TX-A/B ("r0 = 1279;
@@ -848,9 +862,13 @@ LUZ = ('luz_inicia', 'luz_aplica', 'brilho_le', 'brilho_grava', 'brilho_opcoes',
 NA_LIVRE += LUZ                            # v60 e v61: a luz por PWM e o BRIGHTNESS
 PRECISA += LUZ
 PRECISA += ESPECTRO_B
-REMOTO = ('remoto_cabo', 'ptt_porta')      # v156: as entradas do controle remoto (o remoto_envia vem pelo TELA_DESVIOS)
+REMOTO = ('remoto_cabo', 'ptt_porta', 'ble_tx')   # v156: as entradas do controle remoto (o remoto_envia vem pelo
+                                                 # TELA_DESVIOS); v166: o ble_tx
 NA_LIVRE += REMOTO
 PRECISA += REMOTO
+BUSCA = ('busca_sinal', 'limiar_le', 'limiar_grava', 'limiar_opcoes', 'titulo_limiar')   # v167: a busca e o THRESHOLD
+NA_LIVRE += BUSCA
+PRECISA += BUSCA
 
 # v65: o Morse e o APRS (src/mensagem.c, inteiro no .livre). Duas pastas novas, e o envio pela TX de
 # fabrica: o SEND so arma, a chamada da ida do PTT no laco do sinal (0x01E46540) liga a TX como o PTT,
@@ -964,6 +982,19 @@ SINAL_REMENDOS = ((0x01E46A40, bytes.fromhex('7a06'), bytes.fromhex('2001'),
                   (0x01E46A42, bytes.fromhex('7a06'), bytes.fromhex('2001'),
                    'tique lento 5: o medidor, no lugar de nada'))
 SINAL_REMENDOS += MO_REMENDOS
+# v167: a busca no compasso do UV-17L (bancos.c). Cada canal novo da busca carregava 2 tiques de 100 ms no h[0x14618]
+# (r0 = 2 nas duas rotinas que avancam, a do modo 3 e a do 11), que elas mesmas esperam zerar antes do proximo: com a
+# tarefa rodando nas fases 4 e 9 (o desvio_busca_fase9), a medida 50 ms depois de sintonizar ja e a espera. O 50 da
+# retomada (o SCAN RESUME parado num sinal) e o 0 das teclas e do fim da busca ficam.
+SINAL_REMENDOS += ((0x01E45946, bytes.fromhex('4022'), bytes.fromhex('4020'),
+                    'busca: sem a espera de 2 tiques depois de cada canal (modo 3)'),
+                   (0x01E45A7C, bytes.fromhex('4022'), bytes.fromhex('4020'),
+                    'busca: sem a espera de 2 tiques depois de cada canal (modo 11)'))
+# v167: o THRESHOLD (bancos.c): as duas medidas do squelch do passo 1 da busca, as que decidem parar, passam pelo
+# busca_sinal. As das retomadas (0x01E46EAA, 0x01E46EC2, 0x01E46F46, 0x01E46F5E) ficam com o squelch.
+SQL_ABERTO_ERA = 0x01E44818
+CHAMADAS_LIVRE += ((0x01E46AEC, SQL_ABERTO_ERA, 'busca_sinal', 'busca: o THRESHOLD no passo 1 (modo 3)'),
+                   (0x01E46F20, SQL_ABERTO_ERA, 'busca_sinal', 'busca: o THRESHOLD no passo 1 (modo 11)'))
 # v125: o barramento do BK4819 mais rapido. A escrita de registrador (0x01E39D82) e a leitura (0x01E407C0)
 # mandam bit a bit, e cada bit espera duas vezes pela 0x01E38554 com r0 = 7 (ela multiplica por 4 ou 16 e da
 # tantas voltas de nop em 0x01E35E62): cada acesso leva 1,36 ms, e o trafego vazava para o audio (o apito da

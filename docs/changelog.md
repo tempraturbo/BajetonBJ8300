@@ -5,6 +5,26 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v166 and v167 — Nov 18 — Bluetooth that stays on during TX, the scan at the UV-17L's pace and THRESHOLD (no release; not tested on the radio)
+
+What the firmware showed is in [section 40](reverse-engineering.md#40-bluetooth-during-tx-the-scan-at-the-uv-17ls-pace-and-threshold-v166-and-v167)
+of the reverse engineering.
+
+- **v166:** the start of TX turned the radio's Bluetooth off (with BLUETOOTH ON), and the end turned it back on: the
+  phone lost the remote control on every PTT, from the radio or from the app, and the app's PTT lasted 1 s. Now, with
+  a link open, Bluetooth stays on; with no link, as stock. The code does not say why the factory turns it off: it is
+  still to be heard, on a second radio, whether TX with it on carries noise.
+- **v167 (includes v166):** the scan (SCAN, on channels and on the VFO) goes from 3 to 5 channels a second to one
+  every 50 ms, like the UV-17L's (60 ms): the scan task runs twice every 100 ms, and each new channel no longer waits
+  two 100 ms ticks. And **THRESHOLD** in the SCAN folder, right after SCAN RESUME, S1 to S9: while scanning, a channel
+  that opens the squelch below the chosen S is skipped; S1 is as before. Once stopped on a signal, the resume goes on
+  with the squelch. The screen portrait changes version (the menu changed): the remote control needs this round's
+  Tempra Link.
+
+Build of this commit (v167): sha256 `913e0ed3…`, no release; v166 alone gave `3826916f…`. `build.sh` says "tudo certo",
+with the stack equal to stock and the image the same size. Tests: `tests/teste_remoto.py` (58 checks, with the two for
+`ble_tx`) and the usual ones. Neither was flashed to the radio yet.
+
 ## Tempra Link — Nov 18 — the remote's screen drawn on the PC, ROGER CUSTOM, the screen switch and a remote that reconnects
 
 - **The remote control's screen** comes from the portrait (the firmware of the same round) and is drawn with the

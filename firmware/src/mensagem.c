@@ -163,7 +163,7 @@ NOS_MORTOS(20) static u16 crc_byte(u16 c, unsigned v)
     return c;
 }
 
-static u16 fcs(const u8 *p, unsigned n)
+NOS_MORTOS(27) static u16 fcs(const u8 *p, unsigned n)
 {
     u16 c = 0xFFFF;
 
@@ -223,7 +223,7 @@ struct afsk_dac {
 NAS_VOZES static const short seno17[17] = {
     0, 784, 1561, 2322, 3061, 3771, 4445, 5075, 5657, 6184, 6652, 7055, 7391, 7656, 7846, 7961, 8000};
 
-static void linha_poe(struct afsk_dac *d, unsigned tom)
+NOS_MORTOS(24) static void linha_poe(struct afsk_dac *d, unsigned tom)
 {
     unsigned k = d->bits;
 
@@ -361,7 +361,7 @@ static unsigned parece_aprs(const u8 *q, unsigned n)
     return 1;
 }
 
-static void troca_par(u8 *q, unsigned p)
+NOS_MORTOS(25) static void troca_par(u8 *q, unsigned p)
 {
     q[p >> 3] ^= 1 << (p & 7);
     q[(p + 1) >> 3] ^= 1 << ((p + 1) & 7);
@@ -1211,7 +1211,7 @@ static void editor_abre(const char *t, unsigned n, unsigned max)
     EDITOR_PINYIN = 0;
 }
 
-static unsigned editor_texto(char *t, unsigned max)
+NOS_MORTOS(26) static unsigned editor_texto(char *t, unsigned max)
 {
     unsigned i, n = EDITOR_TAM;
 

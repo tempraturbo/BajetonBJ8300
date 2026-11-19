@@ -112,6 +112,8 @@ confere('4. v157: sem remoto, o fio apertado e o PTT', v('fio_sem_remoto'), [0])
 confere('4. v157: com o remoto pelo cabo (reservados em 0xFF), o fio apertado nao vale', v('fio_cabo'), [0, 128, 0x1000])
 confere('4. v157: pelo BLE, o fio do radio vale', v('fio_ble'), [0])
 confere('4. v157: o PTT do quadro aperta pelo cabo', v('fio_cabo_ptt'), [0])
+confere('4. v166: o inicio da TX desliga o BLE sem ligacao', v('ble_sem_ligacao'), [1])
+confere('4. v166: com a ligacao aberta, nao', v('ble_com_ligacao'), [1])
 
 # 5. o retrato
 confere('5. antes da resposta nada sai, e o remoto_retrato devolve a tecla', v('antes_da_resposta'), [77, 0])

@@ -9,7 +9,7 @@
 #ifndef RETRATO_H
 #define RETRATO_H
 
-#define RETRATO_VERSAO  195u
+#define RETRATO_VERSAO  57u
 #define RETRATO_BASE    0x7000u
 #define RETRATO_FAIXAS  22u
 #define RETRATO_RAM     451u

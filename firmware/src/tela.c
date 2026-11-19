@@ -1159,7 +1159,7 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * a quantidade de posicoes da tabela no byte 1 e uma marca por posicao a partir do byte 4. Os dois saem do
  * compilador com 0xFF no primeiro byte - para ficar no .rodata, nao no .bss - e zero no resto, e o
  * montar so escreve neles se achar exatamente isso. */
-const unsigned char menu_tabela[96 * 28] __attribute__((aligned(4))) = {0xFF};   /* v144: sem o MESSAGE e o SEND do Morse; v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN */
+const unsigned char menu_tabela[97 * 28] __attribute__((aligned(4))) = {0xFF};   /* v144: sem o MESSAGE e o SEND do Morse; v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN; v167: o THRESHOLD */
 const unsigned char menu_textos[544] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v144) */
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
@@ -2135,6 +2135,15 @@ DESVIO_MEIO(desvio_exit_apaga, b_exit_apaga, 0x01E4D48E, 0x01E4D4F4, "0x40, 0xe0
 /* O EXIT onde o de fabrica fecharia a edicao: "r0 = 1401" (0x01E4D4F4) le se ela esta aberta; nas listas de canais a
  * pergunta e o editor voltam a lista, e o desvio segue ao redesenho do EXIT (0x01E4D534, v140). */
 DESVIO_MEIO(desvio_exit_lista, b_exit_lista, 0x01E4D4F8, 0x01E4D534, "0x40, 0xe0, 0x79, 0x05");
+
+/* A fase 9 do laco do sinal (o caso 9 do tbh de 0x01E469EC, que so faz algo no modo de tela 4): "r0 = r9; r0 =
+ * b[r6+r0]" (0x01E46C1E) le o modo; nos da busca, 3 e 11, segue para a tarefa da busca da fase 4 (0x01E46AC0, que
+ * le o modo de novo), com os mesmos registradores, porque os dois casos vem do mesmo tbh (v167, bancos.c). */
+u32 b_busca_fase9(void)
+{
+    return MODO_TELA == 3 || MODO_TELA == 11;
+}
+DESVIO_MEIO(desvio_busca_fase9, b_busca_fase9, 0x01E46C24, 0x01E46AC0, "0x90, 0x16, 0xd8, 0xee, 0x60, 0x00");
 
 /* 0x01E44C68 de fabrica, chamada como rotina: os bytes que o desvio cobre e a volta. O rets que o
  * primeiro deles empilha e o de quem chamou esta, entao a de fabrica volta para la. */

@@ -166,6 +166,14 @@ int main(void)
     remoto_cabo();
     printf("fio_cabo_ptt %u\n", ptt_c(12)[1] & 0x1000);
     porta_falsa[1] = 0x1000;
+    /* v166: o inicio da TX so desliga o BLE sem ligacao aberta (o handle em h[0x146D2]) */
+    H(0x146D2) = 0;
+    ble_tx();
+    printf("ble_sem_ligacao %u\n", ble_desligou);
+    H(0x146D2) = 0x50;
+    ble_tx();
+    printf("ble_com_ligacao %u\n", ble_desligou);
+    H(0x146D2) = 0;
 
     /* 5. o retrato: pedido (o bit 2 do quadro), fica pendente na resposta e sai no remoto_retrato, uma vez so; o
      * remoto_retrato devolve a tecla que recebe */

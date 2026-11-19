@@ -3232,3 +3232,50 @@ do CH-NAME de fábrica e saíram com ele (o `nome_para_editor` também). As faix
 chama (o 2b recusa as que o firmware chama): o `roger_custom` na 21, o `meu_indicativo` na 22 (v165) e o
 `grava_registro`, o `soma_de` e os bipes na 23; as outras ficam com os bytes de fábrica (o `montar.py` e o
 `conferir.py` aceitam a faixa vazia).
+
+## 40. O Bluetooth no TX, a busca no compasso do UV-17L e o THRESHOLD (v166 e v167)
+
+**O Bluetooth no TX (v166).** O início da TX (`0x01E41212`, dentro de `0x01E41022`) chama `0x01E3CFD6`, o
+`ble_module_enable(0)`, quando o BLUETOOTH está em ON (`b[0x14B89]` = 1), e o fim dela (`0x01E473D4`) chama
+`0x01E3CFD2`, o `enable(1)`; o set do item BLUETOOTH é outra rotina (`0x01E3CFDA`). O `enable(0)` fecha a ligação com
+o motivo `0x13`: o celular a viu cair de 29 a 75 ms depois de cada PTT, do rádio ou do app, e o PTT do app durava 1 s
+(o vigia do remoto, seção 38). O porquê da fábrica não está no código (poupar energia, ou o rádio do BLE no áudio do
+TX). Na v166 a chamada do início passa pelo `ble_tx` (`remoto.c`), que só desliga sem ligação aberta: o handle dela
+fica em `h[0x146D2]`, 0 sem ligação; e o `enable(1)` do fim, com a ligação aberta, não faz nada (`0x01E3CE3E`). O
+desligar do Bluetooth inteiro (`0x01E4F420`) é outro caminho: só o evento de tecla 133 (`0x01E55740`) e a partida o
+chamam.
+
+**A busca de fábrica.** O laço do sinal (`0x01E4622A`) roda a cada 10 ms e reparte o trabalho em 10 fases
+(`b[0x14612]`, de 0 a 9; o tbh de `0x01E469EC`). Na fase 4 roda a tarefa da busca (`0x01E46AC0`), nos modos de tela 3
+(a busca nos canais e no VFO) e 11 (`b[0x1533D]`); a fase 9 (`0x01E46C1E`) só faz algo no modo 4, e a 0 leva ao
+despachante lento (`0x01E46A38`). O passo da tarefa fica em `[0x148BC]`: 1 mede o squelch (`0x01E44818`: o bit 1 do
+registrador `0x0C`, ou 1 com o SQL em 0), 2 e 3 são a retomada, 4 avança e 5 para. As rotinas que avançam
+(`0x01E458E4` no modo 3, `0x01E45A42` no 11) voltam sem fazer nada enquanto `h[0x14618]` não é 0 e, depois de
+avançar, o põem em 2; quem o desconta é o tique de 100 ms (`0x01E417B4`), e só fora do TX (`b[0x1533C]` = 0). Daí 3 a
+5 canais por segundo, no canal e no VFO. As setas seguradas são rápidas porque o tratador das teclas zera o
+`h[0x14618]` e chama o avanço direto.
+
+**A busca da v167.** O `desvio_busca_fase9` (`tela.c`) troca os 4 primeiros bytes da fase 9 (`0x01E46C1E`, "r0 = r9;
+r0 = b[r6+r0]", que lê o modo): nos modos 3 e 11 segue para a tarefa da fase 4 (`0x01E46AC0`, que lê o modo de novo),
+com os mesmos registradores, porque os dois casos saem do mesmo tbh; nos outros volta a `0x01E46C24`. E o 2 das duas
+rotinas que avançam vira 0 (`0x01E45946` e `0x01E45A7C`). A tarefa roda a cada 50 ms, e cada canal se mede 50 ms
+depois de sintonizado: o do UV-17L leva 60 ms. Na tarefa, os passos que não são o 1 nem o 4 só vão às conferências
+dos modos 11 e 17 e ao fim (`0x01E4772E`); a retomada (o SCAN RESUME parado num sinal) espera o 50 que ela mesma põe
+no `h[0x14618]`, contado pelo tique de 100 ms, e o 0 das teclas e do fim da busca fica como era. Medido só no código.
+
+**O THRESHOLD (v167).** O `0x9022` dos ajustes (`b[0x14BCE]`) nada de fábrica lê nem grava: nenhum acesso pela base
+e deslocamento, nenhum ponteiro de 32 bits e nenhum deslocamento de 16 bits (1358) para ele, e o saneamento da
+partida só olha de `0x14BD7` a `0x14BDD`. O driver `rt900` do CHIRP o chama de `unused_9022:7` e `tailcode:1`. O
+THRESHOLD guarda ali `0xD0` + o S - 1, e lê S1 fora disso (o `0xFF` da flash apagada, o 0 das imagens de antes). O
+`busca_sinal` (`bancos.c`) entra no lugar das duas medidas do squelch que decidem parar (o passo 1: `0x01E46AEC` no
+modo 3, `0x01E46F20` no 11): com o squelch aberto e um THRESHOLD acima de S1, o sinal abaixo do S escolhido conta como
+silêncio. O S é o do medidor da barra (seção 27: S n com 2n - 1 segmentos ou mais), pela conta do `medidor_s` sem as
+condições dele (`segmentos_rssi`), porque o medidor só mede com o rádio recebendo e a busca mede logo depois de
+sintonizar. As medidas das retomadas (`0x01E46EAA`, `0x01E46EC2`, `0x01E46F46`, `0x01E46F5E`) ficam com o squelch.
+Quem abre o áudio é o firmware de fábrica, por outro caminho: abaixo do THRESHOLD, um estalo curto antes de pular é
+possível, e não foi testado.
+
+**O espaço.** O item ocupa uma posição a mais no `menu_tabela` (97, de 28 B). O `segmentos_rssi` (94 B) foi para a
+faixa morta 22 (seção 39), com o `meu_indicativo`; e para o `.livre` caber, o `linha_poe`, o `troca_par`, o
+`editor_texto` e o `fcs` do `mensagem.c`, que só o nosso código chama, foram para as faixas 24 a 27. Sobram 18 B no
+`.livre` e 114 B no `.text`. O retrato muda de versão (195 para 57), porque a versão leva as tabelas do menu.

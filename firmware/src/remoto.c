@@ -1,4 +1,4 @@
-/* O controle remoto (v156 a v165): as teclas, o PTT, um estado curto e o retrato da tela, pelo cabo e pelo Bluetooth.
+/* O controle remoto (v156 a v166): as teclas, o PTT, um estado curto e o retrato da tela, pelo cabo e pelo Bluetooth.
  *
  * O PC (o Tempra Link) manda, fora da sessao do cabo, um quadro de 7 bytes a cada 250 ms e a cada mudanca, sempre
  * duas vezes seguidas:
@@ -88,10 +88,12 @@ FIRMWARE(TECLAS, 0x01E43D50);      unsigned TECLAS(void);          /* codigo cru
 FIRMWARE(PORTA, 0x01E001BA);       volatile u32 *PORTA(unsigned);  /* os registradores da porta; so mexe em r0 e r1 */
 FIRMWARE(RESPONDE, 0x01E431E8);    void RESPONDE(const void *, unsigned);
 FIRMWARE(LE_FLASH, 0x01E390AC);    void LE_FLASH(u32, void *, unsigned);   /* o chip de dados */
+FIRMWARE(BLE_DESLIGA, 0x01E3CFD6); void BLE_DESLIGA(void);         /* o ble_module_enable(0): fecha a ligacao e cala */
 
 #define CABO         ((const volatile u8 *)END(0x00016671))
 #define CABO_CONTA   RAM(u16, 0x0001666C)
 #define PELO_BLE     RAM(u8, 0x000153A0)
+#define BLE_LIGACAO  RAM(u16, 0x000146D2)     /* o handle da ligacao BLE, 0 sem ligacao (0x01E3CF68, 0x01E3CE3E) */
 #define TX_ESTADO    RAM(u8, 0x0001533C)
 #define ESTADO_RX    RAM(u8, 0x00015367)
 #define TENSAO       RAM(u8, 0x000149BC)
@@ -281,6 +283,16 @@ volatile u32 *ptt_c(unsigned n)
     if (r & PTT)
         return (volatile u32 *)portas_falsas;
     return r && !PELO_BLE ? (volatile u32 *)portas_falsas + 1 : PORTA(n);
+}
+
+/* O inicio da TX (0x01E41212, com o BLUETOOTH em ON) desliga o BLE, que fecha a ligacao com o motivo 0x13, e o fim
+ * dela (0x01E473D4) o religa: o celular perdia o remoto a cada PTT, do radio ou do app, e o PTT do app durava 1 s, o
+ * vigia (medido em 18/11). Com uma ligacao aberta o BLE fica (v166), e o religar do fim nao faz nada com ela aberta
+ * (0x01E3CE3E). Sem ligacao, como de fabrica. */
+void ble_tx(void)
+{
+    if (!BLE_LIGACAO)
+        BLE_DESLIGA();
 }
 
 /* O gancho do envio (desvio_envia, tela.c): com a lanterna acesa nada vai ao LCD (v152), e a de fabrica segue. */

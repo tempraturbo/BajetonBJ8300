@@ -5,6 +5,25 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v166 e v167 — 18/11 — o Bluetooth que fica no TX, a busca no compasso do UV-17L e o THRESHOLD (sem release; sem teste no rádio)
+
+O que o firmware mostrou está na [seção 40](engenharia-reversa.md#40-o-bluetooth-no-tx-a-busca-no-compasso-do-uv-17l-e-o-threshold-v166-e-v167)
+da engenharia reversa.
+
+- **v166:** o início da TX desligava o Bluetooth do rádio (com o BLUETOOTH em ON), e o fim o religava: o celular
+  perdia o controle remoto a cada PTT, do rádio ou do app, e o PTT do app durava 1 s. Agora, com uma ligação aberta, o
+  Bluetooth fica; sem ligação, como de fábrica. O código não diz por que a fábrica o desliga: falta ouvir, num segundo
+  rádio, se o TX com ele ligado tem ruído.
+- **v167 (contém a v166):** a busca (o SCAN, nos canais e no VFO) passa de 3 a 5 canais por segundo para um a cada
+  50 ms, como a do UV-17L (60 ms): a tarefa da busca roda duas vezes a cada 100 ms, e cada canal novo não espera mais
+  dois tiques de 100 ms. E o **THRESHOLD** na pasta SCAN, logo depois do SCAN RESUME, de S1 a S9: na busca, o canal
+  que abre o squelch abaixo do S escolhido é pulado; S1 é como antes. Parada num sinal, a retomada segue com o
+  squelch. O retrato da tela muda de versão (o menu mudou): o controle remoto pede o Tempra Link desta rodada.
+
+Build deste commit (a v167): sha256 `913e0ed3…`, sem release; a v166 sozinha deu `3826916f…`. O `build.sh` dá "tudo
+certo", com a pilha igual à de fábrica e a imagem do mesmo tamanho. Testes: o `tests/teste_remoto.py` (58
+conferências, com as duas do `ble_tx`) e os de sempre. Nenhuma das duas foi gravada no rádio ainda.
+
 ## Tempra Link — 18/11 — a tela do remoto desenhada no PC, o ROGER CUSTOM, a chave da tela e o remoto que se reconecta
 
 - **A tela do controle remoto** vem do retrato (o firmware da mesma rodada) e se desenha com o código da tela do

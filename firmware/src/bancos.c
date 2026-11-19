@@ -1789,10 +1789,11 @@ void eq_agudos_tx_grava(void) { eq_grava(3); }
 #define NIVEL_DESENHADO  (*(volatile u8 *)0x00007031)
 #define FAIXA_MEDIDOR    (*(volatile u8 *)0x00015E42)
 static const u8 *const medidor_tabela = (const u8 *)0x01E5EB8C;
+unsigned segmentos_rssi(void);
 
 unsigned medidor_s(void)
 {
-    unsigned v, s1;
+    unsigned v;
 
     if (*(volatile u8 *)0x00014685 == 2) {
         v = LE_REG(0x6F) & 0x7F;
@@ -1805,12 +1806,52 @@ unsigned medidor_s(void)
         return 255;
     if (*(volatile u8 *)0x00014690 < 5 && ESTADO_RX != 5)   /* so a vigia conta (0x01E47CA0): o MO nunca chegaria a 5 (v153) */
         return NIVEL_DESENHADO;
-    v = LE_REG(0x67) & 0x1FF;
-    s1 = medidor_tabela[(FAIXA_MEDIDOR < 5 ? FAIXA_MEDIDOR : 0) * 4 + 3];
+    return segmentos_rssi();
+}
+
+/* Os segmentos do RSSI agora, na faixa sintonizada: a conta do medidor_s, sem as condicoes dele (v167: a busca
+ * mede logo depois de sintonizar, antes de o radio estar recebendo). */
+NOS_MORTOS(22) unsigned segmentos_rssi(void)
+{
+    unsigned v = LE_REG(0x67) & 0x1FF, s1 = medidor_tabela[(FAIXA_MEDIDOR < 5 ? FAIXA_MEDIDOR : 0) * 4 + 3];
+
     if (v < s1)
         return 1;
     v -= s1;                               /* acima do S1, em 0,5 dB: o S9 vai de 96 a 115 */
     return v < 116 ? (v < 102 ? 1 + v / 6 : 18) : v < 216 ? 18 + (v - 96) / 20 : 24;
+}
+
+/* ---------- a busca: o compasso do UV e o THRESHOLD (v167, a pasta SCAN) ----------
+ * A busca de fabrica (os modos de tela 3 e 11, a tarefa da fase 4 do laco do sinal, 0x01E46AC0) mede o squelch
+ * (0x01E44818: o bit 1 do reg 0x0C, ou 1 com o SQL em 0) uma vez a cada 100 ms, e cada canal novo ainda esperava
+ * 2 tiques de 100 ms (h[0x14618] = 2, em 0x01E45946 e 0x01E45A7C): 3 a 5 canais por segundo. A tarefa roda agora
+ * tambem na fase 9 (o desvio_busca_fase9 do tela.c), que nesses modos nao fazia nada, e a espera vai a 0: um canal
+ * a cada 50 ms, medido 50 ms depois de sintonizado, como no UV-17L (60 ms). O THRESHOLD (o 0x9022 dos ajustes,
+ * b[0x14BCE], que nada de fabrica le nem grava: 0xD0 + o S - 1; fora disso, S1) faz a medida que decide parar
+ * (busca_sinal, nas duas chamadas do squelch do passo 1, 0x01E46AEC no modo 3 e 0x01E46F20 no 11) contar o sinal
+ * abaixo do S escolhido como silencio. O S e o do medidor: S n com 2n - 1 segmentos ou mais. Parada num sinal, a
+ * retomada (o SCAN RESUME) segue com o squelch, como de fabrica. */
+#define LIMIAR         (*(volatile u8 *)0x00014BCE)
+FIRMWARE(SQL_ABERTO, 0x01E44818);   unsigned SQL_ABERTO(void);   /* 1 = o squelch abriu (ou o SQL em 0) */
+DADO_NA_LIVRE const char titulo_limiar[] = "THRESHOLD";
+DADO_NA_LIVRE const char *const limiar_opcoes[9] = {"S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"};
+
+NA_LIVRE_COD u16 limiar_le(void)
+{
+    unsigned n = LIMIAR - 0xD0u;
+    return n < 9 ? n : 0;
+}
+
+NA_LIVRE_COD void limiar_grava(void)
+{
+    LIMIAR = (u8)(0xD0 + (VALOR < 9 ? VALOR : 0));
+}
+
+NA_LIVRE_COD unsigned busca_sinal(void)
+{
+    unsigned r = SQL_ABERTO(), n = limiar_le();
+
+    return r == 1 && n && segmentos_rssi() < 2 * n + 1 ? 0 : r;
 }
 
 /* ---------- NOISE REDUCTION: a do microfone, com niveis (v80, a pasta MIC) ----------

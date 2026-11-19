@@ -3289,3 +3289,50 @@ patches for `nome_tamanho` and `nome_para_editor` (v52) were inside the stock CH
 (`nome_para_editor` too). The ranges take routines only our code calls (2b rejects the ones the firmware calls):
 `roger_custom` in 21, `meu_indicativo` in 22 (v165), and `grava_registro`, `soma_de` and the beeps in 23; the others
 keep the stock bytes (`montar.py` and `conferir.py` accept an empty range).
+
+## 40. Bluetooth during TX, the scan at the UV-17L's pace and THRESHOLD (v166 and v167)
+
+**Bluetooth during TX (v166).** The start of TX (`0x01E41212`, inside `0x01E41022`) calls `0x01E3CFD6`,
+`ble_module_enable(0)`, when BLUETOOTH is ON (`b[0x14B89]` = 1), and its end (`0x01E473D4`) calls `0x01E3CFD2`,
+`enable(1)`; the BLUETOOTH item's set is another routine (`0x01E3CFDA`). `enable(0)` closes the link with reason
+`0x13`: the phone saw it drop 29 to 75 ms after every PTT, from the radio or from the app, and the app's PTT lasted 1
+s (the remote's watchdog, section 38). The factory's reason is not in the code (saving power, or the BLE radio in the
+TX audio). In v166 the call at the start goes through `ble_tx` (`remoto.c`), which only turns it off with no open
+link: the link's handle is at `h[0x146D2]`, 0 with no link; and `enable(1)` at the end does nothing with the link
+open (`0x01E3CE3E`). Turning the whole Bluetooth off (`0x01E4F420`) is another path: only key event 133
+(`0x01E55740`) and power-up call it.
+
+**The stock scan.** The signal loop (`0x01E4622A`) runs every 10 ms and splits the work into 10 phases (`b[0x14612]`,
+0 to 9; the tbh at `0x01E469EC`). Phase 4 runs the scan task (`0x01E46AC0`) in screen modes 3 (scanning channels and
+the VFO) and 11 (`b[0x1533D]`); phase 9 (`0x01E46C1E`) only does something in mode 4, and phase 0 leads to the slow
+dispatcher (`0x01E46A38`). The task's step is at `[0x148BC]`: 1 measures the squelch (`0x01E44818`: bit 1 of
+register `0x0C`, or 1 with SQL at 0), 2 and 3 are the resume, 4 advances and 5 stops. The advancing routines
+(`0x01E458E4` in mode 3, `0x01E45A42` in 11) return without doing anything while `h[0x14618]` is not 0 and, after
+advancing, set it to 2; the 100 ms tick (`0x01E417B4`) counts it down, and only outside TX (`b[0x1533C]` = 0). Hence 3
+to 5 channels a second, on channels and on the VFO. Holding the arrows is fast because the key handler zeroes
+`h[0x14618]` and calls the advance directly.
+
+**The v167 scan.** `desvio_busca_fase9` (`tela.c`) replaces the first 4 bytes of phase 9 (`0x01E46C1E`, "r0 = r9; r0 =
+b[r6+r0]", which reads the mode): in modes 3 and 11 it goes on to phase 4's task (`0x01E46AC0`, which reads the mode
+again), with the same registers, since both cases come from the same tbh; otherwise it returns to `0x01E46C24`. And the
+2 of both advancing routines becomes 0 (`0x01E45946` and `0x01E45A7C`). The task runs every 50 ms, and each channel is
+measured 50 ms after being tuned: the UV-17L takes 60 ms. In the task, the steps other than 1 and 4 only go to the
+mode 11 and 17 checks and to the end (`0x01E4772E`); the resume (SCAN RESUME stopped on a signal) waits for the 50 it
+puts in `h[0x14618]` itself, counted by the 100 ms tick, and the 0 from the keys and from the end of the scan stays as
+it was. Measured in the code only.
+
+**THRESHOLD (v167).** The settings' `0x9022` (`b[0x14BCE]`) is neither read nor written by anything stock: no access
+by base and offset, no 32-bit pointer and no 16-bit offset (1358) to it, and the power-up sanitizer only looks at
+`0x14BD7` to `0x14BDD`. CHIRP's `rt900` driver calls it `unused_9022:7` and `tailcode:1`. THRESHOLD keeps `0xD0` +
+S - 1 there, and reads S1 otherwise (the erased flash's `0xFF`, older images' 0). `busca_sinal` (`bancos.c`) replaces
+the two squelch measurements that decide to stop (step 1: `0x01E46AEC` in mode 3, `0x01E46F20` in 11): with the
+squelch open and a THRESHOLD above S1, a signal below the chosen S counts as silence. The S is the bar meter's (section
+27: S n with 2n - 1 segments or more), through `medidor_s`'s arithmetic without its conditions (`segmentos_rssi`),
+because the meter only measures while the radio is receiving and the scan measures right after tuning. The resume's
+measurements (`0x01E46EAA`, `0x01E46EC2`, `0x01E46F46`, `0x01E46F5E`) keep the squelch. The stock firmware opens the
+audio, through another path: below THRESHOLD, a short click before skipping is possible, and was not tested.
+
+**Room.** The item takes one more slot in `menu_tabela` (97, of 28 B). `segmentos_rssi` (94 B) went to dead range 22
+(section 39), with `meu_indicativo`; and for `.livre` to fit, `mensagem.c`'s `linha_poe`, `troca_par`, `editor_texto`
+and `fcs`, which only our code calls, went to ranges 24 to 27. 18 B are left in `.livre` and 114 B in `.text`. The
+portrait changes version (195 to 57), because the version covers the menu tables.
