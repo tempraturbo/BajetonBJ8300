@@ -17,7 +17,7 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.IOUtils, System.Math, System.StrUtils,
   System.DateUtils, System.IniFiles, FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Objects, FMX.Layouts,
   FMX.DialogService, FMX.Media, System.Notification, Transporte, Bluetooth, Remoto, BJ8300, Ajustes, TemaCelular, ModeloRadio,
-  ListaCelular, RadioCelular, TelaConectar, TelaRadio, Melodia;
+  ListaCelular, RadioCelular, TelaConectar, TelaRadio, Melodia, Compatibilidade, RadiosLembrados;
 
 type
   TAba = (abRadio, abCanais, abAjustes, abMais);
@@ -65,6 +65,7 @@ type
     FAvisa, FAvisoSom: Boolean;
     FAvisoLado: string;      // '' qualquer, ou 'A', 'B', 'C'
     FUltimoRX: Integer;
+    FLembrar: TRadioBLE;      // o rádio escolhido agora: entra nos lembrados quando o controle remoto falar com ele
     FPerguntaAplica: TProc<TArray<string>>;   // o que fazer com a resposta da caixa aberta (só há uma de cada vez)
     FSom: TMediaPlayer;      // o ROGER CUSTOM tocado no celular
     procedure CriaBarra;
@@ -73,6 +74,8 @@ type
     procedure MarcaNav;
     procedure NavClick(Sender: TObject);
     procedure MostraConectar;
+    procedure Conecta(const R: TRadioBLE);
+    procedure Incompativel(Motivo: TIncompativel; const Msg: string);
     procedure EntraNoApp;
     procedure VaiAba(A: TAba);
     procedure Empilha(const Titulo: string; const Monta: TFunc<TArray<TLinha>>);
@@ -149,6 +152,9 @@ uses
 {$IFDEF ANDROID}
   System.Permissions, Androidapi.Helpers, Androidapi.JNI.GraphicsContentViewText, FMX.Helpers.Android,
 {$ENDIF}
+{$IFDEF MSWINDOWS}
+  Winapi.ShellAPI,
+{$ENDIF}
   RegistroCelular;
 
 const
@@ -157,6 +163,24 @@ const
   POTENCIAS: array[TPotencia] of string = ('Alta', 'Média', 'Baixa');
   CANAL_AVISO = 'recebendo';
   CANAL_AVISO_MUDO = 'recebendo-mudo';
+  ACHA_MS = 8000;   // a procura do rádio usado antes, que para assim que ele aparece
+  PAGINA_RELEASES = 'https://github.com/tempraturbo/BajetonBJ8300/releases';
+
+// Uma página no navegador.
+procedure AbreEndereco(const Url: string);
+begin
+  try
+{$IFDEF ANDROID}
+    TAndroidHelper.Activity.startActivity(TJIntent.JavaClass.init(TJIntent.JavaClass.ACTION_VIEW, StrToJURI(Url)));
+{$ENDIF}
+{$IFDEF MSWINDOWS}
+    ShellExecute(0, 'open', PChar(Url), nil, nil, 1);   // SW_SHOWNORMAL (o Winapi.Windows embaralha as sobrecargas do FMX)
+{$ENDIF}
+  except
+    on E: Exception do
+      Anota('A página não abriu: ' + E.Message);
+  end;
+end;
 
 // A tela do celular acesa enquanto o controle remoto está aberto. A janela do Android só se mexe na thread de UI do
 // Java, que não é a do FMX.
@@ -256,6 +280,11 @@ begin
     begin
       FConectar.Avisa(Msg, COR_VERMELHO);
     end;
+  FRadio.OnIncompativel :=
+    procedure(Motivo: TIncompativel; Msg: string)
+    begin
+      Incompativel(Motivo, Msg);
+    end;
   FRadio.OnTentaDeNovo :=
     procedure
     begin
@@ -264,12 +293,56 @@ begin
     end;
   FLista := TListaCelular.Create(FCorpo);
   FConectar := TTelaConectar.Create(FCorpo);
+  FNucleo.OnIncompativel :=
+    procedure(Motivo: TIncompativel; Msg: string)
+    begin
+      Incompativel(Motivo, Msg);
+    end;
   FConectar.OnRadio :=
     procedure(R: TRadioBLE)
     begin
-      FNucleo.UsaAparelho(R);
-      Anota('Rádio escolhido: ' + R.Nome + ' (' + R.Endereco + ')');
-      EntraNoApp;
+      Conecta(R);
+    end;
+  // o usado antes: a procura para assim que ele aparece
+  FConectar.OnLembrado :=
+    procedure(L: TLembrado)
+    begin
+      FConectar.Avisa('Procurando o ' + L.Titulo + '...');
+      TThread.CreateAnonymousThread(
+        procedure
+        var
+          R: TRadioBLE;
+          Msg: string;
+        begin
+          Msg := '';
+          try
+            R := AchaRadio(L.Endereco, ACHA_MS);
+          except
+            on E: Exception do
+              Msg := E.Message;
+          end;
+          TThread.Queue(nil,
+            procedure
+            begin
+              if Msg <> '' then
+                FConectar.Avisa(Msg, COR_AMBAR)
+              else
+              begin
+                FConectar.Avisa('');
+                Conecta(R);
+              end;
+            end);
+        end).Start;
+    end;
+  FConectar.OnApelido :=
+    procedure(L: TLembrado)
+    begin
+      Pergunta('Apelido do ' + L.Nome + ' (' + L.Endereco + ')', L.Apelido,
+        procedure(S: string)
+        begin
+          DaApelido(L.Endereco, S);
+          FConectar.MostraRadios;
+        end);
     end;
   FConectar.OnDemonstracao :=
     procedure
@@ -639,8 +712,46 @@ begin
   end;
 end;
 
+// O aparelho escolhido (achado agora ou usado antes): o app entra, e o controle remoto conecta.
+procedure TJanela.Conecta(const R: TRadioBLE);
+begin
+  FNucleo.UsaAparelho(R);
+  FLembrar := R;
+  Anota('Rádio escolhido: ' + R.Nome + ' (' + R.Endereco + ')');
+  EntraNoApp;
+end;
+
+// O firmware do rádio não é um com que o app trabalha: nada do rádio funciona, e o app diz o que fazer. O celular não
+// grava firmware: o firmware vem da página de releases, e grava-se pelo Tempra Link do Windows.
+procedure TJanela.Incompativel(Motivo: TIncompativel; const Msg: string);
+var
+  Texto: string;
+begin
+  FRadio.Desliga;
+  MostraConectar;
+  FConectar.Avisa(Msg, COR_AMBAR);
+  if Motivo = inNova then
+    Texto := Msg + #10#10'Atualize o Tempra Link do celular: a versão nova sai na página de releases do projeto, no ' +
+             'GitHub.'
+  else
+    Texto := Msg + #10#10'O celular não grava firmware. Baixe o firmware TEMPRA mais novo na página de releases do ' +
+             'projeto, no GitHub, e grave-o pelo Tempra Link do Windows, que baixa e grava sozinho.';
+  Confirma(Texto + #10#10'Abrir a página de releases agora?',
+    procedure
+    begin
+      AbreEndereco(PAGINA_RELEASES);
+    end);
+end;
+
 procedure TJanela.AoEstado(E: TEstadoRadio);
 begin
+  // o controle remoto falou com o rádio: ele entra (ou sobe) nos lembrados
+  if FLembrar.Endereco <> '' then
+  begin
+    Lembra(FLembrar.Endereco, FLembrar.Nome);
+    FLembrar := Default(TRadioBLE);
+    FConectar.MostraRadios;
+  end;
   MarcaChave;
   if (E.RX = 4) and (FUltimoRX >= 0) and (FUltimoRX <> 4) and FAvisa and
      ((FAvisoLado = '') or (FAvisoLado = E.Letra)) then

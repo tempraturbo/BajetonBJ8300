@@ -5,6 +5,24 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Tempra Link — 19/11 — a versão do rádio, a atualização sozinha e os rádios lembrados (sem teste no rádio)
+
+- **A versão do rádio:** cada sessão, pelo cabo ou pelo Bluetooth, lê a versão do firmware e a confere contra a faixa
+  do programa (`Compatibilidade.pas` e a `FAIXA` do `CaboBJ.pas`, hoje só a V3.8T). Com o de fábrica, com um TEMPRA de
+  antes da v170 ou com uma versão de fora, ele não lê nem grava nada e oferece o certo: baixar do GitHub e gravar o
+  firmware mais novo da faixa ou, quando o rádio é mais novo que o programa, o Tempra Link novo. O controle remoto
+  confere antes do primeiro quadro, e os textos de "V3.7T ou mais novo" saíram.
+- **A atualização do programa:** ao abrir, ele lê a lista de releases do GitHub (o firmware e o programa, com a versão
+  no nome do arquivo: `TempraLink-BJ8300_v1.1.exe`) e, com um Tempra Link mais novo, pergunta se atualiza: baixa,
+  confere pelo SHA-256, põe o novo no lugar do que está aberto e o abre. Também pelo botão da página Firmware.
+- **O app do celular:** com um firmware com que não trabalha, ele só avisa e abre a página de releases (o celular não
+  grava firmware). A primeira tela lembra os rádios já usados, com um apelido para cada e o Esquecer, e um toque num
+  deles conecta por uma procura que para assim que ele aparece.
+
+Testado no PC: os testes do programa (o rádio simulado com e sem a versão, o de fábrica, o antigo e o mais novo, a
+lista de releases, a troca do programa numa pasta de teste e o Windows renomeando o programa aberto), e o APK
+compilado e instalado no celular. No rádio, nada ainda.
+
 ## Driver do CHIRP — 19/11 — só as versões que ele conhece
 
 O driver lê a versão do rádio (da v170 em diante ele a responde) e só trabalha com as da faixa dele, `FIRMWARES`, hoje

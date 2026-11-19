@@ -16,7 +16,8 @@ uses
   Demonstracao in 'Demonstracao.pas',
   ListaCelular in 'ListaCelular.pas',
   RadioCelular in 'RadioCelular.pas',
-  RegistroCelular in 'RegistroCelular.pas';
+  RegistroCelular in 'RegistroCelular.pas',
+  RadiosLembrados in 'RadiosLembrados.pas';
 
 begin
   Application.Initialize;

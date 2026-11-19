@@ -1,8 +1,8 @@
 ﻿unit Remoto;
 
-{ O controle remoto do BJ-8300 pelo cabo ou pelo Bluetooth, com o firmware v159 ou mais novo (firmware/src/remoto.c),
-  o rádio funcionando normalmente; a tela, com o v163 ou mais novo. Sem nada de janela: serve ao Tempra Link do Windows
-  e ao do Android.
+{ O controle remoto do BJ-8300 pelo cabo ou pelo Bluetooth (firmware/src/remoto.c), com o rádio funcionando
+  normalmente. Antes do primeiro quadro, o ExecutaReligando confere o firmware numa sessão curta do cabo (CaboBJ): o de
+  fábrica e o de fora da FAIXA dão EIncompativel. Sem nada de janela: serve ao Tempra Link do Windows e ao do Android.
 
   O PC manda, a cada ESTADO_MS (com a tela pedida, TELA_MS) e na hora em que algo muda, sempre duas vezes seguidas, o
   quadro de 7 bytes
@@ -106,6 +106,7 @@ type
     FArmado: Boolean;     // o pedido de apagar já chegou ao rádio: o aviso de que acordou vale
     FFalou: Boolean;      // o ExecutaReligando já falou com o rádio: dali em diante, queda é reconexão
     FCaiu: Boolean;       // caiu e ainda não voltou
+    procedure ConfereFirmware(const T: ITransporte);
   public
     Parar: Boolean;
     PausaReligaMs: Cardinal;   // entre as tentativas de reconectar (os testes o zeram)
@@ -118,7 +119,8 @@ type
     // Até o Parar; o rádio que não responde ou para de responder dá ESemRadio ou EFalha. Com Tela, o retrato vem a cada
     // quadro e se desenha, e o OnTela ouve o que mudou.
     procedure Executa(const T: ITransporte; Tela: Boolean);
-    // O Executa sobre o transporte que Abre dá, e de novo a cada queda, até o Parar; só a primeira conexão dá erro.
+    // O Executa sobre o transporte que Abre dá, e de novo a cada queda, até o Parar; só a primeira conexão dá erro, e
+    // só ela confere o firmware (o de fora da FAIXA dá EIncompativel).
     procedure ExecutaReligando(const Abre: TFunc<ITransporte>; Tela: Boolean);
     // Da thread da janela: a tecla segura até o Solta, e o PTT apertado até o Ptt(False).
     procedure Aperta(Codigo: Byte);
@@ -147,7 +149,7 @@ const
 implementation
 
 uses
-  System.Classes, System.Math, System.SyncObjs, Idioma, TelaBJ;
+  System.Classes, System.Math, System.SyncObjs, Idioma, TelaBJ, CaboBJ;
 
 // Os dois do meio em 0xFF, que o firmware não lê: o PTT do BJ é o fio do RX da serial, e cada bit 0 o aperta.
 function QuadroRemoto(Tecla, Bits: Byte): TBytes;
@@ -355,6 +357,21 @@ begin
   FApaga := Liga;
 end;
 
+// A sessão curta do cabo, só para ver o firmware (o CaboBJ confere a versão na entrada); depois do 'E', o rádio só fecha
+// a sessão no silêncio, e o primeiro quadro espera.
+procedure TRemoto.ConfereFirmware(const T: ITransporte);
+var
+  C: TCaboBJ;
+begin
+  C := TCaboBJ.Create;
+  try
+    C.Sessao(T, procedure begin end);
+  finally
+    C.Free;
+  end;
+  T.Dorme(SESSAO_FECHA_MS);
+end;
+
 procedure TRemoto.ExecutaReligando(const Abre: TFunc<ITransporte>; Tela: Boolean);
 var
   T: ITransporte;
@@ -366,6 +383,8 @@ begin
   begin
     try
       T := Abre();
+      if not FFalou then
+        ConfereFirmware(T);
       Executa(T, Tela);
     except
       on E: Exception do
@@ -496,20 +515,11 @@ begin
         if Assigned(OnTela) then
           OnTela(nil, TELA_SEM_RETRATO);
       end;
-      // sem resposta a 460800, o firmware v157 a v159 (115200)
-      if (Estados = 0) and (Agora > Inicio + 700) and (T.Velocidade = BAUD_CABO) then
-      begin
-        T.Velocidade(BAUD_CABO_V157);
-        T.LimpaEntrada;
-        Inicio := Agora;
-        UltimoRetrato := Agora;
-      end;
       if (Estados = 0) and (Agora > Inicio + 3000) then
-        raise ESemRadio.Create(Tr(
-          'O rádio não respondeu. O controle remoto precisa do firmware v159 ou mais novo (a tela, do v163), com o ' +
-          'rádio ligado normalmente (fora do modo de gravação).',
-          'The radio did not answer. Remote control needs firmware v159 or newer (the screen, v163), with the radio ' +
-          'on normally (not in programming mode).'));
+        raise ESemRadio.Create(Tr('O rádio não respondeu ao controle remoto. Confira se ele está ligado normalmente ' +
+                                  '(fora do modo de gravação), com o cabo bem encaixado.',
+                                  'The radio did not answer the remote control. Check that it is on normally (not in ' +
+                                  'programming mode), with the cable firmly plugged in.'));
       if (Estados > 0) and not FPtt and (Agora > Max(Chegou, UltimoPtt) + QUEDA_MS) then
         raise EFalha.CreateFmt(Tr('nada chegou do rádio em %d s', 'nothing came from the radio in %d s'),
                                [QUEDA_MS div 1000]);

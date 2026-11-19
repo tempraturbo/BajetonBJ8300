@@ -5,6 +5,26 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Tempra Link — Nov 19 — the radio's version, updating itself and the remembered radios (not tested on the radio)
+
+- **The radio's version:** every session, over the cable or Bluetooth, reads the firmware version and checks it
+  against the program's range (`Compatibilidade.pas` and the `FAIXA` in `CaboBJ.pas`, today only V3.8T). With the stock
+  firmware, a TEMPRA from before v170 or a version outside the range, it reads and writes nothing and offers the right
+  one: downloading from GitHub and flashing the newest firmware in the range or, when the radio is newer than the
+  program, the new Tempra Link. The remote control checks before the first frame, and the "V3.7T or newer" texts are
+  gone.
+- **Updating the program:** when it opens, it reads the GitHub release list (the firmware and the program, with the
+  version in the file name: `TempraLink-BJ8300_v1.1.exe`) and, with a newer Tempra Link, asks whether to update: it
+  downloads it, checks the SHA-256, puts the new one in place of the open one and opens it. Also from the button on the
+  Firmware page.
+- **The phone app:** with a firmware it does not work with, it only warns and opens the releases page (the phone does
+  not flash firmware). The first screen remembers the radios used before, with a nickname for each and a Forget, and a
+  tap on one connects through a search that stops as soon as it shows up.
+
+Tested on the PC: the program's tests (the simulated radio with and without the version, the stock one, the old one
+and the newer one, the release list, replacing the program in a test folder and Windows renaming the open program),
+and the APK built and installed on the phone. Nothing on the radio yet.
+
 ## CHIRP driver — Nov 19 — only the versions it knows
 
 The driver reads the radio's version (from v170 on the radio answers it) and only works with the ones in its range,

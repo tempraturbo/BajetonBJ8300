@@ -604,16 +604,19 @@ guarda e grava pelo cabo o BJ-8300 com este firmware:
   fábrica ou com o TEMPRA, procura sozinho o release mais novo no GitHub e baixa e grava com um clique a versão nova ou
   a de fábrica (V0.12), conferidas pelo SHA-256 ([seção 42](docs/engenharia-reversa.md#42-a-gravação-do-firmware-pelo-cabo-o-protocolo-do-bintalk)).
 
-Ele só segue com um BJ-8300 que responda com o firmware TEMPRA. Grava só o que mudou, conferindo antes que o rádio
+Ele só trabalha com as versões do firmware TEMPRA que conhece: desde a v170 o rádio diz a versão, e com o de
+fábrica, com um TEMPRA de antes dela ou com uma versão de fora, ele não lê nem grava nada e oferece baixar e
+gravar a certa ([seção 43](docs/engenharia-reversa.md#43-a-versão-pelo-cabo-e-a-compatibilidade-v170)). Ao abrir, procura também
+o Tempra Link mais novo nos releases e pergunta se pode se atualizar. Grava só o que mudou, conferindo antes que o rádio
 não mudou desde a leitura, e lê de volta o que gravou nos setores dos bancos e dos registros. Depois de gravar os
 bancos, desligue e ligue o rádio: ele monta os bancos na partida.
 
-**Controle remoto (depois da V3.7T, ainda sem release):** com um firmware de teste (v159 ou mais novo), a página
+**Controle remoto (depois da V3.7T, ainda sem release):** a página
 Controle remoto põe o teclado e o PTT do rádio no PC e, pelo cabo, a tela do rádio ao vivo, desenhada no PC com o
 código da tela do firmware (o programa e o firmware da mesma rodada); pelo Bluetooth, o estado. A chave **Tela do
 rádio** apaga a tela dele, para poupar a bateria, e volta a Acesa quando uma tecla do rádio a acende. Se a ligação
-cai (o RF do PTT pode derrubar o USB do cabo), o remoto se reconecta sozinho. O cabo passa a 460800 na v160, e o programa e o driver do CHIRP descem sozinhos a 115200 e a 57600 com os firmwares de
-antes.
+cai (o RF do PTT pode derrubar o USB do cabo), o remoto se reconecta sozinho. O cabo passa a 460800 na v160, e o programa e o driver do CHIRP descem sozinhos a 115200 e a 57600 para reconhecer os
+firmwares de antes.
 
 **Bluetooth (experimental):** com o BLUETOOTH do rádio (pasta SYSTEM) em ON, o último item da lista de portas procura
 o rádio pelo Bluetooth LE. Pela leitura do firmware, o rádio recebe pelo BLE os mesmos comandos do cabo; enquanto essa
@@ -624,7 +627,9 @@ aberta); a leitura e a gravação por ele ainda não foram testadas. O código e
 
 **App do celular (Android, depois da V3.7T, ainda sem release):** o Tempra Link no celular, pelo Bluetooth do rádio:
 o controle remoto com a tela do rádio, os canais e os bancos, os ajustes (com o ROGER CUSTOM), ler e gravar, os
-backups e um aviso de recepção, e uma demonstração sem rádio. Ainda sem APK publicado: compila pelo
+backups e um aviso de recepção, e uma demonstração sem rádio. Ele lembra os rádios já usados, com um apelido para
+cada, e conecta neles sem a procura inteira; com um firmware com que não trabalha, só avisa e abre a página de
+releases. Ainda sem APK publicado: compila pelo
 `tempralink/celular/compilar.ps1` (Delphi). No rádio, só o controle remoto foi testado.
 
 ---

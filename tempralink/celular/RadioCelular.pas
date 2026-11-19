@@ -13,7 +13,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.Types, System.Generics.Collections,
-  System.Generics.Defaults, Transporte, Bluetooth, CaboBJ, BJ8300, Ajustes;
+  System.Generics.Defaults, Transporte, Bluetooth, CaboBJ, BJ8300, Ajustes, Compatibilidade;
 
 type
   TFimTarefa = reference to procedure(Ok: Boolean; const Mensagem: string);
@@ -32,6 +32,9 @@ type
       const Depois: TFunc<Boolean, string, string>; const Fim: TFimTarefa);
   public
     Origem: string;          // de onde veio a memória, para a janela mostrar
+    // a leitura ou a gravação parou porque o firmware do rádio não é um com que o app trabalha (CaboBJ.FAIXA); na
+    // thread da janela, antes do Fim
+    OnIncompativel: TProc<TIncompativel, string>;
     DoArquivo: Boolean;      // veio de um backup: a gravação substitui o que o rádio tem (o Restaurar)
     constructor Create;
     destructor Destroy; override;
@@ -67,7 +70,6 @@ const
   ARQUIVO_MENU = 'menu-bj8300.txt';
   ARQUIVO_RETRATO = 'retrato-demonstracao.bin';
   ARQUIVO_AREAS = 'radio-demonstracao.bin';
-  SESSAO_FECHA_MS = 1500;
 
 function ArquivoDoPacote(const Nome: string): string;
 {$IFDEF ANDROID}
@@ -182,10 +184,13 @@ begin
   TThread.CreateAnonymousThread(
     procedure
     var
-      Ok: Boolean;
+      Ok, Incompativel: Boolean;
+      Motivo: TIncompativel;
       Msg: string;
     begin
       Ok := False;
+      Incompativel := False;
+      Motivo := inFabrica;
       Msg := '';
       try
         if not Esperar() then
@@ -193,6 +198,12 @@ begin
         Corpo(C);   // abre o transporte, e ele fecha no fim do Corpo
         Ok := True;
       except
+        on E: EIncompativel do
+        begin
+          Msg := E.Message;
+          Incompativel := True;
+          Motivo := E.Motivo;
+        end;
         on E: Exception do
           Msg := E.Message;
       end;
@@ -203,6 +214,8 @@ begin
           FCabo := nil;
           C.Free;
           FOcupado := False;
+          if Incompativel and Assigned(OnIncompativel) then
+            OnIncompativel(Motivo, Msg);
           Msg := Depois(Ok, Msg);
           Anota(Msg);
           Fim(Ok, Msg);

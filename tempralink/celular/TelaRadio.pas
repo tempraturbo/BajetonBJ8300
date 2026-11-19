@@ -10,7 +10,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Types, System.UITypes, System.Math, FMX.Types, FMX.Controls, FMX.Objects,
-  FMX.Layouts, FMX.Graphics, Transporte, Remoto, LogoFormato, ModeloRadio, TemaCelular;
+  FMX.Layouts, FMX.Graphics, Transporte, Remoto, LogoFormato, ModeloRadio, TemaCelular, Compatibilidade;
 
 const
   // um intervalo maior que este entre dois estados vai ao registro (o rádio que para de responder no TX, 18/11)
@@ -53,6 +53,7 @@ type
     procedure VisorClick(Sender: TObject);
   public
     OnCaiu: TProc<string>;   // o controle remoto parou sozinho (o rádio sumiu): a mensagem
+    OnIncompativel: TProc<TIncompativel, string>;   // nem começou: o firmware do rádio não é um com que o app trabalha
     OnTentaDeNovo: TProc;    // com ele parado, o toque no visor
     OnEstado: TProc<TEstadoRadio>;   // chegou o estado do rádio (e o TelaApagada, que uma tecla do rádio desfaz)
     constructor Create(Pai: TFmxObject);
@@ -403,11 +404,21 @@ begin
     procedure
     var
       Msg: string;
+      Incompativel: Boolean;
+      Motivo: TIncompativel;
     begin
       Msg := '';
+      Incompativel := False;
+      Motivo := inFabrica;
       try
         R.ExecutaReligando(Abre, Tela);
       except
+        on E: EIncompativel do
+        begin
+          Msg := E.Message;
+          Incompativel := True;
+          Motivo := E.Motivo;
+        end;
         on E: Exception do
           Msg := E.Message;
       end;
@@ -423,7 +434,9 @@ begin
             FSituacao := stDesligado;
             FAviso := Msg;
             FTela.Repaint;
-            if (Msg <> '') and Assigned(OnCaiu) then
+            if Incompativel and Assigned(OnIncompativel) then
+              OnIncompativel(Motivo, Msg)
+            else if (Msg <> '') and Assigned(OnCaiu) then
               OnCaiu(Msg);
           end;
           R.Free;

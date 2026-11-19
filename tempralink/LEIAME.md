@@ -2,7 +2,7 @@
 
 O Tempra Link do BJ-8300 para Windows, sem instalar nada: lê, edita, guarda e grava pelo cabo de programação os
 canais, os bancos, os ajustes do menu, os textos do APRS e do Morse, o DTMF e o logo de abertura de um BJ-8300 com o
-firmware TEMPRA (V3.7T ou mais novo), e tenta o mesmo pelo Bluetooth (experimental). É um `.exe` só, sem DLL, de 32
+firmware TEMPRA de uma versão que ele conhece (abaixo, A compatibilidade), e tenta o mesmo pelo Bluetooth (experimental). É um `.exe` só, sem DLL, de 32
 bits. Como usar: [README](../README.md#-tempra-link-o-rádio-pelo-pc).
 
 É o irmão do Tempra Link do Baofeng UV-17L (no repositório dele), com a mesma janela, e separado de propósito: um
@@ -65,7 +65,8 @@ RX GAIN, que fica em `0x9040`, fora do bloco que o cabo lê.
 A página Controle remoto liga o rádio ao PC com ele funcionando normalmente: o teclado do rádio, em que cada tecla fica
 apertada enquanto o botão do mouse está apertado nela (segurar 1 s é o toque longo), e o PTT, que transmite enquanto
 estiver apertado. Pelo cabo, a tela do rádio vem junto e muda com ela; pelo Bluetooth, só o estado (quem recebe, o
-S-meter e a tensão). Precisa do firmware v159 ou mais novo, que ainda não tem release. O protocolo está no alto do
+S-meter e a tensão). Antes do primeiro quadro, o `Remoto.pas` confere o firmware numa sessão curta do cabo. O
+protocolo está no alto do
 `firmware/src/remoto.c` e o que o firmware mostrou na seção 38 da engenharia reversa; o `Remoto.pas`, sem nada de
 janela, serve também ao app de Android.
 
@@ -92,8 +93,26 @@ do BJ-8300); o de fábrica passa igual. Ao abrir, o programa procura no GitHub o
 API dos releases, sem login); **Baixar e gravar** baixa o `.anc` dele, confere pelo tamanho e pelo SHA-256 que o
 GitHub dá e grava; **Voltar ao de fábrica** usa o `firmware/original/BJ8300_V0.12.anc` ao lado do programa, ou o baixa
 do repositório, conferido pelo SHA-256 fixo. Os downloads ficam em `%LOCALAPPDATA%\TempraLink\firmware`. Em qualquer
-conversa pelo cabo, e no **Verificar**, o programa diz se o rádio está com o de fábrica ou com o TEMPRA, e a faixa da
-versão pela velocidade em que ele respondeu. A gravação num rádio ainda não foi testada.
+conversa pelo cabo, e no **Verificar**, o programa diz o firmware do rádio: o de fábrica, um TEMPRA que não diz a
+versão (de antes da v170) ou o TEMPRA e a versão. A gravação num rádio ainda não foi testada.
+
+## A compatibilidade e a atualização
+
+O programa só trabalha com as versões do firmware que conhece: a `FAIXA` do `CaboBJ.pas` (a mesma no app do
+celular), cuja ponta de cima é sempre a do `firmware/src/versao.h` (o teste confere). A sessão lê a versão logo
+depois de ver que o firmware é TEMPRA (a leitura de `0x3F0000`,
+[seção 43](../docs/engenharia-reversa.md#43-a-versão-pelo-cabo-e-a-compatibilidade-v170)) e, fora da faixa, para
+com o `EIncompativel` (`Compatibilidade.pas`, igual no Tempra Link do UV-17L) antes de ler ou gravar qualquer
+bloco. A janela então oferece o certo: para o de fábrica, o TEMPRA sem versão e o antigo, baixar do GitHub e gravar
+o firmware mais novo da faixa; para o mais novo que o programa, o Tempra Link novo. Mudou o que o firmware guarda
+ou responde, sobe a versão dele, e a faixa do programa junto.
+
+Ao abrir, o `Atualizacao.pas` lê a lista de releases do GitHub (sem login; rascunho e pré-release de fora) e acha
+o firmware mais novo da faixa, o mais novo de todos e o Tempra Link mais novo, pela versão no nome do arquivo
+(`BJ8300_BANK_v3.8T.anc`, `TempraLink-BJ8300_v1.1.exe`). Com um programa mais novo que o `VERSAO_TEMPRA_LINK`,
+a janela pergunta se atualiza: o novo se baixa, confere pelo tamanho e pelo SHA-256 do GitHub, entra no lugar do
+que está aberto (este vira `.antigo`, que o novo apaga ao abrir) e abre. Para isso, cada release leva o `.exe`
+com a versão no nome.
 
 ## O Bluetooth (experimental)
 
@@ -108,11 +127,14 @@ ainda não foram testadas.
 
 A pasta `celular/` é o Tempra Link no Android, pelo Bluetooth do rádio, com as unidades do programa do Windows para a
 memória, o menu, o controle remoto, o Bluetooth, o ROGER CUSTOM e a tela do rádio (a `tela/libtelabj.so`). A primeira
-tela procura o rádio (ou abre a demonstração, com um BJ-8300 simulado); depois vêm quatro abas: **Rádio** (o controle
+tela mostra os rádios usados antes (`RadiosLembrados.pas`, cada um com o apelido que se der a ele; um toque
+conecta, com uma procura que para assim que o rádio aparece) e procura os outros (ou abre a demonstração, com um
+BJ-8300 simulado); depois vêm quatro abas: **Rádio** (o controle
 remoto, com a tela do rádio e a chave Tela do rádio), **Canais** (os canais e os bancos), **Ajustes** (as pastas do
 menu, os textos, os VFOs, o DTMF e o ROGER CUSTOM) e **Mais** (ler, gravar, desfazer, os backups, o aviso de recepção,
 trocar de rádio e o registro). O registro (`registro.txt`, na pasta do app) guarda as quedas do remoto, o PTT e os
-erros, para o teste longe do PC.
+erros, para o teste longe do PC. Com um firmware de fora da faixa, o app não funciona: avisa e abre a página de
+releases, porque o celular não grava firmware.
 
 O `celular\compilar.ps1` compila sem a IDE (o msbuild do Delphi) o APK de depuração, porque no Android64 o Delphi só
 faz APK em Debug, e com `-Instala` o instala pelo adb; com `-Windows`, sai um `.exe` para testar as telas no PC com o
@@ -148,7 +170,8 @@ BJ8300.pas           a memória do rádio, os canais, os bancos, os ajustes, os 
 Ajustes.pas          o menu a partir do menu-bj8300.txt
 CaboBJ.pas           o protocolo do cabo
 GravadorBJ.pas       a gravação do firmware e a conferência do .anc (sem janela)
-Atualizacao.pas      o release mais novo no GitHub e o download conferido (o mesmo do UV-17L)
+Atualizacao.pas      os releases do GitHub, o download conferido e a troca do programa (o mesmo do UV-17L)
+Compatibilidade.pas  a faixa de versões do firmware e a recusa do que está fora dela (o mesmo do UV-17L)
 Remoto.pas           o controle remoto: os quadros, o estado, a tela por fatias (sem janela)
 Bluetooth.pas        o Bluetooth LE (experimental)
 Transporte.pas       o caminho até o rádio, que a serial, o Bluetooth e o simulado seguem
@@ -168,7 +191,8 @@ celular/             o app do Android (TempraLinkCelular.dpr; compila pelo compi
 **In English, in short:** Tempra Link for the BJ-8300 reads, edits, keeps and writes a TEMPRA-firmware BJ-8300 through
 the programming cable (and, experimentally, Bluetooth LE through the `FFE1` characteristic, also from an Android app
 in `celular/`): channels, banks, menu
-settings, APRS and Morse texts, DTMF and the boot logo (read only on V3.7T); and, with firmware v159 or newer (not
-released yet), it is a remote control, with the radio's screen live over the cable. The menu description is generated from
+settings, APRS and Morse texts, DTMF and the boot logo (the logo read only); it is also a remote control, with the radio's screen live over the cable. It only works
+with the firmware versions it knows (the radio tells its version since v170), offers the right one otherwise,
+and updates itself from the GitHub releases. The menu description is generated from
 this repository's CHIRP driver by `gera_menu.py`, and the tests check, both ways, that the program and the driver read
 the same memory the same way. Build with `compilar.bat` (Delphi, RAD Studio 12).

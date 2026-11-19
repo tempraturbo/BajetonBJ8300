@@ -13,7 +13,9 @@
     'E'                             ACK: o fim
   Abaixo de 0xF000 os dados vão cifrados com "CO 7". O estendido usa o bit 7 do tamanho: 'R' ou 'W', os 16 bits de
   baixo do endereço e 0x80 + os 8 de cima; o bloco é sempre de 64 bytes, cru. O firmware de fábrica responde o
-  estendido com o tamanho que recebeu, e é assim que se sabe que o rádio não está com o TEMPRA. O TEMPRA grava pelo
+  estendido com o tamanho que recebeu, e é assim que se sabe que o rádio não está com o TEMPRA. Desde a v170 (a
+  V3.8T) a leitura estendida de 0x3F0000 responde "TEMPRA " e a versão; os de antes leem ali o chip, sem o "TEMPRA ".
+  Toda sessão confere a versão contra a FAIXA (Compatibilidade): fora dela, nada se lê nem se grava. O TEMPRA grava pelo
   estendido só de 0xC1000 a 0xD5FFF (os bancos, o WATCH, o VFO C, o Morse e o APRS) e, desde a v164, até 0xDAFFF (os
   históricos e as notas do ROGER CUSTOM), e o primeiro bloco de um setor o apaga; um endereço fora disso ele ignora,
   e responde o ACK do mesmo jeito.
@@ -25,16 +27,20 @@
 interface
 
 uses
-  System.SysUtils, Transporte;
+  System.SysUtils, Transporte, Compatibilidade;
 
 const
   BLOCO = 64;
   ESTENDIDO_INICIO = $C1000;  // o que o TEMPRA grava pelo estendido
   ESTENDIDO_FIM = $DB000;     // v164: até o roger (até a v163, $D6000)
+  VERSAO_CABO = $3F0000;      // v170: a leitura que responde a versão (firmware/src/versao.h)
+  // As versões do firmware com que este Tempra Link trabalha: o mapa da memória (BJ8300.pas) e o protocolo daqui são
+  // os delas. A máxima é sempre a do firmware/src/versao.h (o teste confere).
+  FAIXA: TFaixa = (Minima: 'V3.8T'; Maxima: 'V3.8T');
+  // depois do 'E', o rádio só fecha a sessão quando nenhum byte chega por um tempo: a próxima conversa espera isto
+  SESSAO_FECHA_MS = 1500;
 
 type
-  ENaoTempra = class(Exception);
-
   // o firmware que o rádio mostrou na sessão: nenhum (não respondeu), o de fábrica ou o TEMPRA
   TFirmwareNoRadio = (fnNenhum, fnFabrica, fnTempra);
 
@@ -55,10 +61,10 @@ type
     OnProgresso: TProc<Integer, Integer>;
     Identificacao: string;  // os 16 bytes do 'F', em hexadecimal
     Firmware: TFirmwareNoRadio;
-    Velocidade: Cardinal;   // a da serial em que ele respondeu (0 pelo Bluetooth): diz a faixa da versão do TEMPRA
+    Versao: string;         // a que o TEMPRA disse (vazia nos de antes da v170)
     Feito, Total: Integer;  // os blocos, para o progresso; o Total quem chama põe
-    // Entra (conferindo que o rádio é um BJ-8300 com o firmware TEMPRA), faz o Corpo e sai, mesmo com erro no meio
-    // (e mesmo quando o rádio não é TEMPRA: o 'E' fecha a sessão que o magic abriu).
+    // Entra (conferindo que o rádio é um BJ-8300 com um firmware TEMPRA da FAIXA: senão, EIncompativel), faz o Corpo e
+    // sai, mesmo com erro no meio (e mesmo quando o rádio não serve: o 'E' fecha a sessão que o magic abriu).
     procedure Sessao(const T: ITransporte; Corpo: TProc);
     function LeBloco(Endereco: Cardinal): TBytes;
     procedure GravaBloco(Endereco: Cardinal; const Dados: TBytes);
@@ -188,7 +194,6 @@ begin
                               'The radio answered %.2X instead of entering programming mode. Turn the radio off ' +
                               'and on and try again.'), [R[0]]);
   FDentro := True;
-  Velocidade := FT.Velocidade;
   FT.Escreve([Ord('F')]);
   R := Recebe(16, ESPERA_MS);
   Identificacao := '';
@@ -210,14 +215,28 @@ begin
   begin
     Recebe(R[3], ESPERA_MS);  // o resto da resposta, para o cabo não sair de sincronia
     Firmware := fnFabrica;
-    raise ENaoTempra.Create(Tr('Este BJ-8300 não está com o firmware TEMPRA (V3.7T ou mais novo): o Tempra Link só ' +
-                               'trabalha com ele.',
-                               'This BJ-8300 is not running the TEMPRA firmware (V3.7T or newer): Tempra Link only ' +
-                               'works with it.'));
+    raise EIncompativel.Cria(inFabrica, '');
   end;
   if Length(Recebe(BLOCO, ESPERA_MS)) <> BLOCO then
     raise EFalha.Create(Tr('O rádio não respondeu à leitura de teste.', 'The radio did not answer the test read.'));
   Firmware := fnTempra;
+  // a versão (v170): "TEMPRA " e ela, até o primeiro byte que não é letra
+  FT.Escreve(Pacote('R', VERSAO_CABO));
+  R := Recebe(4 + BLOCO, ESPERA_MS);
+  if (Length(R) <> 4 + BLOCO) or (R[0] <> Ord('R')) or (R[3] <> BLOCO) then
+    raise EFalha.Create(Tr('O rádio não respondeu à leitura da versão.', 'The radio did not answer the version read.'));
+  Versao := '';
+  if CompareMem(@R[4], PAnsiChar(RawByteString('TEMPRA ')), 7) then
+    for I := 11 to High(R) do
+      if (R[I] > 32) and (R[I] < 127) then
+        Versao := Versao + Char(R[I])
+      else
+        Break;
+  if Versao = '' then
+    Registra(Tr('Firmware: TEMPRA, sem dizer a versão.', 'Firmware: TEMPRA, without reporting its version.'))
+  else
+    Registra('Firmware: TEMPRA ' + Versao + '.');
+  ConfereVersao(Versao, FAIXA);
 end;
 
 procedure TCaboBJ.Sai;

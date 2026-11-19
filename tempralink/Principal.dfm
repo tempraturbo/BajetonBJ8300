@@ -1034,6 +1034,23 @@ object FormPrincipal: TFormPrincipal
           TabOrder = 5
           OnClick = BotaoFabricaClick
         end
+        object LabelPrograma: TLabel
+          Left = 24
+          Top = 452
+          Width = 680
+          Height = 18
+          AutoSize = False
+          WordWrap = True
+        end
+        object BotaoPrograma: TButton
+          Left = 24
+          Top = 476
+          Width = 300
+          Height = 33
+          Caption = 'Atualizar o Tempra Link'
+          TabOrder = 6
+          OnClick = BotaoProgramaClick
+        end
       end
       object CartaoBackup: TCard
         Left = 0

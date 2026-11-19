@@ -22,6 +22,7 @@ uses
   EditorRoger in 'EditorRoger.pas',
   GravadorBJ in 'GravadorBJ.pas',
   Atualizacao in 'Atualizacao.pas',
+  Compatibilidade in 'Compatibilidade.pas',
   Principal in 'Principal.pas' {FormPrincipal};
 
 begin

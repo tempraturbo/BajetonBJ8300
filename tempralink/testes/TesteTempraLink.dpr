@@ -9,8 +9,9 @@
 {$APPTYPE CONSOLE}
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils, System.ZLib, System.Math, Idioma, Transporte, CaboBJ, Ajustes,
-  BJ8300, Csv, Logo, LogoFormato, Remoto, TelaBJ, SimuladorBJ, GravadorBJ, SimuladorUpdate, Atualizacao;
+  System.SysUtils, System.Classes, System.IOUtils, System.ZLib, System.Math, System.StrUtils, System.RegularExpressions,
+  Idioma, Transporte, CaboBJ, Ajustes, BJ8300, Csv, Logo, LogoFormato, Remoto, TelaBJ, SimuladorBJ, GravadorBJ,
+  SimuladorUpdate, Atualizacao, Compatibilidade;
 
 var
   Pasta: string;
@@ -164,7 +165,7 @@ begin
   M := Le(T);
   try
     Confere(not R.Lixo and (R.Sessoes = 1) and not R.NaSessao, 'leitura: uma sessão, fechada, sem byte fora do protocolo');
-    Confere(R.Lidos = BlocosDaLeitura + 1, Format('leitura: %d blocos (e o de teste do firmware)', [R.Lidos]));
+    Confere(R.Lidos = BlocosDaLeitura + 2, Format('leitura: %d blocos (e os de teste e da versão do firmware)', [R.Lidos]));
     Certos := 0;
     Falhas := 0;
     for Linha in TFile.ReadAllLines(TPath.Combine(Pasta, 'testes\esperado.txt'), TEncoding.UTF8) do
@@ -317,24 +318,45 @@ end;
 
 procedure TesteRecusas;
 var
+  Motivo, Lido: TIncompativel;
+  Achou: Boolean;
+  Versao: string;
   R: TRadioBJSimulado;
   T: ITransporte;
   M: TMemoriaBJ8300;
   C: TCaboBJ;
   Msg: string;
 begin
-  // o firmware de fábrica: recusado na entrada, com a sessão fechada e o cabo em ordem
-  R := NovoRadio;
-  R.Fabrica := True;
-  T := R;
-  Msg := '';
-  try
-    Le(T).Free;
-  except
-    on E: ENaoTempra do
-      Msg := E.Message;
+  // o firmware de fábrica e o TEMPRA de fora da FAIXA (o que não diz a versão, o antigo e o mais novo): recusados na
+  // entrada, antes de ler ou gravar qualquer bloco, com a sessão fechada e o cabo em ordem
+  for Motivo := Low(TIncompativel) to High(TIncompativel) do
+  begin
+    R := NovoRadio;
+    case Motivo of
+      inFabrica: R.Fabrica := True;
+      inSemVersao: R.Versao := '';
+      inAntiga: R.Versao := 'V3.7T';
+      inNova: R.Versao := 'V9.9T';
+    end;
+    T := R;
+    Msg := '';
+    Achou := False;
+    try
+      Le(T).Free;
+    except
+      on E: EIncompativel do
+      begin
+        Achou := True;
+        Msg := E.Message;
+        Lido := E.Motivo;
+        Versao := E.Versao;
+      end;
+    end;
+    Confere(Achou and (Lido = Motivo) and (Msg <> '') and not R.NaSessao and not R.Lixo and (R.Lidos = 1 + Ord(Motivo <> inFabrica)) and
+            (Versao = IfThen(Motivo in [inAntiga, inNova], R.Versao, '')),
+            Format('recusa: o firmware %s, sem ler nada, com a sessão fechada (%s)',
+                   [IfThen(Motivo = inFabrica, 'de fábrica', 'TEMPRA "' + R.Versao + '"'), Msg]));
   end;
-  Confere((Msg <> '') and not R.NaSessao and not R.Lixo, 'recusa: o firmware de fábrica, com a sessão fechada');
   // o rádio mudo
   R := NovoRadio;
   R.Mudo := True;
@@ -850,8 +872,7 @@ begin
       on Ex: ESemRadio do
         Msg := Ex.Message;
     end;
-    Confere((Pos('v159', Msg) > 0) and (Pos('v163', Msg) > 0),
-            'remoto: o rádio mudo dá a mensagem que pede o firmware v159 (e o v163 para a tela)');
+    Confere(Pos('controle remoto', Msg) > 0, 'remoto: o rádio mudo dá a mensagem do controle remoto');
   finally
     Rem.Free;
   end;
@@ -1111,7 +1132,26 @@ begin
       on E: ESemRadio do
         Msg := E.Message;
     end;
-    Confere(Pos('v159', Msg) > 0, 'remoto: v165, o rádio que nunca respondeu ainda dá o erro, sem ficar tentando');
+    Confere(Msg <> '', 'remoto: v165, o rádio que nunca respondeu ainda dá o erro, sem ficar tentando');
+  finally
+    Rem.Free;
+  end;
+  // o firmware que este Tempra Link não conhece: o remoto nem começa, e o erro diz por quê
+  R3 := NovoRadio;
+  R3.Versao := 'V3.7T';
+  T3 := R3;
+  Rem := TRemoto.Create;
+  try
+    Rem.PausaReligaMs := 0;
+    Msg := '';
+    try
+      Rem.ExecutaReligando(function: ITransporte begin Result := T3; end, False);
+    except
+      on E: EIncompativel do
+        Msg := E.Message;
+    end;
+    Confere((Msg <> '') and (R3.RemQuadros = 0) and not R3.NaSessao,
+            'remoto: o firmware de fora da faixa não recebe nenhum quadro (' + Msg + ')');
   finally
     Rem.Free;
   end;
@@ -1151,7 +1191,7 @@ begin
   finally
     M.Free;
   end;
-  // o remoto: a 460800 de primeira; com a v157 a v159, desce a 115200 e a tela vem
+  // o remoto: a 460800 de primeira, e a tela vem
   R := NovoRadio;
   Rem := TRemoto.Create;
   try
@@ -1167,24 +1207,6 @@ begin
     Rem.Executa(R, True);
     Confere((R.Porta = BAUD_CABO) and (R.Ruido = 0) and (R.Retratos > 0),
             'velocidade: o remoto fala a 460800 com o firmware v160, e a tela vem');
-  finally
-    Rem.Free;
-  end;
-  R := NovoRadio;
-  R.Serial := BAUD_CABO_V157;
-  Rem := TRemoto.Create;
-  try
-    Estados := 0;
-    Rem.OnEstado :=
-      procedure(Es: TEstadoRadio)
-      begin
-        Inc(Estados);
-        if Estados = 20 then
-          Rem.Parar := True;
-      end;
-    Rem.Executa(R, True);
-    Confere((R.Porta = BAUD_CABO_V157) and (Estados = 20) and (R.RemQuadros > 0),
-            'velocidade: o remoto desce a 115200 com o firmware v157 a v159');
   finally
     Rem.Free;
   end;
@@ -1367,7 +1389,7 @@ var
     try
       Result.Sessao(T, procedure begin end);
     except
-      on ENaoTempra do ;
+      on EIncompativel do ;
       on ESemRadio do ;
     end;
   end;
@@ -1378,10 +1400,18 @@ begin
     R := NovoRadio;
     R.Serial := Baud;
     C := Ve(R);
-    Confere((C.Firmware = fnTempra) and (C.Velocidade = Baud) and not R.NaSessao,
-            Format('firmware no rádio: o TEMPRA, com o cabo a %d', [Baud]));
+    Confere((C.Firmware = fnTempra) and (C.Versao = FAIXA.Maxima) and not R.NaSessao,
+            Format('firmware no rádio: o TEMPRA %s, com o cabo a %d', [C.Versao, Baud]));
     C.Free;
   end;
+  // o de antes da v170: a leitura da versão traz o chip (o endereço dá a volta), sem o "TEMPRA "
+  R := NovoRadio;
+  R.Versao := '';
+  R.Poe(VERSAO_CABO and $FFFFF, TEncoding.ASCII.GetBytes('TEMPRX V3.8T'));
+  C := Ve(R);
+  Confere((C.Firmware = fnTempra) and (C.Versao = '') and not R.NaSessao,
+          'firmware no rádio: o TEMPRA de antes da v170 não diz a versão, nem com um texto parecido no chip');
+  C.Free;
   R := NovoRadio;
   R.Fabrica := True;
   R.Serial := BAUD_CABO_ANTIGA;
@@ -1528,27 +1558,90 @@ begin
           'gravador: antes de o rádio responder, dá para cancelar');
 end;
 
-{ O último release pelo GitHub (Atualizacao), sem internet: a resposta de verdade do /releases/latest (sem as notas,
-  testes/github-release.json), o arquivo de firmware dela com o SHA-256 que o GitHub dá, igual ao do .anc da release
-  no repositório, e a comparação das versões. }
+{ Os releases pelo GitHub (Atualizacao), sem internet: a resposta de verdade da V3.7T (sem as notas,
+  testes/github-release.json), com o SHA-256 que o GitHub dá igual ao do .anc da release no repositório, numa lista
+  com releases inventados (um firmware da FAIXA, um mais novo, uma pré-release, um rascunho e um só do Tempra Link); a
+  troca do programa; e a FAIXA, que acompanha o firmware/src/versao.h. }
 procedure TesteAtualizacao;
+
+  function Rel(const Tag, Extra, Arquivos: string): string;
+  begin
+    Result := '{"tag_name": "' + Tag + '", "html_url": "https://github.com/x/releases/tag/' + Tag + '"' + Extra +
+              ', "assets": [' + Arquivos + ']}';
+  end;
+
+  function Arq(const Nome: string; Tamanho: Integer): string;
+  begin
+    Result := '{"name": "' + Nome + '", "size": ' + IntToStr(Tamanho) + ', "digest": "sha256:AB12", ' +
+              '"browser_download_url": "https://x/' + Nome + '"}';
+  end;
+
 var
-  R: TRelease;
-  Json: string;
+  P: TProcura;
+  Real, Json, Exe, VersaoH: string;
+  Velho, Novo: TBytes;
+  Faixa: TFaixa;
+  Erro: string;
 begin
-  Json := TFile.ReadAllText(TPath.Combine(Pasta, 'testes\github-release.json'), TEncoding.UTF8);
-  Confere(LeRelease(Json, 'BJ8300_BANK_v', '.anc', R) = '', 'atualização: o release do GitHub se lê');
-  Confere((R.Tag = 'v3.7T') and (R.Arquivo = 'BJ8300_BANK_v3.7T.anc') and (R.Tamanho = TAMANHO_ANC) and
-          R.Url.EndsWith('/v3.7T/BJ8300_BANK_v3.7T.anc'), 'atualização: o arquivo de firmware dele, com o tamanho');
-  Confere(R.Sha256 = Sha256De(TFile.ReadAllBytes(TPath.Combine(Pasta, '..\firmware\releases\BJ8300_BANK_v3.7T.anc'))),
+  Real := TFile.ReadAllText(TPath.Combine(Pasta, 'testes\github-release.json'), TEncoding.UTF8);
+  Confere(LeReleases('[' + Real + ']', FAIXA, 'BJ8300_BANK_v', '.anc', 'TempraLink-BJ8300_v', P) = '',
+          'atualização: o release de verdade se lê');
+  Confere((P.MaisNovo.Tag = 'v3.7T') and (P.MaisNovo.Arquivo = 'BJ8300_BANK_v3.7T.anc') and (P.MaisNovo.Versao = '3.7T') and
+          (P.MaisNovo.Tamanho = TAMANHO_ANC) and P.MaisNovo.Url.EndsWith('/v3.7T/BJ8300_BANK_v3.7T.anc'),
+          'atualização: o arquivo de firmware dele, com a versão e o tamanho');
+  Confere(P.MaisNovo.Sha256 = Sha256De(TFile.ReadAllBytes(TPath.Combine(Pasta,
+                                       '..\firmware\releases\BJ8300_BANK_v3.7T.anc'))),
           'atualização: o SHA-256 que o GitHub dá é o do .anc da release no repositório');
-  Confere(LeRelease(Json, 'UV17L_v', '.kdhx', R) <> '', 'atualização: sem o arquivo pedido, o release é recusado');
-  Confere(LeRelease('{"message": "Not Found"}', 'BJ8300_BANK_v', '.anc', R) <> '',
-          'atualização: a resposta sem release é recusada');
-  Confere(LeRelease('isto não é json', 'BJ8300_BANK_v', '.anc', R) <> '', 'atualização: o que não é JSON é recusado');
+  Confere((P.Firmware.Arquivo = '') and (P.Programa.Arquivo = ''),
+          'atualização: a V3.7T é de fora da FAIXA, e ainda não há Tempra Link publicado');
+  Json := '[' + Rel('link-1.2', '', Arq('TempraLink-BJ8300_v1.2.exe', 5000000)) + ',' +
+         Rel('v4.0T', '', Arq('BJ8300_BANK_v4.0T.anc', TAMANHO_ANC)) + ',' +
+         Rel('v3.9T', ', "prerelease": true', Arq('BJ8300_BANK_v3.9T.anc', TAMANHO_ANC) + ',' +
+             Arq('TempraLink-BJ8300_v9.0.exe', 1)) + ',' +
+         Rel('v3.9.1T', ', "draft": true', Arq('BJ8300_BANK_v3.9.1T.anc', TAMANHO_ANC)) + ',' +
+         Rel('v3.8T', '', Arq('BJ8300_BANK_v3.8T.anc', TAMANHO_ANC) + ',' + Arq('TempraLink-BJ8300_v1.1.exe', 5000000) +
+             ',' + Arq('UV17L_v1.7T.kdhx', 60000)) + ',' + Real + ']';
+  Faixa.Minima := 'V3.8T';
+  Faixa.Maxima := 'V3.8T';
+  Confere(LeReleases(Json, Faixa, 'BJ8300_BANK_v', '.anc', 'TempraLink-BJ8300_v', P) = '',
+          'atualização: a lista com os releases inventados se lê');
+  Confere((P.Firmware.Versao = '3.8T') and (P.Firmware.Tag = 'v3.8T') and (P.Firmware.Sha256 = 'ab12') and
+          (P.MaisNovo.Versao = '4.0T') and (P.Programa.Versao = '1.2') and (P.Programa.Tag = 'link-1.2'),
+          Format('atualização: o firmware da faixa (%s), o mais novo (%s) e o Tempra Link (%s), sem a pré-release nem ' +
+                 'o rascunho', [P.Firmware.Versao, P.MaisNovo.Versao, P.Programa.Versao]));
+  Confere(LeReleases('{"message": "Not Found"}', FAIXA, 'BJ8300_BANK_v', '.anc', 'TempraLink-BJ8300_v', P) <> '',
+          'atualização: a resposta que não é lista é recusada');
+  Confere(LeReleases('isto não é json', FAIXA, 'BJ8300_BANK_v', '.anc', 'TempraLink-BJ8300_v', P) <> '',
+          'atualização: o que não é JSON é recusado');
   Confere((ComparaVersoes('v3.7T', 'V3.7T') = 0) and (ComparaVersoes('V0.12', 'v3.7T') < 0) and
           (ComparaVersoes('1.10T', '1.9T') > 0) and (ComparaVersoes('v1.6T', '1.6') = 0) and
           (ComparaVersoes('V3.8T', 'v3.7T') > 0), 'atualização: as versões se comparam número a número');
+  Confere(Faixa.Contem('V3.8T') and Faixa.Contem('3.8T') and not Faixa.Contem('V3.7T') and not Faixa.Contem('V3.9T') and
+          not Faixa.Contem(''), 'compatibilidade: a faixa tem as duas pontas, e nada fora delas');
+  // a FAIXA vai até a versão do firmware deste repositório: subiu a versão, o Tempra Link tem de ser revisto
+  VersaoH := TFile.ReadAllText(TPath.Combine(Pasta, '..\firmware\src\versao.h'));
+  Confere(TRegEx.Match(VersaoH, '#define VERSAO "([^"]+)"').Groups[1].Value = FAIXA.Maxima,
+          'compatibilidade: a FAIXA.Maxima (' + FAIXA.Maxima + ') é a do firmware/src/versao.h');
+  // a troca do programa, numa pasta de teste: o novo no lugar e o velho ao lado; o que não é programa não entra
+  Exe := TPath.Combine(TPath.GetTempPath, 'TempraLinkTroca\TempraLink.exe');
+  TDirectory.CreateDirectory(ExtractFileDir(Exe));
+  Velho := TEncoding.ASCII.GetBytes('MZ velho');
+  Novo := TEncoding.ASCII.GetBytes('MZ novo');
+  TFile.WriteAllBytes(Exe, Velho);
+  Erro := TrocaPrograma(Exe, TEncoding.ASCII.GetBytes('PK zip'));
+  Confere((Erro <> '') and (TEncoding.ASCII.GetString(TFile.ReadAllBytes(Exe)) = 'MZ velho') and
+          not TFile.Exists(Exe + '.novo'), 'atualização: o que não é programa não troca nada');
+  Erro := TrocaPrograma(Exe, Novo);
+  Confere((Erro = '') and (TEncoding.ASCII.GetString(TFile.ReadAllBytes(Exe)) = 'MZ novo') and
+          (TEncoding.ASCII.GetString(TFile.ReadAllBytes(Exe + '.antigo')) = 'MZ velho') and not TFile.Exists(Exe + '.novo'),
+          'atualização: o programa novo no lugar, e o velho ao lado (' + Erro + ')');
+  ApagaAntigo(Exe);
+  Sleep(1500);
+  Confere(not TFile.Exists(Exe + '.antigo'), 'atualização: o velho se apaga na abertura seguinte');
+  TDirectory.Delete(ExtractFileDir(Exe), True);
+  // o programa aberto se renomeia (é o que a troca faz com o Tempra Link que está rodando): este teste, ida e volta
+  Confere(RenameFile(ParamStr(0), ParamStr(0) + '.prova') and RenameFile(ParamStr(0) + '.prova', ParamStr(0)),
+          'atualização: o Windows deixa renomear o programa que está aberto');
 end;
 
 begin

@@ -608,15 +608,19 @@ edits, keeps and writes through the cable a BJ-8300 running this firmware:
   factory firmware or TEMPRA, looks up the newest release on GitHub by itself and downloads and flashes the new version
   or the factory one (V0.12) in one click, checked by SHA-256 ([section 42](docs/reverse-engineering.md#42-flashing-the-firmware-over-the-cable-the-bintalk-protocol)).
 
-It only goes on with a BJ-8300 that answers with the TEMPRA firmware. It writes only what changed, checking first
+It only works with the TEMPRA firmware versions it knows: since v170 the radio tells its version, and with the
+stock firmware, a TEMPRA from before it or a version outside its range, it reads and writes nothing and offers to
+download and flash the right one ([section 43](docs/reverse-engineering.md#43-the-version-over-the-cable-and-compatibility-v170)).
+When it opens, it also looks for the newest Tempra Link in the releases and asks whether to update itself. It
+writes only what changed, checking first
 that the radio did not change since it was read, and reads back what it wrote to the bank and record sectors. After
 writing the banks, turn the radio off and on: it builds the banks at power-up.
 
-**Remote control (after V3.7T, not released yet):** with a test firmware (v159 or newer), the Remote control page
+**Remote control (after V3.7T, not released yet):** the Remote control page
 puts the radio's keypad and PTT on the PC and, over the cable, the radio's screen live, drawn on the PC with the
 firmware's screen code (the program and the firmware of the same round); over Bluetooth, the status. The **Radio
 screen** switch turns its screen off, to save battery, and goes back to On when a key on the radio lights it. If the
-link drops (the PTT's RF can knock down the cable's USB), the remote reconnects by itself. The cable goes to 460800 in v160, and the program and the CHIRP driver drop to 115200 and 57600 by themselves with the
+link drops (the PTT's RF can knock down the cable's USB), the remote reconnects by itself. The cable goes to 460800 in v160, and the program and the CHIRP driver drop to 115200 and 57600 by themselves to recognize the
 older firmwares.
 
 **Bluetooth (experimental):** with the radio's BLUETOOTH (SYSTEM folder) ON, the last item of the port list searches
@@ -628,7 +632,9 @@ with the link open); reading and writing over it were not tested yet. The code a
 
 **Phone app (Android, after V3.7T, not released yet):** the Tempra Link on the phone, over the radio's Bluetooth: the
 remote control with the radio's screen, the channels and the banks, the settings (with ROGER CUSTOM), reading and
-writing, backups and a receive alert, plus a demo with no radio. No published APK yet: it builds with
+writing, backups and a receive alert, plus a demo with no radio. It remembers the radios used before, with a nickname for
+each, and connects to them without the full search; with a firmware it does not work with, it only warns and opens the
+releases page. No published APK yet: it builds with
 `tempralink/celular/compilar.ps1` (Delphi). On the radio, only the remote control was tested.
 
 ---

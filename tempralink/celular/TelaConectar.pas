@@ -1,7 +1,8 @@
 ﻿unit TelaConectar;
 
-{ A primeira tela do app: procura o rádio pelo Bluetooth e mostra os aparelhos achados; um toque num deles conecta. A
-  demonstração abre o controle remoto com o BJ-8300 simulado, sem rádio. Embaixo, o registro da última conexão (o que
+{ A primeira tela do app: os rádios usados antes (RadiosLembrados), cada um com o apelido que se der a ele, que um
+  toque conecta sem a procura inteira (ela para assim que o rádio aparece); e a procura pelo Bluetooth, que mostra os
+  aparelhos achados, que um toque conecta. A demonstração abre o controle remoto com o BJ-8300 simulado, sem rádio. Embaixo, o registro da última conexão (o que
   o aparelho anuncia: o Bluetooth do rádio nunca foi provado, e é por ele que se descobre o que faltou).
 
   No Android, a procura pede antes a permissão de "Dispositivos por perto" (do Android 12 em diante) ou a da
@@ -12,7 +13,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Types, System.UITypes, System.Generics.Defaults, System.Generics.Collections,
-  FMX.Types, FMX.Controls, FMX.Objects, FMX.Layouts, Bluetooth, ModeloRadio, TemaCelular;
+  System.StrUtils, FMX.Types, FMX.Controls, FMX.Objects, FMX.Layouts, Bluetooth, ModeloRadio, TemaCelular,
+  RadiosLembrados;
 
 type
   TTelaConectar = class
@@ -26,14 +28,19 @@ type
     FRegistro: TText;
     FLinhas: TStringList;
     FRadios: TArray<TRadioBLE>;
+    FLembrados: TArray<TLembrado>;
     FProcurando: Boolean;
     procedure Procura(Sender: TObject);
     procedure ComecaProcura;
-    procedure MostraRadios;
     procedure Escolhe(Sender: TObject);
+    procedure EscolheLembrado(Sender: TObject);
+    procedure Apelido(Sender: TObject);
+    procedure EsqueceLembrado(Sender: TObject);
     procedure Demonstra(Sender: TObject);
   public
-    OnRadio: TProc<TRadioBLE>;   // tocou num aparelho achado
+    OnRadio: TProc<TRadioBLE>;     // tocou num aparelho achado
+    OnLembrado: TProc<TLembrado>;  // tocou num rádio usado antes
+    OnApelido: TProc<TLembrado>;   // pediu para dar o apelido (a janela pergunta, e chama o MostraRadios)
     OnDemonstracao: TProc;
     constructor Create(Pai: TFmxObject);
     destructor Destroy; override;
@@ -41,6 +48,8 @@ type
     // De qualquer thread: uma linha no registro da conexão (as últimas ficam à vista).
     procedure Registra(const S: string);
     procedure LimpaRegistro;
+    // Os lembrados e, embaixo, os achados na última procura (menos os que já são lembrados).
+    procedure MostraRadios;
     property Raiz: TLayout read FRaiz;
   end;
 
@@ -156,6 +165,7 @@ begin
   FLista.Align := TAlignLayout.Client;
   FLista.Margins.Top := 4;
   FLista.Margins.Bottom := 8;
+  MostraRadios;
 end;
 
 destructor TTelaConectar.Destroy;
@@ -236,19 +246,96 @@ begin
           begin
             FRadios := Achados;
             MostraRadios;
+            if Length(FRadios) = 1 then
+              Avisa('1 aparelho achado: toque nele para conectar.')
+            else if FRadios <> nil then
+              Avisa(Format('%d aparelhos achados: toque no rádio para conectar.', [Length(FRadios)]))
+            else if Achados <> nil then
+              Avisa('Por perto, só os rádios usados antes: toque num deles para conectar.')
+            else
+              Avisa('Nenhum aparelho achado. Confira o BLUETOOTH do rádio em ON e o Bluetooth do celular ligado (até ' +
+                    'o Android 11, a localização também).', COR_AMBAR);
           end;
         end);
     end).Start;
 end;
 
-// Os achados, os com nome antes (o rádio tem nome; relógios e fones sem nome vão para o fim), em ordem de nome.
+// Os lembrados, o usado por último primeiro; depois os achados, os com nome antes (o rádio tem nome; relógios e fones
+// sem nome vão para o fim), em ordem de nome.
 procedure TTelaConectar.MostraRadios;
+var
+  Y: Single;
+
+  // um cartão da lista, com o ícone, o nome e a linha de baixo; Toque é o do cartão inteiro
+  function Cartao(const Nome, Baixo: string; Tag: Integer; Toque: TNotifyEvent; Direita: Single): TRectangle;
+  var
+    I: TControl;
+    T: TText;
+  begin
+    Result := Caixa(FLista, COR_SUPERFICIE, 14, COR_DIVISA);
+    Result.Position.Y := Y;
+    Y := Y + 100;
+    Result.Align := TAlignLayout.Top;
+    Result.Height := 62;
+    Result.Margins.Bottom := 8;
+    Result.Tag := Tag;
+    Result.OnClick := Toque;
+    I := Icone(Result, ICONE_BLUETOOTH, COR_VERDE);
+    I.Position.Point := PointF(14, 19);
+    T := Texto(Result, Nome, 16, COR_TEXTO, True, TTextAlign.Leading);
+    T.Align := TAlignLayout.Top;
+    T.Height := 24;
+    T.Margins.Rect := RectF(50, 9, 12 + Direita, 0);
+    T := Texto(Result, Baixo, 12, COR_TEXTO_FRACO, False, TTextAlign.Leading);
+    T.Align := TAlignLayout.Top;
+    T.Position.Y := 100;
+    T.Height := 18;
+    T.Margins.Rect := RectF(50, 0, 12 + Direita, 0);
+  end;
+
+  // um botão de texto no lado direito do cartão
+  procedure Botao(C: TRectangle; const S: string; Topo: Single; Toque: TNotifyEvent);
+  var
+    T: TText;
+  begin
+    T := Texto(C, S, 13, COR_VERDE, True, TTextAlign.Trailing);
+    T.HitTest := True;
+    T.Tag := C.Tag;
+    T.OnClick := Toque;
+    T.SetBounds(C.Width - 100, Topo, 88, 26);
+    T.Anchors := [TAnchorKind.akTop, TAnchorKind.akRight];
+  end;
+
+  procedure Secao(const S: string);
+  var
+    T: TText;
+  begin
+    T := Texto(FLista, S, 13, COR_TEXTO_FRACO, True, TTextAlign.Leading);
+    T.Position.Y := Y;
+    Y := Y + 100;
+    T.Align := TAlignLayout.Top;
+    T.Height := 26;
+  end;
+
 var
   K: Integer;
   C: TRectangle;
-  I: TControl;
-  T: TText;
+  Novos: TArray<TRadioBLE>;
+  R: TRadioBLE;
+  L: TLembrado;
+  Ja: Boolean;
 begin
+  FLembrados := Lembrados;
+  Novos := nil;
+  for R in FRadios do
+  begin
+    Ja := False;
+    for L in FLembrados do
+      Ja := Ja or SameText(L.Endereco, R.Endereco);
+    if not Ja then
+      Novos := Novos + [R];
+  end;
+  FRadios := Novos;
   TArray.Sort<TRadioBLE>(FRadios, TComparer<TRadioBLE>.Construct(
     function(const A, B: TRadioBLE): Integer
     begin
@@ -257,40 +344,44 @@ begin
         Result := CompareText(A.Nome, B.Nome);
     end));
   FLista.Content.DeleteChildren;
-  for K := 0 to High(FRadios) do
+  Y := 0;
+  if FLembrados <> nil then
+    Secao('Usados antes: toque para conectar');
+  for K := 0 to High(FLembrados) do
   begin
-    C := Caixa(FLista, COR_SUPERFICIE, 14, COR_DIVISA);
-    C.Position.Y := K * 100;
-    C.Align := TAlignLayout.Top;
-    C.Height := 62;
-    C.Margins.Bottom := 8;
-    C.Tag := K;
-    C.OnClick := Escolhe;
-    I := Icone(C, ICONE_BLUETOOTH, COR_VERDE);
-    I.Position.Point := PointF(14, 19);
-    T := Texto(C, FRadios[K].Nome, 16, COR_TEXTO, True, TTextAlign.Leading);
-    T.Align := TAlignLayout.Top;
-    T.Height := 24;
-    T.Margins.Rect := RectF(50, 9, 12, 0);
-    T := Texto(C, FRadios[K].Endereco, 12, COR_TEXTO_FRACO, False, TTextAlign.Leading);
-    T.Align := TAlignLayout.Top;
-    T.Position.Y := 100;
-    T.Height := 18;
-    T.Margins.Rect := RectF(50, 0, 12, 0);
+    C := Cartao(FLembrados[K].Titulo, IfThen(FLembrados[K].Apelido = '', '', FLembrados[K].Nome + ' · ') +
+                FLembrados[K].Endereco, K, EscolheLembrado, 96);
+    Botao(C, 'Apelido', 4, Apelido);
+    Botao(C, 'Esquecer', 32, EsqueceLembrado);
   end;
-  if FRadios = nil then
-    Avisa('Nenhum aparelho achado. Confira o BLUETOOTH do rádio em ON e o Bluetooth do celular ligado (até o ' +
-          'Android 11, a localização também).', COR_AMBAR)
-  else if Length(FRadios) = 1 then
-    Avisa('1 aparelho achado: toque nele para conectar.')
-  else
-    Avisa(Format('%d aparelhos achados: toque no rádio para conectar.', [Length(FRadios)]));
+  if (FLembrados <> nil) and (FRadios <> nil) then
+    Secao('Achados agora');
+  for K := 0 to High(FRadios) do
+    Cartao(FRadios[K].Nome, FRadios[K].Endereco, K, Escolhe, 0);
 end;
 
 procedure TTelaConectar.Escolhe(Sender: TObject);
 begin
   if Assigned(OnRadio) then
     OnRadio(FRadios[(Sender as TFmxObject).Tag]);
+end;
+
+procedure TTelaConectar.EscolheLembrado(Sender: TObject);
+begin
+  if not FProcurando and Assigned(OnLembrado) then
+    OnLembrado(FLembrados[(Sender as TFmxObject).Tag]);
+end;
+
+procedure TTelaConectar.Apelido(Sender: TObject);
+begin
+  if Assigned(OnApelido) then
+    OnApelido(FLembrados[(Sender as TFmxObject).Tag]);
+end;
+
+procedure TTelaConectar.EsqueceLembrado(Sender: TObject);
+begin
+  Esquece(FLembrados[(Sender as TFmxObject).Tag].Endereco);
+  MostraRadios;
 end;
 
 procedure TTelaConectar.Demonstra(Sender: TObject);

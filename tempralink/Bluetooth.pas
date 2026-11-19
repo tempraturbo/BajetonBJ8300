@@ -47,6 +47,9 @@ type
 
 // Os aparelhos BLE em volta, procurando por EsperaMs (fora da thread da janela: espera o fim da procura).
 function ProcuraRadios(EsperaMs: Cardinal): TArray<TRadioBLE>;
+// O aparelho de um endereço já conhecido (o rádio que se usou antes), procurando até ele aparecer, por no máximo
+// EsperaMs; não achado, ESemRadio. Fora da thread da janela.
+function AchaRadio(const Endereco: string; EsperaMs: Cardinal): TRadioBLE;
 
 implementation
 
@@ -65,15 +68,29 @@ const
   FFE1: TBluetoothUUID = '{0000FFE1-0000-1000-8000-00805F9B34FB}';  // o que cabe numa escrita com o MTU de 23 bytes, o menor que o BLE garante
 
 type
-  // o fim da procura chega por evento: um objeto só para segurar o sinal
+  // o fim da procura chega por evento: um objeto só para segurar o sinal (e, no AchaRadio, o aparelho procurado)
   TEspera = class
     Fim: TEvent;
+    Endereco: string;
+    Achado: TBluetoothLEDevice;
     procedure Acabou(const Sender: TObject; const Lista: TBluetoothLEDeviceList);
+    procedure Viu(const Sender: TObject; const Aparelho: TBluetoothLEDevice; Rssi: Integer;
+      const Resposta: TScanResponse);
   end;
 
 procedure TEspera.Acabou(const Sender: TObject; const Lista: TBluetoothLEDeviceList);
 begin
   Fim.SetEvent;
+end;
+
+procedure TEspera.Viu(const Sender: TObject; const Aparelho: TBluetoothLEDevice; Rssi: Integer;
+  const Resposta: TScanResponse);
+begin
+  if (Achado = nil) and SameText(Aparelho.Address, Endereco) then
+  begin
+    Achado := Aparelho;
+    Fim.SetEvent;
+  end;
 end;
 
 function Gerenciador: TBluetoothLEManager;
@@ -120,6 +137,42 @@ begin
         R.Aparelho := A;
         Result := Result + [R];
       end;
+  finally
+    E.Fim.Free;
+    E.Free;
+  end;
+end;
+
+function AchaRadio(const Endereco: string; EsperaMs: Cardinal): TRadioBLE;
+var
+  M: TBluetoothLEManager;
+  E: TEspera;
+begin
+  M := Gerenciador;
+  E := TEspera.Create;
+  E.Fim := TEvent.Create;
+  E.Endereco := Endereco;
+  try
+    M.OnDiscoverLEDevice := E.Viu;
+    M.OnDiscoveryEnd := E.Acabou;
+    if not M.StartDiscovery(EsperaMs) then
+      raise ESemRadio.Create(Tr('O Bluetooth não começou a procurar: confira se ele está ligado no ' + AQUI_PT + '.',
+                                'Bluetooth did not start searching: check that it is turned on on this ' + AQUI_EN +
+                                '.'));
+    E.Fim.WaitFor(EsperaMs + 3000);
+    M.OnDiscoverLEDevice := nil;
+    M.OnDiscoveryEnd := nil;
+    if E.Achado = nil then
+      raise ESemRadio.Create(Format(Tr('O rádio (%s) não apareceu. Confira o BLUETOOTH dele em ON, perto do ' + AQUI_PT +
+                                       ', ou procure de novo.',
+                                       'The radio (%s) did not show up. Check its BLUETOOTH is ON, near this ' + AQUI_EN +
+                                       ', or search again.'), [Endereco]));
+    M.CancelDiscovery;   // achou antes do fim: a procura para
+    Result.Nome := E.Achado.DeviceName;
+    if Result.Nome = '' then
+      Result.Nome := Tr('(sem nome)', '(no name)');
+    Result.Endereco := E.Achado.Address;
+    Result.Aparelho := E.Achado;
   finally
     E.Fim.Free;
     E.Free;

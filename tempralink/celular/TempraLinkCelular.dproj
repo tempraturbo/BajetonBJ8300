@@ -127,6 +127,7 @@
         <DCCReference Include="ListaCelular.pas"/>
         <DCCReference Include="RadioCelular.pas"/>
         <DCCReference Include="RegistroCelular.pas"/>
+        <DCCReference Include="RadiosLembrados.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

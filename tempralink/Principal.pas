@@ -15,14 +15,15 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, System.Types, Vcl.Graphics, Vcl.Controls,
   Vcl.Forms, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls, Vcl.Dialogs, Vcl.Grids, Vcl.WinXPanels, Vcl.WinXCtrls,
   Vcl.CheckLst, Vcl.Menus, Transporte, CaboBJ, Logo, LogoFormato, Ajustes, BJ8300, PortaSerial, Bluetooth, Visual, Remoto,
-  TelaBJ, EditorRoger, GravadorBJ, Atualizacao;
+  TelaBJ, EditorRoger, GravadorBJ, Atualizacao, Compatibilidade;
 
 const
-  VERSAO_TEMPRA_LINK = '1.0';  // a mesma do Recursos.rc
+  VERSAO_TEMPRA_LINK = '1.0';  // a mesma do Recursos.rc e a do nome do .exe nos releases (TempraLink-BJ8300_v1.0.exe)
 
 type
-  TFim = (fOk, fCancelado, fFalha, fSemRadio, fConflito, fErro);
-  TAcao = (acLer, acGravar, acLerLogo, acGravarLogo, acProcurar, acRemoto, acVerificar, acBaixar, acFirmware);
+  TFim = (fOk, fCancelado, fFalha, fSemRadio, fConflito, fIncompativel, fErro);
+  TAcao = (acLer, acGravar, acLerLogo, acGravarLogo, acProcurar, acRemoto, acVerificar, acBaixar, acFirmware,
+           acPrograma);
   TTipoCelula = (tcNada, tcTexto, tcLista, tcBancos);
 
   // uma linha da grade dos ajustes
@@ -47,6 +48,8 @@ type
   public
     Fim: TFim;
     Mensagem: string;
+    Motivo: TIncompativel;  // com o fIncompativel: por que o firmware do rádio não serve, e a versão que ele disse
+    VersaoRadio: string;
     constructor Create(Abre: TFunc<ITransporte>; Corpo: TProc<ITransporte>);
   end;
 
@@ -138,12 +141,14 @@ type
     LabelInfo: TLabel;
     LabelPassos: TLabel;
     LabelVersoes: TLabel;
+    LabelPrograma: TLabel;
     EditArquivo: TEdit;
     BotaoEscolher: TButton;
     BotaoGravar: TButton;
     BotaoVerificar: TButton;
     BotaoBaixar: TButton;
     BotaoFabrica: TButton;
+    BotaoPrograma: TButton;
     CartaoBackup: TCard;
     LabelBackup: TLabel;
     BotaoAbrirBackup: TButton;
@@ -181,6 +186,7 @@ type
     procedure BotaoVerificarClick(Sender: TObject);
     procedure BotaoBaixarClick(Sender: TObject);
     procedure BotaoFabricaClick(Sender: TObject);
+    procedure BotaoProgramaClick(Sender: TObject);
     procedure BuscaChange(Sender: TObject);
     procedure GradeDrawCell(Sender: TObject; ACol, ARow: Integer; Rect: TRect; State: TGridDrawState);
     procedure GradeDblClick(Sender: TObject);
@@ -253,11 +259,14 @@ type
     // o firmware
     FAnc: TAnc;                 // o arquivo escolhido, conferido (Claro vazio quando não há ou não passou)
     FGravador: TGravadorBJ;
-    FRelease: TRelease;         // o último release do GitHub (Tag vazia enquanto não se soube)
-    FErroRelease: string;       // por que não se soube
-    FNoRadio: string;           // o firmware que o rádio mostrou na última conversa pelo cabo
-    FRadioFirmware: TFirmwareNoRadio;
-    FRadioVelocidade: Cardinal;
+    FRelease: TRelease;         // o firmware mais novo do GitHub com que este Tempra Link trabalha (Url vazia: nenhum)
+    FMaisNovo: TRelease;        // o mais novo de todos, que pode ser de fora da FAIXA (pede um Tempra Link novo)
+    FPrograma: TRelease;        // o Tempra Link mais novo do GitHub
+    FProcurou: Boolean;         // o GitHub já respondeu, ou o FErroRelease diz por que não
+    FErroRelease: string;
+    FOfereceu: Boolean;         // a pergunta do Tempra Link novo já se fez desde que a janela abriu
+    FNoRadio: string;           // o firmware que o rádio mostrou na última conversa ('' = ainda não visto)
+    FRadioServe: Boolean;       // e este Tempra Link trabalha com ele
     FBaixado: string;           // onde o download deixa o arquivo
     // a edição na célula
     FEditor: TEdit;
@@ -271,9 +280,11 @@ type
     procedure GravaFirmware;
     procedure BaixaFirmware(const Url, Sha256: string; Tamanho: Int64; const Nome: string);
     procedure ProcuraRelease;
-    procedure MostraRelease(const R: TRelease; const Erro: string);
-    procedure AnotaRadio(C: TCaboBJ);
+    procedure MostraRelease(const P: TProcura; const Erro: string);
+    procedure AnotaRadio(Firmware: TFirmwareNoRadio; const Versao: string);
     procedure MostraVersoes;
+    procedure OfereceFirmware(Motivo: TIncompativel; const Msg: string);
+    procedure AtualizaPrograma;
     procedure AbreImagem(const Caminho: string);
     procedure AbreBackup(const Caminho: string);
     procedure MostraLogo(const L: TBytes; const Info: string);
@@ -350,15 +361,15 @@ const
   CARTAO_BACKUP = 6;
   CARTAO_REGISTRO = 7;
 
-  // o firmware no GitHub: o último release do projeto, e o de fábrica, que o repositório guarda (com o SHA-256 dele,
-  // conferido no download e no arquivo local)
+  // o GitHub: os releases do projeto (o firmware e o Tempra Link, com a versão no nome de cada arquivo), e o de
+  // fábrica, que o repositório guarda (com o SHA-256 dele, conferido no download e no arquivo local)
   REPOSITORIO = 'tempraturbo/BajetonBJ8300';
   PREFIXO_FIRMWARE = 'BJ8300_BANK_v';
+  PREFIXO_PROGRAMA = 'TempraLink-BJ8300_v';
   VERSAO_FABRICA = 'V0.12';
   ARQUIVO_FABRICA = 'BJ8300_V0.12.anc';
   URL_FABRICA = 'https://raw.githubusercontent.com/' + REPOSITORIO + '/main/firmware/original/' + ARQUIVO_FABRICA;
   SHA_FABRICA = '4952585480cab69c035804e748e512405763abedee966e795b25885e303cf52d';
-  VERSAO_CABO_ANTIGA = 'V3.7T';  // a última release com o cabo a 57600 (a v154; da v157 em diante ele é mais rápido)
 
   COL_NOME = 1;
   COL_RX = 2;
@@ -446,8 +457,14 @@ begin
         Fim := fCancelado
       else if E is EFalha then
         Fim := fFalha
-      else if (E is ESemRadio) or (E is ENaoTempra) then
+      else if E is ESemRadio then
         Fim := fSemRadio
+      else if E is EIncompativel then
+      begin
+        Fim := fIncompativel;
+        Motivo := EIncompativel(E).Motivo;
+        VersaoRadio := EIncompativel(E).Versao;
+      end
       else if E is EConflito then
         Fim := fConflito;
     end;
@@ -470,13 +487,8 @@ begin
   Result := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'TempraLink\firmware');
 end;
 
-// a versão do nome do arquivo: BJ8300_BANK_v3.7T.anc -> 3.7T
-function VersaoDoNome(const Arquivo: string): string;
-begin
-  Result := Copy(TPath.GetFileNameWithoutExtension(Arquivo), Length(PREFIXO_FIRMWARE) + 1, MaxInt);
-end;
-
-// O .anc mais novo ao lado do programa (na raiz do repositório e na firmware\releases dele), para abrir já escolhido.
+// O .anc mais novo ao lado do programa (na raiz do repositório e na firmware\releases dele) com que este Tempra Link
+// trabalha, para abrir já escolhido.
 function AncMaisNovo: string;
 var
   Pasta, Arquivo: string;
@@ -485,7 +497,8 @@ begin
   for Pasta in [ExtractFilePath(ParamStr(0)), ExtractFilePath(ParamStr(0)) + 'firmware\releases\'] do
     if TDirectory.Exists(Pasta) then
       for Arquivo in TDirectory.GetFiles(Pasta, PREFIXO_FIRMWARE + '*.anc') do
-        if (Result = '') or (ComparaVersoes(VersaoDoNome(Arquivo), VersaoDoNome(Result)) > 0) then
+        if FAIXA.Contem(VersaoDoArquivo(Arquivo, PREFIXO_FIRMWARE)) and ((Result = '') or
+           (ComparaVersoes(VersaoDoArquivo(Arquivo, PREFIXO_FIRMWARE), VersaoDoArquivo(Result, PREFIXO_FIRMWARE)) > 0)) then
           Result := Arquivo;
 end;
 
@@ -558,10 +571,12 @@ begin
   ItemColar.Caption := Tr('Colar', 'Paste') + #9'Ctrl+V';
   ItemApagar.Caption := Tr('Apagar', 'Delete') + #9'Del';
   ItemApagar.OnClick := BotaoApagarCanalClick;
-  LabelVazio.Caption := Tr('Nenhum rádio lido ainda.'#13#10#13#10'Ligue o rádio normalmente, com o firmware TEMPRA (V3.7T ' +
-                           'ou mais novo), conecte o cabo e clique em Ler do rádio. Ou abra um backup, na página Backup.',
-                           'No radio read yet.'#13#10#13#10'Turn the radio on normally, with the TEMPRA firmware (V3.7T ' +
-                           'or newer), connect the cable and click Read from radio. Or open a backup, on the Backup page.');
+  LabelVazio.Caption := Tr('Nenhum rádio lido ainda.'#13#10#13#10'Ligue o rádio normalmente, conecte o cabo e clique em Ler ' +
+                           'do rádio: o Tempra Link confere o firmware dele e, se não for um com que ele trabalha, ' +
+                           'oferece o certo. Ou abra um backup, na página Backup.',
+                           'No radio read yet.'#13#10#13#10'Turn the radio on normally, connect the cable and click Read ' +
+                           'from radio: Tempra Link checks its firmware and, if it is not one it works with, offers the ' +
+                           'right one. Or open a backup, on the Backup page.');
   Grade.ColCount := Length(COLUNAS);
   for I := 0 to High(COLUNAS) do
   begin
@@ -698,12 +713,12 @@ begin
   LabelLogoInfo.Caption := Tr('Escolha uma imagem, ou leia o logo que está no rádio.',
                               'Choose an image, or read the logo that is on the radio.');
   LabelLogoPassos.Caption := Tr(
-    'Ler do rádio traz o logo que está nele (160 x 138), para ver ou salvar em PNG. Gravar o logo pelo cabo depende do ' +
-    'firmware: a V3.7T ainda não grava, e o Tempra Link confere lendo de volta e avisa. Imagens de 160 x 138 vão como ' +
-    'estão; as outras se ajustam.',
-    'Read from radio brings the logo it has (160 x 138), to view or save as PNG. Writing the logo over the cable ' +
-    'depends on the firmware: V3.7T does not write it yet, and Tempra Link checks by reading back and says so. ' +
-    '160 x 138 images go as they are; others are fitted.');
+    'Ler do rádio traz o logo que está nele (160 x 138), para ver ou salvar em PNG. O firmware TEMPRA ainda não grava ' +
+    'o logo pelo cabo: o Tempra Link confere lendo de volta e avisa. Imagens de 160 x 138 vão como estão; as outras se ' +
+    'ajustam.',
+    'Read from radio brings the logo it has (160 x 138), to view or save as PNG. The TEMPRA firmware does not write ' +
+    'the logo over the cable yet: Tempra Link checks by reading back and says so. 160 x 138 images go as they are; ' +
+    'others are fitted.');
   DialogoImagem.Filter := Tr('Imagens|*.png;*.jpg;*.jpeg;*.bmp;*.gif|Todos os arquivos (*.*)|*.*',
                              'Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*');
   DialogoSalvar.Filter := 'PNG (*.png)|*.png';
@@ -760,16 +775,16 @@ begin
     'the voltage). With the cable plugged in, the microphone and speaker may become the plug''s: this was not tested ' +
     'on the BJ.');
   LabelControleNota.Caption := Tr(
-    'Com o rádio ligado normalmente (firmware v159 ou mais novo), Conectar liga o controle remoto; pelo cabo, a tela ' +
+    'Com o rádio ligado normalmente, Conectar liga o controle remoto; pelo cabo, a tela ' +
     'do rádio vem junto e daí em diante muda com ela. As teclas daqui ficam apertadas no rádio enquanto o botão do ' +
     'mouse está apertado nelas: segurar 1 s é o toque longo. O PTT transmite enquanto estiver apertado, e o TX TIMEOUT ' +
     'do rádio vale também. Se o PC parar de mandar por 1 s, o rádio solta a tecla e o PTT sozinho. Com a tela do rádio ' +
-    'apagada (firmware v164), que poupa a bateria, uma tecla dele a acende.',
-    'With the radio on normally (firmware v159 or newer), Connect starts the remote control; over the cable, the radio ' +
+    'apagada, que poupa a bateria, uma tecla dele a acende.',
+    'With the radio on normally, Connect starts the remote control; over the cable, the radio ' +
     'screen comes along and from then on changes with it. The keys here stay pressed on the radio while the mouse ' +
     'button is pressed on them: holding 1 s is the long press. PTT transmits while pressed, and the radio''s TX TIMEOUT ' +
     'also applies. If the PC stops sending for 1 s, the radio releases the key and the PTT by itself. With the radio ' +
-    'screen turned off (firmware v164), which saves battery, a key on the radio turns it on.');
+    'screen turned off, which saves battery, a key on the radio turns it on.');
   LabelRemoto.Caption := '';
   LabelTelaRadio.Caption := Tr('Tela do rádio', 'Radio screen');
   FChaveTela := TChave.Create(Self);
@@ -845,6 +860,7 @@ begin
   MostraMemoria;
   MostraVersoes;
   JanelaViva := True;
+  ApagaAntigo(ParamStr(0));   // o que a atualização do Tempra Link deixou
   ProcuraRelease;
 end;
 
@@ -2370,6 +2386,7 @@ begin
   BotaoGravar.Enabled := PeloCabo and (FAnc.Claro <> nil);
   BotaoVerificar.Enabled := Livre;
   BotaoBaixar.Enabled := PeloCabo and (FRelease.Url <> '');
+  BotaoPrograma.Enabled := Livre and (FPrograma.Url <> '') and (ComparaVersoes(FPrograma.Versao, VERSAO_TEMPRA_LINK) > 0);
   BotaoFabrica.Enabled := PeloCabo;
   BotaoCancelar.Visible := not Livre and not (FAcao in [acProcurar, acRemoto]);
   Barra.Visible := not Livre and (FAcao <> acRemoto);
@@ -2477,8 +2494,8 @@ begin
   FAcao := Acao;
   Barra.Position := 0;
   // o remoto abre o transporte ele mesmo, e de novo depois de uma queda; a gravação do firmware abre a serial do jeito
-  // dela; o download não usa o rádio; e o Verificar sem porta só pergunta ao GitHub
-  if (Acao in [acProcurar, acRemoto, acBaixar, acFirmware]) or (Escolhida < 0) then
+  // dela; os downloads não usam o rádio; e o Verificar sem porta só pergunta ao GitHub
+  if (Acao in [acProcurar, acRemoto, acBaixar, acFirmware, acPrograma]) or (Escolhida < 0) then
     FTarefa := TTarefa.Create(nil, Corpo)
   else
     FTarefa := TTarefa.Create(AbreTransporte(), Corpo);
@@ -2984,7 +3001,9 @@ begin
                                    'hardware batem.',
                                    'BJ-8300 firmware %s%s, checked: the size, the KDH layer, the CRCs and the hardware ' +
                                    'tag match.'),
-                                [FAnc.Versao, IfThen(FAnc.Fabrica, Tr(' (o de fábrica)', ' (the factory one)'), '')]) +
+                                [FAnc.Versao, IfThen(FAnc.Fabrica, Tr(' (o de fábrica)', ' (the factory one)'),
+                                 IfThen(FAIXA.Contem(FAnc.Versao), '', Tr(', com que este Tempra Link não trabalha',
+                                                                          ', which this Tempra Link does not work with')))]) +
                          #13#10'SHA-256: ' + Sha256De(Dados);
   end
   else
@@ -2999,7 +3018,7 @@ end;
 // Grava o arquivo conferido (FAnc) pela porta do cabo, com o rádio no modo UPDATE.
 procedure TFormPrincipal.GravaFirmware;
 var
-  Nome: string;
+  Nome, Aviso: string;
   A: TAnc;
   G: TGravadorBJ;
   Progresso_: TProc<Integer, Integer>;
@@ -3012,6 +3031,17 @@ begin
              'Choose the cable port at the top: firmware only flashes over the cable.'));
     Exit;
   end;
+  Aviso := '';
+  if FAnc.Fabrica then
+    Aviso := #13#10#13#10 + Tr('É o firmware de fábrica: com ele, o Tempra Link deixa de falar com o rádio (os canais se ' +
+                               'editam pelo CHIRP), até gravar de novo o TEMPRA.',
+                               'This is the factory firmware: with it, Tempra Link no longer talks to the radio ' +
+                               '(channels are edited with CHIRP), until TEMPRA is flashed again.')
+  else if not FAIXA.Contem(FAnc.Versao) then
+    Aviso := #13#10#13#10 + Format(Tr('Este Tempra Link não trabalha com a %s: com ela no rádio, ele não lê nem grava os ' +
+                                      'canais e os ajustes.',
+                                      'This Tempra Link does not work with %s: with it on the radio, it does not read ' +
+                                      'or write the channels and settings.'), [FAnc.Versao]);
   if not Confirma(Format(Tr(
        'Gravar o firmware %s no rádio pela %s?'#13#10#13#10 +
        'Antes de clicar em Sim, desligue o rádio e ligue-o segurando o PTT2 e o atalho, até aparecer UPDATE na tela. ' +
@@ -3019,12 +3049,7 @@ begin
        'Flash firmware %s to the radio on %s?'#13#10#13#10 +
        'Before clicking Yes, turn the radio off and turn it on holding PTT2 and the shortcut key, until UPDATE shows ' +
        'on screen. Then do not turn the radio off or pull the cable until the log says it finished.'),
-       [FAnc.Versao, Porta]) +
-       IfThen(FAnc.Fabrica, #13#10#13#10 + Tr('É o firmware de fábrica: com ele, o Tempra Link deixa de falar com o ' +
-                                             'rádio (os canais se editam pelo CHIRP), até gravar de novo o TEMPRA.',
-                                             'This is the factory firmware: with it, Tempra Link no longer talks to ' +
-                                             'the radio (channels are edited with CHIRP), until TEMPRA is flashed ' +
-                                             'again.'), '')) then
+       [FAnc.Versao, Porta]) + Aviso) then
     Exit;
   Nome := FPortas[Escolhida].Nome;
   A := FAnc;
@@ -3075,96 +3100,178 @@ begin
     end);
 end;
 
-// Pergunta ao GitHub, em segundo plano, qual é o último release; a resposta volta para a janela.
+// Pergunta ao GitHub, em segundo plano, os releases (o firmware e o Tempra Link); a resposta volta para a janela.
 procedure TFormPrincipal.ProcuraRelease;
 begin
   TThread.CreateAnonymousThread(
     procedure
     var
-      R: TRelease;
+      P: TProcura;
       Erro: string;
       Volta: TThreadProcedure;
     begin
-      Erro := UltimoRelease(REPOSITORIO, PREFIXO_FIRMWARE, '.anc', R);
+      Erro := ProcuraReleases(REPOSITORIO, FAIXA, PREFIXO_FIRMWARE, '.anc', PREFIXO_PROGRAMA, P);
       // direto na fila, sem passar pela janela, que pode já ter fechado
       Volta :=
         procedure
         begin
           if JanelaViva then
-            MostraRelease(R, Erro);
+            MostraRelease(P, Erro);
         end;
       TThread.Queue(nil, Volta);
     end).Start;
 end;
 
-procedure TFormPrincipal.MostraRelease(const R: TRelease; const Erro: string);
+procedure TFormPrincipal.MostraRelease(const P: TProcura; const Erro: string);
 begin
-  FRelease := R;
+  FRelease := P.Firmware;
+  FMaisNovo := P.MaisNovo;
+  FPrograma := P.Programa;
   FErroRelease := Erro;
-  if Erro = '' then
-    Registra(Format(Tr('O firmware mais novo no GitHub é a %s.', 'The newest firmware on GitHub is %s.'), [R.Tag]))
+  FProcurou := True;
+  if Erro <> '' then
+    Registra('GitHub: ' + Erro)
+  else if FRelease.Url <> '' then
+    Registra(Format(Tr('O firmware mais novo do GitHub com que este Tempra Link trabalha é a V%s.',
+                       'The newest firmware on GitHub this Tempra Link works with is V%s.'), [FRelease.Versao]))
   else
-    Registra('GitHub: ' + Erro);
+    Registra(Tr('No GitHub não há firmware com que este Tempra Link trabalhe.',
+                'On GitHub there is no firmware this Tempra Link works with.'));
   MostraVersoes;
   Habilita;
+  // o Tempra Link novo: a pergunta uma vez por abertura, com a janela livre (senão, fica o botão na página Firmware)
+  if not FOfereceu and (FTarefa = nil) and (FPrograma.Url <> '') and
+     (ComparaVersoes(FPrograma.Versao, VERSAO_TEMPRA_LINK) > 0) then
+  begin
+    FOfereceu := True;
+    if Confirma(Format(Tr('Existe uma versão nova do Tempra Link: a %s (esta é a %s). Atualizar agora?'#13#10#13#10 +
+                          'Ele baixa a nova, confere, põe no lugar desta e abre de novo.',
+                          'There is a new version of Tempra Link: %s (this one is %s). Update now?'#13#10#13#10 +
+                          'It downloads the new one, checks it, puts it in place of this one and opens again.'),
+                       [FPrograma.Versao, VERSAO_TEMPRA_LINK])) then
+      AtualizaPrograma;
+  end;
 end;
 
-// O firmware que o rádio mostrou na conversa pelo cabo. A versão em si o cabo não diz: diz se é o de fábrica ou o
-// TEMPRA, e a velocidade em que ele respondeu dá a faixa (Transporte.BAUDS_CABO).
-procedure TFormPrincipal.AnotaRadio(C: TCaboBJ);
+// O firmware que o rádio mostrou na última conversa (o de fábrica, um TEMPRA de antes da v170, que não diz a versão,
+// ou o TEMPRA e a versão dele), e se este Tempra Link trabalha com ele.
+procedure TFormPrincipal.AnotaRadio(Firmware: TFirmwareNoRadio; const Versao: string);
 begin
-  if C.Firmware = fnNenhum then
+  if Firmware = fnNenhum then
     Exit;
-  FRadioFirmware := C.Firmware;
-  FRadioVelocidade := C.Velocidade;
-  if C.Firmware = fnFabrica then
+  FRadioServe := (Firmware = fnTempra) and FAIXA.Contem(Versao);
+  if Firmware = fnFabrica then
     FNoRadio := Tr('o firmware de fábrica', 'the factory firmware')
+  else if Versao = '' then
+    FNoRadio := Tr('um TEMPRA antigo, que não diz a versão', 'an old TEMPRA that does not report its version')
   else
-    case C.Velocidade of
-      BAUD_CABO_ANTIGA:
-        FNoRadio := Format(Tr('o TEMPRA %s ou anterior (o cabo responde a 57600)',
-                              'TEMPRA %s or older (the cable answers at 57600)'), [VERSAO_CABO_ANTIGA]);
-      BAUD_CABO_V157:
-        FNoRadio := Tr('um TEMPRA de teste, da v157 à v159 (o cabo responde a 115200)',
-                       'a TEMPRA test build, v157 to v159 (the cable answers at 115200)');
-      BAUD_CABO:
-        FNoRadio := Format(Tr('um TEMPRA mais novo que a %s (o cabo responde a 460800)',
-                              'a TEMPRA newer than %s (the cable answers at 460800)'), [VERSAO_CABO_ANTIGA]);
-    else
-      FNoRadio := Tr('o TEMPRA (pelo Bluetooth não se sabe a faixa da versão)',
-                     'TEMPRA (over Bluetooth the version range is unknown)');
-    end;
+    FNoRadio := 'TEMPRA ' + Versao;
   MostraVersoes;
 end;
 
 procedure TFormPrincipal.MostraVersoes;
 var
   S: string;
+  Novo: Boolean;
 begin
   if FNoRadio = '' then
     S := Tr('No rádio: ainda não visto. Com ele ligado normalmente, clique em Verificar.',
             'On the radio: not seen yet. With it turned on normally, click Check.')
   else
-    S := Tr('No rádio: ', 'On the radio: ') + FNoRadio + '.';
-  if FRelease.Tag <> '' then
-  begin
-    S := S + #13#10 + Format(Tr('No GitHub: a mais nova é a %s.', 'On GitHub: the newest is %s.'), [FRelease.Tag]);
-    if FRadioFirmware = fnFabrica then
-      S := S + ' ' + Tr('Com ela, o rádio passa a falar com o Tempra Link.',
-                        'With it, the radio starts talking to Tempra Link.')
-    else if (FRadioFirmware = fnTempra) and (FRadioVelocidade = BAUD_CABO_ANTIGA) and
-            (ComparaVersoes(FRelease.Tag, VERSAO_CABO_ANTIGA) > 0) then
-      S := S + ' ' + Tr('É mais nova que a do rádio.', 'It is newer than the radio''s.');
-    BotaoBaixar.Caption := Format(Tr('Baixar e gravar a %s', 'Download and flash %s'), [FRelease.Tag]);
-  end
+    S := Tr('No rádio: ', 'On the radio: ') + FNoRadio +
+         IfThen(FRadioServe, Tr(', com que este Tempra Link trabalha.', ', which this Tempra Link works with.'),
+                Tr(', com que este Tempra Link não trabalha.', ', which this Tempra Link does not work with.'));
+  if FRelease.Url <> '' then
+    S := S + #13#10 + Format(Tr('No GitHub: a V%s, com que ele trabalha.', 'On GitHub: V%s, which it works with.'),
+                             [FRelease.Versao])
   else if FErroRelease <> '' then
     S := S + #13#10 + Tr('No GitHub: ', 'On GitHub: ') + FErroRelease
+  else if FProcurou then
+    S := S + #13#10 + Tr('No GitHub: nenhum firmware com que ele trabalhe.', 'On GitHub: no firmware it works with.')
   else
-    S := S + #13#10 + Tr('No GitHub: procurando o release mais novo...', 'On GitHub: looking for the newest release...');
-  if FRadioFirmware <> fnNenhum then
-    S := S + #13#10 + Tr('A versão exata do rádio aparece nele, em SYSTEM > VERSION.',
-                         'The radio''s exact version shows on it, in SYSTEM > VERSION.');
+    S := S + #13#10 + Tr('No GitHub: procurando...', 'On GitHub: looking...');
+  if (FMaisNovo.Url <> '') and (ComparaVersoes(FMaisNovo.Versao, FAIXA.Maxima) > 0) then
+    S := S + ' ' + Format(Tr('A V%s, mais nova, pede um Tempra Link mais novo.', 'V%s, newer, needs a newer Tempra Link.'),
+                          [FMaisNovo.Versao]);
   LabelVersoes.Caption := S;
+  if FRelease.Url <> '' then
+    BotaoBaixar.Caption := Format(Tr('Baixar e gravar a V%s', 'Download and flash V%s'), [FRelease.Versao])
+  else
+    BotaoBaixar.Caption := Tr('Baixar e gravar', 'Download and flash');
+  // o próprio Tempra Link
+  Novo := (FPrograma.Url <> '') and (ComparaVersoes(FPrograma.Versao, VERSAO_TEMPRA_LINK) > 0);
+  S := Format(Tr('Este Tempra Link: %s.', 'This Tempra Link: %s.'), [VERSAO_TEMPRA_LINK]);
+  if Novo then
+    S := S + ' ' + Format(Tr('No GitHub há a %s.', 'GitHub has %s.'), [FPrograma.Versao])
+  else if FPrograma.Url <> '' then
+    S := S + ' ' + Tr('É o mais novo do GitHub.', 'It is the newest on GitHub.');
+  LabelPrograma.Caption := S;
+  if Novo then
+    BotaoPrograma.Caption := Format(Tr('Atualizar o Tempra Link para a %s', 'Update Tempra Link to %s'), [FPrograma.Versao])
+  else
+    BotaoPrograma.Caption := Tr('Atualizar o Tempra Link', 'Update Tempra Link');
+end;
+
+// O rádio está com um firmware com que este Tempra Link não trabalha: oferece o certo. Para o mais novo que ele, o
+// Tempra Link novo; para os outros (o de fábrica, o que não diz a versão, o antigo), o firmware do GitHub.
+procedure TFormPrincipal.OfereceFirmware(Motivo: TIncompativel; const Msg: string);
+begin
+  if Motivo = inNova then
+  begin
+    if (FPrograma.Url <> '') and (ComparaVersoes(FPrograma.Versao, VERSAO_TEMPRA_LINK) > 0) then
+    begin
+      if Confirma(Msg + #13#10#13#10 + Format(Tr('Atualizar o Tempra Link para a %s agora?',
+                                                 'Update Tempra Link to %s now?'), [FPrograma.Versao])) then
+        AtualizaPrograma;
+    end
+    else
+      Avisa(Msg + ' ' + Tr('Baixe o Tempra Link mais novo na página de releases do projeto, no GitHub.',
+                           'Download the newest Tempra Link on the project''s releases page, on GitHub.'));
+    Exit;
+  end;
+  Mostra(CARTAO_FIRMWARE);
+  if FRelease.Url <> '' then
+  begin
+    if Confirma(Msg + #13#10#13#10 + Format(Tr('Baixar do GitHub a V%s, com que ele trabalha, e gravá-la agora?',
+                                               'Download V%s, which it works with, from GitHub and flash it now?'),
+                                           [FRelease.Versao])) then
+      BotaoBaixarClick(nil);
+  end
+  else if FProcurou then
+    Avisa(Msg + ' ' + Tr('No GitHub não há firmware com que ele trabalhe: escolha o arquivo nesta página.',
+                         'On GitHub there is no firmware it works with: choose the file on this page.'))
+  else
+    Avisa(Msg + ' ' + Tr('Clique em Verificar para procurar no GitHub o firmware com que ele trabalha.',
+                         'Click Check to look on GitHub for the firmware it works with.'));
+end;
+
+// Baixa o Tempra Link mais novo, conferido pelo tamanho e pelo SHA-256 do GitHub, e o põe no lugar deste; no fim
+// (Terminou), abre o novo e fecha este.
+procedure TFormPrincipal.AtualizaPrograma;
+var
+  P: TRelease;
+begin
+  if (FTarefa <> nil) or (FPrograma.Url = '') or not DescartaMudancas then
+    Exit;
+  P := FPrograma;
+  Registra(Format(Tr('Baixando o Tempra Link %s...', 'Downloading Tempra Link %s...'), [P.Versao]));
+  Inicia(acPrograma,
+    procedure(T: ITransporte)
+    var
+      Dados: TBytes;
+      Erro: string;
+    begin
+      Erro := Atualizacao.Baixa(P.Url, P.Tamanho, P.Sha256, Dados);
+      if Erro = '' then
+        Erro := TrocaPrograma(ParamStr(0), Dados);
+      if Erro <> '' then
+        raise EFalha.Create(Erro);
+    end);
+end;
+
+procedure TFormPrincipal.BotaoProgramaClick(Sender: TObject);
+begin
+  AtualizaPrograma;
 end;
 
 procedure TFormPrincipal.BotaoEscolherClick(Sender: TObject);
@@ -3180,12 +3287,14 @@ begin
   GravaFirmware;
 end;
 
-// Pergunta ao GitHub de novo e, com a porta escolhida, conversa com o rádio pelo cabo para ver o firmware dele.
+// Pergunta ao GitHub de novo e, com a porta escolhida, conversa com o rádio para ver o firmware dele: o que não serve
+// a este Tempra Link termina em fIncompativel, e o Terminou oferece o certo (o GitHub já respondeu antes).
 procedure TFormPrincipal.BotaoVerificarClick(Sender: TObject);
 var
   C: TCaboBJ;
 begin
   FErroRelease := '';
+  FProcurou := False;
   FRelease := Default(TRelease);
   MostraVersoes;
   C := nil;
@@ -3197,22 +3306,21 @@ begin
   Inicia(acVerificar,
     procedure(T: ITransporte)
     var
-      R: TRelease;
+      P: TProcura;
       Erro: string;
     begin
+      Erro := ProcuraReleases(REPOSITORIO, FAIXA, PREFIXO_FIRMWARE, '.anc', PREFIXO_PROGRAMA, P);
+      NaJanela(
+        procedure
+        begin
+          MostraRelease(P, Erro);
+        end);
       if C <> nil then
         try
           C.Sessao(T, procedure begin end);
         except
-          on ENaoTempra do ;  // o de fábrica: o C.Firmware já diz
           on ESemRadio do ;   // o Terminou diz que ele não respondeu
         end;
-      Erro := UltimoRelease(REPOSITORIO, PREFIXO_FIRMWARE, '.anc', R);
-      NaJanela(
-        procedure
-        begin
-          MostraRelease(R, Erro);
-        end);
     end);
 end;
 
@@ -3242,10 +3350,11 @@ procedure TFormPrincipal.Terminou(Sender: TObject);
 var
   T: TTarefa;
   Arq: string;
-  Gravar: Boolean;
+  Gravar, Abrir: Boolean;
 begin
   T := Sender as TTarefa;
   Gravar := False;
+  Abrir := False;
   case FAcao of
     acLer:
       if T.Fim = fOk then
@@ -3289,6 +3398,8 @@ begin
                                             'power-up.'),
                         Tr('Gravado e conferido.', 'Written and checked.')));
       end
+      else if T.Fim = fIncompativel then
+        Registra(T.Mensagem)
       else if T.Fim = fConflito then
         Registra(T.Mensagem + ' ' + Tr('Para não perder as mudanças, use antes Salvar backup.',
                                        'To keep the changes, use Save backup first.'))
@@ -3352,7 +3463,7 @@ begin
       begin
         if (FCabo <> nil) and (FCabo.Firmware = fnNenhum) then
         begin
-          FRadioFirmware := fnNenhum;
+          FRadioServe := False;
           FNoRadio := Tr('não respondeu (ligue-o normalmente, fora do modo UPDATE, e confira o cabo e a porta)',
                          'did not answer (turn it on normally, not in UPDATE mode, and check the cable and the port)');
         end;
@@ -3369,6 +3480,15 @@ begin
       end
       else
         Registra(T.Mensagem);
+    acPrograma:
+      if T.Fim = fOk then
+      begin
+        Registra(Format(Tr('Tempra Link %s no lugar deste. Abrindo...', 'Tempra Link %s in place of this one. ' +
+                           'Opening...'), [FPrograma.Versao]));
+        Abrir := True;
+      end
+      else
+        Registra(T.Mensagem);
     acFirmware:
       case T.Fim of
         fOk:
@@ -3381,7 +3501,7 @@ begin
                                                    'With the factory one, Tempra Link does not talk to the radio: ' +
                                                    'channels are edited with CHIRP, until the TEMPRA firmware is ' +
                                                    'flashed again.'), ''));
-            FRadioFirmware := fnNenhum;
+            FRadioServe := False;
             FNoRadio := '';
             MostraVersoes;
           end;
@@ -3402,8 +3522,15 @@ begin
   end;
   if T.Fim in [fFalha, fSemRadio, fConflito, fErro] then
     Application.MessageBox(PChar(LabelEstado.Caption), PChar(Caption), MB_OK or MB_ICONWARNING);
-  if FCabo <> nil then
-    AnotaRadio(FCabo);
+  if T.Fim = fIncompativel then
+  begin
+    if T.Motivo = inFabrica then
+      AnotaRadio(fnFabrica, '')
+    else
+      AnotaRadio(fnTempra, T.VersaoRadio);
+  end
+  else if FCabo <> nil then
+    AnotaRadio(FCabo.Firmware, FCabo.Versao);
   FreeAndNil(FCabo);
   FreeAndNil(FRemoto);
   FreeAndNil(FGravador);
@@ -3411,8 +3538,16 @@ begin
   Habilita;
   if FFechar then
     PostMessage(Handle, WM_CLOSE, 0, 0)
+  else if Abrir then
+  begin
+    // o novo no lugar: ele abre, e este sai sem perguntar de novo (o DescartaMudancas já perguntou)
+    ShellExecute(0, nil, PChar(ParamStr(0)), nil, nil, SW_SHOWNORMAL);
+    Application.Terminate;
+  end
   else if Gravar then
-    GravaFirmware;
+    GravaFirmware
+  else if T.Fim = fIncompativel then
+    OfereceFirmware(T.Motivo, T.Mensagem);
 end;
 
 procedure TFormPrincipal.FormCloseQuery(Sender: TObject; var CanClose: Boolean);

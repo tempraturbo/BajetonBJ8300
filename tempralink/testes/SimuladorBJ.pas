@@ -26,6 +26,7 @@ type
   public
     Memoria: TBytes;              // o chip de dados, 1 MB
     Fabrica: Boolean;             // o firmware de fábrica: sem o estendido
+    Versao: string;               // a que o TEMPRA responde no VERSAO_CABO (v170; vazia nos de antes, que leem o chip)
     GravaFora: Boolean;           // um TEMPRA que grava pelo estendido em qualquer lugar (o logo)
     Limite: Cardinal;             // até onde o estendido grava (um firmware antigo grava menos)
     Lixo: Boolean;                // chegou byte fora do protocolo
@@ -74,6 +75,7 @@ begin
   FillChar(Memoria[0], Length(Memoria), $FF);
   Gravados := TList<Cardinal>.Create;
   Limite := ESTENDIDO_FIM;
+  Versao := FAIXA.Maxima;
   Serial := BAUD_CABO;
   Porta := BAUD_CABO;
   RemTecla := -1;
@@ -245,8 +247,16 @@ begin
             else if Fabrica then
               // o de fábrica ecoa o tamanho com o bit 7 e manda esse tanto
               Manda([Ord('R'), Byte(Endereco shr 8), Byte(Endereco), Tam] + Copy(Memoria, Endereco and $FFFF, Tam))
+            else if (Versao <> '') and (Tam = $80 or VERSAO_CABO shr 16) then
+            begin
+              // v170: a versão, e o resto do bloco com o que o pacote tinha (aqui, zeros)
+              Dados := TEncoding.ASCII.GetBytes('TEMPRA ' + Versao);
+              SetLength(Dados, BLOCO);
+              Manda([Ord('R'), Byte(Endereco shr 8), Byte(Endereco), BLOCO] + Dados);
+            end
             else
-              Manda([Ord('R'), Byte(Endereco shr 8), Byte(Endereco), BLOCO] + Copy(Memoria, Endereco, BLOCO));
+              // o chip de 1 MB: o endereço dá a volta
+              Manda([Ord('R'), Byte(Endereco shr 8), Byte(Endereco), BLOCO] + Copy(Memoria, Endereco and $FFFFF, BLOCO));
           end
           else if Letra = Ord('W') then
           begin
