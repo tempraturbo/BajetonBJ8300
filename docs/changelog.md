@@ -5,6 +5,17 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Tempra Link — Nov 19 — the messages for when GitHub does not answer and when the radio does not answer
+
+- With a firmware outside the range and the GitHub search failing (no internet, or GitHub refusing), the refusal box
+  shows the error and suggests Check or the file on the Firmware page, instead of saying GitHub has no firmware it
+  works with.
+- A radio that did not answer Check shows on the Firmware page as "did not answer (...)", without the ", which this
+  Tempra Link does not work with" that used to be tacked on.
+
+Tested on the PC: the program's tests. Both messages only show while talking to a radio over the cable, and were not
+seen on screen.
+
 ## Tempra Link — Nov 19 — the radio's version, updating itself and the remembered radios (not tested on the radio)
 
 - **The radio's version:** every session, over the cable or Bluetooth, reads the firmware version and checks it

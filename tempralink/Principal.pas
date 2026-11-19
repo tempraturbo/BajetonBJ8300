@@ -265,8 +265,8 @@ type
     FProcurou: Boolean;         // o GitHub já respondeu, ou o FErroRelease diz por que não
     FErroRelease: string;
     FOfereceu: Boolean;         // a pergunta do Tempra Link novo já se fez desde que a janela abriu
-    FNoRadio: string;           // o firmware que o rádio mostrou na última conversa ('' = ainda não visto)
-    FRadioServe: Boolean;       // e este Tempra Link trabalha com ele
+    FNoRadio: string;           // o firmware que o rádio mostrou na última conversa e se este Tempra Link trabalha com
+                                // ele, ou que ele não respondeu ('' = ainda não visto)
     FBaixado: string;           // onde o download deixa o arquivo
     // a edição na célula
     FEditor: TEdit;
@@ -3159,13 +3159,15 @@ procedure TFormPrincipal.AnotaRadio(Firmware: TFirmwareNoRadio; const Versao: st
 begin
   if Firmware = fnNenhum then
     Exit;
-  FRadioServe := (Firmware = fnTempra) and FAIXA.Contem(Versao);
   if Firmware = fnFabrica then
     FNoRadio := Tr('o firmware de fábrica', 'the factory firmware')
   else if Versao = '' then
     FNoRadio := Tr('um TEMPRA antigo, que não diz a versão', 'an old TEMPRA that does not report its version')
   else
     FNoRadio := 'TEMPRA ' + Versao;
+  FNoRadio := FNoRadio + IfThen((Firmware = fnTempra) and FAIXA.Contem(Versao),
+                                Tr(', com que este Tempra Link trabalha', ', which this Tempra Link works with'),
+                                Tr(', com que este Tempra Link não trabalha', ', which this Tempra Link does not work with'));
   MostraVersoes;
 end;
 
@@ -3178,9 +3180,7 @@ begin
     S := Tr('No rádio: ainda não visto. Com ele ligado normalmente, clique em Verificar.',
             'On the radio: not seen yet. With it turned on normally, click Check.')
   else
-    S := Tr('No rádio: ', 'On the radio: ') + FNoRadio +
-         IfThen(FRadioServe, Tr(', com que este Tempra Link trabalha.', ', which this Tempra Link works with.'),
-                Tr(', com que este Tempra Link não trabalha.', ', which this Tempra Link does not work with.'));
+    S := Tr('No rádio: ', 'On the radio: ') + FNoRadio + '.';
   if FRelease.Url <> '' then
     S := S + #13#10 + Format(Tr('No GitHub: a V%s, com que ele trabalha.', 'On GitHub: V%s, which it works with.'),
                              [FRelease.Versao])
@@ -3237,6 +3237,11 @@ begin
                                            [FRelease.Versao])) then
       BotaoBaixarClick(nil);
   end
+  else if FErroRelease <> '' then
+    Avisa(Msg + #13#10#13#10 + Tr('Não deu para procurar no GitHub o firmware com que ele trabalha. ',
+                                  'Could not look on GitHub for the firmware it works with. ') + FErroRelease +
+          #13#10#13#10 + Tr('Clique em Verificar para tentar de novo, ou escolha o arquivo nesta página.',
+                            'Click Check to try again, or choose the file on this page.'))
   else if FProcurou then
     Avisa(Msg + ' ' + Tr('No GitHub não há firmware com que ele trabalhe: escolha o arquivo nesta página.',
                          'On GitHub there is no firmware it works with: choose the file on this page.'))
@@ -3462,11 +3467,8 @@ begin
     acVerificar:
       begin
         if (FCabo <> nil) and (FCabo.Firmware = fnNenhum) then
-        begin
-          FRadioServe := False;
           FNoRadio := Tr('não respondeu (ligue-o normalmente, fora do modo UPDATE, e confira o cabo e a porta)',
                          'did not answer (turn it on normally, not in UPDATE mode, and check the cable and the port)');
-        end;
         if T.Fim <> fOk then
           Registra(T.Mensagem);
         MostraVersoes;
@@ -3501,7 +3503,6 @@ begin
                                                    'With the factory one, Tempra Link does not talk to the radio: ' +
                                                    'channels are edited with CHIRP, until the TEMPRA firmware is ' +
                                                    'flashed again.'), ''));
-            FRadioServe := False;
             FNoRadio := '';
             MostraVersoes;
           end;

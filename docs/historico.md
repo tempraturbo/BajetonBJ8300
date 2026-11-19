@@ -5,6 +5,17 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Tempra Link — 19/11 — os avisos de quando o GitHub não responde e de quando o rádio não responde
+
+- Com um firmware de fora da faixa e a procura no GitHub com erro (sem internet, ou o GitHub recusando), a caixa da
+  recusa diz o erro e sugere o Verificar ou o arquivo da página Firmware, em vez de dizer que no GitHub não há firmware
+  com que ele trabalhe.
+- O rádio que não respondeu ao Verificar aparece na página Firmware como "não respondeu (...)", sem o ", com que este
+  Tempra Link não trabalha" que vinha emendado.
+
+Testado no PC: os testes do programa. As duas mensagens só aparecem conversando com um rádio pelo cabo, e não foram
+vistas na tela.
+
 ## Tempra Link — 19/11 — a versão do rádio, a atualização sozinha e os rádios lembrados (sem teste no rádio)
 
 - **A versão do rádio:** cada sessão, pelo cabo ou pelo Bluetooth, lê a versão do firmware e a confere contra a faixa
