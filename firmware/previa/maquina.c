@@ -89,12 +89,11 @@ unsigned previa_menu_itens(unsigned g)
     return g < CONTA_DE(menu_previa_itens) ? menu_previa_itens[g] : 0;
 }
 
-/* O menu do radio (v56): as duas tabelas de fabrica, como o motor as mostra (o item de memoria com o
- * titulo que 0x01E3D20E monta; flags so com o tipo, que e o que a tela le delas). */
-static const char *const previa_radio_fm_am[5] = {"MODULATION", "AMMEMCH", "WORK BAND", "FREQUENCY STEP", "LNA"};
-static const char *const previa_radio_ssb[6] = {"MODULATION", "SSBMEMCH", "FREQUENCY STEP", "BANDWIDTH", "LNA",
-                                                "BFO"};
-static const unsigned char previa_radio_tipos[6] = {0, 4, 0, 0, 0, 13};
+/* O menu do radio (v56; v174: as tabelas nossas, com o NAME, o DELETE e o SAVE do CH MEMORY depois do MODE), como o
+ * motor as mostra (flags so com o tipo, que e o que a tela le delas). */
+static const char *const previa_radio_fm_am[7] = {"MODE", "NAME", "DELETE", "SAVE", "BAND", "STEP", "LNA"};
+static const char *const previa_radio_ssb[8] = {"MODE", "NAME", "DELETE", "SAVE", "STEP", "BW", "LNA", "BFO"};
+static const unsigned char previa_radio_tipos[8] = {0, 4, 4, 4, 0, 0, 0, 13};
 
 const char *previa_item_nome(u32 t, unsigned i)
 {

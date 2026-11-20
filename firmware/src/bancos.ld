@@ -92,6 +92,16 @@ MEMORY
     mortos28 (rx) : ORIGIN = 0x01E3C9A8, LENGTH = 40    /* LANGUAGE: o get e o set */
     mortos29 (rx) : ORIGIN = 0x01E3D058, LENGTH = 20    /* SCRAMBLE: o get */
     mortos30 (rx) : ORIGIN = 0x01E3E242, LENGTH = 20    /* Zone Or Channel: o get */
+    /* v173: os corpos das rotinas de fabrica que desenham o radio, trocadas inteiras (montar.py RADIO_B_FUNCOES). */
+    mortos31 (rx) : ORIGIN = 0x01E449C0, LENGTH = 360   /* a frequencia do radio (alinhada a 4: a tabela do radio) */
+    mortos32 (rx) : ORIGIN = 0x01E44B2C, LENGTH = 316   /* o nome da memoria do radio */
+    mortos33 (rx) : ORIGIN = 0x01E44FB4, LENGTH = 216   /* o radio inteiro */
+    mortos34 (rx) : ORIGIN = 0x01E4519C, LENGTH = 208   /* o medidor S do radio */
+    mortos35 (rx) : ORIGIN = 0x01E4907C, LENGTH = 264   /* a frequencia digitada no radio */
+    /* v174: o MEMCH de fabrica (a exibicao, o titulo e o get) e as tabelas velhas do menu do radio */
+    mortos36 (rx) : ORIGIN = 0x01E3D1DA, LENGTH = 170
+    mortos37 (rx) : ORIGIN = 0x01E61168, LENGTH = 140
+    mortos38 (rx) : ORIGIN = 0x01E6137C, LENGTH = 168
 }
 
 SECTIONS
@@ -153,6 +163,14 @@ SECTIONS
     .mortos28 : { *(.mortos28.*) } > mortos28
     .mortos29 : { *(.mortos29.*) } > mortos29
     .mortos30 : { *(.mortos30.*) } > mortos30
+    .mortos31 : { *(.mortos31.*) } > mortos31
+    .mortos32 : { *(.mortos32.*) } > mortos32
+    .mortos33 : { *(.mortos33.*) } > mortos33
+    .mortos34 : { *(.mortos34.*) } > mortos34
+    .mortos35 : { *(.mortos35.*) } > mortos35
+    .mortos36 : { *(.mortos36.*) } > mortos36
+    .mortos37 : { *(.mortos37.*) } > mortos37
+    .mortos38 : { *(.mortos38.*) } > mortos38
 
     /DISCARD/ : { *(.comment) *(.note*) *(.debug*) }
 }

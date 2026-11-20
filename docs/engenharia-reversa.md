@@ -72,7 +72,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | Faixa | Conteúdo |
 |---|---|
 | `0x00000–0x09FFF` | 960 canais de 32 B (até `0x077FF`); em `0x8000` o log dos VFOs de A e B, e em `0x9000` o log dos ajustes ([seção 26](#26-os-ajustes-que-se-perdiam-a-noise-gate-e-a-gravação-no-ok-v100-e-v101)) |
-| `0x0A000–0x0FFFF` | ajustes; `0x0F000–0x0F24F` é calibração de fábrica (potência de TX em `0xF000–0xF0BF`, [seção 20](#20-a-potência-de-tx); ganho do microfone em `0xF210`, [seção 19](#19-o-ganho-do-microfone-e-o-mic-gain-v49); squelch, subtom e cristal, [seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)) |
+| `0x0A000–0x0FFFF` | ajustes; em `0xC010`, `0xC110` e `0xC210` os nomes das memórias do rádio de FM, AM e SSB ([seção 44](#44-as-memórias-do-rádio-de-am-fm-e-ssb-como-os-canais-v173-e-v174)); `0x0F000–0x0F24F` é calibração de fábrica (potência de TX em `0xF000–0xF0BF`, [seção 20](#20-a-potência-de-tx); ganho do microfone em `0xF210`, [seção 19](#19-o-ganho-do-microfone-e-o-mic-gain-v49); squelch, subtom e cristal, [seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)) |
 | `0x10000–0x1AFFF` | **imagem de abertura**: 160×138 em RGB565 little-endian, 44160 B |
 | `0x20000–0x99FFF` | fontes e textos em chinês (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 registros de 60 B que o firmware usa |
@@ -84,8 +84,9 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | **`0xD6000–0xD7FFF`** | **o histórico do APRS RX**: até 62 pacotes, em anel, um cabeçalho por setor (v70; o `0xD7000` desde a v74; o anel desde a v75) |
 | **`0xD8000–0xD9FFF`** | **o histórico do Morse**: o mesmo anel ([seção 36](#36-a-tela-messages-do-morse-v144-a-v148)) |
 | **`0xDA000–0xDAFFF`** | **o ROGER CUSTOM**: as notas que o Tempra Link grava (v164; [seção 39](#39-o-retrato-da-tela-a-tela-apagada-o-roger-custom-e-as-rotinas-mortas-do-menu-v162-a-v165)) |
+| **`0xDB000–0xDBFFF`** | **a cópia do setor dos nomes do rádio** ao trocar um nome (v174; [seção 44](#44-as-memórias-do-rádio-de-am-fm-e-ssb-como-os-canais-v173-e-v174)) |
 | `0xFA000` | 4 KB de uso do firmware |
-| livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xDB000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **316 KB** |
+| livre | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xDC000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **312 KB** |
 
 O firmware **não** mora nesse chip: nenhuma amostra bate com as imagens do `.anc`, nem cruas nem
 decifradas. Ou seja, sobra espaço de **dados** à vontade, mas espaço de **código** continua sendo
@@ -3449,3 +3450,87 @@ espera o silêncio que fecha a sessão (1,5 s). Mudou o que o firmware guarda ou
 o driver mudam junto.
 
 Sem teste no rádio: falta ver a v170 responder, e um firmware de antes (a v169) ler o endereço novo sem nada mudar.
+
+## 44. As memórias do rádio de AM, FM e SSB como os canais (v173 e v174)
+
+Até a v172 o menu do rádio tinha o item de memória de fábrica (`FMMEMCH`, `AMMEMCH`, `SSBMEMCH`): escolhia um número de
+1 a 15 e o OK gravava ali a frequência de agora. Não apagava, não dava nome (só pelo computador) e mostrava os nomes de
+fábrica (`Modulation`, `Work Band`, `Frequency Step`). Desde a v174 o menu do rádio tem o **NAME**, o **DELETE** e o
+**SAVE** do CH MEMORY, nos itens 2 a 4, com as mesmas telas, teclas e avisos, e os outros itens com nome curto:
+
+| Banda | Itens |
+|---|---|
+| FM | MODE, NAME, DELETE, SAVE (o BAND, o STEP e o LNA seguem escondidos, como na fábrica, que no FM mostrava 2) |
+| AM | MODE, NAME, DELETE, SAVE, BAND, STEP, LNA |
+| LSB, USB e CW | MODE, NAME, DELETE, SAVE, STEP, BW, LNA, BFO |
+
+**O espaço (v173).** As cinco rotinas de fábrica que desenham o rádio (o modo de tela 2) eram desvios da tela B que
+voltavam à de fábrica fora do modo 2. Viraram trocas inteiras: um goto na entrada para o gancho em C, e o corpo, da
+instrução depois do goto ao começo da rotina seguinte, vira espaço de código (`montar.py`, `RADIO_B_FUNCOES`):
+
+| Rotina | O que desenha | Corpo livre |
+|---|---|---|
+| `0x01E44FB0` | o rádio inteiro | `.mortos33`, 216 B |
+| `0x01E449BA` | a frequência | `.mortos31`, 360 B (de `0x01E449C0`, alinhado a 4 para a tabela) |
+| `0x01E44B28` | o nome da memória | `.mortos32`, 316 B |
+| `0x01E45198` | o medidor S | `.mortos34`, 208 B |
+| `0x01E49078` | a frequência digitada | `.mortos35`, 264 B |
+
+No desmontado de fábrica os corpos só desenham, na pilha e na memória de vídeo, pelo `janela()` e pelo `envia()` (e os
+auxiliares `0x01E448A4`, `0x01E44920` e `0x01E38988` também); o que gravam fora disso o gancho grava sempre: a banda e a
+faixa do AM (`0x01E44FD6`, `0x01E45020`) e o nível do medidor S (`0x01E451BA`). Nenhuma devolve valor (todas terminam
+no `envia()`), e o `conferir.py` (2j) prova que nada aponta nem desvia para dentro dos corpos.
+
+**As tabelas (v174).** O motor acha a tabela do rádio pela banda em dois lugares, a entrada do menu do rádio
+(`0x01E49000`) e o OK (`0x01E49996`): `r = 0x01E61168` (FM e AM, em `0x01E49026` e `0x01E49A3C`) e `+532` para a do SSB
+(`0x01E4902C` e `0x01E49A46`). No OK, antes de abrir um item de uma delas, ele chama o get do item e, se vier `0xFFFF`,
+mostra a mensagem 62 e não abre; o get das listas nunca devolve isso. A quantidade de itens vem de `0x01E3DE36`
+(`r2 = 5` no AM em `0x01E3DE40`, `r2 = 2` no FM em `0x01E3DE46`, `r0 = 6` no SSB em `0x01E3DE48`), e não da varredura
+até o item zerado (`FUN_01E4A81A`, cujos outros chamadores, `0x01E4B3FE` e `0x01E4C3C4`, contam as tabelas dos menus
+rápidos em `0x01E5E7A0` e `0x01E6066A`). As tabelas novas, `radio_fm_am` (7 itens, no `.mortos31`) e `radio_ssb` (8, no
+`.mortos32`), saem do `tela.c` com `0xFF` e zeros, e o `montar.py` as enche a partir das de fábrica: o item de fábrica
+com o nome curto, ou a lista no molde do MEMCH (o item 1, tipo 4). Os remendos: os dois `imm32` passam a `radio_fm_am`,
+os dois `+532` a `+364` (a distância entre as duas; imediato de 12 bits, o byte 2 e o nibble baixo do byte 3) e a
+contagem 2, 5 e 6 a 4, 7 e 8. Morreram também a exibição, o título e o get do MEMCH de fábrica (`0x01E3D1DA` a
+`0x01E3D284`, `.mortos36`; só as tabelas velhas apontavam para eles) e as duas tabelas velhas (`.mortos37` e `.mortos38`).
+O set do MEMCH (`0x01E3D462`) fica: as listas o chamam.
+
+**As listas.** NAME, DELETE e SAVE são listas como as do CH MEMORY ([seção 32](#32-o-menu-de-canais-ch-memory-v140)):
+tipo 4, flags `0x84`, máximo 960, get `lista_le`, sets `chname_grava`, `delete_grava` e `save_grava`. O `lista_item` dá
+o número do item − 1 quando a tabela aberta é uma das do rádio, o que cai na ordem do CH MEMORY (CH NAME, DELETE, SAVE),
+e só a origem muda: as 15 memórias da banda no lugar dos 960 canais (o LSB, o USB e o CW usam as do SSB). Usada é a de
+frequência na faixa da banda, pelo mapa de bits que a recontagem de fábrica (`0x01E3D2B0`, na partida e depois de cada
+gravação) monta e `0x01E3D1A0` lê. A linha mostra `01 - NOTICIAS` ou, sem nome, a frequência (o FM em MHz, `105.70`;
+o AM e o SSB em kHz); no SAVE, só o número. A lista abre na memória em uso da banda (os bytes `+32`, `+66` e `+149` do
+bloco). Sem nenhuma, o aviso novo `NO SAVED MEMORIES` (965); com as 15 usadas, o SAVE avisa `MEMORY FULL`. O OK do NAME e
+do SAVE abre o editor, com `FM 02`, `AM 03` ou `SSB 01` no título.
+
+**Gravar.** O SAVE é o set do MEMCH de fábrica (a frequência de agora e, no SSB, a largura e o BFO, na memória do
+`VALOR`, e a recontagem), a gravação do bloco do rádio no registro do `0xB000` (`0x01E438A6`, sem argumentos) e o nome.
+O DELETE é o que o driver do CHIRP faz: a frequência 0 (no SSB, os 5 B), a recontagem, a gravação do bloco e o nome em
+`FF`. Sem nome no editor, a memória fica sem nome (a tela do rádio mostra `NO STATION NAME`), e não `CH 101` como no
+canal. A gravação do bloco usa 324 B de pilha: o `save_grava` chega a 640 B no ponto da chamada, e o pior set do menu
+continua o `morse_rx_grava`, com 728 de 740.
+
+**Os nomes** ficam onde o driver do CHIRP e o Tempra Link os gravam: no setor `0xC000`, em `0xC010` (FM), `0xC110` (AM)
+e `0xC210` (SSB), 16 B por memória, 12 letras e `FF`. Para trocar um, o setor vai para o `0xDB000` (livre) e volta, em
+pedaços de 64 B na pilha, com os 12 B trocados (sem os espaços do fim; só espaços, nome nenhum), porque o firmware não
+tem buffer de setor sobrando (o dele e a memória de vídeo estão em uso). Se a energia cair entre apagar o `0xC000` e
+regravá-lo, os nomes ficam só na cópia do `0xDB000`, e nada os traz de volta sozinho.
+
+**As teclas.** O menu do rádio abre como o principal (`0x01E484F8`, `0x01E4851E` e `b[0x1533D] = 1`) e o OK é o mesmo,
+então o editor, a pergunta do DELETE, os avisos e o EXIT de volta à lista do CH MEMORY valem lá. Na tela B, o NAME e o
+SAVE têm a marca de abrir o editor depois do OK, o DELETE a de apagar vários, e o título por função do MEMCH (o flag
+`0x20`) saiu.
+
+**O espaço depois.** `.mortos31` 352 de 360 B, `.mortos32` 310 de 316, `.mortos33` 214 de 216, `.mortos34` 172 de 208,
+`.mortos35` 264 de 264, `.mortos36` 60 de 170, `.mortos37` e `.mortos38` vazios (140 e 168), `.caminhos` 2906 de 2944,
+`.reserva` 1498 de 1512, e o fim da imagem 3258 B, como antes. Para caber, o `em_canal`, o `na_lista`, o
+`delete_grava`, o `lista_inicio` e o `resumo_texto` saíram do `.caminhos` para os corpos livres.
+
+**O Tempra Link e o CHIRP** não mudam: o bloco do rádio e os nomes são os mesmos, e o `0xDB000` fica fora do que eles
+leem.
+
+Testado no PC: o build (`tudo certo`, a pilha e a imagem do mesmo tamanho), os testes do firmware e, no `teste_rx.py`
+(seção 13), as três listas nas três bandas, com o setor dos nomes e as rotinas de fábrica imitados como estão mapeados
+acima (38 conferências). No rádio, ainda não.

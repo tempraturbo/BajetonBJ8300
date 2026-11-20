@@ -72,7 +72,7 @@ by looking for where content starts mirroring address 0:
 | Range | Contents |
 |---|---|
 | `0x00000–0x09FFF` | 960 channels, 32 B each (up to `0x077FF`); at `0x8000` the log of the A and B VFOs, and at `0x9000` the settings log ([section 26](#26-settings-that-got-lost-noise-gate-and-saving-on-ok-v100-and-v101)) |
-| `0x0A000–0x0FFFF` | settings; `0x0F000–0x0F24F` is factory calibration (TX power at `0xF000–0xF0BF`, [section 20](#20-tx-power); microphone gain at `0xF210`, [section 19](#19-microphone-gain-and-mic-gain-v49); squelch, sub-tone and crystal, [section 22](#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59)) |
+| `0x0A000–0x0FFFF` | settings; at `0xC010`, `0xC110` and `0xC210` the names of the FM, AM and SSB radio memories ([section 44](#44-the-am-fm-and-ssb-radio-memories-like-the-channels-v173-and-v174)); `0x0F000–0x0F24F` is factory calibration (TX power at `0xF000–0xF0BF`, [section 20](#20-tx-power); microphone gain at `0xF210`, [section 19](#19-microphone-gain-and-mic-gain-v49); squelch, sub-tone and crystal, [section 22](#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59)) |
 | `0x10000–0x1AFFF` | **boot image**: 160×138 RGB565 little-endian, 44160 B |
 | `0x20000–0x99FFF` | fonts and Chinese text (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 records of 60 B used by the firmware |
@@ -84,8 +84,9 @@ by looking for where content starts mirroring address 0:
 | **`0xD6000–0xD7FFF`** | **the APRS RX history**: up to 62 packets, as a ring, one header per sector (v70; `0xD7000` since v74; the ring since v75) |
 | **`0xD8000–0xD9FFF`** | **the Morse history**: the same ring ([section 36](#36-the-morse-messages-screen-v144-to-v148)) |
 | **`0xDA000–0xDAFFF`** | **ROGER CUSTOM**: the notes the Tempra Link writes (v164; [section 39](#39-the-screen-portrait-the-dark-screen-roger-custom-and-the-menus-dead-routines-v162-to-v165)) |
+| **`0xDB000–0xDBFFF`** | **the copy of the radio names sector** while changing a name (v174; [section 44](#44-the-am-fm-and-ssb-radio-memories-like-the-channels-v173-and-v174)) |
 | `0xFA000` | 4 KB used by the firmware |
-| free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xDB000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **316 KB** |
+| free | `0x1B000–0x1FFFF`, `0x9A000–0xBFFFF`, `0xDC000–0xF9FFF`, `0xFB000–0xFFFFF` ≈ **312 KB** |
 
 The firmware does **not** live on this chip: no sample matches the `.anc` images, raw or decrypted.
 So there is plenty of room for **data**, while **code** space remains the 3295 bytes in the image.
@@ -3516,3 +3517,88 @@ changes, the version changes, and the program and the driver change with it.
 
 Not tested on the radio: v170 answering is still to be seen, and an older firmware (v169) reading the new address
 with nothing changing.
+
+## 44. The AM, FM and SSB radio memories like the channels (v173 and v174)
+
+Up to v172 the radio menu had the stock memory item (`FMMEMCH`, `AMMEMCH`, `SSBMEMCH`): it picked a number from 1 to 15
+and OK stored the current frequency there. It did not delete, did not name (only from the computer) and showed the stock
+names (`Modulation`, `Work Band`, `Frequency Step`). Since v174 the radio menu has the **NAME**, **DELETE** and **SAVE**
+of CH MEMORY, in items 2 to 4, with the same screens, keys and warnings, and the other items with short names:
+
+| Band | Items |
+|---|---|
+| FM | MODE, NAME, DELETE, SAVE (BAND, STEP and LNA stay hidden, as in the stock firmware, which showed 2 in FM) |
+| AM | MODE, NAME, DELETE, SAVE, BAND, STEP, LNA |
+| LSB, USB and CW | MODE, NAME, DELETE, SAVE, STEP, BW, LNA, BFO |
+
+**The space (v173).** The five stock routines that draw the radio (screen mode 2) were screen-B detours that went back
+to the stock routine outside mode 2. They became whole replacements: a goto at the entry to the C hook, and the body,
+from the instruction after the goto to the start of the next routine, becomes code space (`montar.py`,
+`RADIO_B_FUNCOES`):
+
+| Routine | What it draws | Freed body |
+|---|---|---|
+| `0x01E44FB0` | the whole radio | `.mortos33`, 216 B |
+| `0x01E449BA` | the frequency | `.mortos31`, 360 B (from `0x01E449C0`, 4-aligned for the table) |
+| `0x01E44B28` | the memory name | `.mortos32`, 316 B |
+| `0x01E45198` | the S meter | `.mortos34`, 208 B |
+| `0x01E49078` | the typed frequency | `.mortos35`, 264 B |
+
+In the stock disassembly the bodies only draw, on the stack and in the video memory, through `janela()` and `envia()`
+(and the helpers `0x01E448A4`, `0x01E44920` and `0x01E38988` too); what they store outside that, the hook always
+stores: the band and the AM range (`0x01E44FD6`, `0x01E45020`) and the S-meter level (`0x01E451BA`). None returns a
+value (all end in `envia()`), and `conferir.py` (2j) proves nothing points or branches into the bodies.
+
+**The tables (v174).** The engine finds the radio table by band in two places, the radio menu entry (`0x01E49000`) and
+OK (`0x01E49996`): `r = 0x01E61168` (FM and AM, at `0x01E49026` and `0x01E49A3C`) and `+532` for the SSB one
+(`0x01E4902C` and `0x01E49A46`). On OK, before opening an item of one of them, it calls the item's get and, if that
+returns `0xFFFF`, shows message 62 and does not open; the lists' get never returns that. The item count comes from
+`0x01E3DE36` (`r2 = 5` for AM at `0x01E3DE40`, `r2 = 2` for FM at `0x01E3DE46`, `r0 = 6` for SSB at `0x01E3DE48`), not
+from the scan up to the zeroed item (`FUN_01E4A81A`, whose other callers, `0x01E4B3FE` and `0x01E4C3C4`, count the quick
+menu tables at `0x01E5E7A0` and `0x01E6066A`). The new tables, `radio_fm_am` (7 items, in `.mortos31`) and `radio_ssb`
+(8, in `.mortos32`), leave `tela.c` with `0xFF` and zeros, and `montar.py` fills them from the stock ones: the stock item
+with the short name, or the list on the MEMCH mold (item 1, type 4). The patches: the two `imm32` become `radio_fm_am`,
+the two `+532` become `+364` (the distance between the two; a 12-bit immediate, byte 2 and the low nibble of byte 3) and
+the count 2, 5 and 6 becomes 4, 7 and 8. The stock MEMCH display, title and get also died (`0x01E3D1DA` to `0x01E3D284`,
+`.mortos36`; only the old tables pointed to them), and so did the two old tables (`.mortos37` and `.mortos38`). The
+MEMCH set (`0x01E3D462`) stays: the lists call it.
+
+**The lists.** NAME, DELETE and SAVE are lists like the CH MEMORY ones ([section 32](#32-the-channel-menu-ch-memory-v140)):
+type 4, flags `0x84`, maximum 960, get `lista_le`, sets `chname_grava`, `delete_grava` and `save_grava`. `lista_item`
+gives the item number − 1 when the open table is one of the radio's, which falls in the CH MEMORY order (CH NAME,
+DELETE, SAVE), and only the source changes: the band's 15 memories instead of the 960 channels (LSB, USB and CW use the
+SSB ones). Used means a frequency inside the band's range, by the bitmap that the stock recount (`0x01E3D2B0`, at
+power-on and after each store) builds and `0x01E3D1A0` reads. The line shows `01 - NEWS` or, without a name, the
+frequency (FM in MHz, `105.70`; AM and SSB in kHz); in SAVE, only the number. The list opens on the band's memory in use
+(bytes `+32`, `+66` and `+149` of the block). With none, the new warning `NO SAVED MEMORIES` (965); with all 15 used,
+SAVE warns `MEMORY FULL`. OK on NAME and SAVE opens the editor, with `FM 02`, `AM 03` or `SSB 01` in the title.
+
+**Storing.** SAVE is the stock MEMCH set (the current frequency and, in SSB, the width and the BFO, into memory
+`VALOR`, and the recount), the radio block store into the `0xB000` log (`0x01E438A6`, no arguments) and the name.
+DELETE is what the CHIRP driver does: frequency 0 (in SSB, the 5 B), the recount, the block store and the name as `FF`.
+With no name in the editor, the memory stays unnamed (the radio screen shows `NO STATION NAME`), not `CH 101` as for a
+channel. The block store uses 324 B of stack: `save_grava` reaches 640 B at the call site, and the worst menu set is
+still `morse_rx_grava`, at 728 of 740.
+
+**The names** live where the CHIRP driver and Tempra Link write them: in sector `0xC000`, at `0xC010` (FM), `0xC110`
+(AM) and `0xC210` (SSB), 16 B per memory, 12 letters and `FF`. To change one, the sector goes to `0xDB000` (free) and
+back, in 64-B pieces on the stack, with the 12 B replaced (without trailing spaces; only spaces means no name), because
+the firmware has no spare sector buffer (its own and the video memory are in use). If power fails between erasing
+`0xC000` and rewriting it, the names are left only in the `0xDB000` copy, and nothing brings them back by itself.
+
+**The keys.** The radio menu opens like the main one (`0x01E484F8`, `0x01E4851E` and `b[0x1533D] = 1`) and OK is the
+same, so the editor, the DELETE question, the warnings and the EXIT back to the list of CH MEMORY work there. On screen
+B, NAME and SAVE carry the mark that opens the editor after OK, DELETE the one for deleting several, and the MEMCH
+title by function (flag `0x20`) is gone.
+
+**The space afterwards.** `.mortos31` 352 of 360 B, `.mortos32` 310 of 316, `.mortos33` 214 of 216, `.mortos34` 172 of
+208, `.mortos35` 264 of 264, `.mortos36` 60 of 170, `.mortos37` and `.mortos38` empty (140 and 168), `.caminhos` 2906
+of 2944, `.reserva` 1498 of 1512, and the end of the image 3258 B, as before. To fit, `em_canal`, `na_lista`,
+`delete_grava`, `lista_inicio` and `resumo_texto` moved out of `.caminhos` into the freed bodies.
+
+**Tempra Link and CHIRP** do not change: the radio block and the names are the same, and `0xDB000` is outside what they
+read.
+
+Tested on the PC: the build (`tudo certo`, the stack and the image of the same size), the firmware tests and, in
+`teste_rx.py` (section 13), the three lists in the three bands, with the names sector and the stock routines emulated as
+mapped above (38 checks). On the radio, not yet.

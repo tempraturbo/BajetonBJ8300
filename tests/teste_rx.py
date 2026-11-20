@@ -404,6 +404,51 @@ for k, (nome, esperado) in enumerate((
     else:
         confere(f'12. a linha {k}', c[k], esperado)
 
+# 13. as memorias do radio nas mesmas listas (v174): o NAME, o DELETE e o SAVE do menu do radio com as rotinas do CH
+# MEMORY, as 15 da banda no lugar dos canais (o SSB serve o LSB, o USB e o CW); os nomes no setor 0xC000, que fica
+# inteiro fora dos 12 B trocados
+c = [' '.join(l) for l in roda_modo('radio')]
+for k, (nome, esperado) in enumerate((
+        ('NAME: abre na memoria em uso, com o nome ou a frequencia', 'L [01 - NOTICIAS] [02 - 105.70] [05 - 99.90] 1 4'),
+        ('NAME: a seta anda nas usadas e da a volta', 'L [02 - 105.70] [05 - 99.90] [01 - NOTICIAS] 4 4'),
+        ('NAME: o editor vazio, com a memoria no titulo', 'E |FM 02'),
+        ('NAME: o nome sem os espacos do fim', 'N MUSICA..........'),
+        ('NAME: o nome na lista', 'L [01 - NOTICIAS] [02 - MUSICA] [05 - 99.90] 1 4'),
+        ('NAME: so espacos apagam o nome', 'N ................'),
+        ('o resto do setor dos nomes fica', 'X FABRICA OUTRO NOTICIAS'),
+        ('DELETE: abre na memoria em uso', 'L [01 - NOTICIAS] [02 - MUSICA] [05 - 99.90] 1 4'),
+        ('DELETE: pergunta, sem apagar', 'P 8 1'),
+        ('DELETE: o EXIT da pergunta volta a lista', 'Q 1 4'),
+        ('DELETE: o OK apaga e segue no mais perto', 'D 0 4 0'),
+        ('DELETE: a frequencia zerada e o bloco gravado', 'M 0 1'),
+        ('DELETE: e o nome apagado', 'N ................'),
+        ('SAVE: so as livres, so o numero', 'L [15] [02] [03] 1 4'),
+        ('SAVE: o editor, com a memoria no titulo', 'A 1 7 FM 02'),
+        ('SAVE: o EXIT do editor volta a lista', 'C 1 4 SAVE'),
+        ('SAVE: sem gravar', 'M 0 1'),
+        ('SAVE: o OK grava a frequencia de agora e o bloco', 'M 10230 2'),
+        ('SAVE: com o nome', 'N RADIO X.........'),
+        ('SAVE: na lista do NAME', 'L [01 - NOTICIAS] [02 - RADIO X] [05 - 99.90] 1 4'),
+        ('SAVE: sem nome, a memoria fica sem (nao CH)', 'N ................'),
+        ('SAVE: e a lista mostra a frequencia', 'L [01 - NOTICIAS] [02 - RADIO X] [03 - 102.30] 1 4'),
+        ('AM: as suas memorias, em kHz', 'L [] [03 - 1010] [] 2 4'),
+        ('AM: o titulo do editor', 'E |AM 03'),
+        ('AM: o nome no 0xC110', 'N CBN.............'),
+        ('AM: o do FM nao muda', 'N ................'),
+        ('SSB: sem memoria, o aviso', 'V 965'),
+        ('SSB: o SAVE nas livres', 'L [15] [01] [02] 0 4'),
+        ('SSB: a frequencia, a largura e o BFO', 'M 7100 4 -150 4'),
+        ('SSB: o nome no 0xC210', 'N QSO 40M.........'),
+        ('SSB: na lista do NAME', 'L [] [01 - QSO 40M] [] 0 4'),
+        ('SSB: na do DELETE', 'L [] [01 - QSO 40M] [] 0 4'),
+        ('SSB: apagar a ultima deixa o aviso', 'D 965 8'),
+        ('SSB: os 5 B zerados', 'M 0 0 0 5'),
+        ('SSB: e o nome', 'N ................'),
+        ('o SAVE com as 15 usadas avisa', 'H 962'),
+        ('e o setor dos nomes segue inteiro', 'X FABRICA OUTRO NOTICIAS'))):
+    confere(f'13. {nome}', c[k] if k < len(c) else None, esperado)
+confere('13. nenhuma linha a mais', len(c), 37)
+
 print()
 modelo = 'aviso so na palavra do limite' if os.environ.get('RX_BORDA') else 'aviso a cada palavra no limite'
 print(f'[{modelo}] ' + ('tudo certo' if not falhas else f'{len(falhas)} FALHARAM: ' + ', '.join(falhas)))

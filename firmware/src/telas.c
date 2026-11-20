@@ -129,8 +129,15 @@ static unsigned copia_ram(char *s, u32 a, unsigned n)
 #define MARCA_VFO         32                     /* v141: so vale no VFO, e no canal abre com o aviso */
 #define MARCA_CANAL       64                     /* v141: so vale no canal, e no VFO abre com o aviso */
 #define MARCAS_AVISO      (MARCA_LISTA | MARCA_VFO | MARCA_CANAL)
-#define RADIO_FM_AM       0x01E61168u            /* as tabelas do menu do radio (0x01E49026) */
+#ifdef PREVIA
+#define RADIO_FM_AM       0x01E61168u            /* as tabelas de fabrica do menu do radio (0x01E49026) */
 #define RADIO_SSB         (RADIO_FM_AM + 532)
+#else
+/* v174: as nossas (tela.c), que o montar.py preenche: MODE, NAME, DELETE, SAVE e o resto de cada banda */
+extern const unsigned char radio_fm_am[], radio_ssb[];
+#define RADIO_FM_AM       ((u32)radio_fm_am)
+#define RADIO_SSB         ((u32)radio_ssb)
+#endif
 
 #ifdef PREVIA
 unsigned previa_menu_grupos(void);
@@ -154,8 +161,8 @@ extern const unsigned char menu_tabela[], menu_textos[];
 #define ITEM_FLAGS(t, i)  RAM(u8, (t) + (i) * TAM_ITEM)
 #endif
 
-/* O nome do item i da tabela t: o ponteiro em +11 ou, no item com titulo por funcao (flags 0x20: so o
- * de memoria do radio, 0x01E3D20E), o que ela monta - o prefixo da banda e MEMCH -, em s. */
+/* O nome do item i da tabela t: o ponteiro em +11. (Ate a v173, o item de memoria do radio tinha o titulo montado por
+ * funcao, 0x01E3D20E, o "FMMEMCH"; a v174 o troca pelo NAME, o DELETE e o SAVE.) */
 static const char *item_nome(u32 t, unsigned i, char *s)
 {
 #ifdef PREVIA
@@ -164,10 +171,7 @@ static const char *item_nome(u32 t, unsigned i, char *s)
 #else
     u32 a = t + i * TAM_ITEM + 11;
 
-    if (ITEM_FLAGS(t, i) & 0x20) {
-        junta(junta(s, RADIO_BANDA == 0 ? "FM" : RADIO_BANDA == 1 ? "AM" : "SSB"), "MEMCH");
-        return s;
-    }
+    (void)s;
     return (const char *)(RAM(u8, a) | RAM(u8, a + 1) << 8 | RAM(u8, a + 2) << 16 | (u32)RAM(u8, a + 3) << 24);
 #endif
 }
@@ -211,6 +215,8 @@ unsigned marcas_do_item(void)
 
     if (MENU_TABELA == TABELA_RAPIDA)
         return MARCA_LISTA | MARCA_NOMEIA;
+    if (n == RADIO)                    /* v174: NAME, DELETE e SAVE (itens 1 a 3), as marcas dos do CH MEMORY */
+        return MENU_NUMERO - 1u < 3 ? MARCA_LISTA | (MENU_NUMERO == 2 ? MARCA_VARIOS : MARCA_NOMEIA) : 0;
     return n == 0 || n >= RADIO ? 0 : MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO);
 }
 
@@ -343,8 +349,8 @@ __attribute__((section(".reserva.tela")))
 #endif
 SEPARADA static void aviso_cena(void)
 {
-    static const char *const avisos[5] = {"SAVE CHANNEL FIRST", "NO SAVED CHANNELS", "MEMORY FULL", "VFO ONLY",
-                                          "BANK EMPTY"};
+    static const char *const avisos[6] = {"SAVE CHANNEL FIRST", "NO SAVED CHANNELS", "MEMORY FULL", "VFO ONLY",
+                                          "BANK EMPTY", "NO SAVED MEMORIES"};   /* v174: o 965, o do radio */
     unsigned y = TOPO_MENU + 22, a = RAM(u16, 0x00014BFC);
     char s[28];
 

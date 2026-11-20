@@ -5,6 +5,32 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v173 and v174 — Nov 20 — the AM, FM and SSB radio memories like the channels (not tested on the radio)
+
+The radio menu was confusing: the memory item (`FMMEMCH`, `AMMEMCH`, `SSBMEMCH`) stored, but did not delete or name
+(only from the computer), and the names were the stock ones. Now it has the **NAME**, **DELETE** and **SAVE** of CH
+MEMORY, right after MODE, with the same screens and keys, so nobody has to learn anything new
+([section 44](reverse-engineering.md#44-the-am-fm-and-ssb-radio-memories-like-the-channels-v173-and-v174)).
+
+- **The lists:** NAME and DELETE show only the band's stored memories (`01 - NEWS`, or the frequency when it has no
+  name), and SAVE only the free numbers, with the memory in use in the middle. LSB, USB and CW use the SSB ones. With
+  none, `NO SAVED MEMORIES`; with all 15 used, `MEMORY FULL`.
+- **SAVE** stores the current frequency (in SSB, the width and the BFO too) and opens the name editor, with `FM 02`,
+  `AM 03` or `SSB 01` in the title. EXIT in the editor goes back to the list without storing; with no name, the memory
+  stays unnamed.
+- **DELETE** asks, and OK deletes the frequency and the name and moves to the nearest one, to delete several.
+- **NAME** opens the editor with the memory's name; only spaces deletes the name.
+- **Short names:** MODE, BAND, STEP, BW, LNA and BFO instead of Modulation, Work Band, Frequency Step and Bandwidth.
+- **Where it lives:** the memory and the name in the same places the CHIRP driver and Tempra Link write them, which do
+  not change. To change a name, the names sector goes through `0xDB000`, which was free.
+- **The space (v173):** the five stock routines that draw the radio were replaced whole by the screen-B ones, and their
+  bodies (1366 B) became code space; v174 used almost all of it.
+- v174 `BJ8300_BANK.anc` (outside `firmware/releases/`): sha256 `2b62f73135ede07b307a0265781b306fe8a99d92ecf42ed92fb55ba89e19d4fc`
+
+Tested on the PC: the build ("tudo certo", the stack equal to the stock one and the image of the same size), the
+firmware tests and the three lists in the three bands, with the chip and the stock routines emulated (`teste_rx.py`,
+section 13). On the radio, not yet.
+
 ## Tempra Link — Nov 20 — writing whole sectors and the AM/FM/SSB radio page
 
 - **Writing spoiled channels (Tempra Link 1.0, not released yet).** The radio only erases a 4 KB sector of the chip

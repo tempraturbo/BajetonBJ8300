@@ -5,6 +5,31 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v173 e v174 — 20/11 — as memórias do rádio de AM, FM e SSB como os canais (sem teste no rádio)
+
+O menu do rádio era confuso: o item de memória (`FMMEMCH`, `AMMEMCH`, `SSBMEMCH`) salvava, mas não apagava nem dava
+nome (só pelo computador), e os nomes eram os de fábrica. Agora ele tem o **NAME**, o **DELETE** e o **SAVE** do CH
+MEMORY, logo depois do MODE, com as mesmas telas e teclas, para ninguém precisar reaprender
+([seção 44](engenharia-reversa.md#44-as-memórias-do-rádio-de-am-fm-e-ssb-como-os-canais-v173-e-v174)).
+
+- **As listas:** o NAME e o DELETE mostram só as memórias salvas da banda (`01 - NOTICIAS`, ou a frequência quando não
+  tem nome), e o SAVE só os números livres, com a memória em uso no meio. O LSB, o USB e o CW usam as do SSB. Sem
+  nenhuma, `NO SAVED MEMORIES`; com as 15 usadas, `MEMORY FULL`.
+- **O SAVE** guarda a frequência de agora (no SSB, a largura e o BFO também) e abre o editor do nome, com `FM 02`,
+  `AM 03` ou `SSB 01` no título. O EXIT do editor volta à lista sem gravar; sem nome, a memória fica sem.
+- **O DELETE** pergunta, e o OK apaga a frequência e o nome e segue na mais próxima, para apagar várias.
+- **O NAME** abre o editor com o nome da memória; só espaços apagam o nome.
+- **Nomes curtos:** MODE, BAND, STEP, BW, LNA e BFO no lugar de Modulation, Work Band, Frequency Step e Bandwidth.
+- **Onde mora:** a memória e o nome nos mesmos lugares em que o driver do CHIRP e o Tempra Link os gravam, que não
+  mudam. Para trocar um nome, o setor dos nomes passa pelo `0xDB000`, que estava livre.
+- **O espaço (v173):** as cinco rotinas de fábrica que desenham o rádio foram trocadas inteiras pelas da tela B, e os
+  corpos delas (1366 B) viraram espaço de código; a v174 usou quase tudo.
+- `BJ8300_BANK.anc` da v174 (fora de `firmware/releases/`): sha256 `2b62f73135ede07b307a0265781b306fe8a99d92ecf42ed92fb55ba89e19d4fc`
+
+Testado no PC: o build ("tudo certo", a pilha igual à de fábrica e a imagem do mesmo tamanho), os testes do firmware e
+as três listas nas três bandas, com o chip e as rotinas de fábrica imitados (o `teste_rx.py`, seção 13). No rádio,
+ainda não.
+
 ## Tempra Link — 20/11 — a gravação por setor inteiro e a página do rádio de AM, FM e SSB
 
 - **A gravação estragava canais (o Tempra Link 1.0, ainda não lançado).** O rádio só apaga um setor de 4 KB do chip

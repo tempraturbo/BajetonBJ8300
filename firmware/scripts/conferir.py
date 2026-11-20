@@ -100,6 +100,7 @@ reserva_em, reserva = montar.codigo_ligado(elf, '.reserva')     # v140: na tabel
 caminhos_em, caminhos = montar.codigo_ligado(elf, '.caminhos')   # v138: no lugar dos caminhos das vozes
 sons_em, sons = montar.codigo_ligado(elf, '.sons')               # v144: nas entradas mortas da tabela de caminhos
 mortos = [montar.codigo_ligado(elf, f'.mortos{i + 1}', de) for i, (de, _) in enumerate(montar.MORTOS)]   # v152: nos nomes de item mortos; v164: a vazia vale vazia
+mortos = list(zip([e for e, _ in mortos], montar.mortos_com_radio(app_velho, [b for _, b in mortos])))   # v174: as tabelas do radio
 blocos = [('codigo', montar.ENDERECO_CODIGO, blob), ('tela B', livre_em, tela_gravada),
           ('caminhos', caminhos_em, caminhos),
           ('reserva', reserva_em, reserva),
@@ -192,7 +193,7 @@ sitios_vozes = ({montar.ESPECTRO_EM} | {s for s, _, _, _ in montar.ESPECTRO_CHAM
                 | {e for e, _, _, _ in montar.ESPECTRO_FUNCOES})
 sitios_livre = ({s for s, _ in montar.REALCE_SITIOS_GANCHO} | {s for s, _ in montar.LIMPA_SITIOS} | {s_ for s_, _, _ in montar.ENVIA_SITIOS}
                | {e for e, _, _, _, _ in montar.TELA_DESVIOS} | {s for s, _, _, _ in montar.ESPECTRO_B_CHAMADAS}
-               | {e for e, _, _, _ in montar.ESPECTRO_B_FUNCOES}
+               | {e for e, _, _, _ in montar.ESPECTRO_B_FUNCOES} | {e for e, _, _, _ in montar.RADIO_B_FUNCOES}
                | {s for s, _, _, _ in montar.CHAMADAS_LIVRE + montar.GOTOS_LIVRE + montar.CHAMADAS_NO_LUGAR}
                | {s for s, _, _, _, _, _ in montar.MENU_DESVIOS} | {s for s, _ in montar.SETAS}
                | {montar.PONTEIRO_EM})   # v53: call menu_abre
@@ -471,6 +472,9 @@ for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
                 excecoes_c += 1
             elif onde == montar.TABELA_SONS_BASE and v == montar.SONS:   # v144: a leitura da tabela, so das entradas vivas
                 excecoes_c += 1
+            # v174: o motor de fabrica acha a tabela do radio, que mora no codigo morto do desenho do radio
+            elif binario is app and onde in {s_ + 2 for s_, _ in montar.RADIO_TABELA_EM} and v == montar.S['radio_fm_am']:
+                excecoes_c += 1
             elif binario is app_velho and star.get(onde) == bytes(binario[o:o + 4]):
                 excecoes_c += 1
             # v152: os menus rapidos de fabrica apontavam para os nomes mortos, e o RAPIDA_NOMES os troca: na imagem nova nao apontam
@@ -725,12 +729,24 @@ if not ok:
 
 # 5. nada escrito fora dos trechos previstos - e nada em area protegida
 previsto = [(montar.PONTEIRO_EM, montar.PONTEIRO_EM + len(montar.PONTEIRO_ANTES) - 1, 'ponteiro da tabela'),
+            *[(s_, s_ + 5, 'menu do radio: a tabela') for s_, _ in montar.RADIO_TABELA_EM],
+            *[(s_, s_ + 3, 'menu do radio: a distancia ate a do SSB') for s_, _ in montar.RADIO_SSB_EM],
+            *[(s_, s_ + 1, 'menu do radio: a contagem') for s_, _, _, _ in montar.RADIO_CONTA],
             (montar.CONTAGEM_EM, montar.CONTAGEM_EM + len(montar.CONTAGEM_ANTES) - 1, 'contagem')]
 previsto += [(e, e + len(v), f'texto {v}') for e, v, _ in montar.TEXTOS]
 previsto += [(sitio, sitio + 3, 'setas') for sitio, _ in (montar.SETAS if montar.SETAS_INVERTIDAS else ())]
 previsto += [(montar.GANCHO_EM, montar.GANCHO_EM + 3, 'gancho')]
 previsto += [(montar.SCAN_EM, montar.SCAN_EM + 3, 'gancho do scan')]
 previsto += previsto_tripla
+# v173: as rotinas de fabrica que desenham o radio, trocadas inteiras por um goto para o gancho
+for entrada, antes, nova, oque in montar.RADIO_B_FUNCOES:
+    o = entrada - montar.BASE_APP
+    ok = (bytes(app_velho[o:o + 4]) == antes
+          and bytes(app[o:o + 4]) == montar.monta_goto(entrada, montar.S[nova]))
+    print(f'4h. radio {entrada:#x} trocada por {nova} ({oque}): ' + ('ok' if ok else 'FALHOU'))
+    if not ok:
+        erros.append(f'rotina do radio mal trocada em {entrada:#x}')
+previsto += [(e, e + 3, 'radio') for e, _, _, _ in montar.RADIO_B_FUNCOES]
 if montar.ESPECTRO_TECLAS:
     o = montar.ESPECTRO_EM - montar.BASE_APP
     ok = (bytes(app_velho[o:o + 4]) == montar.ESPECTRO_ANTES

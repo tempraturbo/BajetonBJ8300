@@ -531,21 +531,60 @@ int main(int argc, char **argv)
         grava("11b-menu-txabc-com-a-c");
         previa_vista = 0;
 
-        /* o item de memoria do menu do radio (0x01E3D20E): S, Z e 2 da fonte media sem haste (v40) */
+        /* v174: as memorias do radio nas listas do CH MEMORY. O SAVE (item 3) so com as livres, no SSB */
         BASE_TELAS();
         memoria[0x1533D] = 1;
-        strcpy((char *)&memoria[0x15494], "SSBMEMCH");
+        strcpy((char *)&memoria[0x15494], "SAVE");
         poe32(0x14BF4, RADIO_SSB);
-        memoria[0x14BF8] = 6;
-        memoria[0x14BFA] = 1;
+        memoria[0x14BF8] = 8;
+        memoria[0x14BFA] = 3;
         memoria[0x14BF9] = 1;
+        memoria[0x14C00] = 4;
         memoria[0x12A1B] = 3;
-        LINHA(0, 1, "CH-01");
-        LINHA(1, 2, "02");
-        LINHA(2, 1, "03");
+        LINHA(0, 1, "04");
+        LINHA(1, 2, "05");
+        LINHA(2, 1, "06");
         memoria[0x14C10] = 1;
         telas_b(1, 0);
-        grava("29-menu-ssbmemch");
+        grava("29-menu-radio-save");
+        /* o DELETE (item 2) no FM, a pergunta e o aviso da banda sem memoria */
+        BASE_TELAS();
+        memoria[0x1533D] = 1;
+        strcpy((char *)&memoria[0x15494], "DELETE");
+        poe32(0x14BF4, RADIO_FM_AM);
+        memoria[0x14BF8] = 4;
+        memoria[0x14BFA] = 2;
+        memoria[0x14BF9] = 1;
+        memoria[0x14C00] = 4;
+        memoria[0x12A1B] = 0;
+        LINHA(0, 1, "01 - NOTICIAS");
+        LINHA(1, 2, "02 - MUSICA");
+        LINHA(2, 1, "03 - 105.70");
+        memoria[0x14C10] = 1;
+        telas_b(1, 0);
+        grava("29b-menu-radio-delete");
+        memoria[0x14C00] = 8;
+        telas_b(1, 0);
+        grava("29c-menu-radio-delete-pergunta");
+        memoria[0x14BFC] = 965 & 255;
+        memoria[0x14BFD] = 965 >> 8;
+        telas_b(1, 0);
+        grava("29d-menu-radio-sem-memoria");
+        memoria[0x14BFC] = 0;
+        memoria[0x14BFD] = 0;
+        /* o NAME (item 1): a lista e o editor, com a memoria no titulo */
+        strcpy((char *)&memoria[0x15494], "NAME");
+        memoria[0x14BFA] = 1;
+        memoria[0x14C00] = 4;
+        telas_b(1, 0);
+        grava("29e-menu-radio-name");
+        strcpy((char *)&memoria[0x15494], "FM 02");
+        memoria[0x14C00] = 7;
+        digitando("MUSICA");
+        memoria[0x14A36] = 12;
+        memoria[0x14A38] = 1;
+        telas_b(1, 0);
+        grava("29f-menu-radio-name-editor");
 
         /* o ACTIVE (v141): o banco ligado vem com o byte 0x01 no fim (bancos.c, banco_texto) */
         BASE_TELAS();
@@ -802,29 +841,26 @@ int main(int argc, char **argv)
         memoria[0x1533D] = 1;
         memoria[0x12A1B] = 3;
         poe32(0x14BF4, RADIO_SSB);
-        memoria[0x14BF8] = 6;
-        memoria[0x14BFA] = 3;
+        memoria[0x14BF8] = 8;
+        memoria[0x14BFA] = 5;                /* v174: o BW e o 6o item do SSB */
         LINHA(0, 1, "1.2K");
         LINHA(1, 2, "2.2K");
         LINHA(2, 1, "3.0K");
         telas_b(1, 0);
         grava("49-menu-radio-usb");
-        memoria[0x14BFA] = 1;
-        LINHA(0, 1, "CH-01");
-        LINHA(1, 2, "02");
-        LINHA(2, 1, "03");
+        memoria[0x14BFA] = 1;                /* v174: o NAME, com a seta da lista (como no CH MEMORY) */
         telas_b(1, 0);
         grava("50-menu-radio-memoria");
         memoria[0x12A1B] = 1;
         poe32(0x14BF4, RADIO_FM_AM);
-        memoria[0x14BF8] = 5;
+        memoria[0x14BF8] = 7;
         memoria[0x14BFA] = 0;
         LINHA(0, 1, "FM");
         LINHA(1, 2, "AM");
         LINHA(2, 1, "LSB");
         telas_b(1, 0);
         grava("51-menu-radio-am");
-        memoria[0x14BFA] = 2;                /* v58: o 3o item do menu do radio, o WORK BAND */
+        memoria[0x14BFA] = 4;                /* v58: o BAND (v174: o 5o item do AM) */
         LINHA(0, 1, "LW");
         LINHA(1, 2, "MW");
         LINHA(2, 1, "SW");
@@ -834,7 +870,7 @@ int main(int argc, char **argv)
         LINHA(0, 1, "FM");
         LINHA(1, 2, "AM");
         LINHA(2, 1, "LSB");
-        strcpy((char *)&memoria[0x15494], "Modulation");
+        strcpy((char *)&memoria[0x15494], "MODE");
         memoria[0x14BF9] = 1;
         memoria[0x14C10] = 1;
         telas_b(1, 0);

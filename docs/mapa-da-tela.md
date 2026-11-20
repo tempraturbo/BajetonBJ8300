@@ -498,7 +498,9 @@ primeiro 0 ou `0xFF` (o CHIRP completa o nome com `0xFF`), e não mais com o str
 | zeros na frente do que se digita | `b[0x14A36]` | `0x01E490A0` |
 
 A troca de modulação passa pelo menu do próprio rádio: as tabelas `0x01E61168` (FM e AM) e
-`0x01E6137C` (SSB), e o set do item Modulation é `0x01E3DE52`. Ele redesenha a tela de um VFO de
+`0x01E6137C` (SSB) de fábrica (desde a v174 as nossas, `radio_fm_am` e `radio_ssb`, com o NAME, o DELETE e o SAVE;
+[seção 44](engenharia-reversa.md#44-as-memórias-do-rádio-de-am-fm-e-ssb-como-os-canais-v173-e-v174)), e o set do item
+Modulation (o MODE) é `0x01E3DE52`. Ele redesenha a tela de um VFO de
 fábrica e escreve "Radio Initialization / Please Wait..." antes de iniciar o chip
 (`0x01E3DDBA`); no SSB, o patch do chip receptor vai de `0x01E64D40` a `0x01E68B18` (`0x01E3DC42`).
 A troca de banda desliga o chip, espera 0,6 s (`0x01E3DBCC`) e mais duas vezes 1,5 s antes de

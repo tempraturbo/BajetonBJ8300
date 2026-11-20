@@ -4,6 +4,7 @@
  *   teste_rx volta    (v112: a volta da tela MESSAGES, gancho_teclas)
  *   teste_rx caixa    (v112: a caixa, aprs_caixa_abre e aprs_dest_grava)
  *   teste_rx canais   (v140: as listas de canais, CH NAME, DELETE e SAVE)
+ *   teste_rx radio    (v174: as memorias do radio nas mesmas listas)
  * <tela>/<injeta>: o b[0x14BF2] e o b[0x14BEF] na entrada (a caixa e a volta, v112), com o BEEP PROMPT em 0.
  * <ar>: os bits de linha ('0'/'1'), 1200 por segundo desde o tempo 0; <roteiro>: as teclas, "de:ate:tecla"
  * em ms separados por virgula ("-" sem nenhuma); <faixa_us>: quanto a tela gasta por faixa de 32 linhas;
@@ -397,6 +398,158 @@ static u8 *le_arquivo(const char *nome, unsigned *n)
     return p;
 }
 
+/* As memorias do radio nas listas (v174): o NAME, o DELETE e o SAVE do menu do radio sao os itens 1 a 3, com as
+ * rotinas das listas de canais. Memorias de teste, contando de 0: no FM a 0 (88.10, NOTICIAS), a 1 (105.70) e a 4
+ * (99.90); no AM a 2 (1010 kHz). "N <banda> <memoria>" mostra os 16 B do nome no setor 0xC000 (FF como "."). */
+static void nome_radio(unsigned b, unsigned n)
+{
+    const u8 *p = flash_nomes + 0x10 + 0x100 * b + 16 * n;
+    unsigned k;
+
+    printf("N ");
+    for (k = 0; k < 16; k++)
+        putchar(p[k] == 0xFF ? '.' : p[k]);
+    putchar('\n');
+}
+
+static void freq_radio(unsigned b, unsigned n)
+{
+    const u8 *p = ram_pc + (b == 0 ? 0x129DA + 2 * n : b == 1 ? 0x129FC + 2 * n : 0x12A22 + 5 * n);
+
+    printf("M %u", p[0] | p[1] << 8);
+    if (b == 2)
+        printf(" %u %d", p[2], (short)(p[3] | p[4] << 8));
+    printf(" %u\n", radio_salvas);
+}
+
+static void poe_radio(u32 em, unsigned f)
+{
+    ram_pc[em] = (u8)f;
+    ram_pc[em + 1] = (u8)(f >> 8);
+}
+
+static int radio_teste(void)
+{
+    unsigned k;
+
+    memset(flash_nomes, 0xFF, sizeof flash_nomes);
+    memcpy(flash_nomes, "FABRICA", 7);              /* o resto do setor tem de ficar */
+    memcpy(flash_nomes + 0x300, "OUTRO", 5);
+    memcpy(flash_nomes + 0x10, "NOTICIAS", 8);
+    poe_radio(0x129DA, 8810);
+    poe_radio(0x129DC, 10570);
+    poe_radio(0x129E2, 9990);
+    poe_radio(0x12A00, 1010);
+    RADIO_RECONTA();
+    ram_pc[0x12A1B] = 0;                            /* o FM, na memoria 2 */
+    ram_pc[0x129F8] = 1;
+    MENU_TABELA = RADIO_FM_AM;
+    marcas_teste = MARCA_LISTA;
+
+    /* o NAME abre na memoria em uso; o nome, ou a frequencia */
+    abre_lista(1);
+    lista_seta(1);
+    tela_lista();
+    /* o OK abre o editor com o nome e a memoria no titulo; o nome novo, sem os espacos do fim */
+    VALOR = 1;
+    chname_grava();
+    lista_editor_abre();
+    printf("E %.*s|%s\n", EDITOR_TAM, EDITOR_TEXTO, TITULO_MENU);
+    digita_nome("MUSICA  ");
+    chname_grava();
+    nome_radio(0, 1);
+    abre_lista(1);
+    /* so espacos apagam o nome */
+    chname_grava();
+    lista_editor_abre();
+    digita_nome("   ");
+    chname_grava();
+    nome_radio(0, 1);
+    printf("X %.7s %.5s %.8s\n", (char *)flash_nomes, (char *)flash_nomes + 0x300, (char *)flash_nomes + 0x10);
+
+    /* o DELETE pergunta; o EXIT da pergunta volta; o OK zera a frequencia, apaga o nome e segue no mais perto */
+    memcpy(flash_nomes + 0x20, "MUSICA", 6);
+    abre_lista(2);
+    delete_grava();
+    printf("P %u %u\n", MENU_TIPO, RADIO_USADA(1));
+    printf("Q %u %u\n", lista_cancela(), MENU_TIPO);
+    delete_grava();
+    delete_grava();
+    printf("D %u %u %u\n", VALOR, MENU_TIPO, RADIO_USADA(1));
+    freq_radio(0, 1);
+    nome_radio(0, 1);
+
+    /* o SAVE so nas livres e so com o numero; grava a frequencia de agora e abre o editor do nome */
+    poe_radio(0x129D8, 10230);
+    abre_lista(3);
+    save_grava();
+    printf("A %u %u %s\n", lista_editor_abre(), MENU_TIPO, TITULO_MENU);
+    printf("C %u %u %s\n", lista_cancela(), MENU_TIPO, TITULO_MENU);
+    freq_radio(0, 1);
+    save_grava();
+    lista_editor_abre();
+    digita_nome("RADIO X");
+    save_grava();
+    freq_radio(0, 1);
+    nome_radio(0, 1);
+    abre_lista(1);
+    /* sem nome no editor, a memoria fica sem nome (nao "CH") */
+    VALOR = 2;
+    MENU_TIPO = TIPO_LISTA;
+    lista_editor_abre();
+    digita_nome("");
+    save_grava();
+    nome_radio(0, 2);
+    abre_lista(2);
+
+    /* o AM usa os seus 15 e os seus nomes (0xC110) */
+    ram_pc[0x12A1B] = 1;
+    ram_pc[0x12A1A] = 2;
+    abre_lista(1);
+    VALOR = 2;
+    chname_grava();
+    lista_editor_abre();
+    printf("E %.*s|%s\n", EDITOR_TAM, EDITOR_TEXTO, TITULO_MENU);
+    digita_nome("CBN");
+    chname_grava();
+    nome_radio(1, 2);
+    nome_radio(0, 2);
+
+    /* o LSB, o USB e o CW usam as do SSB: a frequencia, a largura e o BFO; sem nenhuma, o aviso */
+    ram_pc[0x12A1B] = 3;
+    MENU_TABELA = RADIO_SSB;
+    MENU_NUMERO = 1;
+    printf("V %u\n", lista_aviso());
+    poe_radio(0x12A1D, 7100);
+    ram_pc[0x12A1F] = 4;
+    poe_radio(0x12A20, (unsigned)(-150 & 0xFFFF));
+    abre_lista(3);
+    save_grava();
+    lista_editor_abre();
+    digita_nome("QSO 40M");
+    save_grava();
+    freq_radio(2, 0);
+    nome_radio(2, 0);
+    abre_lista(1);
+    abre_lista(2);
+    delete_grava();
+    delete_grava();
+    printf("D %u %u\n", VALOR, MENU_TIPO);
+    freq_radio(2, 0);
+    nome_radio(2, 0);
+
+    /* as 15 do FM usadas: o SAVE avisa que esta cheia */
+    ram_pc[0x12A1B] = 0;
+    MENU_TABELA = RADIO_FM_AM;
+    for (k = 0; k < 15; k++)
+        poe_radio(0x129DA + 2 * k, 8800 + k * 10);
+    RADIO_RECONTA();
+    MENU_NUMERO = 3;
+    printf("H %u\n", lista_aviso());
+    printf("X %.7s %.5s %.8s\n", (char *)flash_nomes, (char *)flash_nomes + 0x300, (char *)flash_nomes + 0x10);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     struct aprs *a = (struct aprs *)registro_aprs;
@@ -411,6 +564,8 @@ int main(int argc, char **argv)
         return caixa();
     if (argc == 2 && !strcmp(argv[1], "canais"))
         return canais_teste();
+    if (argc == 2 && !strcmp(argv[1], "radio"))
+        return radio_teste();
     if (argc < 6)
         return 2;
     borda = getenv("RX_BORDA") != 0;

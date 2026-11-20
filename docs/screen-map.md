@@ -501,8 +501,10 @@ to the first 0 or `0xFF` (CHIRP fills the name with `0xFF`), no longer with the 
 | setting being edited (0 = the frequency) | `[0x14CD4]` | `0x01E4934A` |
 | zeros in front of what is typed | `b[0x14A36]` | `0x01E490A0` |
 
-The modulation change goes through the radio's own menu: the tables `0x01E61168` (FM and AM) and
-`0x01E6137C` (SSB), and the Modulation item's set is `0x01E3DE52`. It redraws the stock single-VFO
+The modulation change goes through the radio's own menu: the stock tables `0x01E61168` (FM and AM) and
+`0x01E6137C` (SSB) (since v174 ours, `radio_fm_am` and `radio_ssb`, with NAME, DELETE and SAVE;
+[section 44](reverse-engineering.md#44-the-am-fm-and-ssb-radio-memories-like-the-channels-v173-and-v174)), and the
+Modulation (MODE) item's set is `0x01E3DE52`. It redraws the stock single-VFO
 screen and writes "Radio Initialization / Please Wait..." before starting the chip (`0x01E3DDBA`);
 in SSB, the receiver chip's patch runs from `0x01E64D40` to `0x01E68B18` (`0x01E3DC42`). The band
 switch powers the chip down, waits 0.6 s (`0x01E3DBCC`) and twice more 1.5 s before powering it

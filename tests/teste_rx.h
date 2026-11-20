@@ -135,11 +135,14 @@ static void ESPERA_2MS(unsigned n)
 /* ---------- a flash do chip de dados ---------- */
 static u8 flash_d[0x10000];
 static u8 flash_canais[0x8000];            /* v140: os 960 canais, 0x0000..0x77FF, para as listas */
+static u8 flash_nomes[0x1000];             /* v174: o setor dos nomes das memorias do radio, 0xC000..0xCFFF */
 
 static u8 *flash_em(u32 a, unsigned n)
 {
     if (a + n <= sizeof flash_canais)
         return flash_canais + a;
+    if (a >= 0xC000 && a + n <= 0xD000)
+        return flash_nomes + (a - 0xC000);
     if (a < 0xD0000 || a + n > 0xE0000) {
         printf("X flash fora: %x\n", (unsigned)a);
         exit(3);
@@ -255,6 +258,45 @@ static void GERADOR(unsigned x) { (void)x; }
 #define VALOR_TESTE (*(volatile u16 *)(ram_pc + 0x14BFC))
 static int existe_no_registro(const u8 *p) { return p[0] != 0xFF && p[3] != 0; }
 static void DELCH_FABRICA(void) { memset(flash_canais + (VALOR_TESTE << 5), 0xFF, 32); }
+/* O menu do radio (v174): os enderecos das tabelas e as rotinas de fabrica das memorias, como as mapeamos: a
+ * recontagem (0x01E3D2B0) monta o mapa de bits das usadas, as de frequencia na faixa da banda, e 0x01E3D1A0 le o bit da
+ * banda atual; o set do MEMCH (0x01E3D462) poe a frequencia de agora (no SSB os 5 B do VFO de HF: a frequencia, a
+ * largura e o BFO) na memoria do VALOR e reconta; a gravacao do bloco (0x01E438A6) so se conta. O bloco fica em
+ * 0x129D8: o FM em +2, o AM em +36 (2 B cada) e o SSB em +74 (5 B); os VFOs em +0, +34 e +69. */
+#define RADIO_FM_AM 0x01E449C0u
+#define RADIO_SSB   0x01E44B2Cu
+static unsigned radio_mapa[3], radio_salvas;
+static unsigned radio_banco_teste(void) { return ram_pc[0x12A1B] > 2 ? 2 : ram_pc[0x12A1B]; }
+static unsigned radio_valida(unsigned b, unsigned f)
+{
+    if (b == 0)
+        return f >= 6400 && f <= 10800;
+    if (b == 1)
+        return (f >= 153 && f <= 279) || (f >= 520 && f <= 1710) || (f >= 2300 && f <= 30000);
+    return f >= 150 && f <= 30000;
+}
+static void RADIO_RECONTA(void)
+{
+    static const unsigned em[3] = {0x129DA, 0x129FC, 0x12A22}, passo[3] = {2, 2, 5};
+    unsigned b, n;
+
+    for (b = 0; b < 3; b++)
+        for (radio_mapa[b] = n = 0; n < 15; n++)
+            if (radio_valida(b, ram_pc[em[b] + passo[b] * n] | ram_pc[em[b] + passo[b] * n + 1] << 8))
+                radio_mapa[b] |= 1u << n;
+}
+static unsigned RADIO_USADA(unsigned n) { return radio_mapa[radio_banco_teste()] >> n & 1; }
+static void RADIO_MEMCH(void)
+{
+    unsigned b = radio_banco_teste(), n = VALOR_TESTE;
+
+    if (b == 2)
+        memcpy(ram_pc + 0x12A22 + 5 * n, ram_pc + 0x12A1D, 5);
+    else
+        memcpy(ram_pc + (b ? 0x129FC : 0x129DA) + 2 * n, ram_pc + (b ? 0x129FA : 0x129D8), 2);
+    RADIO_RECONTA();
+}
+static void RADIO_SALVA(void) { radio_salvas++; }
 static void GRAVA_CANAL(unsigned n, const void *cru, const void *nome)
 {
     memcpy(flash_canais + (n << 5), cru, 20);

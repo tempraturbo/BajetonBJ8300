@@ -1166,6 +1166,13 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * montar so escreve neles se achar exatamente isso. */
 const unsigned char menu_tabela[97 * 28] __attribute__((aligned(4))) = {0xFF};   /* v144: sem o MESSAGE e o SEND do Morse; v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN; v167: o THRESHOLD */
 const unsigned char menu_textos[544] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v144) */
+/* v174: as tabelas do menu do radio, que o montar.py preenche dos itens de fabrica (RADIO_TABELAS): FM e AM numa (o FM
+ * mostra os 4 primeiros, o AM os 7), SSB na outra. Ficam no codigo morto do desenho do radio (v173). */
+__attribute__((section(".mortos31.tela.rodata"), aligned(4))) const unsigned char radio_fm_am[7 * 28] = {0xFF};
+__attribute__((section(".mortos32.tela.rodata"), aligned(4))) const unsigned char radio_ssb[8 * 28] = {0xFF};
+/* os nomes curtos dos itens de fabrica do menu do radio (eram Modulation, Work Band, Frequency Step, Bandwidth) */
+__attribute__((section(".mortos33.tela.rodata"))) const char radio_nome_mode[] = "MODE", radio_nome_band[] = "BAND",
+    radio_nome_step[] = "STEP", radio_nome_bw[] = "BW", radio_nome_lna[] = "LNA", radio_nome_bfo[] = "BFO";
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
  * O mapa do motor de menus esta no telas.c, junto do desenho. O que muda o nivel faz o mesmo que as
@@ -1243,7 +1250,7 @@ de_novo:
                 return OK_MENU();
             if (lista_cancela())
                 return MOTOR_MENU();
-            if (n >= RADIO)
+            if (n == FORA)                /* v174: o menu do radio sai do aviso para o item, como os grupos */
                 return 0;
             menu_aviso_sai();
             if (a != 960)
@@ -1541,53 +1548,52 @@ void gancho_editor_linha(void)
         ENVIA();
 }
 
-/* 0x01E44FB0, o redesenho do radio: so desenha (faixa da banda, 0x01E449BA, 0x01E44B28 e
- * 0x01E44C68(0, -1), que com o item 0 nao grava nada), depois de por a banda (> 4) e a faixa do AM
- * (> 3) em 0, como ele faz (0x01E44FD2, 0x01E4501A). Como ele, a seta fica na frequencia. */
-u32 b_radio(void)
+/* As rotinas de fabrica que desenham o radio - 0x01E44FB0 (o redesenho), 0x01E449BA (a frequencia e o
+ * numero da memoria), 0x01E44B28 (o nome), 0x01E45198 (o medidor S) e 0x01E49078 (a frequencia sendo
+ * digitada) - sao trocadas inteiras (montar.py RADIO_B_FUNCOES, v173): o corpo delas so desenhava (na
+ * pilha e na memoria de video, pelo janela() e pelo envia()), e virou espaco de codigo (.mortos31 a 35).
+ * O que elas gravavam fora disso o gancho grava sempre, em qualquer modo de tela: a banda e a faixa do AM
+ * na entrada do redesenho e o nivel do medidor S. O desenho so vale no modo de tela 2; fora dele, a tela
+ * daquele modo e a da tela B. */
+
+/* 0x01E44FB0, o redesenho do radio: poe a banda (> 4) e a faixa do AM (> 3) em 0, como ele faz
+ * (0x01E44FD2, 0x01E4501A), e desenha. Como ele, a seta fica na frequencia. */
+void b_radio(void)
 {
-    if (MODO_TELA != 2)
-        return 0;
     if (RADIO_BANDA >= 5)
         RADIO_BANDA = 0;
     if (RADIO_FAIXA_AM >= 4)
         RADIO_FAIXA_AM = 0;
-    telas_faixa(2, 0, 128, RADIO_NORMAL, 0);
-    return 1;
+    if (MODO_TELA == 2)
+        telas_faixa(2, 0, 128, RADIO_NORMAL, 0);
 }
 
-/* 0x01E449BA, a frequencia e o numero da memoria (so desenha): a faixa da frequencia e a do nome,
- * onde a tela B mostra a memoria. A seta, pelo item em edicao ([0x14CD4]). */
-u32 b_radio_freq(void)
+/* 0x01E449BA, a frequencia e o numero da memoria: a faixa da frequencia e a do nome, onde a tela B
+ * mostra a memoria. A seta, pelo item em edicao ([0x14CD4]). */
+void b_radio_freq(void)
 {
-    if (MODO_TELA != 2)
-        return 0;
-    telas_faixa(2, 36, 88, RADIO_NORMAL, RADIO_ITEM);
-    return 1;
+    if (MODO_TELA == 2)
+        telas_faixa(2, 36, 88, RADIO_NORMAL, RADIO_ITEM);
 }
 
-/* 0x01E44B28, o nome da memoria (so le o chip de dados e desenha). */
-u32 b_radio_nome(void)
+/* 0x01E44B28, o nome da memoria. */
+void b_radio_nome(void)
 {
-    if (MODO_TELA != 2)
-        return 0;
-    telas_faixa(2, 68, 88, RADIO_NORMAL, RADIO_ITEM);
-    return 1;
+    if (MODO_TELA == 2)
+        telas_faixa(2, 68, 88, RADIO_NORMAL, RADIO_ITEM);
 }
 
 /* 0x01E45198, o medidor S: a de fabrica so redesenha quando o nivel (sinal / 6) muda, e grava o nivel
- * em b[0x14CCE]; o gancho faz o mesmo. */
-u32 b_radio_sinal(void)
+ * em b[0x14CCE] (0x01E451BA). */
+void b_radio_sinal(void)
 {
     unsigned nivel = RADIO_SINAL / 6;
 
-    if (MODO_TELA != 2)
-        return 0;
     if (RADIO_NIVEL != nivel) {
         RADIO_NIVEL = nivel;
-        telas_faixa(2, 16, 36, RADIO_NORMAL, RADIO_ITEM);
+        if (MODO_TELA == 2)
+            telas_faixa(2, 16, 36, RADIO_NORMAL, RADIO_ITEM);
     }
-    return 1;
 }
 
 /* 0x01E44C68(item, valor), a seta e os ajustes: grava o valor (passo, BW, LNA, BFO) e desenha. O
@@ -1614,13 +1620,11 @@ void gancho_radio_mudo(void)
         ENVIA();
 }
 
-/* 0x01E49078, a frequencia sendo digitada (so desenha: a mascara e os digitos de 0x14A3A, e a unidade). */
-u32 b_radio_digita(void)
+/* 0x01E49078, a frequencia sendo digitada (a mascara e os digitos de 0x14A3A, e a unidade). */
+void b_radio_digita(void)
 {
-    if (MODO_TELA != 2)
-        return 0;
-    telas_faixa(2, 36, 68, RADIO_DIGITANDO, RADIO_ITEM);
-    return 1;
+    if (MODO_TELA == 2)
+        telas_faixa(2, 36, 68, RADIO_DIGITANDO, RADIO_ITEM);
 }
 
 /* No lugar do envia() do "SEEK..." que a interface escreve no lugar da frequencia (0x01E4D3D4..
@@ -2098,13 +2102,8 @@ DESVIO(desvio_medidor, b_medidor, 0x01E3B596, "0x7c, 0x04, 0xe2, 0x9c");
 DESVIO(desvio_transmissao, b_transmissao, 0x01E40F20, "0x76, 0x04, 0xe2, 0x9e");
 DESVIO(desvio_luz, b_luz, 0x01E394DE, "0x10, 0x04, 0xc1, 0xff, 0x80, 0x46, 0x01, 0x00");
 DESVIO(desvio_sinal, b_sinal, 0x01E4616E, "0x77, 0x04, 0xc5, 0xff, 0x80, 0x46, 0x01, 0x00");
-DESVIO(desvio_radio, b_radio, 0x01E44FB4, "0x77, 0x04, 0xe2, 0x9b");
-DESVIO(desvio_radio_freq, b_radio_freq, 0x01E449BE, "0x79, 0x04, 0xe2, 0x9a");
-DESVIO(desvio_radio_nome, b_radio_nome, 0x01E44B2C, "0x75, 0x04, 0xe2, 0x95");
-DESVIO(desvio_radio_sinal, b_radio_sinal, 0x01E4519C, "0x7b, 0x04, 0xe2, 0x9c");
 DESVIO(desvio_radio_ajustes, b_radio_ajustes, 0x01E44C6C, "0x7d, 0x04, 0xe2, 0x99");
 DESVIO(desvio_scanqt, b_scanqt, 0x01E45A86, "0x76, 0x04, 0xe2, 0x9a");
-DESVIO(desvio_radio_digita, b_radio_digita, 0x01E4907C, "0x77, 0x04, 0xe2, 0x9b");
 DESVIO(desvio_editor_modo, b_editor_modo, 0x01E48724, "0x76, 0x04, 0xe2, 0x9c");
 DESVIO(desvio_editor_quadro, b_editor_quadro, 0x01E48660, "0x7e, 0x04, 0x29, 0x16");
 

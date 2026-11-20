@@ -178,8 +178,9 @@ blob = open(os.path.join(BUILD, 'bancos.bin'), 'rb').read()
 _, tela = montar.codigo_ligado(os.path.join(BUILD, 'bancos.elf'), '.livre')
 tab, _ = montar.monta_menu(velho, blob, tela)
 itens = [tab[o:o + 28] for o in range(0, len(tab), 28)]
-for T, n in ((0x1e61168, 5), (0x1e6137c, 6)):
-    itens += [velho[T - B + i * 28:T - B + i * 28 + 28] for i in range(n)]
+for simbolo, itens_radio in montar.RADIO_TABELAS:   # v174: as do radio como o montar as grava, e nao as de fabrica
+    t_ = montar.monta_radio(velho, simbolo, itens_radio)
+    itens += [t_[o:o + 28] for o in range(0, len(t_), 28)]
 pior = []
 for it in itens:
     if not any(it):

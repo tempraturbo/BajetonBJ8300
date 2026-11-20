@@ -1914,7 +1914,7 @@ NOS_MORTOS(4) static void aprs_texto_le(unsigned qual)
 }
 
 /* Uma conta do texto, para saber se ele mudou. */
-NOS_CAMINHOS static unsigned resumo_texto(const char *t, unsigned n)
+NOS_MORTOS(35) __attribute__((noinline)) static unsigned resumo_texto(const char *t, unsigned n)
 {
     unsigned h = n;
 
@@ -2109,8 +2109,156 @@ void banco_canal(unsigned k, unsigned canal);
 void banco_nomeia(unsigned n);
 unsigned le_nome(unsigned n, char *destino);
 
+/* ---------- as memorias do radio de AM, FM e SSB nas mesmas listas (v174) ----------
+ * O menu do radio tem o NAME, o DELETE e o SAVE nos itens 1 a 3, na ordem do CH MEMORY (o tipo da lista e o item - 1),
+ * com as mesmas rotinas: so a origem muda, as 15 memorias da banda (o LSB, o USB e o CW usam as do SSB) no lugar dos
+ * 960 canais. Usada e a da frequencia na faixa da banda, pelo mapa de bits que a recontagem de fabrica monta
+ * (0x01E3D2B0, na partida e depois de cada gravacao) e que 0x01E3D1A0 le. Gravar e o set do MEMCH de fabrica (a
+ * frequencia, e no SSB a largura e o BFO, no VALOR, e a recontagem) e a gravacao do bloco do radio no registro do
+ * 0xB000 (0x01E438A6); apagar e o que o driver do CHIRP faz (a frequencia 0, e no SSB os 5 B). Os nomes ficam no setor
+ * 0xC000 (0xC010, 0xC110 e 0xC210, 16 B cada, 12 letras e FF no fim, como o driver os grava). */
+#ifndef RADIO_FM_AM                             /* as tabelas do menu do radio (tela.c; o teste da os enderecos) */
+extern const unsigned char radio_fm_am[], radio_ssb[];
+#define RADIO_FM_AM    ((u32)radio_fm_am)
+#define RADIO_SSB      ((u32)radio_ssb)
+#endif
+#define NO_RADIO       no_radio()
+#define MEMORIAS_RADIO 15u
+#define BANDA_RADIO    RAM(u8, 0x00012A1B)      /* 0 FM, 1 AM, 2 LSB, 3 USB, 4 CW */
+#define AVISO_SEM_MEMORIA (CANAIS + 5)          /* telas.c, aviso_cena */
+#define SETOR_NOMES    0x0000C000u
+#define SETOR_COPIA    0x000DB000u              /* livre: a copia do setor dos nomes ao trocar um */
+FIRMWARE(RADIO_USADA, 0x01E3D1A0);    unsigned RADIO_USADA(unsigned);   /* o bit da memoria n na banda atual */
+FIRMWARE(RADIO_RECONTA, 0x01E3D2B0);  void RADIO_RECONTA(void);
+FIRMWARE(RADIO_MEMCH, 0x01E3D462);    void RADIO_MEMCH(void);
+FIRMWARE(RADIO_SALVA, 0x01E438A6);    void RADIO_SALVA(void);
+
+/* A lista e do menu do radio? (Uma chamada, e nao a comparacao em cada uso: o .caminhos esta cheio.) */
+NOS_MORTOS(33) __attribute__((noinline)) static unsigned no_radio(void)
+{
+    return MENU_TABELA == RADIO_FM_AM || MENU_TABELA == RADIO_SSB;
+}
+
+/* O banco de memorias da banda: 0 FM, 1 AM, 2 SSB. */
+NOS_MORTOS(33) __attribute__((noinline)) static unsigned radio_banco(void)
+{
+    return BANDA_RADIO > 2 ? 2 : BANDA_RADIO;
+}
+
+/* Onde a memoria n fica no bloco do radio na RAM (0x129D8): o FM em +2 e o AM em +36, 2 B cada; o SSB em +74, 5 B. */
+NOS_MORTOS(33) __attribute__((noinline)) static u32 radio_posicao(unsigned n)
+{
+    unsigned b = radio_banco();
+
+    return b == 0 ? 0x000129DAu + 2 * n : b == 1 ? 0x000129FCu + 2 * n : 0x00012A22u + 5 * n;
+}
+
+NOS_MORTOS(33) __attribute__((noinline)) static u32 radio_nome_em(unsigned n)
+{
+    return SETOR_NOMES + 0x10 + 0x100 * radio_banco() + 16 * n;
+}
+
+/* O nome da memoria n em s (12 letras e o 0 do fim, sem os FF); devolve quantas letras. */
+NOS_MORTOS(33) __attribute__((noinline)) static unsigned radio_nome_le(unsigned n, char *s)
+{
+    unsigned k = 0;
+
+    LE_FLASH(radio_nome_em(n), s, 12);
+    while (k < 12 && s[k] && (u8)s[k] != 0xFF)
+        k++;
+    s[k] = 0;
+    return k;
+}
+
+/* Troca o nome da memoria n (nome nulo ou so de espacos: apaga): o setor dos nomes vai para o setor livre e volta, em
+ * pedacos de 64 B na pilha, com os 12 B do nome trocados (sem os espacos do fim; o que falta, FF). Sem buffer grande: o
+ * de setor do firmware e a memoria de video (bancos.c). */
+NOS_MORTOS(34) __attribute__((noinline)) static void radio_nome_grava(unsigned n, const char *nome)
+{
+    u8 b[64];
+    u32 o, alvo = radio_nome_em(n) - SETOR_NOMES;
+    unsigned k, fim = 0;
+
+    for (k = 0; nome && k < 12; k++)        /* o nome do editor vem com zeros depois do texto */
+        if (nome[k] && nome[k] != ' ')
+            fim = k + 1;
+    APAGA_SETOR(SETOR_COPIA);
+    for (o = 0; o < 0x1000; o += 64) {
+        LE_FLASH(SETOR_NOMES + o, b, 64);
+        GRAVA_FLASH(SETOR_COPIA + o, b, 64);
+    }
+    APAGA_SETOR(SETOR_NOMES);
+    for (o = 0; o < 0x1000; o += 64) {
+        LE_FLASH(SETOR_COPIA + o, b, 64);
+        if (alvo - o < 64)
+            for (k = 0; k < 12; k++)
+                b[alvo - o + k] = k < fim ? (u8)nome[k] : 0xFF;
+        GRAVA_FLASH(SETOR_NOMES + o, b, 64);
+    }
+}
+
+/* O SAVE: a frequencia de agora na memoria do VALOR, o bloco no chip e o nome. */
+NOS_MORTOS(35) __attribute__((noinline)) static void radio_salva(const char *nome)
+{
+    RADIO_MEMCH();
+    RADIO_SALVA();
+    radio_nome_grava(VALOR, nome);
+}
+
+/* O DELETE: a memoria n zerada, a recontagem (o mapa de bits e a memoria atual da banda), o bloco no chip e o nome. */
+NOS_MORTOS(35) __attribute__((noinline)) static void radio_apaga(unsigned n)
+{
+    u32 a = radio_posicao(n);
+    unsigned k;
+
+    for (k = radio_banco() == 2 ? 5 : 2; k--;)
+        RAM(u8, a + k) = 0;
+    RADIO_RECONTA();
+    RADIO_SALVA();
+    radio_nome_grava(n, 0);
+}
+
+/* "01 - NOTICIAS"; sem nome, a frequencia (o FM em MHz, "101.10"; o AM e o SSB em kHz); no SAVE, so o numero. */
+NOS_MORTOS(35) __attribute__((noinline)) static char *radio_texto(unsigned n, unsigned item)
+{
+    char *p = TEXTO;
+    unsigned f, k, d;
+
+    *p++ = (char)('0' + (n + 1) / 10);
+    *p++ = (char)('0' + (n + 1) % 10);
+    if (item != ITEM_SAVE) {
+        *p++ = ' ';
+        *p++ = '-';
+        *p++ = ' ';
+        k = radio_nome_le(n, p);
+        p += k;
+        if (!k) {
+            f = RAM(u16, radio_posicao(n));
+            for (d = 10000; d > 1 && f < d && !(radio_banco() == 0 && d <= 100); d /= 10)
+                ;
+            for (; d; d /= 10) {
+                *p++ = (char)('0' + f / d % 10);
+                if (radio_banco() == 0 && d == 100)
+                    *p++ = '.';
+            }
+        }
+    }
+    *p = 0;
+    return TEXTO;
+}
+
+/* A memoria em uso na banda (o FM em +32, o AM em +66 e o SSB em +149 do bloco). */
+NOS_MORTOS(33) __attribute__((noinline)) static unsigned radio_atual(void)
+{
+    unsigned b = radio_banco();
+
+    return RAM(u8, b == 0 ? 0x000129F8u : b == 1 ? 0x00012A1Au : 0x00012A6Du);
+}
+
 NOS_CAMINHOS unsigned lista_item(void)
 {
+    if (NO_RADIO)
+        return MENU_NUMERO - 1u;
     if (MENU_TABELA == TABELA_RAPIDA)
         return ITEM_SAVE;
     if (!(marcas_do_item() & MARCA_BANKS))
@@ -2119,16 +2267,18 @@ NOS_CAMINHOS unsigned lista_item(void)
 }
 
 /* O lado em evidencia esta num canal? O aviso do CH NAME em VFO e o "---" da pasta. */
-NOS_CAMINHOS unsigned em_canal(void)
+NOS_MORTOS(31) unsigned em_canal(void)   /* v174: no codigo morto do desenho do radio (o .caminhos acabou) */
 {
     return (MODO_LADOS >> (LADO_MENU * 4) & 15) == 1;
 }
 
-NOS_CAMINHOS static unsigned na_lista(unsigned n, unsigned item)
+NOS_MORTOS(31) __attribute__((noinline)) static unsigned na_lista(unsigned n, unsigned item)
 {
     u8 b[4];
     unsigned salvo;
 
+    if (NO_RADIO)
+        return n < MEMORIAS_RADIO && !RADIO_USADA(n) == (item == ITEM_SAVE);
     if (item > ITEM_NO_BANCO)
         return n < BANCOS;
     LE_FLASH(n << 5, b, 4);
@@ -2180,6 +2330,8 @@ NOS_CAMINHOS static char *lista_texto(unsigned n, unsigned item)
     u8 b[4];
     int k = 0;
 
+    if (NO_RADIO)
+        return radio_texto(n, item);
     if (item > ITEM_NO_BANCO)
         return banco_texto(n, item == ITEM_ACTIVE);
     p = tres_digitos(TEXTO, n + 1);
@@ -2207,10 +2359,12 @@ NOS_CAMINHOS static char *lista_texto(unsigned n, unsigned item)
 }
 
 /* O get: o canal do lado em evidencia (em VFO, o ultimo dele) ou o mais perto da lista; os bancos abrem no primeiro. */
-NOS_CAMINHOS static unsigned lista_inicio(void)
+NOS_MORTOS(36) __attribute__((noinline)) static unsigned lista_inicio(void)
 {
     unsigned item = lista_item();
 
+    if (NO_RADIO)
+        return lista_perto(radio_atual(), item);
     return item > ITEM_NO_BANCO ? 0 : lista_perto(RAM(u16, 0x00015E0C + LADO_MENU * 4), item);
 }
 
@@ -2233,7 +2387,7 @@ NA_RESERVA static char *lista_linha(void)
     if (MENU_EDITANDO != 1 && item > ITEM_NO_BANCO)
         return banco_resumo();
     a = lista_perto(MENU_EDITANDO == 1 ? LINHA_BASE : VALOR, item);
-    if (a >= CANAIS || (item == ITEM_CH_NAME && !em_canal()))
+    if (a >= CANAIS || (item == ITEM_CH_NAME && !em_canal() && !NO_RADIO))
         return "---";
     if (MENU_EDITANDO == 1)
         d = (short)(VALOR - LINHA_BASE);
@@ -2265,11 +2419,11 @@ NA_RESERVA unsigned lista_aviso(void)
         return em_canal() ? 0 : AVISO_SALVE;
     BANCO_ABERTO = 0;
     item = lista_item();
-    if (item == ITEM_CH_NAME)
+    if (item == ITEM_CH_NAME && !NO_RADIO)
         return em_canal() ? 0 : AVISO_SALVE;
     if (lista_perto(0, item == ITEM_ESCOLHE ? ITEM_DELETE : item) < CANAIS)
         return 0;
-    return item == ITEM_SAVE ? AVISO_CHEIA : AVISO_VAZIO;
+    return item == ITEM_SAVE ? AVISO_CHEIA : NO_RADIO ? AVISO_SEM_MEMORIA : AVISO_VAZIO;
 }
 
 /* A seta com a lista aberta: anda so na lista; no editor, no aviso e na pergunta nao faz nada. */
@@ -2304,7 +2458,7 @@ NA_RESERVA u32 lista_cancela(void)
         unsigned item = lista_item();
 
         editor_fecha();
-        lista_titulo(item == ITEM_SAVE ? "SAVE" : item == ITEM_NOME ? "NAME" : "CH NAME");
+        lista_titulo(item == ITEM_SAVE ? "SAVE" : item == ITEM_NOME || NO_RADIO ? "NAME" : "CH NAME");
     } else if (MENU_TIPO == TIPO_LISTA) {
         if (!BANCO_ABERTO)
             return 0;
@@ -2335,7 +2489,10 @@ NOS_CAMINHOS unsigned lista_editor_abre(void)
     }
     if (item == ITEM_NOME)
         k = le_nome(n, TEXTO);
-    else if (item == ITEM_CH_NAME) {
+    else if (NO_RADIO) {
+        if (item == ITEM_CH_NAME)
+            k = radio_nome_le(n, TEXTO);
+    } else if (item == ITEM_CH_NAME) {
         LE_FLASH((n << 5) + 20, TEXTO, 12);
         while (k < 12 && TEXTO[k] && (u8)TEXTO[k] != 0xFF)
             k++;
@@ -2347,6 +2504,14 @@ NOS_CAMINHOS unsigned lista_editor_abre(void)
     editor_abre(TEXTO, k, 12);
     if (item == ITEM_NOME) {
         banco_padrao(n, TITULO_MENU);
+        return 1;
+    }
+    if (NO_RADIO) {                         /* "FM 01", "AM 01", "SSB 01" */
+        char *p = junta(TITULO_MENU, radio_banco() == 0 ? "FM " : radio_banco() == 1 ? "AM " : "SSB ");
+
+        p[0] = (char)('0' + (n + 1) / 10);
+        p[1] = (char)('0' + (n + 1) % 10);
+        p[2] = 0;
         return 1;
     }
     TITULO_MENU[0] = 'C';
@@ -2367,7 +2532,7 @@ NOS_CAMINHOS static void nome_do_editor(char *s, unsigned n)
         else if (s[k] != ' ')
             vazio = 0;
     }
-    if (vazio) {
+    if (vazio && !NO_RADIO) {               /* a memoria do radio sem nome fica sem: a tela mostra NO STATION NAME */
         s[0] = 'C';
         s[1] = 'H';
         s[2] = ' ';
@@ -2390,9 +2555,13 @@ NOS_CAMINHOS void chname_grava(void)
         return;
     }
     nome_do_editor(nome, n);
-    LE_FLASH(n << 5, cru, 20);
-    GRAVA_CANAL(n, cru, nome);
-    RECARREGA_LADOS();
+    if (NO_RADIO)
+        radio_nome_grava(n, nome);
+    else {
+        LE_FLASH(n << 5, cru, 20);
+        GRAVA_CANAL(n, cru, nome);
+        RECARREGA_LADOS();
+    }
     editor_fecha();
 }
 
@@ -2405,11 +2574,14 @@ void save_grava(void)
         return;
     }
     nome_do_editor(nome, VALOR);
-    memch_grava(nome);
+    if (NO_RADIO)
+        radio_salva(nome);
+    else
+        memch_grava(nome);
     editor_fecha();
 }
 
-NOS_CAMINHOS void delete_grava(void)
+NOS_MORTOS(32) void delete_grava(void)
 {
     unsigned n = lista_perto(VALOR, ITEM_DELETE);
 
@@ -2419,11 +2591,15 @@ NOS_CAMINHOS void delete_grava(void)
         return;
     }
     MENU_TIPO = TIPO_LISTA;
-    DELCH_FABRICA();
-    banco_refiltra();
+    if (NO_RADIO)
+        radio_apaga(VALOR);
+    else {
+        DELCH_FABRICA();
+        banco_refiltra();
+    }
     VALOR = (u16)lista_perto(VALOR, ITEM_DELETE);
     if (VALOR >= CANAIS) {
-        VALOR = AVISO_VAZIO;
+        VALOR = NO_RADIO ? AVISO_SEM_MEMORIA : AVISO_VAZIO;
         MENU_TIPO = TIPO_AVISO;
     }
 }
@@ -2456,7 +2632,7 @@ NA_RESERVA void canais_grava(void)
     VALOR = (u16)lista_inicio();
 }
 
-NA_RESERVA void nome_grava(void)
+NOS_CAMINHOS void nome_grava(void)
 {
     if (MENU_TIPO != TIPO_EDITOR) {
         VALOR = (u16)lista_perto(VALOR, ITEM_NOME);
