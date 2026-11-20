@@ -81,20 +81,20 @@ checks the sha256 of the compiler's five files; to use another copy of the compi
 
 **Space budget:** the new code lives in nine places, all at the same address in the 6 images:
 
-- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (V4.0T uses 3254);
+- **the free area at the end of the image**, from `0x01E96124`, with 3260 bytes (V4.1T uses 3258);
 - **the space that was the voices'**, with the spectrum, but only inside the files C0 and C1
-  (1066 bytes, of which V4.0T uses 1060), because the radio's loader refuses an image that changes
+  (1066 bytes, of which V4.1T uses 1056), because the radio's loader refuses an image that changes
   more voice files;
 - **the place of the G.729 and MP3 decoders**, inside `app.bin`, with the B screens, WATCH, TRIPLE,
-  the folder menu, APRS and the menu table (38884 bytes, of which V4.0T uses 38882);
-- **the voice paths**, in `app.bin`, only with what our code calls (2944 bytes, of which V4.0T uses 2944);
-- **the stock menu table**, dead since v43, in `app.bin` (1512 bytes, of which V4.0T uses 1510);
-- **the dead part of the path table** (`.sons`), in `app.bin` (472 bytes, of which V4.0T uses 468);
-- **stock item names with no pointers** (`.mortos1` to `.mortos10`), in `app.bin`, in 10 pieces (422 bytes, of which V4.0T uses 396);
-- **dead stock code** (`.mortos11` to `.mortos20`), which takes the Morse and APRS routines moved there in v156, so the remote control fits (1004 bytes, of which V4.0T uses 990);
-- **the stock routines of the items that left the menu** (`.mortos21` to `.mortos30`), with no caller since v43 (782 bytes, of which V4.0T uses 717).
+  the folder menu, APRS and the menu table (38884 bytes, of which V4.1T uses 38882);
+- **the voice paths**, in `app.bin`, only with what our code calls (2944 bytes, of which V4.1T uses 2944);
+- **the stock menu table**, dead since v43, in `app.bin` (1512 bytes, of which V4.1T uses 1510);
+- **the dead part of the path table** (`.sons`), in `app.bin` (472 bytes, of which V4.1T uses 468);
+- **stock item names with no pointers** (`.mortos1` to `.mortos10`), in `app.bin`, in 10 pieces (422 bytes, of which V4.1T uses 396);
+- **dead stock code** (`.mortos11` to `.mortos20`), which takes the Morse and APRS routines moved there in v156, so the remote control fits (1004 bytes, of which V4.1T uses 990);
+- **the stock routines of the items that left the menu** (`.mortos21` to `.mortos30`), with no caller since v43 (782 bytes, of which V4.1T uses 737).
 
-The menu table has lived in the place of G.729 and MP3 since v43, in a 97-slot array (V4.0T uses all 97: the 17
+The menu table has lived in the place of G.729 and MP3 since v43, in a 97-slot array (V4.1T uses all 97: the 17
 folders and the 80 items); the original, with 54, became code space in v140. [docs/reverse-engineering.md](../reverse-engineering.md)
 explains how to measure it, where space was already saved and why these places are safe.
 
@@ -115,7 +115,7 @@ firmware/
   original/     BJ8300_V0.12.anc — stock firmware
   releases/     .anc files ready to flash
   build.sh      compiles, builds and checks
-chirp/          CHIRP driver (bj8300_v4.0TEMPRA.py)
+chirp/          CHIRP driver (bj8300_v4.1TEMPRA.py)
 tools/
   jl-toolchain-2.5.3/  the JieLi compiler (the 5 executables the build uses)
   anc-bootloader/  BinTe ANC Bootloader flasher (BinTalk V1.1)

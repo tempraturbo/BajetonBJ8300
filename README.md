@@ -1,4 +1,4 @@
-# Bajeton BJ-8300 — firmware TEMPRA V4.0T
+# Bajeton BJ-8300 — firmware TEMPRA V4.1T
 
 <p align="center">
   <a href="README.en.md"><img src="docs/imagens/botao-english.svg" alt="English version" height="56"></a>
@@ -10,7 +10,7 @@ Firmware novo para o rádio **Baojie/Bajeton BJ-8300**, feito por engenharia rev
 O "T" da versão é de **Tempra**.
 
 <p align="center">
-  <a href="https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.0T"><img src="https://img.shields.io/badge/Baixar%20a%20V4.0T-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Baixar a V4.0T"></a>
+  <a href="https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T"><img src="https://img.shields.io/badge/Baixar%20a%20V4.1T-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Baixar a V4.1T"></a>
   <a href="docs/wiki/README.md"><img src="https://img.shields.io/badge/Documenta%C3%A7%C3%A3o%20completa-0969da?style=for-the-badge&logo=bookstack&logoColor=white" alt="Documentação completa"></a>
   <a href="https://www.paypal.com/donate/?hosted_button_id=2VPWYBMKBSJX6"><img src="https://img.shields.io/badge/Doar%20com-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="Doar com PayPal"></a>
 </p>
@@ -21,8 +21,8 @@ O "T" da versão é de **Tempra**.
 > [**Doar com PayPal**](https://www.paypal.com/donate/?hosted_button_id=2VPWYBMKBSJX6) · [o QR code](#-apoie-o-projeto)
 
 > [!NOTE]
-> **🎉 Novo na V4.0T:** o Tempra Link, o controle remoto pelo PC, o ROGER CUSTOM, a busca mais rápida com o THRESHOLD e
-> o Bluetooth que fica ligado no TX. [Tudo o que mudou](docs/wiki/versoes.md)
+> **🎉 Novo na V4.1T:** o Tempra Link, o controle remoto pelo PC, o ROGER CUSTOM, a busca mais rápida com o THRESHOLD, o
+> Bluetooth que fica ligado no TX e a linha do espectro, que deixada no fundo não subia mais. [Tudo o que mudou](docs/wiki/versoes.md)
 
 ---
 
@@ -59,7 +59,7 @@ baixar nada à mão) e depois programa o rádio inteiro pelo cabo. Um `.exe` só
 - 🎵 **ROGER CUSTOM:** composto num piano, ou importado de MIDI e de som.
 - 💾 **Backup** a cada leitura, e **se atualiza sozinho** pelo GitHub.
 
-**[⬇️ Baixar o Tempra Link](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.0T)** ·
+**[⬇️ Baixar o Tempra Link](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T)** ·
 **[📖 O manual, com todas as telas](docs/wiki/tempra-link.md)**
 
 ---
@@ -71,20 +71,20 @@ mesmo do CPS de fábrica). Dois caminhos:
 
 ### 🚀 Pelo Tempra Link: automático
 
-1. Baixe e abra o `TempraLink-BJ8300_v1.0.exe`, do [release V4.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.0T).
+1. Baixe e abra o `TempraLink-BJ8300_v1.0.exe`, do [release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T).
 2. Com o rádio ligado e o cabo no PC, clique em **Ler do rádio**. Vendo o firmware de fábrica, ele oferece baixar e
-   gravar a V4.0T: **Sim**.
+   gravar a V4.1T: **Sim**.
 3. Quando ele pedir, desligue o rádio e ligue-o segurando **PTT2 + atalho**, até aparecer `UPDATE`, e confirme.
-4. Espere uns 3 minutos e desligue e ligue o rádio: `SYSTEM > VERSION` mostra `Firmware: V4.0T`.
+4. Espere uns 3 minutos e desligue e ligue o rádio: `SYSTEM > VERSION` mostra `Firmware: V4.1T`.
 
 | | |
 |:---:|:---:|
-| <img src="docs/imagens/tempralink-fabrica.png" alt="Com o firmware de fábrica, ele oferece a V4.0T" width="430"> | <img src="docs/imagens/tempralink-gravando.png" alt="A gravação em andamento" width="430"> |
-| Ele vê o firmware de fábrica e oferece a V4.0T | A gravação: a barra vermelha até o fim |
+| <img src="docs/imagens/tempralink-fabrica.png" alt="Com o firmware de fábrica, ele oferece a V4.1T" width="430"> | <img src="docs/imagens/tempralink-gravando.png" alt="A gravação em andamento" width="430"> |
+| Ele vê o firmware de fábrica e oferece a V4.1T | A gravação: a barra vermelha até o fim |
 
 ### 🔧 Pelo BinTalk: o gravador de fábrica
 
-1. Baixe do [release V4.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.0T) o `BJ8300_BANK_v4.0T.anc` e o
+1. Baixe do [release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T) o `BJ8300_BANK_v4.1T.anc` e o
    `BinTalk-V1.1.zip`, e abra o `BinTe ANC Bootloader.exe`.
 2. Escolha o `.anc`, a COM do cabo e **115200**.
 3. Desligue o rádio e ligue-o segurando **PTT2 + atalho**, até aparecer `UPDATE`, e clique em **Update**.
@@ -98,8 +98,8 @@ volta ao de fábrica →](docs/wiki/gravar.md)**
 
 ## 📻 Como usar o CHIRP com este firmware
 
-Carregue no CHIRP o módulo `bj8300_v4.0TEMPRA.py` do [release V4.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.0T)
-(**File → Load Module**, com o modo desenvolvedor ligado) e escolha **Bajeton → BJ8300_v4.0TEMPRA**. Os modelos de
+Carregue no CHIRP o módulo `bj8300_v4.1TEMPRA.py` do [release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T)
+(**File → Load Module**, com o modo desenvolvedor ligado) e escolha **Bajeton → BJ8300_v4.1TEMPRA**. Os modelos de
 fábrica do CHIRP (Bajeton BJ7800 e Radtel RT-920) não servem para este firmware.
 **[O passo a passo →](docs/wiki/chirp.md)**
 

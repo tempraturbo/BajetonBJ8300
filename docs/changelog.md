@@ -5,6 +5,20 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V4.1T — Nov 20 — V4.0T with the spectrum line fixed (prepared; the release goes out after the radio test)
+
+v172 becomes **V4.1T**, at the owner's request, in place of V4.0T, which never went out: between preparing it and the
+release, a user found the spectrum line bug, and the fix (v172, below) goes into the release. The firmware is v172 with
+the version name: `firmware/releases/BJ8300_BANK_v4.1T.anc`, sha256 `d3d6eb3c77df8df2f892779f2a7897cb133562303b46e99944c92a66649d8084`.
+
+- **Tempra Link and the phone app:** `FAIXA` goes from V3.8T to V4.1T. Both stay at version 1.0, which never went out.
+- **CHIRP driver:** the module becomes `bj8300_v4.1TEMPRA.py` (model `BJ8300_v4.1TEMPRA`), with V4.0T's in
+  `MODEL_COMPAT`, and `FIRMWARES` goes from V3.8T to V4.1T.
+- **The documentation:** the README, the wiki, Tempra Link's manual and its pictures move to V4.1T.
+
+Tested on the PC: the build ("tudo certo", the stack the same as stock and the image the same size), the firmware
+tests, the CHIRP driver's and Tempra Link's. On the radio, not yet.
+
 ## v172 — Nov 20 — the spectrum line always goes up and comes back to the default on entry (not tested on the radio)
 
 A user lowered the spectrum threshold line all the way down and it never came back up, not even after turning the
@@ -26,7 +40,7 @@ explained by the code and was not reproduced.
 Tested on the PC: the build ("tudo certo", the image the same size, the dead SCRAMBLE code with 20 of 20 bytes) and
 the firmware tests. On the radio, not yet.
 
-## V4.0T — Nov 20 — Tempra Link, the remote control, ROGER CUSTOM and a faster scan (prepared; the release goes out after the radio test)
+## V4.0T — Nov 20 — Tempra Link, the remote control, ROGER CUSTOM and a faster scan (never released: became V4.1T)
 
 v171 becomes **V4.0T**, at the owner's request, with the first release of the Windows **Tempra Link**. The firmware is
 v171 with the version name in `firmware/src/versao.h` (the VERSION item shows it and the cable answers it):

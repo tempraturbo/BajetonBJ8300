@@ -137,7 +137,7 @@ ACK = b'\x06'
 # map here is theirs. From v170 (V3.8T) on, the extended read of 0x3F0000 answers b'TEMPRA ' and the version; the
 # firmwares before it answer what the chip has there, without that prefix, and are refused like any other one outside
 # the range: the radio could keep something else where this driver writes.
-FIRMWARES = ('V3.8T', 'V4.0T')
+FIRMWARES = ('V3.8T', 'V4.1T')
 VERSION_ADDRESS = 0x3F0000
 
 
@@ -1081,28 +1081,28 @@ def _vfo_scramble_setting(old, side, vfo):
 # until V2.0T, bj8300_v2.0TEMPRA.py until V2.5T, bj8300_v2.5TEMPRA.py (never released) until V2.6T,
 # bj8300_v2.6TEMPRA.py until V2.7T, bj8300_v2.7TEMPRA.py until V2.8T, bj8300_v2.8TEMPRA.py until
 # V2.9T, bj8300_v2.9TEMPRA.py until V3.0T, bj8300_v3.0TEMPRA.py until V3.1T, bj8300_v3.1TEMPRA.py until
-# V3.2T, bj8300_v3.2TEMPRA.py until V3.5T, bj8300_v3.5TEMPRA.py until V3.6T, bj8300_v3.6TEMPRA.py until V3.7T, bj8300_v3.7TEMPRA.py until V4.0T. An image keeps the vendor and model it was saved with, and CHIRP only opens it with a driver
+# V3.2T, bj8300_v3.2TEMPRA.py until V3.5T, bj8300_v3.5TEMPRA.py until V3.6T, bj8300_v3.6TEMPRA.py until V3.7T, bj8300_v3.7TEMPRA.py until V4.1T (V4.0T was never released; its module, bj8300_v4.0TEMPRA.py, maps here too). An image keeps the vendor and model it was saved with, and CHIRP only opens it with a driver
 # whose model matches, directly or through directory.MODEL_COMPAT (get_radio_by_image): this keeps the
 # images saved with the old modules opening here, without more models in the radio list. Up to the
 # V2.8T module the vendor was Baojie; since then it is Bajeton, the brand on the radio, where CHIRP also
 # lists the BJ7800, so the images saved under Baojie map here too (and the ones saved under Bajeton by
 # the test module of v62, still named v2.8TEMPRA).
 if isinstance(getattr(directory, 'MODEL_COMPAT', None), dict):
-    directory.MODEL_COMPAT.update({('Baojie', old): ('Bajeton', 'BJ8300_v4.0TEMPRA')
+    directory.MODEL_COMPAT.update({('Baojie', old): ('Bajeton', 'BJ8300_v4.1TEMPRA')
                                    for old in ('BJ8300_v1.0TEMPRA', 'BJ8300_v2.0TEMPRA',
                                                'BJ8300_v2.5TEMPRA', 'BJ8300_v2.6TEMPRA',
                                                'BJ8300_v2.7TEMPRA', 'BJ8300_v2.8TEMPRA')})
-    directory.MODEL_COMPAT.update({('Bajeton', old): ('Bajeton', 'BJ8300_v4.0TEMPRA')
+    directory.MODEL_COMPAT.update({('Bajeton', old): ('Bajeton', 'BJ8300_v4.1TEMPRA')
                                    for old in ('BJ8300_v2.8TEMPRA', 'BJ8300_v2.9TEMPRA', 'BJ8300_v3.0TEMPRA',
                                                'BJ8300_v3.1TEMPRA', 'BJ8300_v3.2TEMPRA', 'BJ8300_v3.5TEMPRA',
-                                               'BJ8300_v3.6TEMPRA', 'BJ8300_v3.7TEMPRA')})
+                                               'BJ8300_v3.6TEMPRA', 'BJ8300_v3.7TEMPRA', 'BJ8300_v4.0TEMPRA')})
 
 
 @directory.register
 class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     """Bajeton BJ-8300 running the channel banks firmware."""
     VENDOR = 'Bajeton'
-    MODEL = 'BJ8300_v4.0TEMPRA'        # its own name: it only works with the modified firmware
+    MODEL = 'BJ8300_v4.1TEMPRA'        # its own name: it only works with the modified firmware
     VARIANT = ''
 
     # the channel scramble with the firmware's options, in menu order (see SCRAMBLE_OPTIONS)
@@ -1171,7 +1171,7 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
     def get_prompts(cls):
         rp = super().get_prompts()
         rp.experimental = (
-            'Driver for the BJ-8300 running the TEMPRA channel banks firmware (V4.0T).\n'
+            'Driver for the BJ-8300 running the TEMPRA channel banks firmware (V4.1T).\n'
             '\n'
             'The 16 banks are in the Banks tab: one column per bank, and a channel can be in as\n'
             'many banks as you like. Double-click a bank\'s column header to rename it. Each\n'
@@ -1806,5 +1806,5 @@ class BJ8300(_BankCableMixin, radtel_rt900.BJ7800):
 class BJ8300VhfUhf(BJ8300):
     """VHF/UHF sub-device: this is where the 960 channels are and, with them, the banks."""
     VENDOR = 'Bajeton'
-    MODEL = 'BJ8300_v4.0TEMPRA'
+    MODEL = 'BJ8300_v4.1TEMPRA'
     VARIANT = 'VHF/UHF'

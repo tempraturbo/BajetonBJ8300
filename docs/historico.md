@@ -5,6 +5,21 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V4.1T — 20/11 — a V4.0T com a linha do espectro corrigida (preparada; o release sai depois do teste no rádio)
+
+A v172 vira a **V4.1T**, a pedido do dono, no lugar da V4.0T, que não chegou a sair: entre a preparação dela e o
+lançamento, um usuário achou o defeito da linha do espectro, e a correção (a v172, abaixo) entra no release. O firmware
+é o da v172 com o nome da versão: `firmware/releases/BJ8300_BANK_v4.1T.anc`, sha256 `d3d6eb3c77df8df2f892779f2a7897cb133562303b46e99944c92a66649d8084`.
+
+- **Tempra Link e app do celular:** a `FAIXA` vai da V3.8T à V4.1T. Os dois continuam na versão 1.0, que não chegou a
+  sair.
+- **Driver do CHIRP:** o módulo passa a `bj8300_v4.1TEMPRA.py` (modelo `BJ8300_v4.1TEMPRA`), com o da V4.0T no
+  `MODEL_COMPAT`, e os `FIRMWARES` vão da V3.8T à V4.1T.
+- **A documentação:** o README, a wiki, o manual e as fotos do Tempra Link passam à V4.1T.
+
+Testado no PC: o build ("tudo certo", a pilha igual à de fábrica e a imagem do mesmo tamanho), os testes do firmware,
+os do driver do CHIRP e os do Tempra Link. No rádio, ainda não.
+
 ## v172 — 20/11 — a linha do espectro sobe sempre e volta ao padrão na entrada (sem teste no rádio)
 
 Um usuário desceu a linha do limite do espectro até o fundo e ela não subiu mais, nem desligando o rádio. Com a linha
@@ -25,7 +40,7 @@ código e não foi reproduzido.
 Testado no PC: o build ("tudo certo", a imagem do mesmo tamanho, o SCRAMBLE morto com 20 de 20 bytes) e os testes do
 firmware. No rádio, ainda não.
 
-## V4.0T — 20/11 — o Tempra Link, o controle remoto, o ROGER CUSTOM e a busca mais rápida (preparada; o release sai depois do teste no rádio)
+## V4.0T — 20/11 — o Tempra Link, o controle remoto, o ROGER CUSTOM e a busca mais rápida (nunca lançada: virou a V4.1T)
 
 A v171 vira a **V4.0T**, a pedido do dono, com o primeiro release do **Tempra Link** do Windows. O firmware é o da v171
 com o nome da versão no `firmware/src/versao.h` (o item VERSION a mostra e o cabo a responde):

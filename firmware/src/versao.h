@@ -5,6 +5,6 @@
 #ifndef VERSAO_H
 #define VERSAO_H
 
-#define VERSAO "V4.0T"
+#define VERSAO "V4.1T"
 
 #endif

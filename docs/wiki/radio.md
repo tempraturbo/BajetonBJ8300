@@ -8,7 +8,7 @@
 
 ## 📁 Menu novo: tudo em pastas
 
-O menu de fábrica é uma fila de mais de 50 itens. Desde a V2.7T eles ficam em pastas por assunto (**17 na V4.0T**),
+O menu de fábrica é uma fila de mais de 50 itens. Desde a V2.7T eles ficam em pastas por assunto (**17 na V4.1T**),
 em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes de abrir.
 
 | | | |
@@ -157,7 +157,7 @@ firmware do BJ-8300 fazia isso.
 As imagens saem da prévia no PC ([firmware/previa/](../../firmware/previa/)), que roda o mesmo código de
 desenho que vai para o rádio.
 
-## ✨ O que mudou da V0.12 de fábrica para a V4.0T
+## ✨ O que mudou da V0.12 de fábrica para a V4.1T
 
 ### 🆕 Recursos novos
 
@@ -199,7 +199,7 @@ desenho que vai para o rádio.
 | 💻 **Tempra Link**<ul><li>O programa para Windows deste firmware, sem instalar nada.</li><li>Lê, edita e grava os 960 canais, os 16 bancos, os ajustes do menu, os textos, o DTMF e o ROGER CUSTOM, e guarda um backup a cada leitura.</li><li>Grava o firmware pelo cabo, conferindo o arquivo antes, e baixa sozinho do GitHub a versão certa.</li><li>[O manual, com as telas](tempra-link.md).</li></ul> | <img src="../imagens/tempralink-canais.png" alt="O Tempra Link" width="300"> |
 | 📊 **Espectro**<ul><li>**320 e 640 pontos** além dos 160 de fábrica, e **passo de 10 kHz**.</li><li>**Pico seguro**: a barra sobe na hora e desce aos poucos.</li><li>A coluna medida em branco, a frequência que roda no alto e a do pico de cada passada em verde, com o dBm.</li><li>A luz não apaga enquanto ele está na tela.</li></ul> | <img src="../imagens/tela-espectro.png" alt="Espectro" width="300"> |
 | 🔌 **Driver do CHIRP próprio**<ul><li>Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, o WATCH, o VFO C, a pasta MIC, o CRYSTAL FINE, o BRIGHTNESS, o LIGHT PWM, o MODEM GAIN, a pasta AUDIO, o EQ, a pasta **APRS (SMS)**, a pasta **Morse**, o DECODE, o PF3 LONG, o THRESHOLD e o ROGER CUSTOM (as notas, só o Tempra Link grava).</li><li>Tudo numa sessão só pelo cabo; fica na lista do **Bajeton**.</li><li>Recusa gravar num rádio com o firmware de fábrica ou com um TEMPRA de outra versão ([como usar](chirp.md#-como-usar-o-chirp-com-este-firmware)).</li></ul> | |
-| 🧰 **Comando estendido no cabo**<ul><li>Leitura do chip de dados inteiro (endereço de 24 bits).</li><li>Gravação só nas áreas do firmware novo: os bancos, o WATCH, o VFO C, o Morse, o APRS e o ROGER CUSTOM.</li><li>A leitura de `0x3F0000` responde a versão do firmware (`TEMPRA V4.0T`).</li><li>A serial a 460800 bauds.</li><li>É o que o Tempra Link e o driver do CHIRP usam.</li></ul> | |
+| 🧰 **Comando estendido no cabo**<ul><li>Leitura do chip de dados inteiro (endereço de 24 bits).</li><li>Gravação só nas áreas do firmware novo: os bancos, o WATCH, o VFO C, o Morse, o APRS e o ROGER CUSTOM.</li><li>A leitura de `0x3F0000` responde a versão do firmware (`TEMPRA V4.1T`).</li><li>A serial a 460800 bauds.</li><li>É o que o Tempra Link e o driver do CHIRP usam.</li></ul> | |
 
 ### 🖥️ A tela nova, tela por tela
 
@@ -235,14 +235,14 @@ etiquetas coloridas e uma fonte própria:
 | 🟩 **Lado em evidência destacado** | O lado ativo fica num cartão de borda verde, com a frequência grande e a barra S; o outro fica compacto |
 | 📻 **Rádio FM/AM/SSB** | A troca de modulação ficou ~2,5 s mais rápida, e os ajustes salvos (passo, largura, LNA, BFO e as memórias) são conferidos ao entrar e a cada troca: valor fora dos limites dos menus volta ao padrão |
 | ↕️ **Setas do menu invertidas** | A seta de cima passa a subir na lista, em vez de avançar o valor |
-| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TRIPLE WATCH`, porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX SIDE`. O menu `VERSION` mostra `Firmware: V4.0T` |
+| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TRIPLE WATCH`, porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX SIDE`. O menu `VERSION` mostra `Firmware: V4.1T` |
 | 🏷️ **Nomes claros no menu** | Os nomes curtos de fábrica viraram nomes que dizem o que o item faz, iguais aos do Baofeng UV-17L: `SQL` é `SQUELCH`, `STE` é `TAIL CUT`, `BCL` é `BUSY LOCK`, `TXP` é `TX POWER`, `W/N` é `BANDWIDTH`, `TOT` é `TX TIMEOUT` e `MDF-A` é `SHOW A`, entre outros. A [tabela das pastas](#-menu-novo-tudo-em-pastas) traz todos, e a [seção 35](../engenharia-reversa.md#35-os-nomes-do-menu-desde-a-v141) lista o nome antigo de cada um |
 | 📶 **Bluetooth no TX** | O de fábrica desliga o Bluetooth a cada PTT, e o celular perdia o controle remoto. Com uma ligação aberta, ele agora fica ligado; sem ligação, é como de fábrica |
 | 🔌 **Cabo mais rápido** | A serial do cabo passa de 57600 a 460800 bauds. O Tempra Link e o driver do CHIRP descem sozinhos às velocidades de antes, para reconhecer os firmwares antigos |
 
 ### 🐞 Correções
 
-| Problema da V0.12 | Na V4.0T |
+| Problema da V0.12 | Na V4.1T |
 |---|---|
 | Os ajustes do menu só iam para o chip ao fechar o menu: desligado com ele aberto, o que mudou se perdia | Cada OK grava na hora |
 | O medidor de sinal tinha 5 degraus e já enchia num sinal fraco (entre −117 e −96 dBm) | A barra S, do chiado (S1) a S9+60 |

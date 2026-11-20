@@ -1508,11 +1508,11 @@ begin
             'gravador: o pacote de ' + VETORES[I, 0] + ' é o do BinTalk');
 
   Fab := TFile.ReadAllBytes(TPath.Combine(Pasta, '..\firmware\original\BJ8300_V0.12.anc'));
-  Rel := TFile.ReadAllBytes(TPath.Combine(Pasta, '..\firmware\releases\BJ8300_BANK_v4.0T.anc'));
+  Rel := TFile.ReadAllBytes(TPath.Combine(Pasta, '..\firmware\releases\BJ8300_BANK_v4.1T.anc'));
   Confere((ConfereAnc(Fab, A) = '') and (A.Versao = 'V0.12') and A.Fabrica,
           'gravador: o .anc de fábrica (V0.12) confere');
-  Confere((ConfereAnc(Rel, A2) = '') and (A2.Versao = 'V4.0T') and not A2.Fabrica,
-          'gravador: o .anc da release (V4.0T) confere');
+  Confere((ConfereAnc(Rel, A2) = '') and (A2.Versao = 'V4.1T') and not A2.Fabrica,
+          'gravador: o .anc da release (V4.1T) confere');
   B := Copy(Fab);
   Kdh(B);
   Kdh(B);

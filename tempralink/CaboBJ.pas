@@ -36,7 +36,7 @@ const
   VERSAO_CABO = $3F0000;      // v170: a leitura que responde a versão (firmware/src/versao.h)
   // As versões do firmware com que este Tempra Link trabalha: o mapa da memória (BJ8300.pas) e o protocolo daqui são
   // os delas. A máxima é sempre a do firmware/src/versao.h (o teste confere).
-  FAIXA: TFaixa = (Minima: 'V3.8T'; Maxima: 'V4.0T');
+  FAIXA: TFaixa = (Minima: 'V3.8T'; Maxima: 'V4.1T');
   // depois do 'E', o rádio só fecha a sessão quando nenhum byte chega por um tempo: a próxima conversa espera isto
   SESSAO_FECHA_MS = 1500;
 

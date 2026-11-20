@@ -1,4 +1,4 @@
-"""O lado do CHIRP nos testes do Tempra Link do BJ-8300: o driver deste repositório (chirp/bj8300_v4.0TEMPRA.py) é a
+"""O lado do CHIRP nos testes do Tempra Link do BJ-8300: o driver deste repositório (chirp/bj8300_v4.1TEMPRA.py) é a
 referência do que cada byte quer dizer.
 
   python -I tempralink/testes/fixtures.py gera     monta um rádio pelo driver (canais, bancos, ajustes, textos) e

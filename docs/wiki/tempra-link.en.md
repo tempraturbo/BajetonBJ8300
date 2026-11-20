@@ -32,14 +32,14 @@ screen live on the PC, and **flashes the firmware itself**. It is a single `.exe
 
 ## 1. Before you start
 
-- **The radio's firmware.** Tempra Link 1.0 works with TEMPRA firmware **V4.0T** (and with V3.8T, which only existed as
+- **The radio's firmware.** Tempra Link 1.0 works with TEMPRA firmware **V4.1T** (and with V3.8T, which only existed as
   a test build). With the factory firmware or an older TEMPRA, it reads and writes nothing, but it flashes the right
   firmware: see [Flashing the firmware](#10-flashing-the-firmware).
 - **The cable** is the radio's USB programming cable, with the CH340 chip, the same one the factory CPS and CHIRP use. If
   Windows does not recognize it, install the driver from the release's `CH340-driver.zip` (see the
   [flashing page](gravar.en.md#-the-cable-and-the-driver)).
 - **Download** `TempraLink-BJ8300_v1.0.exe` from the
-  [V4.0T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.0T) and put it in a folder of your
+  [V4.1T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T) and put it in a folder of your
   own. It installs nothing: the backups go to the user's folder ([Backup and log](#11-backup-and-log)).
 - **The first time,** Windows may warn that the program comes from an unknown publisher (SmartScreen), because the `.exe`
   is not signed: **More info** → **Run anyway**.
@@ -134,7 +134,7 @@ radio with the rest, on **Write to radio**.
 - **Read from radio** brings the image the radio shows when it turns on (160 × 138), and **Save as PNG...** keeps it.
 - **Choose image...** opens an image from the PC. The 160 × 138 ones go as they are, and the others are fitted: filling
   the screen (cropping the excess) or whole (with black bars).
-- **Write to radio** does not work yet: the TEMPRA firmware, V4.0T included, does not write the logo over the cable.
+- **Write to radio** does not work yet: the TEMPRA firmware, V4.1T included, does not write the logo over the cable.
   Tempra Link checks by reading it back and warns.
 
 ## 9. Remote control
@@ -169,7 +169,7 @@ the same way. Channels, settings and calibration are on a separate chip, which f
 ### Step by step
 
 1. **Read the radio first** (Channels page), to have the backup of the channels and settings.
-2. **The file.** The easiest is the **Download and flash V4.0T** button: it downloads from GitHub the newest firmware this
+2. **The file.** The easiest is the **Download and flash V4.1T** button: it downloads from GitHub the newest firmware this
    Tempra Link works with, checks it by size and SHA-256 and goes on to flashing. Or **Browse...** for an `.anc` on the
    PC; a `BJ8300_BANK_v*.anc` in the program's folder opens by itself.
 3. **The port** is the cable's, at the top: the firmware does not flash over Bluetooth.
@@ -183,7 +183,7 @@ the same way. Channels, settings and calibration are on a separate chip, which f
      at this point;
    - *Flashing the firmware to the radio*: about 2 minutes;
    - *The radio finished flashing.*
-7. **Turn the radio off and on.** **SYSTEM > VERSION** shows `Firmware: V4.0T`. The **Check the radio and GitHub**
+7. **Turn the radio off and on.** **SYSTEM > VERSION** shows `Firmware: V4.1T`. The **Check the radio and GitHub**
    button, with the radio on normally, shows the version too.
 
 <p align="center"><img src="../imagens/tempralink-gravando-en.png" alt="Flashing in progress: the bottom bar in red" width="900"></p>
@@ -233,10 +233,10 @@ nothing and offers the right thing:
 
 | On the radio | What Tempra Link 1.0 does |
 |---|---|
-| TEMPRA V4.0T (or V3.8T) | everything |
-| an older TEMPRA, up to V3.7T (does not report the version) | reads and writes nothing; offers to download and flash V4.0T |
-| the factory firmware (V0.12) | reads and writes nothing; offers to download and flash V4.0T |
-| a TEMPRA newer than V4.0T | reads and writes nothing; offers the newer Tempra Link |
+| TEMPRA V4.1T (or V3.8T) | everything |
+| an older TEMPRA, up to V3.7T (does not report the version) | reads and writes nothing; offers to download and flash V4.1T |
+| the factory firmware (V0.12) | reads and writes nothing; offers to download and flash V4.1T |
+| a TEMPRA newer than V4.1T | reads and writes nothing; offers the newer Tempra Link |
 
 The CHIRP driver does the same: each release brings the module for its version.
 
@@ -252,7 +252,7 @@ worked with the phone app; reading and writing over it have not been tested yet.
 - **The port does not show:** plug the cable and click **Refresh**. If it still does not show, install the CH340 driver.
 - **"The radio did not answer"** when reading or in the remote control: the radio must be on normally, not in UPDATE,
   with the cable plug well seated. Close CHIRP, the CPS and BinTalk.
-- **"This radio runs firmware ..., too old for this Tempra Link"**, or the factory one: flash V4.0T from the Firmware page
+- **"This radio runs firmware ..., too old for this Tempra Link"**, or the factory one: flash V4.1T from the Firmware page
   ([Firmware versions](#12-firmware-versions)).
 - **"The radio changed since it was read (...). Nothing was written"**: the radio was touched after the reading. Read it again
   and redo the changes (or save a backup before reading, and write from it).

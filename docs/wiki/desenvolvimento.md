@@ -82,20 +82,20 @@ variável `JL_TOOLCHAIN` para ela.
 
 **Orçamento de espaço:** o código novo mora em nove lugares, todos no mesmo endereço nas 6 imagens:
 
-- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a V4.0T usa 3254);
+- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a V4.1T usa 3258);
 - **o espaço que era das vozes**, com o espectro, mas só dentro dos arquivos C0 e C1 (1066 bytes,
-  dos quais a V4.0T usa 1060), porque o carregador do rádio recusa a imagem que muda mais arquivos de
+  dos quais a V4.1T usa 1056), porque o carregador do rádio recusa a imagem que muda mais arquivos de
   voz;
 - **o lugar dos decodificadores G.729 e MP3**, dentro do `app.bin`, com as telas B, o WATCH, o
-  TRIPLE, o menu em pastas, o APRS e a tabela de menus (38884 bytes, dos quais a V4.0T usa 38882);
-- **os caminhos das vozes**, no `app.bin`, só com o que o nosso código chama (2944 bytes, dos quais a V4.0T usa 2944);
-- **a tabela de menu de fábrica**, morta desde a v43, no `app.bin` (1512 bytes, dos quais a V4.0T usa 1510);
-- **a parte morta da tabela de caminhos** (`.sons`), no `app.bin` (472 bytes, dos quais a V4.0T usa 468);
-- **os nomes de item de fábrica sem ponteiro** (`.mortos1` a `.mortos10`), no `app.bin`, em 10 pedaços (422 bytes, dos quais a V4.0T usa 396);
-- **trechos de fábrica mortos** (`.mortos11` a `.mortos20`), que recebem as rotinas do Morse e do APRS levadas para lá na v156, para o controle remoto caber (1004 bytes, dos quais a V4.0T usa 990);
-- **as rotinas de fábrica dos itens que saíram do menu** (`.mortos21` a `.mortos30`), sem chamador desde a v43 (782 bytes, dos quais a V4.0T usa 717).
+  TRIPLE, o menu em pastas, o APRS e a tabela de menus (38884 bytes, dos quais a V4.1T usa 38882);
+- **os caminhos das vozes**, no `app.bin`, só com o que o nosso código chama (2944 bytes, dos quais a V4.1T usa 2944);
+- **a tabela de menu de fábrica**, morta desde a v43, no `app.bin` (1512 bytes, dos quais a V4.1T usa 1510);
+- **a parte morta da tabela de caminhos** (`.sons`), no `app.bin` (472 bytes, dos quais a V4.1T usa 468);
+- **os nomes de item de fábrica sem ponteiro** (`.mortos1` a `.mortos10`), no `app.bin`, em 10 pedaços (422 bytes, dos quais a V4.1T usa 396);
+- **trechos de fábrica mortos** (`.mortos11` a `.mortos20`), que recebem as rotinas do Morse e do APRS levadas para lá na v156, para o controle remoto caber (1004 bytes, dos quais a V4.1T usa 990);
+- **as rotinas de fábrica dos itens que saíram do menu** (`.mortos21` a `.mortos30`), sem chamador desde a v43 (782 bytes, dos quais a V4.1T usa 737).
 
-A tabela de menus fica no lugar do G.729 e do MP3 desde a v43, num vetor de 97 vagas (a V4.0T usa as 97: as 17
+A tabela de menus fica no lugar do G.729 e do MP3 desde a v43, num vetor de 97 vagas (a V4.1T usa as 97: as 17
 pastas e os 80 itens); a original, de 54, virou espaço de código na v140. [docs/engenharia-reversa.md](../engenharia-reversa.md)
 explica como medir, onde já foi economizado e por que esses lugares são seguros.
 
@@ -116,7 +116,7 @@ firmware/
   original/     BJ8300_V0.12.anc — firmware de fábrica
   releases/     .anc prontos para gravar
   build.sh      compila, monta e confere
-chirp/          driver do CHIRP (bj8300_v4.0TEMPRA.py)
+chirp/          driver do CHIRP (bj8300_v4.1TEMPRA.py)
 tools/
   jl-toolchain-2.5.3/  o compilador da JieLi (os 5 executáveis que o build usa)
   anc-bootloader/  gravador BinTe ANC Bootloader (BinTalk V1.1)
