@@ -5,6 +5,33 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V4.0T — Nov 20 — Tempra Link, the remote control, ROGER CUSTOM and a faster scan (prepared; the release goes out after the radio test)
+
+v171 becomes **V4.0T**, at the owner's request, with the first release of the Windows **Tempra Link**. The firmware is
+v171 with the version name in `firmware/src/versao.h` (the VERSION item shows it and the cable answers it):
+`firmware/releases/BJ8300_BANK_v4.0T.anc`, sha256 `caa0e07ccbe571d5b6cbfbb44654d93fec18959d435aa7930a8efb6aa301ef5e`. What V3.7T did not have is in the
+entries below, from v155 to v171. V3.8T, the name v170 and v171 showed, does not go out as a release; Tempra Link and the
+CHIRP driver still work with it.
+
+- **Tempra Link 1.0** (`TempraLink-BJ8300_v1.0.exe` in the release): `FAIXA` goes from V3.8T to V4.0T. The English title
+  of the ROGER CUSTOM editor got shorter: its end was cut off. The test that checks `FAIXA.Maxima` against `versao.h` read
+  a local variable named `Faixa`, which in Delphi hides the `FAIXA` constant (case does not count), and passed by
+  coincidence; the variable was renamed, and the test now checks the constant.
+- **Phone app 1.0** (versionCode 2): the version in the project and on the About screen. The APK is not in the release
+  yet.
+- **CHIRP driver:** the module becomes `bj8300_v4.0TEMPRA.py` (model `BJ8300_v4.0TEMPRA`), with `BJ8300_v3.7TEMPRA` in
+  `MODEL_COMPAT`, and `FIRMWARES` goes from V3.8T to V4.0T.
+- **The documentation:** Tempra Link's manual, with the screens, in Portuguese and English
+  ([tempra-link.en.md](tempra-link.en.md)); the README with V4.0T, Tempra Link and flashing with it; and two new preview
+  screens, ROGER CUSTOM and THRESHOLD. The manual's pictures came from a copy of the program connected to the tests'
+  simulated radio, on a fake COM3 port, and to a local GitHub with the release as it will go out: they are the program's
+  own screens, with no real radio.
+
+Tested on the PC: the build ("tudo certo", the stack the same as stock and the image the same size), the firmware tests,
+the CHIRP driver's, Tempra Link's (the V4.0T `.anc` passes the flasher's check, with the version) and the phone app
+built for the PC. On the radio, flashing with Tempra Link has been done (v169, in the owner's log of Nov 19), and the
+owner runs v170; v171 and V4.0T have not been flashed yet.
+
 ## Tempra Link — Nov 19 — flashing stands out and does not wait for nothing, and GitHub without the firmware yet
 
 - **Flashing stands out:** while the firmware flashes, the bottom bar turns red, with light text and a wheel that spins

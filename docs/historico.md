@@ -5,6 +5,31 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V4.0T — 20/11 — o Tempra Link, o controle remoto, o ROGER CUSTOM e a busca mais rápida (preparada; o release sai depois do teste no rádio)
+
+A v171 vira a **V4.0T**, a pedido do dono, com o primeiro release do **Tempra Link** do Windows. O firmware é o da v171
+com o nome da versão no `firmware/src/versao.h` (o item VERSION a mostra e o cabo a responde):
+`firmware/releases/BJ8300_BANK_v4.0T.anc`, sha256 `caa0e07ccbe571d5b6cbfbb44654d93fec18959d435aa7930a8efb6aa301ef5e`. O que a V3.7T não tinha está nas
+entradas de baixo, da v155 à v171. A V3.8T, o nome que a v170 e a v171 mostravam, não sai como release; o Tempra Link e o
+driver do CHIRP continuam trabalhando com ela.
+
+- **Tempra Link 1.0** (`TempraLink-BJ8300_v1.0.exe` no release): a `FAIXA` vai da V3.8T à V4.0T. O título do editor do
+  ROGER CUSTOM, em inglês, encurtou: o fim dele ficava cortado. O teste que confere a `FAIXA.Maxima` contra o `versao.h`
+  lia uma variável local chamada `Faixa`, que no Delphi esconde a constante `FAIXA` (maiúsculas não contam), e passava
+  por coincidência; a variável mudou de nome, e o teste agora confere a constante.
+- **App do celular 1.0** (versionCode 2): a versão no projeto e na tela Sobre. O APK ainda não sai no release.
+- **Driver do CHIRP:** o módulo passa a `bj8300_v4.0TEMPRA.py` (modelo `BJ8300_v4.0TEMPRA`), com o `BJ8300_v3.7TEMPRA`
+  no `MODEL_COMPAT`, e os `FIRMWARES` vão da V3.8T à V4.0T.
+- **A documentação:** o manual do Tempra Link, com as telas, em português e em inglês ([tempra-link.md](tempra-link.md));
+  o README com a V4.0T, o Tempra Link e a gravação por ele; e duas telas novas da prévia, o ROGER CUSTOM e o THRESHOLD.
+  As fotos do manual saíram de uma cópia do programa ligada ao rádio simulado dos testes, numa porta COM3 de mentira, e
+  a um GitHub local com o release como ele vai sair: são as telas do próprio programa, sem rádio de verdade.
+
+Testado no PC: o build ("tudo certo", a pilha igual à de fábrica e a imagem do mesmo tamanho), os testes do firmware, os
+do driver do CHIRP, os do Tempra Link (o `.anc` da V4.0T se confere no gravador, com a versão) e o app do celular
+compilado para o PC. No rádio, a gravação pelo Tempra Link já foi feita (a v169, no registro do dono de 19/11), e o dono
+usa a v170; a v171 e a V4.0T ainda não foram gravadas.
+
 ## Tempra Link — 19/11 — a gravação em destaque e sem espera à toa, e o GitHub que ainda não tem o firmware
 
 - **A gravação em destaque:** enquanto o firmware grava, a barra de baixo fica vermelha, com o texto claro e uma roda

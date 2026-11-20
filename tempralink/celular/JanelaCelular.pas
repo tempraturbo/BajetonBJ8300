@@ -165,6 +165,7 @@ const
   CANAL_AVISO_MUDO = 'recebendo-mudo';
   ACHA_MS = 8000;   // a procura do rádio usado antes, que para assim que ele aparece
   PAGINA_RELEASES = 'https://github.com/tempraturbo/BajetonBJ8300/releases';
+  VERSAO_APP = '1.0';  // a mesma do versionName do TempraLinkCelular.dproj
 
 // Uma página no navegador.
 procedure AbreEndereco(const Url: string);
@@ -1829,8 +1830,8 @@ begin
         Empilha('Registro', PaginaRegistro);
       end),
     Secao('Sobre'),
-    Linha('Tempra Link do ' + RADIO_NOME, IfThen(M.Versao = '', 'versão 0.1 do app',
-          'versão 0.1 do app · firmware ' + M.Versao), '')];
+    Linha('Tempra Link do ' + RADIO_NOME, IfThen(M.Versao = '', 'versão ' + VERSAO_APP + ' do app',
+          'versão ' + VERSAO_APP + ' do app · firmware ' + M.Versao), '')];
 end;
 
 function TJanela.AcaoBackup(const Arquivo: string): TProc;

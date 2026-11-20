@@ -3,7 +3,7 @@
 Uso: python -I tempralink/gera_menu.py        (precisa do CHIRP instalado, como o tests/teste_chirp_real.py)
 
 O Tempra Link não interpreta os ajustes: para cada item do menu do rádio, ele sabe os bytes que cada valor põe na
-memória. Este gerador tira esses bytes do driver do CHIRP deste repositório (chirp/bj8300_v3.7TEMPRA.py, conferido
+memória. Este gerador tira esses bytes do driver do CHIRP deste repositório (chirp/bj8300_v4.0TEMPRA.py, conferido
 contra o rádio): aplica cada opção do ajuste correspondente numa imagem e anota os bits que mudam de uma opção para
 outra. Os nomes das pastas e dos itens são os do menu do rádio (firmware/scripts/montar.py, GRUPOS); o texto de cada
 valor é o que o rádio mostra quando a lista do rádio diz a mesma coisa que a do CHIRP (TEXTOS_DO_RADIO, tirados das
@@ -33,7 +33,7 @@ except ImportError:
     sys.exit('precisa do chirp instalado (pip install https://codeload.github.com/kk7ds/chirp/tar.gz/refs/heads/master '
              '--no-deps)')
 
-_caminho = os.path.join(RAIZ, 'chirp', 'bj8300_v3.7TEMPRA.py')
+_caminho = os.path.join(RAIZ, 'chirp', 'bj8300_v4.0TEMPRA.py')
 _nome = 'chirp.loaded.%s' % os.path.splitext(os.path.basename(_caminho))[0]
 _spec = importlib.util.spec_from_file_location(_nome, _caminho)
 bj = importlib.util.module_from_spec(_spec)

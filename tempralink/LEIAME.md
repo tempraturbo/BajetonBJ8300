@@ -3,10 +3,10 @@
 O Tempra Link do BJ-8300 para Windows, sem instalar nada: lê, edita, guarda e grava pelo cabo de programação os
 canais, os bancos, os ajustes do menu, os textos do APRS e do Morse, o DTMF e o logo de abertura de um BJ-8300 com o
 firmware TEMPRA de uma versão que ele conhece (abaixo, A compatibilidade), e tenta o mesmo pelo Bluetooth (experimental). É um `.exe` só, sem DLL, de 32
-bits. Como usar: [README](../README.md#-tempra-link-o-rádio-pelo-pc).
+bits. Como usar: [o manual, com as telas](../docs/tempra-link.md).
 
 É o irmão do Tempra Link do Baofeng UV-17L (no repositório dele), com a mesma janela, e separado de propósito: um
-não fala com o outro rádio, e um não abre o backup do outro. O controle remoto, que o firmware ganhou depois da V3.7T,
+não fala com o outro rádio, e um não abre o backup do outro. O controle remoto, que o firmware ganhou na V4.0T,
 e a gravação do firmware têm páginas próprias (abaixo).
 
 ## A memória pelo cabo
@@ -94,7 +94,7 @@ API dos releases, sem login); **Baixar e gravar** baixa o `.anc` dele, confere p
 GitHub dá e grava; **Voltar ao de fábrica** usa o `firmware/original/BJ8300_V0.12.anc` ao lado do programa, ou o baixa
 do repositório, conferido pelo SHA-256 fixo. Os downloads ficam em `%LOCALAPPDATA%\TempraLink\firmware`. Em qualquer
 conversa pelo cabo, e no **Verificar**, o programa diz o firmware do rádio: o de fábrica, um TEMPRA que não diz a
-versão (de antes da v170) ou o TEMPRA e a versão. A gravação num rádio ainda não foi testada.
+versão (de antes da v170) ou o TEMPRA e a versão. No rádio, a gravação funcionou (a v169, em 19/11).
 
 ## A compatibilidade e a atualização
 
@@ -109,7 +109,7 @@ ou responde, sobe a versão dele, e a faixa do programa junto.
 
 Ao abrir, o `Atualizacao.pas` lê a lista de releases do GitHub (sem login; rascunho e pré-release de fora) e acha
 o firmware mais novo da faixa, o mais novo de todos e o Tempra Link mais novo, pela versão no nome do arquivo
-(`BJ8300_BANK_v3.8T.anc`, `TempraLink-BJ8300_v1.1.exe`). Com um programa mais novo que o `VERSAO_TEMPRA_LINK`,
+(`BJ8300_BANK_v4.0T.anc`, `TempraLink-BJ8300_v1.0.exe`). Com um programa mais novo que o `VERSAO_TEMPRA_LINK`,
 a janela pergunta se atualiza: o novo se baixa, confere pelo tamanho e pelo SHA-256 do GitHub, entra no lugar do
 que está aberto (este vira `.antigo`, que o novo apaga ao abrir) e abre. Para isso, cada release leva o `.exe`
 com a versão no nome.
@@ -125,7 +125,8 @@ ainda não foram testadas.
 
 ## O app do celular (Android)
 
-A pasta `celular/` é o Tempra Link no Android, pelo Bluetooth do rádio, com as unidades do programa do Windows para a
+A pasta `celular/` é o Tempra Link no Android (a versão 1.0, ainda sem APK publicado: o `versionName` do projeto e o
+`VERSAO_APP` do `JanelaCelular.pas`), pelo Bluetooth do rádio, com as unidades do programa do Windows para a
 memória, o menu, o controle remoto, o Bluetooth, o ROGER CUSTOM e a tela do rádio (a `tela/libtelabj.so`). A primeira
 tela mostra os rádios usados antes (`RadiosLembrados.pas`, cada um com o apelido que se der a ele; um toque
 conecta, com uma procura que para assim que o rádio aparece) e procura os outros (ou abre a demonstração, com um

@@ -1508,11 +1508,11 @@ begin
             'gravador: o pacote de ' + VETORES[I, 0] + ' é o do BinTalk');
 
   Fab := TFile.ReadAllBytes(TPath.Combine(Pasta, '..\firmware\original\BJ8300_V0.12.anc'));
-  Rel := TFile.ReadAllBytes(TPath.Combine(Pasta, '..\firmware\releases\BJ8300_BANK_v3.7T.anc'));
+  Rel := TFile.ReadAllBytes(TPath.Combine(Pasta, '..\firmware\releases\BJ8300_BANK_v4.0T.anc'));
   Confere((ConfereAnc(Fab, A) = '') and (A.Versao = 'V0.12') and A.Fabrica,
           'gravador: o .anc de fábrica (V0.12) confere');
-  Confere((ConfereAnc(Rel, A2) = '') and (A2.Versao = 'V3.7T') and not A2.Fabrica,
-          'gravador: o .anc da release (V3.7T) confere');
+  Confere((ConfereAnc(Rel, A2) = '') and (A2.Versao = 'V4.0T') and not A2.Fabrica,
+          'gravador: o .anc da release (V4.0T) confere');
   B := Copy(Fab);
   Kdh(B);
   Kdh(B);
@@ -1582,7 +1582,7 @@ var
   P: TProcura;
   Real, Json, Exe, VersaoH: string;
   Velho, Novo: TBytes;
-  Faixa: TFaixa;
+  Inventada: TFaixa;  // não "Faixa": no Delphi, ela esconderia a constante FAIXA
   Erro: string;
 begin
   Real := TFile.ReadAllText(TPath.Combine(Pasta, 'testes\github-release.json'), TEncoding.UTF8);
@@ -1591,9 +1591,9 @@ begin
   Confere((P.MaisNovo.Tag = 'v3.7T') and (P.MaisNovo.Arquivo = 'BJ8300_BANK_v3.7T.anc') and (P.MaisNovo.Versao = '3.7T') and
           (P.MaisNovo.Tamanho = TAMANHO_ANC) and P.MaisNovo.Url.EndsWith('/v3.7T/BJ8300_BANK_v3.7T.anc'),
           'atualização: o arquivo de firmware dele, com a versão e o tamanho');
-  Confere(P.MaisNovo.Sha256 = Sha256De(TFile.ReadAllBytes(TPath.Combine(Pasta,
-                                       '..\firmware\releases\BJ8300_BANK_v3.7T.anc'))),
-          'atualização: o SHA-256 que o GitHub dá é o do .anc da release no repositório');
+  // o .anc da V3.7T saiu de firmware/releases na V4.0T: o SHA-256 dele, o do histórico
+  Confere(P.MaisNovo.Sha256 = 'fc0890e41baac86ab2af503612a0452277ba7613271d71f5cdc2e67297538342',
+          'atualização: o SHA-256 que o GitHub dá é o do .anc da V3.7T');
   Confere((P.Firmware.Arquivo = '') and (P.Programa.Arquivo = ''),
           'atualização: a V3.7T é de fora da FAIXA, e ainda não há Tempra Link publicado');
   Json := '[' + Rel('link-1.2', '', Arq('TempraLink-BJ8300_v1.2.exe', 5000000)) + ',' +
@@ -1603,9 +1603,9 @@ begin
          Rel('v3.9.1T', ', "draft": true', Arq('BJ8300_BANK_v3.9.1T.anc', TAMANHO_ANC)) + ',' +
          Rel('v3.8T', '', Arq('BJ8300_BANK_v3.8T.anc', TAMANHO_ANC) + ',' + Arq('TempraLink-BJ8300_v1.1.exe', 5000000) +
              ',' + Arq('UV17L_v1.7T.kdhx', 60000)) + ',' + Real + ']';
-  Faixa.Minima := 'V3.8T';
-  Faixa.Maxima := 'V3.8T';
-  Confere(LeReleases(Json, Faixa, 'BJ8300_BANK_v', '.anc', 'TempraLink-BJ8300_v', P) = '',
+  Inventada.Minima := 'V3.8T';
+  Inventada.Maxima := 'V3.8T';
+  Confere(LeReleases(Json, Inventada, 'BJ8300_BANK_v', '.anc', 'TempraLink-BJ8300_v', P) = '',
           'atualização: a lista com os releases inventados se lê');
   Confere((P.Firmware.Versao = '3.8T') and (P.Firmware.Tag = 'v3.8T') and (P.Firmware.Sha256 = 'ab12') and
           (P.MaisNovo.Versao = '4.0T') and (P.Programa.Versao = '1.2') and (P.Programa.Tag = 'link-1.2'),
@@ -1618,8 +1618,8 @@ begin
   Confere((ComparaVersoes('v3.7T', 'V3.7T') = 0) and (ComparaVersoes('V0.12', 'v3.7T') < 0) and
           (ComparaVersoes('1.10T', '1.9T') > 0) and (ComparaVersoes('v1.6T', '1.6') = 0) and
           (ComparaVersoes('V3.8T', 'v3.7T') > 0), 'atualização: as versões se comparam número a número');
-  Confere(Faixa.Contem('V3.8T') and Faixa.Contem('3.8T') and not Faixa.Contem('V3.7T') and not Faixa.Contem('V3.9T') and
-          not Faixa.Contem(''), 'compatibilidade: a faixa tem as duas pontas, e nada fora delas');
+  Confere(Inventada.Contem('V3.8T') and Inventada.Contem('3.8T') and not Inventada.Contem('V3.7T') and not Inventada.Contem('V3.9T') and
+          not Inventada.Contem(''), 'compatibilidade: a faixa tem as duas pontas, e nada fora delas');
   // a FAIXA vai até a versão do firmware deste repositório: subiu a versão, o Tempra Link tem de ser revisto
   VersaoH := TFile.ReadAllText(TPath.Combine(Pasta, '..\firmware\src\versao.h'));
   Confere(TRegEx.Match(VersaoH, '#define VERSAO "([^"]+)"').Groups[1].Value = FAIXA.Maxima,

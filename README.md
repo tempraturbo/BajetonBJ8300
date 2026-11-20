@@ -1,4 +1,4 @@
-# Bajeton BJ-8300 — firmware V3.7T: menu em pastas, escuta tripla, APRS e Morse, EQ, barra S, tela nova, bancos de canais e driver do CHIRP
+# Bajeton BJ-8300 — firmware V4.0T: menu em pastas, escuta tripla, APRS e Morse, EQ, barra S, tela nova, bancos de canais, controle remoto, Tempra Link e driver do CHIRP
 
 <p align="center">
   <a href="README.en.md"><img src="docs/imagens/botao-english.svg" alt="English version" height="56"></a>
@@ -10,35 +10,36 @@ em pastas**, a **escuta tripla (TRIPLE)**, inédita neste rádio, **uma tela nov
 **APRS e Morse**, um **equalizador** de graves e agudos na recepção e na transmissão, a **barra S**,
 **16 bancos de canais de verdade**, scramble compatível com o Baofeng UV-17L, ganho, compressor, AGC e redução
 de ruído do microfone no menu, expansor e porta de ruído na recepção, o ganho do receptor, ajuste fino do cristal, brilho da tela,
-espectro mais rápido e um **driver do CHIRP** próprio. O "T" da versão é de **Tempra**.
+espectro mais rápido, o **controle remoto** pelo PC, o **Tempra Link**, um programa para Windows que edita o rádio, faz o
+controle remoto e grava o firmware, e um **driver do CHIRP** próprio. O "T" da versão é de **Tempra**.
 
 > [!TIP]
-> ## 🎉 V3.7T — a tela MESSAGES do Morse, o SENDING, o PF3 LONG e a lanterna de tela
+> ## 🎉 V4.0T — o Tempra Link, o controle remoto pelo PC, o ROGER CUSTOM e a busca mais rápida
 >
-> **[⬇️ Baixar a V3.7T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.7T)**
+> **[⬇️ Baixar a V4.0T na página de Releases](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.0T)**
 >
 > | Arquivo do release | Para que serve |
 > |---|---|
-> | `BJ8300_BANK_v3.7T.anc` | o firmware, para gravar no rádio |
-> | `bj8300_v3.7TEMPRA.py` | o módulo do CHIRP para este firmware |
-> | `BinTalk-V1.1.zip` | o gravador (BinTe ANC Bootloader) |
+> | `TempraLink-BJ8300_v1.0.exe` | o **Tempra Link**, o programa do PC: edita o rádio, faz o controle remoto e grava o firmware ([manual](docs/tempra-link.md)) |
+> | `BJ8300_BANK_v4.0T.anc` | o firmware, para gravar no rádio |
+> | `bj8300_v4.0TEMPRA.py` | o módulo do CHIRP para este firmware |
+> | `BinTalk-V1.1.zip` | o gravador de fábrica (BinTe ANC Bootloader), para quem preferir gravar por ele |
 > | `CH340-driver.zip` | o driver do cabo de programação USB |
 >
-> A V3.7T é a V3.6T com:
+> A V4.0T é a V3.7T com:
 >
-> - a **tela MESSAGES do Morse**: lê o Morse que chega, palavra por palavra, guarda as mensagens e, no `#`, abre a caixa SEND;
-> - a **caixa** abrindo com a última mensagem, no Morse e no APRS, e a primeira tecla trocando tudo;
-> - a tela **SENDING** enquanto o Morse ou o APRS vão ao ar;
-> - as duas telas MESSAGES **caladas**: com o SQUELCH em OFF, ouve-se tudo;
-> - o **MESSAGES num clique**, no APRS e no Morse, como no Baofeng UV-17L;
-> - o **MONITOR** sempre no lado em evidência, com a barra S andando;
-> - o **PF3 LONG** na pasta KEYS, com MONITOR ou FLASHLIGHT, e a **lanterna de tela**;
-> - o **`#`** que, depois de muito tempo na tela, caía na tela principal;
-> - no **CHIRP**, o PF3 LONG e a mensagem do APRS de volta à página.
+> - o **Tempra Link**, o programa para Windows deste firmware: lê, edita e grava pelo cabo os canais, os bancos e os ajustes, guarda backups, faz de controle remoto e grava o firmware ([o manual, com as telas](docs/tempra-link.md));
+> - o **controle remoto**: pelo cabo, o teclado, o PTT e a tela do rádio ao vivo no PC, com a tela do rádio apagada a pedido, para poupar a bateria; pelo Bluetooth, o teclado, o PTT e o estado;
+> - o **ROGER CUSTOM**: até 32 notas e 3 s, compostas no Tempra Link, como no Baofeng UV-17L;
+> - a **busca mais rápida**, um canal a cada 60 ms, como a do UV-17L, com o número do canal acompanhando, o `*` curto parando e o **THRESHOLD**, de S1 a S9, na pasta SCAN;
+> - o **Bluetooth** que fica ligado no TX com uma ligação aberta (o de fábrica o desligava a cada PTT, e o celular perdia o remoto);
+> - o cabo a **460800** bauds e a **versão** do firmware respondida pelo cabo e pelo Bluetooth, para o Tempra Link e o driver do CHIRP só trabalharem com as versões que conhecem;
+> - a etiqueta **SCR** em todas as frequências do scramble (sumia em 2800 e 3300 Hz) e o **SYSTEM > VERSION**, que abria vazio até uma seta;
+> - no **CHIRP**, o ROGER CUSTOM, o Scan threshold e a recusa das versões de firmware que o módulo não conhece.
 >
-> A V3.7T é a v154, gravada e aprovada no rádio. No ar, o BJ lê até 15 wpm, e o melhor tom é 700 Hz. Para gravar: [passo a passo](#-como-gravar-o-firmware-passo-a-passo).
+> A V4.0T é a v171 com o nome da versão. Para gravar: [pelo Tempra Link](docs/tempra-link.md#10-gravar-o-firmware) ou [pelo BinTalk](#-como-gravar-o-firmware-passo-a-passo).
 > Para o CHIRP: [passo a passo](#-como-usar-o-chirp-com-este-firmware). As anteriores continuam
-> disponíveis: a [V3.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.6T), com o MESSAGE e o SEND do Morse como itens e o MO de fábrica, a [V3.5T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.5T), com os menus MEMORY e BANKS antigos e os nomes de fábrica, a [V3.2T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.2T), com a tela MESSAGES e sem o MIC GAIN DEFAULT, a [V3.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.1T), com o RX, o MESSAGE e o SEND separados e sem o RX GAIN, a [V3.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.0T), sem o EQ no CHIRP,
+> disponíveis: a [V3.7T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.7T), sem o controle remoto e o ROGER CUSTOM, a [V3.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.6T), com o MESSAGE e o SEND do Morse como itens e o MO de fábrica, a [V3.5T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.5T), com os menus MEMORY e BANKS antigos e os nomes de fábrica, a [V3.2T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.2T), com a tela MESSAGES e sem o MIC GAIN DEFAULT, a [V3.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.1T), com o RX, o MESSAGE e o SEND separados e sem o RX GAIN, a [V3.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.0T), sem o EQ no CHIRP,
 > a [V2.9T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.9T), sem o APRS e o Morse, a [V2.6T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.6T), com a
 > escuta tripla e o menu numa lista só, a [V2.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v2.0T),
 > com a tela nova e sem o WATCH, e a [v1.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v1.0T),
@@ -51,7 +52,7 @@ ajuda a próxima versão a sair.
 
 ## 📁 Menu novo: tudo em pastas
 
-O menu de fábrica é uma fila de mais de 50 itens. Desde a V2.7T eles ficam em pastas por assunto (**17 na V3.7T**),
+O menu de fábrica é uma fila de mais de 50 itens. Desde a V2.7T eles ficam em pastas por assunto (**17 na V4.0T**),
 em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes de abrir.
 
 | | | |
@@ -82,7 +83,7 @@ em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes 
 | 10 MIC | COMPRESSOR, EQ BASS, EQ TREBLE, MIC AGC, MIC GAIN, NOISE REDUCTION |
 | 11 MORSE | MESSAGES, SPEED, TONE |
 | 12 REPEATER | OFFSET, RPT TAIL CUT, RPT TAIL DELAY, TONE BURST, TX SHIFT |
-| 13 SCAN | SCAN ADD, SCAN RESUME |
+| 13 SCAN | SCAN ADD, SCAN RESUME, THRESHOLD |
 | 14 SYSTEM | ALARM MODE, BATTERY SAVE, BLUETOOTH, RESET, VERSION |
 | 15 TONES | RX CTCSS, RX DCS, TX CTCSS, TX DCS |
 | 16 TX | ROGER, TX TIMEOUT, VOX, VOX DELAY |
@@ -204,7 +205,7 @@ firmware do BJ-8300 fazia isso.
 As imagens saem da prévia no PC ([firmware/previa/](firmware/previa/)), que roda o mesmo código de
 desenho que vai para o rádio.
 
-## ✨ O que mudou da V0.12 de fábrica para a V3.7T
+## ✨ O que mudou da V0.12 de fábrica para a V4.0T
 
 ### 🆕 Recursos novos
 
@@ -240,11 +241,13 @@ desenho que vai para o rádio.
 | 🗂️ **16 bancos de canais**<ul><li>Cada banco tem **nome de 12 caracteres**, e um canal pode estar em **quantos bancos quiser**.</li><li>Dá para ligar **vários bancos ao mesmo tempo**: o sobe/desce e a busca passam a ver só os canais dos bancos ligados.</li><li>Sem nenhum ligado, o rádio funciona como de fábrica.</li><li>Pasta nova **BANKS**, com `ACTIVE`, `CHANNELS` e `NAME` ([como usar](#usando-os-bancos-no-rádio)).</li></ul> | <img src="docs/imagens/tela-menu.png" alt="BANKS, o ACTIVE" width="300"> |
 | 🔐 **Scramble com 8 frequências**<ul><li>O `SCRAMBLE` passa de OFF/ON para **OFF e de 2700 a 3400 Hz, de 100 em 100**, em ordem crescente.</li><li>O **3400 Hz** é o ON de fábrica (fala com outros BJ-8300).</li><li>Os **modos 1, 2 e 3 do Baofeng UV-17L** caem, cada um, numa dessas frequências. Testado com os três modos.</li></ul> | <img src="docs/imagens/tela-scramble.png" alt="SCRAMBLE" width="300"> |
 | 🔔 **Roger BEEP 2 e COIN**<ul><li>O `ROGER` ganha duas opções: OFF, BEEP 1 (o de fábrica), **BEEP 2**, **COIN** e TONE1200.</li><li>**BEEP 2**: quatro tons (1125, 1857, 1359 e 931 Hz), ~0,4 s no total.</li><li>**COIN**: a moeda.</li></ul> | <img src="docs/imagens/tela-roger.png" alt="ROGER" width="300"> |
-| 🎵 **ROGER CUSTOM** (depois da V3.7T, ainda sem release)<ul><li>O `ROGER` ganha o **CUSTOM**: até 32 notas, de 300 a 3000 Hz, e até 3 s, compostas no Tempra Link (o piano, a linha do tempo e a importação de MIDI e de som).</li><li>Como o do Baofeng UV-17L.</li></ul> | |
-| 🔎 **Busca mais rápida e THRESHOLD** (depois da V3.7T, ainda sem release)<ul><li>A busca (o SCAN, nos canais e no VFO) passa de 3 a 5 canais por segundo para **um canal a cada 60 ms**, como a do Baofeng UV-17L, e para no sinal com as mesmas confirmações de fábrica.</li><li>Na busca em canal, o número acompanha o canal visitado, e o `*` curto também para a busca, como o `#` curto.</li><li>**THRESHOLD** na pasta SCAN, de **S1 a S9**: na busca, o canal que abre o squelch abaixo do S escolhido é pulado. S1 é como de fábrica.</li></ul> | |
+| 🎵 **ROGER CUSTOM**<ul><li>O `ROGER` ganha o **CUSTOM**: até 32 notas, de 300 a 3000 Hz, e até 3 s, compostas no Tempra Link (o piano, a linha do tempo e a importação de MIDI e de som).</li><li>As notas vão para o rádio pelo Tempra Link; o CHIRP só escolhe o CUSTOM.</li><li>Como o do Baofeng UV-17L.</li></ul> | <img src="docs/imagens/tela-roger-custom.png" alt="ROGER CUSTOM" width="300"> |
+| 🔎 **Busca mais rápida e THRESHOLD**<ul><li>A busca (o SCAN, nos canais e no VFO) passa de 3 a 5 canais por segundo para **um canal a cada 60 ms**, como a do Baofeng UV-17L, e para no sinal com as mesmas confirmações de fábrica.</li><li>Na busca em canal, o número acompanha o canal visitado, e o `*` curto também para a busca, como o `#` curto.</li><li>**THRESHOLD** na pasta SCAN, de **S1 a S9**: na busca, o canal que abre o squelch abaixo do S escolhido é pulado. S1 é como de fábrica.</li></ul> | <img src="docs/imagens/tela-threshold.png" alt="THRESHOLD" width="300"> |
+| 🕹️ **Controle remoto**<ul><li>Pelo cabo, o Tempra Link mostra a tela do rádio ao vivo, desenhada no PC com o mesmo código da tela do firmware, e manda as teclas, com o toque longo, e o PTT.</li><li>Pelo Bluetooth, as teclas, o PTT e o estado: quem recebe, a barra S e a tensão.</li><li>A tela do rádio pode ficar apagada com o remoto ligado, para poupar a bateria; uma tecla do rádio a acende.</li><li>Se o PC parar de mandar por 1 s, o rádio solta a tecla e o PTT sozinho ([o manual](docs/tempra-link.md#9-controle-remoto)).</li></ul> | <img src="docs/imagens/tempralink-remoto.png" alt="O controle remoto no Tempra Link" width="300"> |
+| 💻 **Tempra Link**<ul><li>O programa para Windows deste firmware, sem instalar nada.</li><li>Lê, edita e grava os 960 canais, os 16 bancos, os ajustes do menu, os textos, o DTMF e o ROGER CUSTOM, e guarda um backup a cada leitura.</li><li>Grava o firmware pelo cabo, conferindo o arquivo antes, e baixa sozinho do GitHub a versão certa.</li><li>[O manual, com as telas](docs/tempra-link.md).</li></ul> | <img src="docs/imagens/tempralink-canais.png" alt="O Tempra Link" width="300"> |
 | 📊 **Espectro**<ul><li>**320 e 640 pontos** além dos 160 de fábrica, e **passo de 10 kHz**.</li><li>**Pico seguro**: a barra sobe na hora e desce aos poucos.</li><li>A coluna medida em branco, a frequência que roda no alto e a do pico de cada passada em verde, com o dBm.</li><li>A luz não apaga enquanto ele está na tela.</li></ul> | <img src="docs/imagens/tela-espectro.png" alt="Espectro" width="300"> |
-| 🔌 **Driver do CHIRP próprio**<ul><li>Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, o WATCH, o VFO C, a pasta MIC, o CRYSTAL FINE, o BRIGHTNESS, o LIGHT PWM, o MODEM GAIN, a pasta AUDIO, o EQ, a pasta **APRS (SMS)**, a pasta **Morse**, o DECODE, o PF3 LONG e o THRESHOLD.</li><li>Tudo numa sessão só pelo cabo; fica na lista do **Bajeton**.</li><li>Recusa gravar num rádio com firmware de fábrica ([como usar](#-como-usar-o-chirp-com-este-firmware)).</li></ul> | |
-| 🧰 **Comando estendido no cabo**<ul><li>Leitura do chip de dados inteiro (endereço de 24 bits).</li><li>Gravação só nas áreas do firmware novo: os bancos, o WATCH, o VFO C, o Morse e o APRS.</li><li>É o que o driver do CHIRP usa.</li></ul> | |
+| 🔌 **Driver do CHIRP próprio**<ul><li>Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, o WATCH, o VFO C, a pasta MIC, o CRYSTAL FINE, o BRIGHTNESS, o LIGHT PWM, o MODEM GAIN, a pasta AUDIO, o EQ, a pasta **APRS (SMS)**, a pasta **Morse**, o DECODE, o PF3 LONG, o THRESHOLD e o ROGER CUSTOM (as notas, só o Tempra Link grava).</li><li>Tudo numa sessão só pelo cabo; fica na lista do **Bajeton**.</li><li>Recusa gravar num rádio com o firmware de fábrica ou com um TEMPRA de outra versão ([como usar](#-como-usar-o-chirp-com-este-firmware)).</li></ul> | |
+| 🧰 **Comando estendido no cabo**<ul><li>Leitura do chip de dados inteiro (endereço de 24 bits).</li><li>Gravação só nas áreas do firmware novo: os bancos, o WATCH, o VFO C, o Morse, o APRS e o ROGER CUSTOM.</li><li>A leitura de `0x3F0000` responde a versão do firmware (`TEMPRA V4.0T`).</li><li>A serial a 460800 bauds.</li><li>É o que o Tempra Link e o driver do CHIRP usam.</li></ul> | |
 
 ### 🖥️ A tela nova, tela por tela
 
@@ -280,12 +283,14 @@ etiquetas coloridas e uma fonte própria:
 | 🟩 **Lado em evidência destacado** | O lado ativo fica num cartão de borda verde, com a frequência grande e a barra S; o outro fica compacto |
 | 📻 **Rádio FM/AM/SSB** | A troca de modulação ficou ~2,5 s mais rápida, e os ajustes salvos (passo, largura, LNA, BFO e as memórias) são conferidos ao entrar e a cada troca: valor fora dos limites dos menus volta ao padrão |
 | ↕️ **Setas do menu invertidas** | A seta de cima passa a subir na lista, em vez de avançar o valor |
-| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TRIPLE WATCH`, porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX SIDE`. O menu `VERSION` mostra `Firmware: V3.7T` |
+| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TRIPLE WATCH`, porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX SIDE`. O menu `VERSION` mostra `Firmware: V4.0T` |
 | 🏷️ **Nomes claros no menu** | Os nomes curtos de fábrica viraram nomes que dizem o que o item faz, iguais aos do Baofeng UV-17L: `SQL` é `SQUELCH`, `STE` é `TAIL CUT`, `BCL` é `BUSY LOCK`, `TXP` é `TX POWER`, `W/N` é `BANDWIDTH`, `TOT` é `TX TIMEOUT` e `MDF-A` é `SHOW A`, entre outros. A [tabela das pastas](#-menu-novo-tudo-em-pastas) traz todos, e a [seção 35](docs/engenharia-reversa.md#35-os-nomes-do-menu-desde-a-v141) lista o nome antigo de cada um |
+| 📶 **Bluetooth no TX** | O de fábrica desliga o Bluetooth a cada PTT, e o celular perdia o controle remoto. Com uma ligação aberta, ele agora fica ligado; sem ligação, é como de fábrica |
+| 🔌 **Cabo mais rápido** | A serial do cabo passa de 57600 a 460800 bauds. O Tempra Link e o driver do CHIRP descem sozinhos às velocidades de antes, para reconhecer os firmwares antigos |
 
 ### 🐞 Correções
 
-| Problema da V0.12 | Na V3.7T |
+| Problema da V0.12 | Na V4.0T |
 |---|---|
 | Os ajustes do menu só iam para o chip ao fechar o menu: desligado com ele aberto, o que mudou se perdia | Cada OK grava na hora |
 | O medidor de sinal tinha 5 degraus e já enchia num sinal fraco (entre −117 e −96 dBm) | A barra S, do chiado (S1) a S9+60 |
@@ -336,16 +341,16 @@ o firmware nem chega a ligar, mas ele **nunca foi testado**.
 ## 📥 Como gravar o firmware, passo a passo
 
 > [!TIP]
-> **Pelo Tempra Link** (depois da V3.7T, ainda sem teste no rádio): a página **Firmware** do `TempraLink-BJ8300.exe`
-> grava o `.anc` pelo mesmo protocolo do gravador abaixo, confere o arquivo inteiro antes (o de fábrica também), mostra
-> o firmware do rádio e o release mais novo do GitHub, e baixa e grava com um clique a versão nova ou a de fábrica. Os
-> passos abaixo, pelo BinTalk, continuam valendo.
+> **O jeito mais fácil é pelo Tempra Link:** a página **Firmware** do `TempraLink-BJ8300_v1.0.exe` baixa a V4.0T do
+> GitHub, confere o arquivo inteiro e a grava pelo cabo, com o rádio no modo UPDATE, pelo mesmo protocolo do gravador
+> abaixo ([o passo a passo, com as telas](docs/tempra-link.md#10-gravar-o-firmware)). Os passos abaixo, pelo BinTalk
+> de fábrica, continuam valendo.
 
 Precisa de um PC com Windows e do **cabo de programação USB** do rádio (o de chip CH340, o mesmo do
 CPS de fábrica).
 
-**1. Baixe os arquivos.** Na [página do release V3.7T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v3.7T),
-baixe o `BJ8300_BANK_v3.7T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
+**1. Baixe os arquivos.** Na [página do release V4.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.0T),
+baixe o `BJ8300_BANK_v4.0T.anc`, o `BinTalk-V1.1.zip` e, se o Windows ainda não reconhece o cabo,
 o `CH340-driver.zip`. Descompacte os zips. (Os mesmos arquivos estão no repositório, em
 `firmware/releases/`, `tools/anc-bootloader/` e `tools/ch340-driver/`.)
 
@@ -360,7 +365,7 @@ Feche antes qualquer programa que use a porta COM (CHIRP, CPS).
 
 <p align="center"><img src="docs/imagens/gravador.png" alt="Janela do gravador BinTalk V1.1" width="300"></p>
 
-- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v3.7T.anc`.
+- No campo de cima, clique em **`...`** e escolha o `BJ8300_BANK_v4.0T.anc`.
 - **Port:** a COM do cabo (a do passo 2).
 - **Baudrate:** **115200** (já vem assim).
 
@@ -371,7 +376,7 @@ o rádio **segurando PTT2 + o botão de atalho**, até aparecer `UPDATE` na tela
 `Update 3%` → `Jump To Loader` → `Progress 100%` → `Finish`. Não desconecte nada no meio.
 
 **6. Confira.** Desligue e ligue o rádio. O menu abre nas pastas, e em `SYSTEM` → `VERSION` deve
-aparecer `Firmware: V3.7T`.
+aparecer `Firmware: V4.0T`.
 
 **Se der `Retry1..5 / Failure!`:** desligue o rádio, confira que nenhum outro programa está com a
 porta COM, volte ao passo 4 e tente de novo.
@@ -381,9 +386,9 @@ porta COM, volte ao passo 4 e tente de novo.
 ## 📻 Como usar o CHIRP com este firmware
 
 > [!CAUTION]
-> **Com a V3.7T, use só o módulo `bj8300_v3.7TEMPRA.py` deste release.** Ele substitui os
-> anteriores (de `bj8300_v1.0TEMPRA.py` a `bj8300_v3.6TEMPRA.py`). O modelo no CHIRP passou a ser
-> **Bajeton → `BJ8300_v3.7TEMPRA`** (até a V2.8T ele ficava em Baojie), e uma imagem `.img` salva com
+> **Com a V4.0T, use só o módulo `bj8300_v4.0TEMPRA.py` deste release.** Ele substitui os
+> anteriores (de `bj8300_v1.0TEMPRA.py` a `bj8300_v3.7TEMPRA.py`). O modelo no CHIRP passou a ser
+> **Bajeton → `BJ8300_v4.0TEMPRA`** (até a V2.8T ele ficava em Baojie), e uma imagem `.img` salva com
 > um módulo antigo abre nele normalmente. As versões anteriores têm o módulo delas no release de cada
 > uma.
 >
@@ -394,7 +399,9 @@ porta COM, volte ao passo 4 e tente de novo.
 >   para sair dele foi removido.
 > - **Não use versões antigas deste módulo**: elas não conhecem as opções novas, e um canal com
 >   uma frequência de scramble nova aparece como inválido.
-> - Ao contrário também vale: o módulo **recusa** gravar num rádio com o firmware de fábrica.
+> - Ao contrário também vale: o módulo **recusa** gravar num rádio com o firmware de fábrica. E, como o Tempra
+>   Link, ele lê a versão do firmware e só trabalha com a V4.0T: num rádio com a V3.7T ou uma de antes, use o
+>   módulo do release dela, ou grave a V4.0T.
 
 **1. Instale o CHIRP mais recente.** Baixe o **CHIRP-next** em
 [chirpmyradio.com](https://chirpmyradio.com/projects/chirp/wiki/Download). O módulo usa o driver
@@ -407,7 +414,7 @@ CHIRP**. O modo fica ligado nas próximas vezes.
 
 **3. Carregue o módulo (toda vez que abrir o CHIRP).** Menu **File** → **Load Module...** (só
 aparece com o modo desenvolvedor). O CHIRP avisa que carregar módulo é perigoso: clique **Yes** e
-escolha o `bj8300_v3.7TEMPRA.py`. A janela fica **vermelha** e o título mostra
+escolha o `bj8300_v4.0TEMPRA.py`. A janela fica **vermelha** e o título mostra
 `CHIRP **Module Loaded**`: é o sinal de que o módulo está carregado. Ao fechar o CHIRP, ele é
 descarregado, e na próxima vez é preciso carregar de novo.
 
@@ -418,13 +425,13 @@ descarregado, e na próxima vez é preciso carregar de novo.
 |---|---|
 | **Port** | a COM do cabo |
 | **Vendor** | **Bajeton** |
-| **Model** | **BJ8300_v3.7TEMPRA** (não o BJ7800, que é o modelo de fábrica) |
+| **Model** | **BJ8300_v4.0TEMPRA** (não o BJ7800, que é o modelo de fábrica) |
 
 O CHIRP mostra o aviso *"Experimental driver"*, com as instruções do módulo: clique **Yes** e
 depois **OK** para ler.
 
 > [!NOTE]
-> Se o `BJ8300_v3.7TEMPRA` não aparece em **Bajeton**, o módulo não está carregado: volte ao passo 3.
+> Se o `BJ8300_v4.0TEMPRA` não aparece em **Bajeton**, o módulo não está carregado: volte ao passo 3.
 
 **5. Edite.** No lado direito aparece a lista das partes do rádio:
 
@@ -432,12 +439,12 @@ depois **OK** para ler.
   estão aqui.
 - **Banks (VHF/UHF):** uma coluna por banco; marque em quais bancos cada canal está. Para
   renomear um banco, **dê duplo clique no cabeçalho da coluna** dele.
-- **Settings:** os ajustes do rádio, com o roger de 6 opções e, no **BJ8300_v3.7TEMPRA Specific**,
+- **Settings:** os ajustes do rádio, com o roger de 6 opções e, no **BJ8300_v4.0TEMPRA Specific**,
   logo depois do Noise reduction, o **Expander**, a **Noise gate**, a **De-emphasis**, o **EQ bass (RX)** e o
   **EQ treble (RX)**, o **Mic Gain** (com o DEFAULT, na ordem do rádio), o **Compressor**, o **Mic AGC**, o **EQ bass (TX)** e o
   **EQ treble (TX)**, o **Crystal fine** (em Hz, em 435,5 MHz), o **Brightness**, o **Light PWM** e o
   **Modem gain**, além do **PF3 Key (Long Press)**, logo depois do PF3, e do **Scan threshold**, logo depois do Scan
-  Resume Method (firmware v167 ou mais novo, ainda sem release).
+  Resume Method.
 - **Settings → APRS (SMS) e Settings → Morse:** o indicativo, o SSID, o PATH, o destinatário, a mensagem e o DECODE do APRS, e
   a mensagem, a velocidade e o tom do Morse. As duas mensagens são a última enviada, com que as caixas do `#` abrem. Gravar o APRS e o Morse precisa da V3.0T, e o EQ, da V3.1T.
 - **Settings → Banks:** um bloco por banco, de **BANK 1** a **BANK 16**:
@@ -497,7 +504,7 @@ marcado para o outro.
 
 ## Como o driver do CHIRP funciona
 
-O arquivo é [chirp/bj8300_v3.7TEMPRA.py](chirp/bj8300_v3.7TEMPRA.py). O nome é proposital: só
+O arquivo é [chirp/bj8300_v4.0TEMPRA.py](chirp/bj8300_v4.0TEMPRA.py). O nome é proposital: só
 funciona com **este** firmware, e assim ninguém com um BJ-8300 de fábrica o usa por engano. Ele
 deriva do `radtel_rt900.py` do CHIRP, que já trata este rádio como família RT-920/BJ7800, e
 acrescenta:
@@ -550,7 +557,8 @@ histórico do git. A história completa, com o que quebrou e por quê, está no 
 
 | Arquivo | Estado |
 |---|---|
-| `BJ8300_BANK_v3.7T.anc` | **estável, a recomendada** — a v154: a V3.6T + a tela MESSAGES do Morse (o que chega, o histórico e a caixa SEND), a tela SENDING, as caixas abrindo com a última mensagem, as telas caladas, o MESSAGES num clique, o MONITOR no lado em evidência, o PF3 LONG e a lanterna de tela; use com o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v4.0T.anc` | **estável, a recomendada** — a v171: a V3.7T + o controle remoto pelo cabo e pelo Bluetooth (com a tela do rádio no PC e a tela apagada a pedido), o ROGER CUSTOM, a busca a cada 60 ms com o THRESHOLD, o número do canal na busca e o `*` curto que a para, o Bluetooth que fica no TX, o cabo a 460800, a versão pelo cabo e pelo Bluetooth, o SCR em todas as frequências do scramble e o VERSION que abre com o firmware e o hardware; use com o Tempra Link e o driver do CHIRP do mesmo release |
+| `BJ8300_BANK_v3.7T.anc` | estável anterior — a v154: a V3.6T + a tela MESSAGES do Morse (o que chega, o histórico e a caixa SEND), a tela SENDING, as caixas abrindo com a última mensagem, as telas caladas, o MESSAGES num clique, o MONITOR no lado em evidência, o PF3 LONG e a lanterna de tela; use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v3.6T.anc` | estável anterior — a v142: a V3.5T + o CH MEMORY, os BANKS refeitos, os avisos de modo, as listas com o cursor no meio, os nomes claros, o TRIPLE WATCH com DW e TW na barra e a pasta APRS (SMS); use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v3.5T.anc` | estável anterior — a v139: a V3.2T + o SAVE que já pede o nome, as etiquetas do tom de TX e AIR, o MIC GAIN com DEFAULT, o teto de 90% no PA, o CALLSIGN antes do envio, o OK que grava o canal e um EXIT só nos itens de texto; use com o driver do CHIRP do mesmo release |
 | `BJ8300_BANK_v3.2T.anc` | estável anterior — a v115: a V3.1T + a tela MESSAGES no lugar do RX, do MESSAGE e do SEND do APRS (o `#` abre a caixa da mensagem e o `#` segurado a do TO, e a tela volta sozinha depois do envio), o rodapé com o P e o RX GAIN na CALIBRATION; use com o driver do CHIRP do mesmo release |
@@ -584,53 +592,40 @@ histórico do git. A história completa, com o que quebrou e por quê, está no 
 
 ## 💻 Tempra Link: o rádio pelo PC
 
-O **`TempraLink-BJ8300.exe`**, na raiz do repositório, é um programa para Windows, sem instalar nada, que lê, edita,
-guarda e grava pelo cabo o BJ-8300 com este firmware:
+<p align="center"><img src="docs/imagens/tempralink-canais.png" alt="O Tempra Link na página Canais" width="900"></p>
 
-- **Canais:** os 960, numa grade que se edita na célula, como numa planilha (o nome, o RX e o TX, os tons, a
-  potência, a largura, o AM, o BCL, a varredura, o SCRAMBLE, o ENCRYPT, o grupo DTMF, o PTT-ID e os bancos), com
-  copiar e colar e o CSV do CHIRP.
-- **Bancos:** o nome, o ligado e quantos canais cada um tem.
-- **Ajustes:** as pastas do menu do rádio, com os nomes e os valores dele, as frequências e o OFFSET dos VFOs A, B e
-  C, os textos do APRS e do Morse e os 15 códigos DTMF.
-- **ROGER CUSTOM** (firmware v164 ou mais novo, ainda sem release): na pasta TX dos ajustes, um piano e a linha do
-  tempo das notas, com modelos e a importação de MIDI e de som (a melodia aproximada), ouvindo no PC.
-- **Logo de abertura:** lê e salva em PNG. Gravar depende do firmware: a V3.7T ainda não grava o logo pelo cabo, e o
-  programa confere lendo de volta e avisa.
-- **Backup:** cada leitura guarda um sozinha; salvar, abrir e restaurar. O backup do Tempra Link do Baofeng UV-17L
-  não abre aqui, e o deste não abre lá.
-- **Firmware** (ainda sem teste no rádio): grava o `.anc` pelo cabo, com o rádio no modo UPDATE, como o BinTalk;
-  confere o arquivo inteiro antes de gravar (os CRCs do `.anc` e a marca do hardware), diz se o rádio está com o de
-  fábrica ou com o TEMPRA, procura sozinho o release mais novo no GitHub e baixa e grava com um clique a versão nova ou
-  a de fábrica (V0.12), conferidas pelo SHA-256 ([seção 42](docs/engenharia-reversa.md#42-a-gravação-do-firmware-pelo-cabo-o-protocolo-do-bintalk)).
+O **Tempra Link** (o `TempraLink-BJ8300_v1.0.exe` do release; o `TempraLink-BJ8300.exe` da raiz do repositório é o
+mesmo programa) é o programa para Windows deste firmware, sem instalar nada. Pelo cabo de programação:
 
-Ele só trabalha com as versões do firmware TEMPRA que conhece: desde a v170 o rádio diz a versão, e com o de
-fábrica, com um TEMPRA de antes dela ou com uma versão de fora, ele não lê nem grava nada e oferece baixar e
-gravar a certa ([seção 43](docs/engenharia-reversa.md#43-a-versão-pelo-cabo-e-a-compatibilidade-v170)). Ao abrir, procura também
-o Tempra Link mais novo nos releases e pergunta se pode se atualizar. Grava só o que mudou, conferindo antes que o rádio
-não mudou desde a leitura, e lê de volta o que gravou nos setores dos bancos e dos registros. Depois de gravar os
-bancos, desligue e ligue o rádio: ele monta os bancos na partida.
+- **Canais:** os 960, numa grade que se edita na célula, como numa planilha, com copiar e colar e o CSV do CHIRP.
+- **Bancos:** o nome, o ativo e quantos canais cada um tem.
+- **Ajustes:** as pastas do menu do rádio, com os nomes e os valores dele, as frequências e o OFFSET dos VFOs A, B e C,
+  os textos do APRS e do Morse, os 15 códigos DTMF e o editor do **ROGER CUSTOM** (um piano, a linha do tempo, modelos
+  e a importação de MIDI e de som).
+- **Controle remoto:** o teclado e o PTT do rádio no PC e, pelo cabo, a tela dele ao vivo; a tela do rádio apagada a
+  pedido; a reconexão sozinha quando o USB do cabo cai.
+- **Firmware:** grava o `.anc` pelo cabo, com o rádio no modo UPDATE, conferindo o arquivo inteiro antes, e baixa do
+  GitHub, com um clique, a versão certa ou a de fábrica.
+- **Logo de abertura:** lê e salva em PNG (gravar, o firmware ainda não grava pelo cabo).
+- **Backup:** um a cada leitura; salvar, abrir e restaurar.
 
-**Controle remoto (depois da V3.7T, ainda sem release):** a página
-Controle remoto põe o teclado e o PTT do rádio no PC e, pelo cabo, a tela do rádio ao vivo, desenhada no PC com o
-código da tela do firmware (o programa e o firmware da mesma rodada); pelo Bluetooth, o estado. A chave **Tela do
-rádio** apaga a tela dele, para poupar a bateria, e volta a Acesa quando uma tecla do rádio a acende. Se a ligação
-cai (o RF do PTT pode derrubar o USB do cabo), o remoto se reconecta sozinho. O cabo passa a 460800 na v160, e o programa e o driver do CHIRP descem sozinhos a 115200 e a 57600 para reconhecer os
-firmwares de antes.
+**[O manual, com as telas e o passo a passo](docs/tempra-link.md).** Ele só trabalha com as versões do firmware que
+conhece (o 1.0, com a V4.0T), porque desde a V3.8T o rádio diz a versão pelo cabo e pelo Bluetooth
+([seção 43](docs/engenharia-reversa.md#43-a-versão-pelo-cabo-e-a-compatibilidade-v170)); com outra, ele não lê nem grava
+nada e oferece o certo. Ao abrir, procura no GitHub o firmware e o Tempra Link mais novos e pergunta se pode se
+atualizar. O código e os testes estão em [tempralink/](tempralink/). No rádio, até aqui: a leitura, o controle remoto
+pelo cabo e pelo Bluetooth do celular, e a gravação do firmware pelo Tempra Link.
 
 **Bluetooth (experimental):** com o BLUETOOTH do rádio (pasta SYSTEM) em ON, o último item da lista de portas procura
 o rádio pelo Bluetooth LE. Pela leitura do firmware, o rádio recebe pelo BLE os mesmos comandos do cabo; enquanto essa
-sessão está aberta, ele ignora o cabo. No rádio, o controle remoto pelo Bluetooth funcionou com o app do celular (até
-a v165, o PTT derrubava a ligação: o firmware de fábrica desliga o Bluetooth no TX, e a v166 o mantém com a ligação
-aberta); a leitura e a gravação por ele ainda não foram testadas. O código e os testes estão em
-[tempralink/](tempralink/).
+sessão está aberta, ele ignora o cabo. O controle remoto pelo Bluetooth funcionou no rádio com o app do celular; a
+leitura e a gravação por ele ainda não foram testadas.
 
-**App do celular (Android, depois da V3.7T, ainda sem release):** o Tempra Link no celular, pelo Bluetooth do rádio:
+**App do celular (Android, versão 1.0, ainda sem APK publicado):** o Tempra Link no celular, pelo Bluetooth do rádio:
 o controle remoto com a tela do rádio, os canais e os bancos, os ajustes (com o ROGER CUSTOM), ler e gravar, os
 backups e um aviso de recepção, e uma demonstração sem rádio. Ele lembra os rádios já usados, com um apelido para
 cada, e conecta neles sem a procura inteira; com um firmware com que não trabalha, só avisa e abre a página de
-releases. Ainda sem APK publicado: compila pelo
-`tempralink/celular/compilar.ps1` (Delphi). No rádio, só o controle remoto foi testado.
+releases. Compila pelo `tempralink/celular/compilar.ps1` (Delphi). No rádio, só o controle remoto foi testado.
 
 ---
 
@@ -710,21 +705,23 @@ variável `JL_TOOLCHAIN` para ela.
   chama um endereço, com os argumentos), `fluxo.py` (os caminhos dentro de uma rotina) e
   `escritas.py` (quem lê ou grava um endereço de RAM).
 
-**Orçamento de espaço:** o código novo mora em sete lugares, todos no mesmo endereço nas 6 imagens:
+**Orçamento de espaço:** o código novo mora em nove lugares, todos no mesmo endereço nas 6 imagens:
 
-- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a V3.7T usa 3254);
+- **a área livre do fim da imagem**, a partir de `0x01E96124`, com 3260 bytes (a V4.0T usa 3254);
 - **o espaço que era das vozes**, com o espectro, mas só dentro dos arquivos C0 e C1 (1066 bytes,
-  dos quais a V3.7T usa 1060), porque o carregador do rádio recusa a imagem que muda mais arquivos de
+  dos quais a V4.0T usa 1060), porque o carregador do rádio recusa a imagem que muda mais arquivos de
   voz;
 - **o lugar dos decodificadores G.729 e MP3**, dentro do `app.bin`, com as telas B, o WATCH, o
-  TRIPLE, o menu em pastas, o APRS e a tabela de menus (38884 bytes, dos quais a V3.7T usa 38882);
-- **os caminhos das vozes**, no `app.bin`, só com o que o nosso código chama (2944 bytes, dos quais a V3.7T usa 2944);
-- **a tabela de menu de fábrica**, morta desde a v43, no `app.bin` (1512 bytes, dos quais a V3.7T usa 1506);
-- **a parte morta da tabela de caminhos** (`.sons`), no `app.bin` (472 bytes, dos quais a V3.7T usa 468);
-- **os nomes de item de fábrica sem ponteiro** (`.mortos1` a `.mortos10`), no `app.bin`, em 10 pedaços (422 bytes, dos quais a V3.7T usa 396).
+  TRIPLE, o menu em pastas, o APRS e a tabela de menus (38884 bytes, dos quais a V4.0T usa 38882);
+- **os caminhos das vozes**, no `app.bin`, só com o que o nosso código chama (2944 bytes, dos quais a V4.0T usa 2944);
+- **a tabela de menu de fábrica**, morta desde a v43, no `app.bin` (1512 bytes, dos quais a V4.0T usa 1510);
+- **a parte morta da tabela de caminhos** (`.sons`), no `app.bin` (472 bytes, dos quais a V4.0T usa 468);
+- **os nomes de item de fábrica sem ponteiro** (`.mortos1` a `.mortos10`), no `app.bin`, em 10 pedaços (422 bytes, dos quais a V4.0T usa 396);
+- **trechos de fábrica mortos** (`.mortos11` a `.mortos20`), que recebem as rotinas do Morse e do APRS levadas para lá na v156, para o controle remoto caber (1004 bytes, dos quais a V4.0T usa 990);
+- **as rotinas de fábrica dos itens que saíram do menu** (`.mortos21` a `.mortos30`), sem chamador desde a v43 (782 bytes, dos quais a V4.0T usa 717).
 
-A tabela de menus fica no lugar do G.729 e do MP3 desde a v43, num vetor de 96 vagas (a V3.7T usa as 96: as 17
-pastas e os 79 itens); a original, de 54, virou espaço de código na v140. [docs/engenharia-reversa.md](docs/engenharia-reversa.md)
+A tabela de menus fica no lugar do G.729 e do MP3 desde a v43, num vetor de 97 vagas (a V4.0T usa as 97: as 17
+pastas e os 80 itens); a original, de 54, virou espaço de código na v140. [docs/engenharia-reversa.md](docs/engenharia-reversa.md)
 explica como medir, onde já foi economizado e por que esses lugares são seguros.
 
 **Prévia da tela B no PC:** `python -I previa/previa.py <pasta>`, de dentro de `firmware/`, grava
@@ -746,7 +743,7 @@ firmware/
   original/     BJ8300_V0.12.anc — firmware de fábrica
   releases/     .anc prontos para gravar
   build.sh      compila, monta e confere
-chirp/          driver do CHIRP (bj8300_v3.7TEMPRA.py)
+chirp/          driver do CHIRP (bj8300_v4.0TEMPRA.py)
 tools/
   jl-toolchain-2.5.3/  o compilador da JieLi (os 5 executáveis que o build usa)
   anc-bootloader/  gravador BinTe ANC Bootloader (BinTalk V1.1)
@@ -756,7 +753,7 @@ tools/
 logo/           imagem de abertura (BMP) e conversor
 tests/          testes do driver do CHIRP
 tempralink/     o código do Tempra Link (Delphi), o gerador do menu e os testes
-docs/           engenharia reversa, histórico, mapa da tela, imagens e notas de trabalho
+docs/           o manual do Tempra Link, engenharia reversa, histórico, mapa da tela, imagens e notas de trabalho
 ```
 
 ---

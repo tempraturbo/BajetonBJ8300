@@ -621,7 +621,7 @@ begin
   GradeAjustes.ColWidths[1] := MulDiv(220, CurrentPPI, 96);
   // o ROGER CUSTOM (v164), na pasta TX: o editor do Tempra Link do UV-17L
   LabelRoger.Caption := Tr('ROGER CUSTOM  ·  escolha CUSTOM no ROGER, acima, para o rádio tocar',
-                           'ROGER CUSTOM  ·  choose CUSTOM in ROGER, above, for the radio to play it');
+                           'ROGER CUSTOM  ·  set ROGER, above, to CUSTOM for the radio to play it');
   LabelRogerDica.Caption := Tr(
     'Clique numa tecla do piano para ouvir; dois cliques, ou arrastar a tecla para a linha, põem a nota. Na linha, ' +
     'arraste a nota para cima e para baixo (o tom), pela ponta direita (a duração) e para os lados (a ordem). ' +

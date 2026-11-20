@@ -950,6 +950,19 @@ int main(int argc, char **argv)
         LINHA(2, 0, "");
         telas_b(1, 0);
         grava("60k-menu-pf3-long");
+        /* V4.0T: o CUSTOM do ROGER (v164) e o THRESHOLD da pasta SCAN (v167), para o README */
+        menu_no("TX", "ROGER");
+        LINHA(0, 1, "TONE1200");
+        LINHA(1, 2, "CUSTOM");
+        LINHA(2, 0, "");
+        telas_b(1, 0);
+        grava("60m-menu-roger-custom");
+        menu_no("SCAN", "THRESHOLD");
+        LINHA(0, 1, "S3");
+        LINHA(1, 2, "S4");
+        LINHA(2, 1, "S5");
+        telas_b(1, 0);
+        grava("60n-menu-scan-threshold");
         BASE_TELAS();
         memoria[0x1533D] = 1;
         {

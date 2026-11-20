@@ -3,7 +3,7 @@
 { A memória do BJ-8300 que o Tempra Link lê, mostra, edita, guarda e grava. Sem nada de janela, para dar para testar.
 
   Duas cópias das áreas: a original (o que estava no rádio, ou no backup aberto) e a atual, já com as mudanças. As
-  áreas são as que o driver do CHIRP deste repositório lê (chirp/bj8300_v3.7TEMPRA.py): as do protocolo de fábrica
+  áreas são as que o driver do CHIRP deste repositório lê (chirp/bj8300_v4.0TEMPRA.py): as do protocolo de fábrica
   (os canais, os VFOs A e B, os ajustes, o DTMF, o rádio FM/AM/HF e o modo), a calibração (só para o backup) e as do
   firmware TEMPRA, cada uma num setor: o cabeçalho dos bancos, os 16 bancos, o WATCH, o VFO C, o Morse e o APRS.
 

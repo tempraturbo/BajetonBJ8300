@@ -53,7 +53,7 @@
              targetSdk 34: do 35 em diante o Android 15 põe a janela por baixo das barras do sistema, e a frente do
              rádio é desenhada para a área livre -->
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
-        <VerInfo_Keys>package=tempralink.bj8300;label=Tempra Link;versionCode=1;versionName=0.1;persistent=False;restoreAnyVersion=False;installLocation=auto;largeHeap=False;theme=TitleBar;hardwareAccelerated=true;apiKey=;minSdkVersion=26;targetSdkVersion=34</VerInfo_Keys>
+        <VerInfo_Keys>package=tempralink.bj8300;label=Tempra Link;versionCode=2;versionName=1.0;persistent=False;restoreAnyVersion=False;installLocation=auto;largeHeap=False;theme=TitleBar;hardwareAccelerated=true;apiKey=;minSdkVersion=26;targetSdkVersion=34</VerInfo_Keys>
         <BT_BuildType>Debug</BT_BuildType>
         <AUP_VIBRATE>true</AUP_VIBRATE>
         <!-- paginas de 16 KB: com a pagina comum de 16 KB o RELRO do ld do NDK termina num multiplo dela, e o app abre
