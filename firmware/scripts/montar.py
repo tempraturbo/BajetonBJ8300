@@ -684,6 +684,9 @@ TX_TROCA_ERA = 0x01E40E52
 CHAMADAS_LIVRE += ((0x01E410EA, 0x01E3FDE4, 'gancho_tx_desarma', 'TX-A/B/C: a terceira no inicio da TX'),
                    (0x01E411AE, TX_TROCA_ERA, 'gancho_tx_volta', 'TX-A/B/C: a destroca na TX recusada'),
                    (0x01E473EE, TX_TROCA_ERA, 'gancho_tx_volta', 'TX-A/B/C: a destroca no fim da TX'))
+# v172: a entrada do espectro (0x01E4CF82, o PARA_DW logo depois de o modo virar 20 em 0x01E4CF7E) poe o limite no
+# padrao de fabrica antes de a janela (0x01E4CFBC) converte-lo em altura (bancos.c, gancho_espectro_entra).
+CHAMADAS_LIVRE += ((0x01E4CF82, 0x01E3FDE4, 'gancho_espectro_entra', 'espectro: a linha volta ao padrao na entrada'),)
 # v52: o editor de nome. O get do CH-NAME (0x01E3C732) media o nome com o strlen da ROM (0x021127C0),
 # que so para no 0, e o CHIRP completa o nome com 0xFF: o editor abria com 12/12 e os 0xFF como
 # letras. O tamanho e a copia para o editor (COPIA_MEM, com o tamanho + 1) passam pelos ganchos, que

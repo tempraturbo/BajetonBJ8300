@@ -5,6 +5,27 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v172 — Nov 20 — the spectrum line always goes up and comes back to the default on entry (not tested on the radio)
+
+A user lowered the spectrum threshold line all the way down and it never came back up, not even after turning the
+radio off. With the line at the bottom, the sweep stops at every point, and from v19 to v171 the arrows, with the sweep
+stopped, only carried it on: it moved one point, stopped again, and the line never changed. And the spectrum settings
+live in the data chip, which flashing firmware does not touch: the line always came back at the bottom
+([section 11](reverse-engineering.md#11-spectrum)).
+
+- **The up arrow** raises the line in any state, like the stock one; with the sweep stopped, it resumes by itself once
+  the signal is below the line. **The down arrow**, with the sweep stopped, carries on with the sweep, as since v19.
+- **Entering the spectrum** puts the line at the stock default (−60, in the meter's unit, between −130 and −20).
+
+In the stock firmware, going by the code, the up arrow raises the line 2 per press (35 presses from the bottom to the
+default); the report that it stayed stuck there too, and only came back after flashing V3.2T and V3.7T, is not
+explained by the code and was not reproduced.
+
+- `BJ8300_BANK.anc` of v172 (outside `firmware/releases/`): sha256 `e49b8a54ffd4bcb5f697f83424f9e5d79c0d37757007ddaad4f683bec16dfdd8`
+
+Tested on the PC: the build ("tudo certo", the image the same size, the dead SCRAMBLE code with 20 of 20 bytes) and
+the firmware tests. On the radio, not yet.
+
 ## V4.0T — Nov 20 — Tempra Link, the remote control, ROGER CUSTOM and a faster scan (prepared; the release goes out after the radio test)
 
 v171 becomes **V4.0T**, at the owner's request, with the first release of the Windows **Tempra Link**. The firmware is

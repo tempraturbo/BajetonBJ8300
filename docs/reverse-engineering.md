@@ -72,7 +72,7 @@ by looking for where content starts mirroring address 0:
 | Range | Contents |
 |---|---|
 | `0x00000–0x09FFF` | 960 channels, 32 B each (up to `0x077FF`); at `0x8000` the log of the A and B VFOs, and at `0x9000` the settings log ([section 26](#26-settings-that-got-lost-noise-gate-and-saving-on-ok-v100-and-v101)) |
-| `0x0A000–0x0FFFF` | settings; `0x0F000–0x0F24F` is factory calibration (TX power at `0xF000–0xF0BF`, [section 20](#20-tx-power-map-read-only); microphone gain at `0xF210`, [section 19](#19-microphone-gain-and-mic-gain-v49); squelch, sub-tone and crystal, [section 22](#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59)) |
+| `0x0A000–0x0FFFF` | settings; `0x0F000–0x0F24F` is factory calibration (TX power at `0xF000–0xF0BF`, [section 20](#20-tx-power); microphone gain at `0xF210`, [section 19](#19-microphone-gain-and-mic-gain-v49); squelch, sub-tone and crystal, [section 22](#22-the-mic-folder-crystal-fine-and-the-menu-while-receiving-v59)) |
 | `0x10000–0x1AFFF` | **boot image**: 160×138 RGB565 little-endian, 44160 B |
 | `0x20000–0x99FFF` | fonts and Chinese text (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 records of 60 B used by the firmware |
@@ -440,6 +440,30 @@ If the signal is strong, neighbouring points of the same signal may also pass th
 graph shows that as a hill several points wide — and the sweep stops again right next to it. Making
 the arrow skip the whole hill needs to remember "I am skipping" from one turn to the next, i.e. a
 byte of RAM of our own, and this firmware has no proven-free RAM yet.
+
+**The line that would not come back up (v172).** A user lowered the threshold line all the way down and it never came
+back up, not even after turning the radio off. Two things together:
+
+- **With the line at the bottom, the sweep stops at every point.** The threshold becomes a height between the minimum
+  and the maximum (−130 and −20, at the end of `0x01E4AA3C`), and at the minimum it is 0: every level reaches it, the
+  sweep goes to state 2 on the first point and only leaves it when the level drops below 0, which never happens. From
+  v19 to v171, both arrows, stopped on a find, only resumed: the sweep moved one point, stopped again, and the
+  threshold never changed. In the stock firmware the arrows move the threshold in any state (`0x01E4C532` and
+  `0x01E4C586`: +2 up to the maximum and −2 down to the minimum, with `smin` and `smax`).
+- **The settings survive everything.** The 73 bytes at `0x6EC0` go to the data chip (`0xC0000`, 64 records of 60 B)
+  when leaving the spectrum (`0x01E3FE38`) and come back at power-up (`0x01E55E8A`, checked only by the sum); flashing
+  firmware does not touch that chip.
+
+The fix has two parts. The up arrow is the stock one again in every state: it raises the threshold, and the sweep
+resumes by itself once the signal is below it. Only the down arrow, stopped on a find, carries on with the sweep. And
+entering the spectrum puts the threshold back at the stock default, −60: the `PARA_DW` call right after the mode
+becomes 20 (`0x01E4CF82`, before the window at `0x01E4CFBC`, which turns the threshold into a height) goes to
+`gancho_espectro_entra`. It is a `goto`, at the end of the image, to the body in the dead SCRAMBLE code (`mortos29`, 20
+of 20 bytes), because the firmware cannot call the dead stretches directly (the proof that they are dead is that
+nothing stock points at them). The body writes the threshold's four bytes at `0x6ED5`, unaligned, the way the firmware
+writes them, and goes on to `PARA_DW`; it only uses r0 and r1, which `PARA_DW` already clobbers. The default comes from
+the initial settings, `app.bin + 0x6AC0C + 0x6EC0` (the stretch the start-up copies to RAM): points 1 (80), step 4
+(25 kHz), FM, threshold −60, minimum −130 and maximum −20.
 
 **10 kHz step, 320 and 640 points, speed and peak (v20).**
 

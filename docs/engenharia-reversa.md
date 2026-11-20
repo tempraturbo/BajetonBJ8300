@@ -72,7 +72,7 @@ procurando onde o conteúdo começa a espelhar o endereço 0:
 | Faixa | Conteúdo |
 |---|---|
 | `0x00000–0x09FFF` | 960 canais de 32 B (até `0x077FF`); em `0x8000` o log dos VFOs de A e B, e em `0x9000` o log dos ajustes ([seção 26](#26-os-ajustes-que-se-perdiam-a-noise-gate-e-a-gravação-no-ok-v100-e-v101)) |
-| `0x0A000–0x0FFFF` | ajustes; `0x0F000–0x0F24F` é calibração de fábrica (potência de TX em `0xF000–0xF0BF`, [seção 20](#20-a-potência-de-tx-mapa-só-leitura); ganho do microfone em `0xF210`, [seção 19](#19-o-ganho-do-microfone-e-o-mic-gain-v49); squelch, subtom e cristal, [seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)) |
+| `0x0A000–0x0FFFF` | ajustes; `0x0F000–0x0F24F` é calibração de fábrica (potência de TX em `0xF000–0xF0BF`, [seção 20](#20-a-potência-de-tx); ganho do microfone em `0xF210`, [seção 19](#19-o-ganho-do-microfone-e-o-mic-gain-v49); squelch, subtom e cristal, [seção 22](#22-a-pasta-mic-o-crystal-fine-e-o-menu-recebendo-v59)) |
 | `0x10000–0x1AFFF` | **imagem de abertura**: 160×138 em RGB565 little-endian, 44160 B |
 | `0x20000–0x99FFF` | fontes e textos em chinês (~480 KB) |
 | `0xC0000–0xC0FFF` | 64 registros de 60 B que o firmware usa |
@@ -438,6 +438,28 @@ Se o sinal for forte, os pontos vizinhos do mesmo sinal também podem passar do 
 gráfico mostra como um morro de vários pontos — e a varredura para de novo logo ao lado. Fazer a
 seta pular o morro inteiro precisa guardar "estou pulando" entre uma volta e outra, ou seja, um
 byte de RAM nosso, e este firmware ainda não tem RAM comprovadamente livre.
+
+**A linha que não subia mais (v172).** Um usuário desceu a linha do limite até o fundo e ela não subiu mais, nem
+desligando o rádio. Duas coisas juntas:
+
+- **Com a linha no fundo, a busca para em todo ponto.** O limite vira altura entre o mínimo e o máximo (−130 e −20, no
+  fim de `0x01E4AA3C`), e no mínimo dá 0: todo nível chega a ele, a varredura vai ao estado 2 no primeiro ponto e só
+  sai dali quando o nível cair abaixo de 0, o que não acontece. Da v19 à v171, as duas setas, parado num achado, só
+  faziam a retomada: a busca andava um ponto, parava de novo, e o limite nunca mudava. De fábrica, as setas mexem no
+  limite em qualquer estado (`0x01E4C532` e `0x01E4C586`: +2 até o máximo e −2 até o mínimo, com `smin` e `smax`).
+- **A configuração atravessa tudo.** Os 73 bytes de `0x6EC0` vão para o chip de dados (`0xC0000`, 64 registros de
+  60 B) ao sair do espectro (`0x01E3FE38`) e voltam na partida (`0x01E55E8A`, conferidos só pela soma); gravar
+  firmware não mexe nesse chip.
+
+A correção tem duas partes. A seta de cima volta a ser a de fábrica em todo estado: sobe o limite, e a busca retoma
+sozinha quando o sinal fica abaixo dele. Só a de baixo, parado num achado, continua a busca. E a entrada do espectro
+põe o limite no padrão de fábrica, −60: a chamada do `PARA_DW` logo depois de o modo virar 20 (`0x01E4CF82`, antes da
+janela de `0x01E4CFBC`, que converte o limite em altura) vai ao `gancho_espectro_entra`. Ele é um `goto`, no fim da
+imagem, para o corpo no SCRAMBLE morto (`mortos29`, 20 de 20 bytes), porque o firmware não pode chamar os trechos
+mortos direto (a prova de que estão mortos é ninguém de fábrica apontar para eles). O corpo grava os quatro bytes do
+limite em `0x6ED5`, sem alinhamento, como o firmware os grava, e segue para o `PARA_DW`; só usa r0 e r1, que o
+`PARA_DW` já suja. O padrão sai da configuração inicial, `app.bin + 0x6AC0C + 0x6EC0` (o trecho que a partida copia
+para a RAM): pontos 1 (80), passo 4 (25 kHz), FM, limite −60, mínimo −130 e máximo −20.
 
 **Passo de 10 kHz, 320 e 640 pontos, velocidade e pico (v20).**
 

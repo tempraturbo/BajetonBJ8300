@@ -803,8 +803,11 @@ NAS_VOZES static void reconfigura(void)
  * caso do tbh: recebe a tecla em r0 e devolve r0 = a tecla e r1 = o caso, num u64 (o clang poe a
  * metade de baixo em r0 e a de cima em r1). A chamada passa a sujar r2 e r3, que estao mortos ali
  * em todos os caminhos. Tres coisas mudam, o resto e o caso de fabrica:
- *  - parado num achado (estado 2), as setas (que de fabrica so mexem no limite, +-2 em [0x6ED5])
- *    fazem a mesma retomada do firmware (0x01E4AEFC) e viram o caso da tecla 20, que so bipa;
+ *  - parado num achado (estado 2), a seta de baixo (que de fabrica so mexe no limite, -2 em [0x6ED5])
+ *    faz a mesma retomada do firmware (0x01E4AEFC) e vira o caso da tecla 20, que so bipa. Da v19 a
+ *    v171 a de cima fazia o mesmo, e com a linha no fundo a busca parava em todo ponto: a seta so
+ *    retomava, a busca parava de novo no ponto seguinte, e a linha nao subia mais (v172). A de cima e
+ *    a de fabrica em todo estado: sobe o limite 2, e a busca retoma sozinha quando o sinal fica abaixo;
  *  - OK e # trocam passo e pontos pela nossa ordem, com os valores novos, e fazem o que o firmware
  *    faz em seguida; voltam como tecla 255 no caso 20, que pula o bipe - como as duas de fabrica.
  */
@@ -812,7 +815,7 @@ NAS_VOZES unsigned long long gancho_tecla_espectro(unsigned tecla)
 {
     unsigned caso = tecla - 16;
 
-    if ((tecla == TECLA_CIMA || tecla == TECLA_BAIXO) && ESPECTRO_ESTADO == 2) {
+    if (tecla == TECLA_BAIXO && ESPECTRO_ESTADO == 2) {
         ESPECTRO_ESTADO = 0;
         AUDIO_DO_CHIP(0);
         PEDE_AMPLI(6);
@@ -829,6 +832,32 @@ NAS_VOZES unsigned long long gancho_tecla_espectro(unsigned tecla)
         caso = 20 - 16;
     }
     return (unsigned long long)caso << 32 | tecla;
+}
+
+/* ---------- a linha do espectro na entrada (v172) ----------
+ * Na chamada do PARA_DW da entrada do espectro (0x01E4CF82, logo depois de o modo virar 20 em 0x01E4CF7E),
+ * antes da janela (0x01E4CFBC), que converte o limite em altura (0x01E4AA3C, fim): o limite volta ao padrao
+ * de fabrica, -60 (a configuracao inicial, app.bin + 0x6AC0C + 0x6EC0: o limite em +0x15, entre -130 em
+ * +0x19 e -20 em +0x1D, na unidade do medidor). A configuracao do espectro mora no chip de dados (0xC0000,
+ * gravada ao sair e lida na partida) e atravessa o desligar e as gravacoes de firmware, e era assim que a
+ * linha deixada no fundo voltava sempre no fundo. O limite e um s32 em 0x6ED5, sem alinhamento, que o
+ * firmware grava byte a byte (0x01E4C568). So r0 e r1, que o PARA_DW ja suja. O corpo fica no SCRAMBLE morto
+ * (mortos29), que so o nosso codigo pode chamar: a chamada da entrada vai ao gancho no fim da imagem, um goto. */
+#define LIMITE_FABRICA (-60)
+NOS_MORTOS(29) __attribute__((noinline)) static void linha_padrao(void)
+{
+    volatile u8 *limite = (volatile u8 *)0x00006ED5;
+
+    limite[0] = (u8)LIMITE_FABRICA;
+    limite[1] = 0xFF;
+    limite[2] = 0xFF;
+    limite[3] = 0xFF;
+    PARA_DW();
+}
+
+void gancho_espectro_entra(void)
+{
+    linha_padrao();
 }
 
 /* ---------- roger: BEEP 2, COIN e CUSTOM ----------

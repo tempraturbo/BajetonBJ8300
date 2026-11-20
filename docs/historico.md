@@ -5,6 +5,26 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v172 — 20/11 — a linha do espectro sobe sempre e volta ao padrão na entrada (sem teste no rádio)
+
+Um usuário desceu a linha do limite do espectro até o fundo e ela não subiu mais, nem desligando o rádio. Com a linha
+no fundo, a busca para em todo ponto, e da v19 à v171 as setas, com a busca parada, só a continuavam: ela andava um
+ponto, parava de novo, e a linha nunca mudava. E a configuração do espectro mora no chip de dados, que gravar firmware
+não toca: a linha voltava sempre no fundo ([seção 11](engenharia-reversa.md#11-espectro)).
+
+- **A seta de cima** sobe a linha em qualquer estado, como a de fábrica; com a busca parada, ela retoma sozinha quando
+  o sinal fica abaixo da linha. **A de baixo**, com a busca parada, continua a busca, como desde a v19.
+- **A entrada do espectro** põe a linha no padrão de fábrica (−60, na unidade do medidor, entre −130 e −20).
+
+No firmware de fábrica, pelo código, a seta de cima sobe a linha 2 por toque (do fundo ao padrão são 35 toques); o
+relato de que ela também ficou presa lá, e de que só voltou depois de gravar a V3.2T e a V3.7T, não se explica pelo
+código e não foi reproduzido.
+
+- `BJ8300_BANK.anc` da v172 (fora de `firmware/releases/`): sha256 `e49b8a54ffd4bcb5f697f83424f9e5d79c0d37757007ddaad4f683bec16dfdd8`
+
+Testado no PC: o build ("tudo certo", a imagem do mesmo tamanho, o SCRAMBLE morto com 20 de 20 bytes) e os testes do
+firmware. No rádio, ainda não.
+
 ## V4.0T — 20/11 — o Tempra Link, o controle remoto, o ROGER CUSTOM e a busca mais rápida (preparada; o release sai depois do teste no rádio)
 
 A v171 vira a **V4.0T**, a pedido do dono, com o primeiro release do **Tempra Link** do Windows. O firmware é o da v171
