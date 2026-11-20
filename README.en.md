@@ -10,8 +10,8 @@ New firmware for the **Baojie/Bajeton BJ-8300** radio, built by reverse engineer
 radio over the cable. The "T" in the version stands for **Tempra**.
 
 <p align="center">
-  <a href="https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T"><img src="https://img.shields.io/badge/Download%20V4.1T-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download V4.1T"></a>
-  <a href="docs/wiki/README.en.md"><img src="https://img.shields.io/badge/Full%20documentation-0969da?style=for-the-badge&logo=bookstack&logoColor=white" alt="Full documentation"></a>
+  <a href="https://github.com/tempraturbo/BajetonBJ8300/releases/latest"><img src="https://img.shields.io/badge/Download%20V4.1T-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download V4.1T"></a>
+  <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/English"><img src="https://img.shields.io/badge/Full%20documentation-0969da?style=for-the-badge&logo=bookstack&logoColor=white" alt="Full documentation"></a>
   <a href="https://www.paypal.com/donate/?hosted_button_id=2VPWYBMKBSJX6"><img src="https://img.shields.io/badge/Donate%20with-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="Donate with PayPal"></a>
 </p>
 
@@ -20,9 +20,19 @@ radio over the cable. The "T" in the version stands for **Tempra**.
 > every donation means time for new features, gear to test on and the next version coming out.
 > [**Donate with PayPal**](https://www.paypal.com/donate/?hosted_button_id=2VPWYBMKBSJX6) · [the QR code](#-support-the-project)
 
+### 📑 On this page
+
+- [📻 What the radio gets](#-what-the-radio-gets)
+- [💻 Tempra Link: the radio from the PC](#-tempra-link-the-radio-from-the-pc)
+- [📥 How to flash the firmware](#-how-to-flash-the-firmware-step-by-step): [with Tempra Link](#-with-tempra-link-automatic) or [with BinTalk](#-with-bintalk-the-factory-flasher)
+- [🔌 How to use CHIRP](#-how-to-use-chirp-with-this-firmware)
+- [📖 Full documentation](#-full-documentation)
+- [💚 Support the project](#-support-the-project)
+- [📜 Credits and licence](#credits-and-licence)
+
 > [!NOTE]
 > **🎉 New in V4.1T:** Tempra Link, remote control from the PC, ROGER CUSTOM, a faster scan with THRESHOLD, Bluetooth
-> that stays on during TX and the spectrum line, which left at the bottom would not come back up. [Everything that changed](docs/wiki/versoes.en.md)
+> that stays on during TX and the spectrum line, which left at the bottom would not come back up. [Everything that changed](https://github.com/tempraturbo/BajetonBJ8300/wiki/Versions)
 
 ---
 
@@ -30,16 +40,16 @@ radio over the cable. The "T" in the version stands for **Tempra**.
 
 | | | |
 |:---:|:---:|:---:|
-| <img src="docs/imagens/tela-inicio.png" alt="The new main screen" width="260"> | <img src="docs/imagens/tela-menu-pastas.png" alt="The folder menu" width="260"> | <img src="docs/imagens/tela-triple-c.png" alt="TRIPLE" width="260"> |
-| **New screen**, with the S-meter | **Menu in 17 folders** | **TRIPLE:** three frequencies |
-| <img src="docs/imagens/tela-aprs-rx.png" alt="APRS" width="260"> | <img src="docs/imagens/tela-morse-messages.png" alt="Morse" width="260"> | <img src="docs/imagens/tela-banks-canais.png" alt="The channel banks" width="260"> |
-| **APRS:** messages and position | **Morse:** reads and sends | **16 channel banks** |
-| <img src="docs/imagens/tela-espectro.png" alt="The spectrum" width="260"> | <img src="docs/imagens/tela-roger-custom.png" alt="ROGER CUSTOM" width="260"> | <img src="docs/imagens/tela-eq.png" alt="The EQ" width="260"> |
-| A faster **spectrum** | **ROGER CUSTOM** | **EQ** on RX and TX |
+| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#-the-new-look"><img src="docs/imagens/tela-inicio.png" alt="The new main screen" width="260"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#-a-new-menu-everything-in-folders"><img src="docs/imagens/tela-menu-pastas.png" alt="The folder menu" width="260"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#-triple-the-bj-8300-listening-to-three-frequencies"><img src="docs/imagens/tela-triple-c.png" alt="TRIPLE" width="260"></a> |
+| [**New screen**, with the S-meter](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#-the-new-look) | [**Menu in 17 folders**](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#-a-new-menu-everything-in-folders) | [**TRIPLE:** three frequencies](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#-triple-the-bj-8300-listening-to-three-frequencies) |
+| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#-the-aprs-messages-screen-in-v32t"><img src="docs/imagens/tela-aprs-rx.png" alt="APRS" width="260"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#-the-morse-messages-screen-in-v37t"><img src="docs/imagens/tela-morse-messages.png" alt="Morse" width="260"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#using-banks-on-the-radio"><img src="docs/imagens/tela-banks-canais.png" alt="The channel banks" width="260"></a> |
+| [**APRS:** messages and position](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#-the-aprs-messages-screen-in-v32t) | [**Morse:** reads and sends](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#-the-morse-messages-screen-in-v37t) | [**16 channel banks**](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#using-banks-on-the-radio) |
+| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#spectrum"><img src="docs/imagens/tela-espectro.png" alt="The spectrum" width="260"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#roger-custom"><img src="docs/imagens/tela-roger-custom.png" alt="ROGER CUSTOM" width="260"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#eq"><img src="docs/imagens/tela-eq.png" alt="The EQ" width="260"></a> |
+| [A faster **spectrum**](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#spectrum) | [**ROGER CUSTOM**](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#roger-custom) | [**EQ** on RX and TX](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features#eq) |
 
 **And more:** an S-meter from S1 to S9+60, a scramble that talks to the Baofeng UV-17L, a scan at one channel every 60 ms
 with THRESHOLD, microphone compressor and AGC, crystal fine tuning, screen brightness, a full C side and remote control
-over the cable and Bluetooth. **[Every feature, explained in the wiki →](docs/wiki/radio.en.md)**
+over the cable and Bluetooth. **[Every feature, explained in the wiki →](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features)**
 
 ---
 
@@ -50,8 +60,8 @@ with nothing to download by hand) and then programs the whole radio over the cab
 
 | | |
 |:---:|:---:|
-| <img src="docs/imagens/tempralink-remoto-en.png" alt="The remote control, with the radio's screen on the PC" width="430"> | <img src="docs/imagens/tempralink-canais-en.png" alt="The channels, like a spreadsheet" width="430"> |
-| **Remote control:** the radio's screen, keypad and PTT on the PC | **Channels:** all 960, like a spreadsheet |
+| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#9-remote-control"><img src="docs/imagens/tempralink-remoto-en.png" alt="The remote control, with the radio's screen on the PC" width="430"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#4-channels"><img src="docs/imagens/tempralink-canais-en.png" alt="The channels, like a spreadsheet" width="430"></a> |
+| [**Remote control:** the radio's screen, keypad and PTT on the PC](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#9-remote-control) | [**Channels:** all 960, like a spreadsheet](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#4-channels) |
 
 - 🔥 **Flashes the firmware:** downloads the right version from GitHub, checks it and flashes it over the cable; and goes back to stock.
 - 📻 **Channels and banks:** copy and paste and CHIRP's CSV.
@@ -59,8 +69,8 @@ with nothing to download by hand) and then programs the whole radio over the cab
 - 🎵 **ROGER CUSTOM:** composed on a piano, or imported from MIDI and sound.
 - 💾 **A backup** of every reading, and it **updates itself** from GitHub.
 
-**[⬇️ Download Tempra Link](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T)** ·
-**[📖 The manual, with every screen](docs/wiki/tempra-link.en.md)**
+**[⬇️ Download Tempra Link](https://github.com/tempraturbo/BajetonBJ8300/releases/latest)** ·
+**[📖 The manual, with every screen](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual)**
 
 ---
 
@@ -71,7 +81,7 @@ same the stock CPS uses). Two ways:
 
 ### 🚀 With Tempra Link: automatic
 
-1. Download and open `TempraLink-BJ8300_v1.0.exe`, from the [V4.1T release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T).
+1. Download and open `TempraLink-BJ8300_v1.0.exe`, from the [V4.1T release](https://github.com/tempraturbo/BajetonBJ8300/releases/latest).
 2. With the radio on and the cable plugged into the PC, click **Read from radio**. Seeing the stock firmware, it offers
    to download and flash V4.1T: **Yes**.
 3. When it asks, turn the radio off and turn it on holding **PTT2 + the shortcut key**, until `UPDATE` shows, and
@@ -80,12 +90,12 @@ same the stock CPS uses). Two ways:
 
 | | |
 |:---:|:---:|
-| <img src="docs/imagens/tempralink-fabrica-en.png" alt="With the stock firmware, it offers V4.1T" width="430"> | <img src="docs/imagens/tempralink-gravando-en.png" alt="Flashing in progress" width="430"> |
-| It sees the stock firmware and offers V4.1T | Flashing: the red bar until the end |
+| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Flashing-the-firmware#-option-1-with-tempra-link-automatic"><img src="docs/imagens/tempralink-fabrica-en.png" alt="With the stock firmware, it offers V4.1T" width="430"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#10-flashing-the-firmware"><img src="docs/imagens/tempralink-gravando-en.png" alt="Flashing in progress" width="430"></a> |
+| [It sees the stock firmware and offers V4.1T](https://github.com/tempraturbo/BajetonBJ8300/wiki/Flashing-the-firmware#-option-1-with-tempra-link-automatic) | [Flashing: the red bar until the end](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#10-flashing-the-firmware) |
 
 ### 🔧 With BinTalk: the factory flasher
 
-1. Download `BJ8300_BANK_v4.1T.anc` and `BinTalk-V1.1.zip` from the [V4.1T release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T),
+1. Download `BJ8300_BANK_v4.1T.anc` and `BinTalk-V1.1.zip` from the [V4.1T release](https://github.com/tempraturbo/BajetonBJ8300/releases/latest),
    and open `BinTe ANC Bootloader.exe`.
 2. Pick the `.anc`, the cable's COM port and **115200**.
 3. Turn the radio off and turn it on holding **PTT2 + the shortcut key**, until `UPDATE` shows, and click **Update**.
@@ -93,15 +103,15 @@ same the stock CPS uses). Two ways:
 
 Channels, settings and calibration are not touched by flashing, and UPDATE mode runs before any modified part: you can
 go back to stock whenever you want. **[The full step by step: the cable driver, what to do if it fails and going back
-to stock →](docs/wiki/gravar.en.md)**
+to stock →](https://github.com/tempraturbo/BajetonBJ8300/wiki/Flashing-the-firmware)**
 
 ---
 
-## 📻 How to use CHIRP with this firmware
+## 🔌 How to use CHIRP with this firmware
 
-Load the `bj8300_v4.1TEMPRA.py` module from the [V4.1T release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T)
+Load the `bj8300_v4.1TEMPRA.py` module from the [V4.1T release](https://github.com/tempraturbo/BajetonBJ8300/releases/latest)
 into CHIRP (**File → Load Module**, with developer mode on) and pick **Bajeton → BJ8300_v4.1TEMPRA**. CHIRP's stock models
-(Bajeton BJ7800 and Radtel RT-920) do not work with this firmware. **[The step by step →](docs/wiki/chirp.en.md)**
+(Bajeton BJ7800 and Radtel RT-920) do not work with this firmware. **[The step by step →](https://github.com/tempraturbo/BajetonBJ8300/wiki/Using-CHIRP)**
 
 ---
 
@@ -109,17 +119,17 @@ into CHIRP (**File → Load Module**, with developer mode on) and pick **Bajeton
 
 > [!IMPORTANT]
 > **Every feature of the radio and of Tempra Link is explained in detail, with the screens, in the
-> [📖 project wiki](docs/wiki/README.en.md).**
+> [📖 project wiki](https://github.com/tempraturbo/BajetonBJ8300/wiki/English).**
 
 | | |
 |---|---|
-| 📻 **[Radio features](docs/wiki/radio.en.md)** | the 17-folder menu, TRIPLE, APRS, Morse, the banks, the new screen and everything that changed from V0.12 |
-| 💻 **[Tempra Link](docs/wiki/tempra-link.en.md)** | the manual, page by page, with the screens |
-| 📥 **[Flashing the firmware](docs/wiki/gravar.en.md)** | both ways, the cable driver, errors and going back to stock |
-| 🔌 **[CHIRP](docs/wiki/chirp.en.md)** | the module, the banks in CHIRP and how the driver works |
-| 🗂️ **[Releases](docs/wiki/versoes.en.md)** and **[changelog](docs/changelog.md)** | every version, what changed and why |
+| 📻 **[Radio features](https://github.com/tempraturbo/BajetonBJ8300/wiki/Radio-features)** | the 17-folder menu, TRIPLE, APRS, Morse, the banks, the new screen and everything that changed from V0.12 |
+| 💻 **[Tempra Link](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual)** | the manual, page by page, with the screens |
+| 📥 **[Flashing the firmware](https://github.com/tempraturbo/BajetonBJ8300/wiki/Flashing-the-firmware)** | both ways, the cable driver, errors and going back to stock |
+| 🔌 **[CHIRP](https://github.com/tempraturbo/BajetonBJ8300/wiki/Using-CHIRP)** | the module, the banks in CHIRP and how the driver works |
+| 🗂️ **[Releases](https://github.com/tempraturbo/BajetonBJ8300/wiki/Versions)** and **[changelog](docs/changelog.md)** | every version, what changed and why |
 | 🔬 **[Reverse engineering](docs/reverse-engineering.md)** | how the stock firmware was opened and modified |
-| 🛠️ **[Development](docs/wiki/desenvolvimento.en.md)** | building, the cable tools, the space budget and the repository layout |
+| 🛠️ **[Development](https://github.com/tempraturbo/BajetonBJ8300/wiki/Development)** | building, the cable tools, the space budget and the repository layout |
 
 ---
 

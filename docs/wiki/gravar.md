@@ -28,7 +28,7 @@ num PC com Windows.
 
 Ligue o cabo no PC e abra o **Gerenciador de Dispositivos**. Se em **Portas (COM e LPT)** aparece
 `USB-SERIAL CH340 (COMx)`, está pronto: anote o número da COM. Se não aparece, baixe o `CH340-driver.zip` do
-[release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T), clique com o botão direito no `ch341ser.inf` dele → **Instalar** (ou, num PowerShell **como
+[release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/latest), clique com o botão direito no `ch341ser.inf` dele → **Instalar** (ou, num PowerShell **como
 administrador**, `pnputil /add-driver ch341ser.inf /install`) e desconecte e conecte o cabo. Antes de gravar, feche o
 CHIRP, o CPS e qualquer outro programa que use a porta.
 
@@ -38,7 +38,7 @@ Serve para sair do firmware de fábrica e entrar no TEMPRA, e depois para atuali
 baixa do GitHub a versão certa e a confere antes de gravar (pelo tamanho, pelo SHA-256 do GitHub e pelos CRCs e a marca
 do hardware do próprio `.anc`).
 
-**1. Baixe e abra** o `TempraLink-BJ8300_v1.0.exe`, da [página do release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T). Ele não instala nada. Na
+**1. Baixe e abra** o `TempraLink-BJ8300_v1.0.exe`, da [página do release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/latest). Ele não instala nada. Na
 primeira vez, o Windows pode avisar que ele é de um editor desconhecido, porque o `.exe` não é assinado: **Mais
 informações** → **Executar assim mesmo**.
 
@@ -69,7 +69,7 @@ O gravador do fabricante (BinTe ANC Bootloader). Os arquivos estão no release e
 [firmware/releases/](../../firmware/releases/), [tools/anc-bootloader/](../../tools/anc-bootloader/) e
 [tools/ch340-driver/](../../tools/ch340-driver/).
 
-**1. Baixe os arquivos.** Na [página do release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T), baixe o `BJ8300_BANK_v4.1T.anc` e o `BinTalk-V1.1.zip`,
+**1. Baixe os arquivos.** Na [página do release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/latest), baixe o `BJ8300_BANK_v4.1T.anc` e o `BinTalk-V1.1.zip`,
 e descompacte o zip.
 
 **2. Abra o gravador.** Rode o `BinTe ANC Bootloader.exe` (a janela se chama **BinTalk V1.1**).

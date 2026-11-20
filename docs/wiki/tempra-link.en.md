@@ -39,7 +39,7 @@ screen live on the PC, and **flashes the firmware itself**. It is a single `.exe
   Windows does not recognize it, install the driver from the release's `CH340-driver.zip` (see the
   [flashing page](gravar.en.md#-the-cable-and-the-driver)).
 - **Download** `TempraLink-BJ8300_v1.0.exe` from the
-  [V4.1T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T) and put it in a folder of your
+  [V4.1T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/latest) and put it in a folder of your
   own. It installs nothing: the backups go to the user's folder ([Backup and log](#11-backup-and-log)).
 - **The first time,** Windows may warn that the program comes from an unknown publisher (SmartScreen), because the `.exe`
   is not signed: **More info** → **Run anyway**.

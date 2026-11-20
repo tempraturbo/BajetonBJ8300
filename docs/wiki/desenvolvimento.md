@@ -103,6 +103,22 @@ explica como medir, onde já foi economizado e por que esses lugares são seguro
 cada cenário da tela em PNG. Precisa do zig (`pip install ziglang`), que faz o papel de compilador
 de C.
 
+## A aba Wiki do GitHub
+
+A [aba Wiki](https://github.com/tempraturbo/BajetonBJ8300/wiki) é gerada desta pasta, `docs/wiki`, que é a fonte: as
+mudanças entram aqui, no mesmo commit do que elas descrevem, e vão para a wiki pelo
+[`tools/gera_wiki.py`](../../tools/gera_wiki.py):
+
+```
+git clone https://github.com/tempraturbo/BajetonBJ8300.wiki.git ../BajetonBJ8300.wiki
+python -I tools/gera_wiki.py ../BajetonBJ8300.wiki
+cd ../BajetonBJ8300.wiki && git add -A && git commit -m "Wiki do commit <commit>" && git push
+```
+
+O script tira o título do alto (a wiki já mostra o nome da página), troca os links entre as páginas pelos nomes da
+wiki, as imagens pelo endereço do `raw.githubusercontent.com` e o resto do repositório pelo `github.com`, e escreve o
+menu lateral e o rodapé. Página nova em `docs/wiki` entra na tabela `PAGINAS` dele, senão ele para.
+
 ## Estrutura do repositório
 
 ```
@@ -123,8 +139,9 @@ tools/
   ch340-driver/    driver do cabo USB
   cabo/            ferramentas PowerShell que falam com o rádio
   ghidra-scripts/  scripts usados na análise
+  gera_wiki.py     gera a aba Wiki a partir de docs/wiki
 logo/           imagem de abertura (BMP) e conversor
 tests/          testes do driver do CHIRP
 tempralink/     o código do Tempra Link (Delphi), o gerador do menu e os testes
-docs/           o manual do Tempra Link, engenharia reversa, histórico, mapa da tela, imagens e notas de trabalho
+docs/           wiki/ (a documentação completa, fonte da aba Wiki), engenharia reversa, histórico, mapa da tela, imagens e notas de trabalho
 ```

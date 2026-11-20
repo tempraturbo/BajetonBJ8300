@@ -102,6 +102,23 @@ explains how to measure it, where space was already saved and why these places a
 writes every screen scenario as PNG. It needs zig (`pip install ziglang`), which serves as the C
 compiler.
 
+## The GitHub Wiki tab
+
+The [Wiki tab](https://github.com/tempraturbo/BajetonBJ8300/wiki) is generated from this folder, `docs/wiki`, which is
+the source: changes go in here, in the same commit as what they describe, and reach the wiki through
+[`tools/gera_wiki.py`](../../tools/gera_wiki.py):
+
+```
+git clone https://github.com/tempraturbo/BajetonBJ8300.wiki.git ../BajetonBJ8300.wiki
+python -I tools/gera_wiki.py ../BajetonBJ8300.wiki
+cd ../BajetonBJ8300.wiki && git add -A && git commit -m "Wiki from commit <commit>" && git push
+```
+
+The script drops the title at the top (the wiki already shows the page name), turns links between pages into wiki
+page names, images into `raw.githubusercontent.com` addresses and the rest of the repository into `github.com`
+addresses, and writes the sidebar and the footer. A new page in `docs/wiki` goes into its `PAGINAS` table, or it
+stops.
+
 ## Repository layout
 
 ```
@@ -122,8 +139,9 @@ tools/
   ch340-driver/    USB cable driver
   cabo/            PowerShell tools that talk to the radio
   ghidra-scripts/  scripts used during analysis
+  gera_wiki.py     generates the Wiki tab from docs/wiki
 logo/           boot image (BMP) and converter
 tests/          CHIRP driver tests
 tempralink/     Tempra Link's source (Delphi), the menu generator and the tests
-docs/           Tempra Link's manual, reverse engineering, changelog, screen map, images and working notes
+docs/           wiki/ (the full documentation, source of the Wiki tab), reverse engineering, changelog, screen map, images and working notes
 ```

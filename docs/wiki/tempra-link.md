@@ -39,7 +39,7 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
   reconhece, instale o driver do `CH340-driver.zip` do release (veja na
   [página de gravar](gravar.md#-o-cabo-e-o-driver)).
 - **Baixe** o `TempraLink-BJ8300_v1.0.exe` da
-  [página do release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.1T) e ponha numa pasta sua.
+  [página do release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/latest) e ponha numa pasta sua.
   Ele não instala nada: os backups ficam na pasta do usuário ([Backup e registro](#11-backup-e-registro)).
 - **Na primeira vez,** o Windows pode avisar que o programa é de um editor desconhecido (o SmartScreen), porque o `.exe`
   não é assinado: **Mais informações** → **Executar assim mesmo**.
