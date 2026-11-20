@@ -60,11 +60,11 @@ with nothing to download by hand) and then programs the whole radio over the cab
 
 | | |
 |:---:|:---:|
-| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#9-remote-control"><img src="docs/imagens/tempralink-remoto-en.png" alt="The remote control, with the radio's screen on the PC" width="430"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#4-channels"><img src="docs/imagens/tempralink-canais-en.png" alt="The channels, like a spreadsheet" width="430"></a> |
-| [**Remote control:** the radio's screen, keypad and PTT on the PC](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#9-remote-control) | [**Channels:** all 960, like a spreadsheet](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#4-channels) |
+| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#10-remote-control"><img src="docs/imagens/tempralink-remoto-en.png" alt="The remote control, with the radio's screen on the PC" width="430"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#4-channels"><img src="docs/imagens/tempralink-canais-en.png" alt="The channels, like a spreadsheet" width="430"></a> |
+| [**Remote control:** the radio's screen, keypad and PTT on the PC](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#10-remote-control) | [**Channels:** all 960, like a spreadsheet](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#4-channels) |
 
 - 🔥 **Flashes the firmware:** downloads the right version from GitHub, checks it and flashes it over the cable; and goes back to stock.
-- 📻 **Channels and banks:** copy and paste and CHIRP's CSV.
+- 📻 **Channels and banks:** copy and paste and CHIRP's CSV; and the **AM/FM/SSB radio memories**, with names.
 - ⚙️ **Settings:** the radio's menu, the VFOs, the APRS and Morse texts and DTMF.
 - 🎵 **ROGER CUSTOM:** composed on a piano, or imported from MIDI and sound.
 - 💾 **A backup** of every reading, and it **updates itself** from GitHub.
@@ -90,8 +90,8 @@ same the stock CPS uses). Two ways:
 
 | | |
 |:---:|:---:|
-| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Flashing-the-firmware#-option-1-with-tempra-link-automatic"><img src="docs/imagens/tempralink-fabrica-en.png" alt="With the stock firmware, it offers V4.1T" width="430"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#10-flashing-the-firmware"><img src="docs/imagens/tempralink-gravando-en.png" alt="Flashing in progress" width="430"></a> |
-| [It sees the stock firmware and offers V4.1T](https://github.com/tempraturbo/BajetonBJ8300/wiki/Flashing-the-firmware#-option-1-with-tempra-link-automatic) | [Flashing: the red bar until the end](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#10-flashing-the-firmware) |
+| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Flashing-the-firmware#-option-1-with-tempra-link-automatic"><img src="docs/imagens/tempralink-fabrica-en.png" alt="With the stock firmware, it offers V4.1T" width="430"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#11-flashing-the-firmware"><img src="docs/imagens/tempralink-gravando-en.png" alt="Flashing in progress" width="430"></a> |
+| [It sees the stock firmware and offers V4.1T](https://github.com/tempraturbo/BajetonBJ8300/wiki/Flashing-the-firmware#-option-1-with-tempra-link-automatic) | [Flashing: the red bar until the end](https://github.com/tempraturbo/BajetonBJ8300/wiki/Tempra-Link-manual#11-flashing-the-firmware) |
 
 ### 🔧 With BinTalk: the factory flasher
 

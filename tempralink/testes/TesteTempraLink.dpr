@@ -71,6 +71,31 @@ begin
   end;
 end;
 
+{ Cada área do rádio simulado igual à que a memória quer gravar, menos a calibração (que não se grava) e os bytes do
+  bloco 0xB080 depois dos 25 que o rádio usa (a leitura traz ali a sobra do buffer do cabo). A primeira diferença vai
+  para a saída. }
+function RadioComoAMemoria(R: TRadioBJSimulado; M: TMemoriaBJ8300): Boolean;
+var
+  A, I: Integer;
+  NoRadio, Quer: TBytes;
+begin
+  for A := 0 to High(AREAS) do
+  begin
+    if A = AREA_CALIBRACAO then
+      Continue;
+    NoRadio := R.Pega(AREAS[A].Endereco, AREAS[A].Tamanho);
+    Quer := M.Atual(A);
+    for I := 0 to High(Quer) do
+      if (NoRadio[I] <> Quer[I]) and not ((AREAS[A].Endereco = $B000) and (I >= $99) and (I < $C0)) then
+      begin
+        Writeln(Format('       %.6X: no rádio %.2X, e devia ser %.2X', [AREAS[A].Endereco + Cardinal(I), NoRadio[I],
+                                                                       Quer[I]]));
+        Exit(False);
+      end;
+  end;
+  Result := True;
+end;
+
 function NovoRadio: TRadioBJSimulado;
 begin
   Result := TRadioBJSimulado.Create;
@@ -136,6 +161,14 @@ begin
           'cifra: a regra do _crypt do CHIRP');
 end;
 
+function BandaRadio(const S: string): TBandaRadio;
+begin
+  for Result := Low(TBandaRadio) to High(TBandaRadio) do
+    if BANDAS_RADIO[Result] = S then
+      Exit;
+  raise Exception.Create('banda do rádio ' + S);
+end;
+
 // o que o driver do CHIRP leu da mesma memória (esperado.txt), linha a linha
 procedure TesteLeitura;
 var
@@ -145,6 +178,7 @@ var
   Linha: string;
   C: TArray<string>;
   Ca: TCanal;
+  Mr: TMemoriaRadio;
   It: TItem;
   Certos, Falhas: Integer;
 
@@ -201,6 +235,15 @@ begin
         'F':
           Bate((M.Frequencia(StrToInt(C[1])) = Cardinal(StrToInt(C[2]))) and
                (M.Offset(StrToInt(C[1])) = Cardinal(StrToInt(C[3]))), Linha);
+        'R':
+          begin
+            Mr := M.MemoriaRadio(BandaRadio(C[1]), StrToInt(C[2]));
+            if C[3] = '-' then
+              Bate(not Mr.Existe, Linha)
+            else
+              Bate(Mr.Existe and (Mr.Freq = Cardinal(StrToInt(C[3]))) and (Mr.Nome = C[4]) and
+                   ((Mr.Banda <> brSSB) or (Mr.Largura = StrToInt(C[5])) and (Mr.Bfo = StrToInt(C[6]))), Linha);
+          end;
       end;
     end;
     Confere((Falhas = 0) and (Certos > 100), Format('leitura igual à do driver do CHIRP: %d linhas certas, %d erradas',
@@ -231,6 +274,7 @@ procedure Muda(M: TMemoriaBJ8300);
 var
   C: TCanal;
   T: Word;
+  R: TMemoriaRadio;
 begin
   M.Guarda;
   C := Default(TCanal);
@@ -271,6 +315,17 @@ begin
   M.PoeFrequencia(2, 43300000);
   M.PoeOffset(2, 600);
   M.PoeGrupoDtmf(1, '9876');
+  // as memórias do rádio de AM, FM e SSB
+  R := M.MemoriaRadio(brFM, 2);
+  R.Existe := True;
+  R.Freq := 9850;
+  R.Nome := 'NOVA FM';
+  M.PoeMemoriaRadio(R);
+  M.ApagaMemoriaRadio(brAM, 2);
+  R := M.MemoriaRadio(brSSB, 1);
+  R.Nome := 'QSO 7100';
+  R.Bfo := 200;
+  M.PoeMemoriaRadio(R);
 end;
 
 procedure TesteGravacao;
@@ -281,6 +336,7 @@ var
   C: TCaboBJ;
   E: Cardinal;
   SoOsCanais: Boolean;
+  Proximo: Cardinal;
 begin
   R := NovoRadio;
   T := R;
@@ -299,11 +355,18 @@ begin
     C.Sessao(T, procedure begin M.GravaNoRadio(C, False) end);
     M.Gravou;
     Confere(not M.Mudou and not R.Lixo and not R.NaSessao, 'gravação: terminou, e nada mais a gravar');
+    Confere(RadioComoAMemoria(R, M), 'gravação: o rádio ficou byte a byte com o que o Tempra Link tinha (a flash ' +
+            'só apaga o setor no bloco que começa nele)');
+    // o 2 e o 10 moram no setor 0x0000: ele vai inteiro, do começo (o primeiro bloco o apaga), e nenhum outro dos canais
+    Proximo := 0;
     SoOsCanais := True;
     for E in R.Gravados do
       if E < $8000 then
-        SoOsCanais := SoOsCanais and ((E = $0000) or (E = $0100));
-    Confere(SoOsCanais, 'gravação: dos canais, só os blocos do 2 e do 10');
+      begin
+        SoOsCanais := SoOsCanais and (E = Proximo);
+        Inc(Proximo, 64);
+      end;
+    Confere(SoOsCanais and (Proximo = $1000), 'gravação: dos canais, só o setor do 2 e do 10, inteiro e do começo');
     SalvaAreas(R, TPath.Combine(Pasta, 'testes\gravado.bin'));
     // uma segunda leitura vê o mesmo que ficou na memória
     M.Free;

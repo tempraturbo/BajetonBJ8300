@@ -5,6 +5,23 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## Tempra Link — Nov 20 — writing whole sectors and the AM/FM/SSB radio page
+
+- **Writing spoiled channels (Tempra Link 1.0, not released yet).** The radio only erases a 4 KB sector of the chip
+  when the block written over the cable starts it (`0x01E43A68`); the other blocks it writes on top, and flash, without
+  erasing, only clears bits. Tempra Link wrote only the 64 B blocks that changed: a channel at the start of a sector
+  erased the others in the sector, and one in the middle came out mixed with the old one ("ABC" turning into "ABD"
+  became "AB@"). Now a sector of the stock areas where something changed goes whole, from its start, as the CHIRP
+  driver writes. The test simulator wrote like RAM and the test only looked at the changed channels; now it writes like
+  the radio, and the test checks the whole radio, byte by byte, after writing. From the disassembly and the simulator;
+  not on the radio yet.
+- **The AM/FM/SSB radio page** (on Windows and on the phone): the 15 memories of each mode, with the frequency, the name
+  and, in SSB, the bandwidth and the BFO, like the channels (only the saved ones, Show empty ones, an empty one is
+  created by its frequency, Delete). The cable brings the radio block from RAM at `0xB000`, `0xB040` and `0xB080`
+  (153 B; `0xB080` only has 25 and is the one that makes the radio save the block, so it goes last), and the names
+  come from the `0xC000` sector. Deleting does what the CHIRP driver does: frequency 0 (in SSB, the 5 B) and the name
+  in `FF`. The tests check reading and writing through the driver.
+
 ## V4.1T — Nov 20 — V4.0T with the spectrum line fixed (prepared; the release goes out after the radio test)
 
 v172 becomes **V4.1T**, at the owner's request, in place of V4.0T, which never went out: between preparing it and the

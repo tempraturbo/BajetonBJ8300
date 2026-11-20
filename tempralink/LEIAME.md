@@ -148,9 +148,10 @@ repositório. Precisa do Delphi (feito no RAD Studio 12; outra versão: defina `
 CHIRP instalados, os testes conferem também contra o driver do CHIRP:
 
 - o `testes\fixtures.py gera` monta um BJ-8300 pelo próprio driver (canais com tons, deslocamentos, AM e sem TX, bancos,
-  ajustes, textos e VFOs) e escreve a memória dele (`radio.bin`) e o que se tem de ler dela (`esperado.txt`);
-- o `testes\TesteTempraLink.dpr` lê essa memória pelo rádio simulado (`testes\SimuladorBJ.pas`, que segue a seção 4) e
-  confere linha a linha; grava um conjunto de mudanças e guarda o resultado (`gravado.bin`); e confere as recusas (o
+  ajustes, textos, VFOs e as memórias do rádio de AM, FM e SSB, pelos sub-rádios) e escreve a memória dele (`radio.bin`) e o que se tem de ler dela (`esperado.txt`);
+- o `testes\TesteTempraLink.dpr` lê essa memória pelo rádio simulado (`testes\SimuladorBJ.pas`, que segue a seção 4 e grava
+  como a flash do rádio: o bloco que começa um setor o apaga, e os outros só zeram bits) e confere linha a linha; grava
+  um conjunto de mudanças, confere o rádio inteiro byte a byte e guarda o resultado (`gravado.bin`); e confere as recusas (o
   firmware de fábrica, o rádio mudo, o rádio que mudou, o firmware que confirma e não guarda, o VFO C com o C no lado
   B), os registros apagados, o backup, o CSV e o logo; o controle remoto, com o rádio simulado falando o protocolo
   dele (as teclas, o PTT, a tela por fatias, a perda que chega no meio da tela inteira, a TX, o clique curto e a tecla

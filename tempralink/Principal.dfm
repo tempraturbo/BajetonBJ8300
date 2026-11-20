@@ -435,14 +435,113 @@ object FormPrincipal: TFormPrincipal
           OnKeyPress = GradeKeyPress
         end
       end
+      object CartaoRadio: TCard
+        Left = 0
+        Top = 0
+        Width = 980
+        Height = 608
+        Caption = 'CartaoRadio'
+        CardIndex = 2
+        TabOrder = 2
+        object PainelFiltroRadio: TPanel
+          Left = 0
+          Top = 0
+          Width = 980
+          Height = 48
+          Align = alTop
+          BevelOuter = bvNone
+          Color = clWindow
+          ParentBackground = False
+          TabOrder = 0
+          object LabelContagemRadio: TLabel
+            Left = 776
+            Top = 15
+            Width = 180
+            Height = 15
+            Alignment = taRightJustify
+            Anchors = [akTop, akRight]
+            AutoSize = False
+            Font.Charset = DEFAULT_CHARSET
+            Font.Color = clGrayText
+            Font.Height = -12
+            Font.Name = 'Segoe UI'
+            Font.Style = []
+            ParentFont = False
+          end
+          object CheckVaziasRadio: TCheckBox
+            Left = 24
+            Top = 15
+            Width = 150
+            Height = 17
+            Caption = 'Mostrar as vazias'
+            TabOrder = 0
+            OnClick = CheckVaziasRadioClick
+          end
+          object BotaoApagarRadio: TButton
+            Left = 182
+            Top = 10
+            Width = 76
+            Height = 28
+            Caption = 'Apagar'
+            TabOrder = 1
+            OnClick = BotaoApagarRadioClick
+          end
+        end
+        object LabelRadioNota: TLabel
+          AlignWithMargins = True
+          Left = 24
+          Top = 568
+          Width = 932
+          Height = 32
+          Margins.Left = 24
+          Margins.Top = 0
+          Margins.Right = 24
+          Margins.Bottom = 8
+          Align = alBottom
+          AutoSize = False
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clGrayText
+          Font.Height = -12
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+          WordWrap = True
+        end
+        object GradeRadio: TStringGrid
+          AlignWithMargins = True
+          Left = 24
+          Top = 48
+          Width = 932
+          Height = 512
+          Margins.Left = 24
+          Margins.Top = 0
+          Margins.Right = 24
+          Margins.Bottom = 8
+          Align = alClient
+          BorderStyle = bsNone
+          ColCount = 5
+          DefaultDrawing = False
+          DefaultRowHeight = 26
+          FixedCols = 0
+          RowCount = 2
+          GridLineWidth = 0
+          Options = [goFixedVertLine, goFixedHorzLine, goRangeSelect, goThumbTracking, goFixedRowDefAlign]
+          TabOrder = 1
+          OnDblClick = GradeDblClick
+          OnSelectCell = GradeSelectCell
+          OnDrawCell = GradeDrawCell
+          OnKeyDown = GradeKeyDown
+          OnKeyPress = GradeKeyPress
+        end
+      end
       object CartaoAjustes: TCard
         Left = 0
         Top = 0
         Width = 980
         Height = 608
         Caption = 'CartaoAjustes'
-        CardIndex = 2
-        TabOrder = 2
+        CardIndex = 3
+        TabOrder = 3
         object PainelPastas: TPanel
           Left = 0
           Top = 0
@@ -741,8 +840,8 @@ object FormPrincipal: TFormPrincipal
         Width = 980
         Height = 608
         Caption = 'CartaoLogo'
-        CardIndex = 3
-        TabOrder = 3
+        CardIndex = 4
+        TabOrder = 4
         object LabelLogoInfo: TLabel
           Left = 360
           Top = 106
@@ -845,8 +944,8 @@ object FormPrincipal: TFormPrincipal
         Width = 980
         Height = 608
         Caption = 'CartaoControle'
-        CardIndex = 4
-        TabOrder = 4
+        CardIndex = 5
+        TabOrder = 5
         object LabelRemoto: TLabel
           Left = 216
           Top = 421
@@ -942,8 +1041,8 @@ object FormPrincipal: TFormPrincipal
         Width = 980
         Height = 608
         Caption = 'CartaoFirmware'
-        CardIndex = 5
-        TabOrder = 5
+        CardIndex = 6
+        TabOrder = 6
         object LabelArquivo: TLabel
           Left = 24
           Top = 16
@@ -1058,8 +1157,8 @@ object FormPrincipal: TFormPrincipal
         Width = 980
         Height = 608
         Caption = 'CartaoBackup'
-        CardIndex = 6
-        TabOrder = 6
+        CardIndex = 7
+        TabOrder = 7
         object LabelBackup: TLabel
           Left = 24
           Top = 16
@@ -1116,8 +1215,8 @@ object FormPrincipal: TFormPrincipal
         Width = 980
         Height = 608
         Caption = 'CartaoRegistro'
-        CardIndex = 7
-        TabOrder = 7
+        CardIndex = 8
+        TabOrder = 8
         object MemoRegistro: TMemo
           AlignWithMargins = True
           Left = 24

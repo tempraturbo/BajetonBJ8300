@@ -5,6 +5,21 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## Tempra Link — 20/11 — a gravação por setor inteiro e a página do rádio de AM, FM e SSB
+
+- **A gravação estragava canais (o Tempra Link 1.0, ainda não lançado).** O rádio só apaga um setor de 4 KB do chip
+  quando o bloco gravado pelo cabo começa nele (`0x01E43A68`); os outros blocos ele grava por cima, e a flash, sem
+  apagar, só zera bits. O Tempra Link gravava só os blocos de 64 B que mudaram: um canal no começo de um setor apagava
+  os outros do setor, e um no meio saía misturado com o velho ("ABC" virando "ABD" ficava "AB@"). Agora um setor das
+  áreas de fábrica em que algo mudou vai inteiro, do começo, como o driver do CHIRP grava. O simulador dos testes
+  gravava como RAM e o teste só olhava os canais mudados; agora ele grava como o rádio, e o teste confere o rádio
+  inteiro, byte a byte, depois da gravação. Pelo desmontado e pelo simulador; no rádio, ainda não.
+- **A página Rádio AM/FM/SSB** (no Windows e no celular): as 15 memórias de cada modo, com a frequência, o nome e, no
+  SSB, a largura e o BFO, como os canais (só as salvas, Mostrar as vazias, uma vazia nasce pela frequência, Apagar). O
+  cabo traz o bloco do rádio da RAM em `0xB000`, `0xB040` e `0xB080` (153 B; o `0xB080` só tem 25 e é o que manda o
+  rádio guardar o bloco, então vai por último), e os nomes vêm do setor `0xC000`. Apagar é o que o driver do CHIRP
+  faz: a frequência 0 (no SSB, os 5 B) e o nome em `FF`. Os testes conferem a leitura e a gravação pelo driver.
+
 ## V4.1T — 20/11 — a V4.0T com a linha do espectro corrigida (preparada; o release sai depois do teste no rádio)
 
 A v172 vira a **V4.1T**, a pedido do dono, no lugar da V4.0T, que não chegou a sair: entre a preparação dela e o

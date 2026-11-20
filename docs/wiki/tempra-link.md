@@ -7,7 +7,7 @@
 [📖 Wiki](README.md) · [🏠 Página inicial](../../README.md)
 
 O **Tempra Link** é o programa para Windows do firmware TEMPRA do Bajeton BJ-8300. Pelo cabo de programação, ele lê,
-edita e grava os canais, os bancos e os ajustes do rádio, guarda backups, faz de **controle remoto**, com a tela do rádio
+edita e grava os canais, os bancos, as memórias do rádio de AM, FM e SSB e os ajustes do rádio, guarda backups, faz de **controle remoto**, com a tela do rádio
 ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar nada.
 
 <p align="center"><img src="../imagens/tempralink-remoto.png" alt="O controle remoto, com a tela do rádio no PC" width="900"></p>
@@ -19,28 +19,29 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
 3. [Ler o rádio e gravar de volta](#3-ler-o-rádio-e-gravar-de-volta)
 4. [Canais](#4-canais)
 5. [Bancos](#5-bancos)
-6. [Ajustes](#6-ajustes)
-7. [ROGER CUSTOM](#7-roger-custom)
-8. [Logo de abertura](#8-logo-de-abertura)
-9. [Controle remoto](#9-controle-remoto)
-10. [Gravar o firmware](#10-gravar-o-firmware)
-11. [Backup e registro](#11-backup-e-registro)
-12. [As versões do firmware](#12-as-versões-do-firmware)
-13. [Bluetooth (experimental)](#13-bluetooth-experimental)
-14. [Problemas comuns](#14-problemas-comuns)
-15. [O app do celular (Android)](#15-o-app-do-celular-android)
+6. [Rádio AM/FM/SSB](#6-rádio-amfmssb)
+7. [Ajustes](#7-ajustes)
+8. [ROGER CUSTOM](#8-roger-custom)
+9. [Logo de abertura](#9-logo-de-abertura)
+10. [Controle remoto](#10-controle-remoto)
+11. [Gravar o firmware](#11-gravar-o-firmware)
+12. [Backup e registro](#12-backup-e-registro)
+13. [As versões do firmware](#13-as-versões-do-firmware)
+14. [Bluetooth (experimental)](#14-bluetooth-experimental)
+15. [Problemas comuns](#15-problemas-comuns)
+16. [O app do celular (Android)](#16-o-app-do-celular-android)
 
 ## 1. Antes de começar
 
 - **O firmware do rádio.** O Tempra Link 1.0 trabalha com o firmware TEMPRA **V4.1T** (e com a V3.8T, que só existiu em
   teste). Com o firmware de fábrica ou com um TEMPRA de antes, ele não lê nem grava nada, mas grava o firmware certo:
-  veja [Gravar o firmware](#10-gravar-o-firmware).
+  veja [Gravar o firmware](#11-gravar-o-firmware).
 - **O cabo** é o de programação USB do rádio, com o chip CH340, o mesmo do CPS de fábrica e do CHIRP. Se o Windows não o
   reconhece, instale o driver do `CH340-driver.zip` do release (veja na
   [página de gravar](gravar.md#-o-cabo-e-o-driver)).
 - **Baixe** o `TempraLink-BJ8300_v1.0.exe` da
   [página do release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/latest) e ponha numa pasta sua.
-  Ele não instala nada: os backups ficam na pasta do usuário ([Backup e registro](#11-backup-e-registro)).
+  Ele não instala nada: os backups ficam na pasta do usuário ([Backup e registro](#12-backup-e-registro)).
 - **Na primeira vez,** o Windows pode avisar que o programa é de um editor desconhecido (o SmartScreen), porque o `.exe`
   não é assinado: **Mais informações** → **Executar assim mesmo**.
 - **O idioma** segue o do Windows: português num Windows em português, inglês nos outros.
@@ -51,22 +52,23 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
 ## 2. A janela
 
 - **No alto:** a **porta** do cabo (`USB-SERIAL CH340 (COMx)`; a última opção da lista procura o rádio pelo
-  [Bluetooth](#13-bluetooth-experimental)), **Atualizar** (a lista das portas, depois de ligar o cabo), **Desfazer**
+  [Bluetooth](#14-bluetooth-experimental)), **Atualizar** (a lista das portas, depois de ligar o cabo), **Desfazer**
   (também Ctrl+Z), **Ler do rádio** e **Gravar no rádio**.
 - **Embaixo do título:** o rádio, a versão do firmware e de onde veio a memória que está na tela (a leitura, com a hora,
   ou o backup aberto). Em âmbar, quantas mudanças ainda não foram para o rádio.
 - **À esquerda,** as páginas.
 - **Embaixo,** a última mensagem; todas ficam na página **Registro**. Enquanto o firmware grava, essa barra fica
-  vermelha, com uma roda girando ([Gravar o firmware](#10-gravar-o-firmware)).
+  vermelha, com uma roda girando ([Gravar o firmware](#11-gravar-o-firmware)).
 
 ## 3. Ler o rádio e gravar de volta
 
 1. Ligue o rádio normalmente (fora do modo UPDATE) e ligue o cabo nele e no PC.
 2. Escolha a porta do cabo no alto (**Atualizar**, se ela não aparece).
-3. **Ler do rádio.** Vêm os canais, os bancos, os ajustes, os textos do APRS e do Morse, o DTMF, os VFOs e as notas do
+3. **Ler do rádio.** Vêm os canais, os bancos, as memórias do rádio de AM, FM e SSB, os ajustes, os textos do APRS e do Morse, o DTMF, os VFOs e as notas do
    ROGER CUSTOM, e cada leitura guarda sozinha um backup.
 4. Mude o que quiser nas páginas. **Desfazer** volta uma mudança por vez.
-5. **Gravar no rádio.** Só vai o que mudou. Antes, o Tempra Link confere que o rádio não mudou desde a leitura (se
+5. **Gravar no rádio.** Só vai o que mudou: das áreas de fábrica, o setor de 4 KB inteiro em que houve mudança,
+   como o CHIRP grava (o rádio só apaga o setor quando a gravação começa nele). Antes, o Tempra Link confere que o rádio não mudou desde a leitura (se
    mudou, nada se grava: leia de novo); depois, lê de volta o que gravou nos setores dos bancos e dos registros do
    TEMPRA. Com um backup aberto, ele grava o backup por cima do que está no rádio: é assim que se restaura.
 6. **Mudou os bancos?** Desligue e ligue o rádio: ele monta os bancos na partida.
@@ -96,7 +98,19 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
 - Um banco ativo sem canal o rádio recusa: ele sai desligado na gravação.
 - Depois de gravar os bancos, desligue e ligue o rádio.
 
-## 6. Ajustes
+## 6. Rádio AM/FM/SSB
+
+<p align="center"><img src="../imagens/tempralink-radio.png" alt="A página Rádio AM/FM/SSB" width="900"></p>
+
+- **As memórias do rádio de AM, FM e SSB:** 15 de cada modo (o LSB, o USB e o CW usam as do SSB), como o rádio as
+  guarda: a frequência e o nome (até 12 letras) e, no SSB, a largura e o BFO.
+- **Como os canais:** só as salvas aparecem, e **Mostrar as vazias** mostra as 45. Uma vazia nasce pela frequência: FM
+  de 64 a 108 MHz (`101.1`), AM de 153 a 279, de 520 a 1710 e de 2300 a 30000 kHz (`1530`, ou `7.2 MHz`), SSB de 150 a
+  30000 kHz. **Apagar** (ou Delete) apaga as escolhidas: a frequência e o nome.
+- **No rádio,** elas se chamam pelo modo memória, e o nome aparece na tela. O CHIRP mostra as mesmas memórias nos
+  sub-rádios **FM Broadcast**, **AM Broadcast** e **HF**.
+
+## 7. Ajustes
 
 <p align="center"><img src="../imagens/tempralink-ajustes.png" alt="A página Ajustes, na pasta SCAN" width="900"></p>
 
@@ -107,7 +121,7 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
   própria) e o RX GAIN.
 - Edita-se como na página Canais.
 
-## 7. ROGER CUSTOM
+## 8. ROGER CUSTOM
 
 <p align="center"><img src="../imagens/tempralink-roger.png" alt="O editor do ROGER CUSTOM, na pasta TX" width="900"></p>
 
@@ -125,7 +139,7 @@ no **Gravar no rádio**.
    partir de **Começar em** e por **Duração** segundos. A melodia que sai de um som é aproximada.
 6. **Gravar no rádio.**
 
-## 8. Logo de abertura
+## 9. Logo de abertura
 
 <p align="center"><img src="../imagens/tempralink-logo.png" alt="A página Logo de abertura, com o logo lido do rádio" width="900"></p>
 
@@ -135,7 +149,7 @@ no **Gravar no rádio**.
 - **Gravar no rádio** ainda não serve: o firmware TEMPRA, a V4.1T inclusive, não grava o logo pelo cabo. O Tempra Link
   confere lendo de volta e avisa.
 
-## 9. Controle remoto
+## 10. Controle remoto
 
 <p align="center"><img src="../imagens/tempralink-remoto.png" alt="O controle remoto ligado pelo cabo" width="900"></p>
 
@@ -155,7 +169,7 @@ Com o rádio ligado normalmente, **Conectar** liga o controle remoto, e o rádio
 - **Pelo Bluetooth,** vão as teclas e o PTT e vem o estado, sem a tela.
 - Com o cabo plugado, o microfone e o alto-falante do rádio podem passar a ser os do plugue: isso não foi testado no BJ.
 
-## 10. Gravar o firmware
+## 11. Gravar o firmware
 
 <p align="center"><img src="../imagens/tempralink-firmware.png" alt="A página Firmware" width="900"></p>
 
@@ -206,7 +220,7 @@ com o rádio (os canais se editam pelo CHIRP, nos modelos de fábrica) até o TE
 Ao abrir, o Tempra Link procura no GitHub também uma versão mais nova dele mesmo. Havendo, ele pergunta se atualiza:
 baixa, confere pelo SHA-256, põe a nova no lugar desta e a abre. O botão **Atualizar o Tempra Link** faz o mesmo depois.
 
-## 11. Backup e registro
+## 12. Backup e registro
 
 - **Cada leitura do rádio guarda um backup sozinha,** em `%LOCALAPPDATA%\TempraLink\backups` (o botão **Abrir a pasta
   dos backups**, na página Backup).
@@ -220,7 +234,7 @@ baixa, confere pelo SHA-256, põe a nova no lugar desta e a abre. O botão **Atu
 
 <p align="center"><img src="../imagens/tempralink-registro.png" alt="A página Registro" width="900"></p>
 
-## 12. As versões do firmware
+## 13. As versões do firmware
 
 Desde a V3.8T, o rádio diz a versão do firmware pelo cabo e pelo Bluetooth, e o Tempra Link só trabalha com as que
 conhece, porque cada versão pode guardar as coisas em outro lugar da memória. Com outra, ele não lê nem grava nada e
@@ -235,29 +249,29 @@ oferece o certo:
 
 O driver do CHIRP faz o mesmo: cada release traz o módulo da versão dele.
 
-## 13. Bluetooth (experimental)
+## 14. Bluetooth (experimental)
 
 Com o **BLUETOOTH** do rádio em ON (pasta SYSTEM), a última opção da lista de portas procura o rádio pelo Bluetooth do PC
 por 6 s, e os achados entram na lista. Pelo Bluetooth vão a leitura, a gravação dos canais e o controle remoto sem a
 tela; o firmware só se grava pelo cabo. No rádio, o controle remoto pelo Bluetooth funcionou com o app do celular; a
 leitura e a gravação por ele ainda não foram testadas.
 
-## 14. Problemas comuns
+## 15. Problemas comuns
 
 - **A porta não aparece:** ligue o cabo e clique em **Atualizar**. Se ainda não aparece, instale o driver do CH340.
 - **"O rádio não respondeu"** ao ler ou no controle remoto: o rádio tem de estar ligado normalmente, fora do UPDATE, com
   o plugue do cabo bem encaixado. Feche o CHIRP, o CPS e o BinTalk.
 - **"Este rádio está com o firmware ..., antigo para este Tempra Link"**, ou com o de fábrica: grave a V4.1T pela página
-  Firmware ([As versões do firmware](#12-as-versões-do-firmware)).
+  Firmware ([As versões do firmware](#13-as-versões-do-firmware)).
 - **"O rádio mudou desde a leitura (...). Nada foi gravado"**: o rádio foi mexido depois da leitura. Leia de novo e refaça as
   mudanças (ou salve um backup antes de ler, e grave a partir dele).
 - **O GitHub não responde** (sem internet, ou um firewall que barra o programa): o resto funciona. Para o firmware, use um
   `.anc` baixado da página de releases.
 
-## 15. O app do celular (Android)
+## 16. O app do celular (Android)
 
-O Tempra Link no celular, pelo Bluetooth do rádio: o controle remoto com a tela do rádio, os canais e os bancos, os
-ajustes (com o ROGER CUSTOM), ler e gravar, os backups e um aviso de recepção, e uma demonstração sem rádio. Ele lembra
+O Tempra Link no celular, pelo Bluetooth do rádio: o controle remoto com a tela do rádio, os canais e os bancos, as
+memórias do rádio de AM, FM e SSB, os ajustes (com o ROGER CUSTOM), ler e gravar, os backups e um aviso de recepção, e uma demonstração sem rádio. Ele lembra
 os rádios já usados, com um apelido para cada, e conecta neles sem a procura inteira; com um firmware com que não
 trabalha, só avisa e abre a página de releases, porque o celular não grava firmware. A versão 1.0 ainda não tem APK
 publicado: compila pelo `tempralink/celular/compilar.ps1` (Delphi). No rádio, só o controle remoto foi testado.

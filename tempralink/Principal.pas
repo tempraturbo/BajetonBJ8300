@@ -88,6 +88,13 @@ type
     CartaoBancos: TCard;
     GradeBancos: TStringGrid;
     LabelBancosNota: TLabel;
+    CartaoRadio: TCard;
+    PainelFiltroRadio: TPanel;
+    LabelContagemRadio: TLabel;
+    CheckVaziasRadio: TCheckBox;
+    BotaoApagarRadio: TButton;
+    LabelRadioNota: TLabel;
+    GradeRadio: TStringGrid;
     CartaoAjustes: TCard;
     PainelPastas: TPanel;
     BuscaAjuste: TSearchBox;
@@ -188,6 +195,8 @@ type
     procedure BotaoFabricaClick(Sender: TObject);
     procedure BotaoProgramaClick(Sender: TObject);
     procedure BuscaChange(Sender: TObject);
+    procedure CheckVaziasRadioClick(Sender: TObject);
+    procedure BotaoApagarRadioClick(Sender: TObject);
     procedure GradeDrawCell(Sender: TObject; ACol, ARow: Integer; Rect: TRect; State: TGridDrawState);
     procedure GradeDblClick(Sender: TObject);
     procedure GradeSelectCell(Sender: TObject; ACol, ARow: Integer; var CanSelect: Boolean);
@@ -252,6 +261,7 @@ type
     FDoArquivo: Boolean;        // veio de um backup: gravar é restaurar
     FBancosGravados: Boolean;   // a gravação de agora mexe nos bancos: o rádio só os monta na partida
     FLinhas: TArray<Integer>;   // os canais de cada linha da grade
+    FLinhasRadio: TArray<Integer>;  // as memórias do rádio de cada linha: banda * 15 + número - 1
     FNovo: Integer;             // um canal vazio que o Novo canal pôs na grade
     FAjustes: TArray<TLinhaAjuste>;
     FImagem: TWICImage;         // a imagem escolhida; nil quando o logo veio do rádio
@@ -297,6 +307,8 @@ type
     procedure PreencheGrade;
     procedure PreencheLinhaDoCanal(L, N: Integer);
     procedure PreencheBancos;
+    procedure PreencheLinhaDaMemoria(L, K: Integer);
+    procedure PreencheRadio;
     procedure PreencheAjustes;
     procedure PreencheNotas;
     procedure MostraNotaEscolhida;
@@ -332,6 +344,7 @@ type
     function Celula(G: TStringGrid; Col, Lin: Integer; out Opcoes: TArray<string>; out Atual: string): TTipoCelula;
     procedure Aplica(G: TStringGrid; Col, Lin: Integer; const Valor: string);
     procedure AplicaCanal(Col, N: Integer; const Valor: string);
+    procedure AplicaRadio(Col, K: Integer; const Valor: string);
     procedure IniciaEdicao(G: TStringGrid; Col, Lin: Integer; const Primeira: string = '');
     procedure ConfirmaEdicao(Sender: TObject);
     procedure CancelaEdicao;
@@ -359,12 +372,19 @@ uses
 const
   CARTAO_CANAIS = 0;
   CARTAO_BANCOS = 1;
-  CARTAO_AJUSTES = 2;
-  CARTAO_LOGO = 3;
-  CARTAO_CONTROLE = 4;
-  CARTAO_FIRMWARE = 5;
-  CARTAO_BACKUP = 6;
-  CARTAO_REGISTRO = 7;
+  CARTAO_RADIO = 2;
+  CARTAO_AJUSTES = 3;
+  CARTAO_LOGO = 4;
+  CARTAO_CONTROLE = 5;
+  CARTAO_FIRMWARE = 6;
+  CARTAO_BACKUP = 7;
+  CARTAO_REGISTRO = 8;
+  // a grade do rádio de AM, FM e SSB
+  COL_R_MEMORIA = 0;
+  COL_R_NOME = 1;
+  COL_R_FREQ = 2;
+  COL_R_LARGURA = 3;
+  COL_R_BFO = 4;
 
   // o GitHub: os releases do projeto (o firmware e o Tempra Link, com a versão no nome de cada arquivo), e o de
   // fábrica, que o repositório guarda (com o SHA-256 dele, conferido no download e no arquivo local)
@@ -555,10 +575,10 @@ begin
   LabelMarca.Caption := 'Tempra Link';
   LabelModelo.Caption := 'Baojie BJ-8300';
   LabelVersao.Caption := Tr('versão ', 'version ') + VERSAO_TEMPRA_LINK;
-  ListaNav.Items.Text := Tr('Canais'#13#10'Bancos'#13#10'Ajustes'#13#10'Logo de abertura'#13#10'Controle remoto'#13#10 +
-                            'Firmware'#13#10'Backup'#13#10'Registro',
-                            'Channels'#13#10'Banks'#13#10'Settings'#13#10'Boot logo'#13#10'Remote control'#13#10 +
-                            'Firmware'#13#10'Backup'#13#10'Log');
+  ListaNav.Items.Text := Tr('Canais'#13#10'Bancos'#13#10'Rádio AM/FM/SSB'#13#10'Ajustes'#13#10'Logo de abertura'#13#10 +
+                            'Controle remoto'#13#10'Firmware'#13#10'Backup'#13#10'Registro',
+                            'Channels'#13#10'Banks'#13#10'AM/FM/SSB radio'#13#10'Settings'#13#10'Boot logo'#13#10 +
+                            'Remote control'#13#10'Firmware'#13#10'Backup'#13#10'Log');
   BotaoAtualizar.Caption := Tr('Atualizar', 'Refresh');
   BotaoLer.Caption := Tr('Ler do rádio', 'Read from radio');
   BotaoGravarRadio.Caption := Tr('Gravar no rádio', 'Write to radio');
@@ -609,6 +629,27 @@ begin
     'the Banks column on the Channels page. Without a name, the radio shows BANK 01 to BANK 16. The radio refuses an ' +
     'active bank with no channel: it is written turned off. After writing the banks, turn the radio off and on: it ' +
     'builds the banks at power-up.');
+
+  // o rádio de AM, FM e SSB
+  CheckVaziasRadio.Caption := Tr('Mostrar as vazias', 'Show empty ones');
+  BotaoApagarRadio.Caption := Tr('Apagar', 'Delete');
+  GradeRadio.Cells[COL_R_MEMORIA, 0] := Tr('Memória', 'Memory');
+  GradeRadio.Cells[COL_R_NOME, 0] := Tr('Nome', 'Name');
+  GradeRadio.Cells[COL_R_FREQ, 0] := Tr('Frequência', 'Frequency');
+  GradeRadio.Cells[COL_R_LARGURA, 0] := Tr('Largura (SSB)', 'Bandwidth (SSB)');
+  GradeRadio.Cells[COL_R_BFO, 0] := Tr('BFO em Hz (SSB)', 'BFO in Hz (SSB)');
+  GradeRadio.ColWidths[COL_R_MEMORIA] := MulDiv(80, CurrentPPI, 96);
+  GradeRadio.ColWidths[COL_R_NOME] := MulDiv(130, CurrentPPI, 96);
+  GradeRadio.ColWidths[COL_R_FREQ] := MulDiv(110, CurrentPPI, 96);
+  GradeRadio.ColWidths[COL_R_LARGURA] := MulDiv(110, CurrentPPI, 96);
+  GradeRadio.ColWidths[COL_R_BFO] := MulDiv(120, CurrentPPI, 96);
+  LabelRadioNota.Caption := Tr(
+    'As 15 memórias de cada modo do rádio (o LSB, o USB e o CW usam as do SSB). Uma vazia nasce pela frequência: FM ' +
+    'de 64 a 108 MHz; AM de 153 a 279, de 520 a 1710 e de 2300 a 30000 kHz; SSB de 150 a 30000 kHz. No rádio, elas ' +
+    'se chamam pelo modo memória, e o nome aparece na tela.',
+    'The 15 memories of each radio mode (LSB, USB and CW use the SSB ones). An empty one is created by typing its ' +
+    'frequency: FM from 64 to 108 MHz; AM from 153 to 279, 520 to 1710 and 2300 to 30000 kHz; SSB from 150 to 30000 ' +
+    'kHz. On the radio, they are recalled in memory mode, and the name shows on the screen.');
 
   // os ajustes
   BuscaAjuste.TextHint := Tr('Buscar ajuste', 'Search setting');
@@ -1078,6 +1119,7 @@ begin
     FNotas := FMemoria.Notas;
   PreencheGrade;
   PreencheBancos;
+  PreencheRadio;
   PreencheAjustes;
   PreencheNotas;
   MostraTopo;
@@ -1089,7 +1131,11 @@ procedure TFormPrincipal.Mudou;
 begin
   MostraTopo;
   if not FMemoria.Vazia then
+  begin
     LabelContagem.Caption := Format(Tr('%d canais salvos de %d', '%d channels saved out of %d'), [FMemoria.Salvos, CANAIS]);
+    LabelContagemRadio.Caption := Format(Tr('%d memórias salvas de %d', '%d memories saved out of %d'),
+                                         [FMemoria.MemoriasRadio, 3 * MEMORIAS_RADIO]);
+  end;
   Habilita;
 end;
 
@@ -1167,6 +1213,118 @@ begin
       GradeBancos.Cells[3, K + 1] := IntToStr(FMemoria.CanaisNoBanco(K));
     end;
   end;
+end;
+
+{ O rádio de AM, FM e SSB: as memórias salvas (ou as 45, com Mostrar as vazias), na ordem FM, AM e SSB, como os canais
+  na página Canais. }
+
+procedure TFormPrincipal.PreencheLinhaDaMemoria(L, K: Integer);
+var
+  M: TMemoriaRadio;
+begin
+  M := FMemoria.MemoriaRadio(TBandaRadio(K div MEMORIAS_RADIO), K mod MEMORIAS_RADIO + 1);
+  GradeRadio.Rows[L].Clear;
+  GradeRadio.Cells[COL_R_MEMORIA, L] := Format('%s %.2d', [BANDAS_RADIO[M.Banda], M.Numero]);
+  if not M.Existe then
+    Exit;
+  GradeRadio.Cells[COL_R_NOME, L] := M.Nome;
+  GradeRadio.Cells[COL_R_FREQ, L] := FrequenciaRadioTexto(M.Banda, M.Freq);
+  if M.Banda = brSSB then
+  begin
+    GradeRadio.Cells[COL_R_LARGURA, L] := LARGURAS_SSB[M.Largura];
+    GradeRadio.Cells[COL_R_BFO, L] := IntToStr(M.Bfo);
+  end;
+end;
+
+procedure TFormPrincipal.PreencheRadio;
+var
+  K: Integer;
+begin
+  FLinhasRadio := nil;
+  if not FMemoria.Vazia then
+    for K := 0 to 3 * MEMORIAS_RADIO - 1 do
+      if CheckVaziasRadio.Checked or
+         FMemoria.MemoriaRadio(TBandaRadio(K div MEMORIAS_RADIO), K mod MEMORIAS_RADIO + 1).Existe then
+        FLinhasRadio := FLinhasRadio + [K];
+  GradeRadio.RowCount := Max(2, Length(FLinhasRadio) + 1);
+  GradeRadio.Rows[1].Clear;
+  for K := 0 to High(FLinhasRadio) do
+    PreencheLinhaDaMemoria(K + 1, FLinhasRadio[K]);
+  Mudou;
+end;
+
+procedure TFormPrincipal.CheckVaziasRadioClick(Sender: TObject);
+begin
+  CancelaEdicao;
+  PreencheRadio;
+end;
+
+// Uma memória vazia nasce pela frequência, como os canais; a largura e o BFO só existem no SSB.
+procedure TFormPrincipal.AplicaRadio(Col, K: Integer; const Valor: string);
+var
+  M: TMemoriaRadio;
+  F: Cardinal;
+  V, I: Integer;
+begin
+  M := FMemoria.MemoriaRadio(TBandaRadio(K div MEMORIAS_RADIO), K mod MEMORIAS_RADIO + 1);
+  if not M.Existe and (Col <> COL_R_FREQ) then
+    Exit;
+  case Col of
+    COL_R_NOME:
+      M.Nome := NomeValido(UpperCase(Valor));
+    COL_R_FREQ:
+      begin
+        if not TextoFrequenciaRadio(M.Banda, Valor, F) then
+          raise EConvertError.CreateFmt(Tr('A frequência do %s vai de %s.', 'The %s frequency goes from %s.'),
+                                        [BANDAS_RADIO[M.Banda], FaixasRadioTexto(M.Banda)]);
+        if not M.Existe then
+        begin
+          M.Nome := '';
+          M.Largura := LARGURA_SSB_PADRAO;
+          M.Bfo := 0;
+        end;
+        M.Freq := F;
+      end;
+    COL_R_LARGURA:
+      for I := 0 to High(LARGURAS_SSB) do
+        if LARGURAS_SSB[I] = Valor then
+          M.Largura := I;
+    COL_R_BFO:
+      begin
+        if not TryStrToInt(Trim(Valor).Replace('+', ''), V) or (V < BFO_MIN) or (V > BFO_MAX) then
+          raise EConvertError.CreateFmt(Tr('O BFO vai de %d a %d Hz.', 'The BFO goes from %d to %d Hz.'),
+                                        [BFO_MIN, BFO_MAX]);
+        M.Bfo := V;
+      end;
+  end;
+  M.Existe := True;
+  FMemoria.PoeMemoriaRadio(M);
+end;
+
+procedure TFormPrincipal.BotaoApagarRadioClick(Sender: TObject);
+var
+  Primeira, Ultima, L, N, K: Integer;
+begin
+  Primeira := GradeRadio.Selection.Top;
+  Ultima := GradeRadio.Selection.Bottom;
+  if (Primeira < 1) or (Ultima > Length(FLinhasRadio)) or (Primeira > Ultima) then
+    Exit;
+  N := 0;
+  for L := Primeira to Ultima do
+  begin
+    K := FLinhasRadio[L - 1];
+    if FMemoria.MemoriaRadio(TBandaRadio(K div MEMORIAS_RADIO), K mod MEMORIAS_RADIO + 1).Existe then
+      Inc(N);
+  end;
+  if (N = 0) or (N > 1) and not Confirma(Format(Tr('Apagar %d memórias?', 'Delete %d memories?'), [N])) then
+    Exit;
+  FMemoria.Guarda;
+  for L := Primeira to Ultima do
+  begin
+    K := FLinhasRadio[L - 1];
+    FMemoria.ApagaMemoriaRadio(TBandaRadio(K div MEMORIAS_RADIO), K mod MEMORIAS_RADIO + 1);
+  end;
+  PreencheRadio;
 end;
 
 // O valor de uma linha dos ajustes como texto.
@@ -1587,6 +1745,9 @@ begin
   if (ARow > 0) and not FMemoria.Vazia then
     if (G = Grade) and (ARow <= Length(FLinhas)) then
       Cinza := not FMemoria.Canal(FLinhas[ARow - 1]).Existe
+    else if (G = GradeRadio) and (ARow <= Length(FLinhasRadio)) then
+      Cinza := not FMemoria.MemoriaRadio(TBandaRadio(FLinhasRadio[ARow - 1] div MEMORIAS_RADIO),
+                                         FLinhasRadio[ARow - 1] mod MEMORIAS_RADIO + 1).Existe
     else if (G = GradeAjustes) and (ARow <= Length(FAjustes)) then
       Mudado := ValorAjuste(FMemoria, FAjustes[ARow - 1]) <> ValorAjuste(FMemoria, FAjustes[ARow - 1], True);
   Escolhida := (ARow >= G.Selection.Top) and (ARow <= G.Selection.Bottom);
@@ -1635,6 +1796,7 @@ function TFormPrincipal.Celula(G: TStringGrid; Col, Lin: Integer; out Opcoes: TA
 var
   K: Integer;
   A: TLinhaAjuste;
+  M: TMemoriaRadio;
 begin
   Result := tcNada;
   Opcoes := nil;
@@ -1699,6 +1861,28 @@ begin
         end;
       COL_BANCOS:
         Result := tcBancos;
+    end;
+  end
+  else if G = GradeRadio then
+  begin
+    if Lin > Length(FLinhasRadio) then
+      Exit;
+    M := FMemoria.MemoriaRadio(TBandaRadio(FLinhasRadio[Lin - 1] div MEMORIAS_RADIO),
+                               FLinhasRadio[Lin - 1] mod MEMORIAS_RADIO + 1);
+    if not M.Existe and (Col <> COL_R_FREQ) then
+      Exit;
+    case Col of
+      COL_R_NOME, COL_R_FREQ:
+        Result := tcTexto;
+      COL_R_LARGURA:
+        if M.Banda = brSSB then
+        begin
+          Result := tcLista;
+          Opcoes := LargurasSsb;
+        end;
+      COL_R_BFO:
+        if M.Banda = brSSB then
+          Result := tcTexto;
     end;
   end
   else if G = GradeBancos then
@@ -1865,6 +2049,11 @@ begin
       if FLinhas[Lin - 1] = FNovo then
         FNovo := 0;
       PreencheBancos;
+    end
+    else if G = GradeRadio then
+    begin
+      AplicaRadio(Col, FLinhasRadio[Lin - 1], Valor);
+      PreencheLinhaDaMemoria(Lin, FLinhasRadio[Lin - 1]);
     end
     else if G = GradeBancos then
     begin
@@ -2111,6 +2300,11 @@ begin
       if G = Grade then
       begin
         BotaoApagarCanalClick(nil);
+        Key := 0;
+      end
+      else if G = GradeRadio then
+      begin
+        BotaoApagarRadioClick(nil);
         Key := 0;
       end;
     Ord('C'):
@@ -2361,6 +2555,9 @@ begin
   BotaoDesfazer.Enabled := Edita and FMemoria.PodeDesfazer;
   Grade.Enabled := Edita;
   GradeBancos.Enabled := Edita;
+  GradeRadio.Enabled := Edita;
+  CheckVaziasRadio.Enabled := Edita;
+  BotaoApagarRadio.Enabled := Edita;
   GradeAjustes.Enabled := Edita;
   FLinhaRoger.Enabled := Edita;
   FTeclado.Enabled := Edita;
@@ -2648,6 +2845,7 @@ begin
   begin
     PreencheGrade;
     PreencheBancos;
+    PreencheRadio;
     PreencheAjustes;
     Mudou;
     Grade.Invalidate;

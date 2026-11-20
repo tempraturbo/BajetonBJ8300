@@ -4,6 +4,10 @@
   seção 4): o magic, o 'F', a cifra, o 'R' que dispara com 4 bytes e o 'W' com 68, o 'E', e o estendido do TEMPRA
   (no firmware de fábrica, o estendido volta com o tamanho que chegou e mais bytes). O relógio é de mentira: cada
   leitura sem nada para ler anda 20 ms. A memória é a do chip de dados (1 MB), e o 0x9000 sai dela como do resto.
+  A gravação de fábrica é a do tratador (0x01E43A68): o bloco que começa um setor de 4 KB o apaga, e o resto vai por
+  cima, como a flash grava (só zera bits). Os blocos que o rádio guarda na RAM (o 0x8000, o 0x9000 e os do rádio de
+  AM, FM e SSB, 0xB000, 0xB040 e 0xB080) se gravam inteiros; o 0xB080 só usa 25 bytes, e a leitura dele traz no resto o
+  que sobrou no buffer do cabo (0x01E43A84).
   Fora da sessão, os quadros do controle remoto (v162, firmware/src/remoto.c): cada '~' 'R' com a soma certa vira o
   estado de 9 bytes e, com a tela pedida, o Retrato logo depois (o que se puser nele: os testes usam os da prévia,
   testes\retrato-*.bin). Com o Laco (o APRS ou o Morse no rádio), o estado vem e o retrato não. EstragaRetrato
@@ -19,7 +23,9 @@ type
   private
     FRelogio: UInt64;
     FEntrada, FSaida: TBytes;
+    FBuffer: TBytes;   // o buffer de 64 B do cabo no rádio (0x14E02): o último bloco lido ou gravado
     FEstado: Integer;  // 0 esperando o magic, 1 o 'F', 2 a cifra, 3 na sessão
+    procedure GravaFabrica(Endereco: Cardinal; const Dados: TBytes);
     procedure Processa;
     procedure Manda(const B: TBytes);
     procedure Remoto;
@@ -93,6 +99,23 @@ procedure TRadioBJSimulado.Poe(Endereco: Cardinal; const B: TBytes);
 begin
   if B <> nil then
     Move(B[0], Memoria[Endereco], Length(B));
+end;
+
+procedure TRadioBJSimulado.GravaFabrica(Endereco: Cardinal; const Dados: TBytes);
+var
+  I: Integer;
+begin
+  case Endereco of
+    $8000, $9000, $B000, $B040:
+      Poe(Endereco, Dados);
+    $B080:
+      Poe(Endereco, Copy(Dados, 0, 25));
+  else
+    if Endereco and $FFF = 0 then
+      FillChar(Memoria[Endereco], $1000, $FF);
+    for I := 0 to High(Dados) do
+      Memoria[Endereco + Cardinal(I)] := Memoria[Endereco + Cardinal(I)] and Dados[I];
+  end;
 end;
 
 function TRadioBJSimulado.Pega(Endereco, N: Cardinal): TBytes;
@@ -240,6 +263,9 @@ begin
             if Tam and $80 = 0 then
             begin
               Dados := Copy(Memoria, Endereco, Tam);
+              if (Endereco = $B080) and (Length(FBuffer) = Tam) then
+                Dados := Copy(Memoria, Endereco, 25) + Copy(FBuffer, 25, Tam - 25);
+              FBuffer := Copy(Dados);
               if Endereco < $F000 then
                 Dados := Cifra(Dados);
               Manda([Ord('R'), Byte(Endereco shr 8), Byte(Endereco), Tam] + Dados);
@@ -268,7 +294,8 @@ begin
             begin
               if Endereco < $F000 then
                 Dados := Cifra(Dados);
-              Poe(Endereco, Dados);
+              FBuffer := Copy(Dados);
+              GravaFabrica(Endereco, Dados);
               Gravados.Add(Endereco);
             end
             else if not Fabrica and (GravaFora or (Endereco >= ESTENDIDO_INICIO) and (Endereco < Limite)) then

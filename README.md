@@ -60,11 +60,11 @@ baixar nada à mão) e depois programa o rádio inteiro pelo cabo. Um `.exe` só
 
 | | |
 |:---:|:---:|
-| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#9-controle-remoto"><img src="docs/imagens/tempralink-remoto.png" alt="O controle remoto, com a tela do rádio no PC" width="430"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#4-canais"><img src="docs/imagens/tempralink-canais.png" alt="Os canais, como numa planilha" width="430"></a> |
-| [**Controle remoto:** a tela, o teclado e o PTT do rádio no PC](https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#9-controle-remoto) | [**Canais:** os 960, como numa planilha](https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#4-canais) |
+| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#10-controle-remoto"><img src="docs/imagens/tempralink-remoto.png" alt="O controle remoto, com a tela do rádio no PC" width="430"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#4-canais"><img src="docs/imagens/tempralink-canais.png" alt="Os canais, como numa planilha" width="430"></a> |
+| [**Controle remoto:** a tela, o teclado e o PTT do rádio no PC](https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#10-controle-remoto) | [**Canais:** os 960, como numa planilha](https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#4-canais) |
 
 - 🔥 **Grava o firmware:** baixa a versão certa do GitHub, confere e grava pelo cabo; e volta ao de fábrica.
-- 📻 **Canais e bancos:** copiar e colar e o CSV do CHIRP.
+- 📻 **Canais e bancos:** copiar e colar e o CSV do CHIRP; e as **memórias do rádio** de AM, FM e SSB, com nome.
 - ⚙️ **Ajustes:** o menu do rádio, os VFOs, os textos do APRS e do Morse e o DTMF.
 - 🎵 **ROGER CUSTOM:** composto num piano, ou importado de MIDI e de som.
 - 💾 **Backup** a cada leitura, e **se atualiza sozinho** pelo GitHub.
@@ -89,8 +89,8 @@ mesmo do CPS de fábrica). Dois caminhos:
 
 | | |
 |:---:|:---:|
-| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Gravar-o-firmware#-op%C3%A7%C3%A3o-1-pelo-tempra-link-autom%C3%A1tico"><img src="docs/imagens/tempralink-fabrica.png" alt="Com o firmware de fábrica, ele oferece a V4.1T" width="430"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#10-gravar-o-firmware"><img src="docs/imagens/tempralink-gravando.png" alt="A gravação em andamento" width="430"></a> |
-| [Ele vê o firmware de fábrica e oferece a V4.1T](https://github.com/tempraturbo/BajetonBJ8300/wiki/Gravar-o-firmware#-op%C3%A7%C3%A3o-1-pelo-tempra-link-autom%C3%A1tico) | [A gravação: a barra vermelha até o fim](https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#10-gravar-o-firmware) |
+| <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Gravar-o-firmware#-op%C3%A7%C3%A3o-1-pelo-tempra-link-autom%C3%A1tico"><img src="docs/imagens/tempralink-fabrica.png" alt="Com o firmware de fábrica, ele oferece a V4.1T" width="430"></a> | <a href="https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#11-gravar-o-firmware"><img src="docs/imagens/tempralink-gravando.png" alt="A gravação em andamento" width="430"></a> |
+| [Ele vê o firmware de fábrica e oferece a V4.1T](https://github.com/tempraturbo/BajetonBJ8300/wiki/Gravar-o-firmware#-op%C3%A7%C3%A3o-1-pelo-tempra-link-autom%C3%A1tico) | [A gravação: a barra vermelha até o fim](https://github.com/tempraturbo/BajetonBJ8300/wiki/Manual-do-Tempra-Link#11-gravar-o-firmware) |
 
 ### 🔧 Pelo BinTalk: o gravador de fábrica
 

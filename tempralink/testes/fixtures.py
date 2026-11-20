@@ -96,6 +96,8 @@ def monta():
     img[0x9000:0x9040] = bytes(0x40)
     img[0xA000:0xA140] = b'\xff' * 0x140
     img[0xD000] = 0x00
+    img[0xB000:0xB000 + RADIO_UTIL] = bytes(RADIO_UTIL)   # o bloco do rádio como ele vem da RAM, sem memória
+    img[0xC000:0xC400] = b'\xff' * 0x400
     vfo = bytes([1, 4, 6, 5, 2, 0, 0, 0]) + bytes(24)
     img[0x8000:0x8040] = vfo + vfo
     radio = bj.BJ8300(memmap.MemoryMapBytes(bytes(img)))
@@ -143,7 +145,37 @@ def monta():
                         ('vfoc_freq', '438.500000'), ('vfoc_offset', '5.000000'), ('vfo.b.offset', '0.600000'),
                         ('settings_unused_9022', 'S3')):
         ajuste(radio, nome, valor)
+    fm, am, hf = sub_radios(radio)
+    for sub, n, freq, nome in ((fm, 1, 101100000, 'RADIO X'), (fm, 3, 89100000, 'CBN SP'), (fm, 15, 107900000, ''),
+                               (am, 1, 1530000, 'AM 1530'), (am, 2, 7255000, 'SW 41M'),
+                               (hf, 1, 7100000, 'QSO 40M'), (hf, 3, 14200000, 'DX 20M')):
+        sub.set_memory(memoria(n, freq, nome))
+    for n, largura, bfo in ((1, '2.2K', -150), (3, '3.0K', 0)):
+        m = hf.get_memory(n)
+        for el in m.extra:
+            el.value.set_value({'bandwidth': largura, 'beatfreq': bfo}[el.get_name()])
+        hf.set_memory(m)
     return radio
+
+
+RADIO_UTIL = 153   # os bytes do bloco do rádio de AM, FM e SSB que o cabo traz da RAM (0xB000 a 0xB098)
+BANDAS_RADIO = (('FM', 10000), ('AM', 1000), ('SSB', 1000))   # e o que vale uma unidade da frequência, em Hz
+
+
+def sub_radios(radio):
+    """Os sub-rádios do driver para as memórias de FM, AM e HF (SSB), na memória do rádio."""
+    return [s for s in radio.get_sub_devices() if s.VARIANT in ('FM Broadcast', 'AM Broadcast', 'HF')]
+
+
+def linha_radio(banda, unidade, m):
+    if m.empty:
+        return 'R\t%s\t%d\t-' % (banda, m.number)
+    largura, bfo = 0, 0
+    if banda == 'SSB':
+        extra = {el.get_name(): el.value for el in m.extra}
+        largura = list(extra['bandwidth'].get_options()).index(str(extra['bandwidth']))
+        bfo = int(extra['beatfreq'])
+    return 'R\t%s\t%d\t%d\t%s\t%d\t%d' % (banda, m.number, m.freq // unidade, m.name, largura, bfo)
 
 
 def tom(modo, valor, pol):
@@ -204,6 +236,9 @@ def esperado(radio):
         linhas.append('D\t%d\t%s' % (k, codigo))
     for k, vfo in enumerate((radio._memobj.vfo.a, radio._memobj.vfo.b, radio._vfc.c)):
         linhas.append('F\t%d\t%d\t%d' % (k, bj._digits(vfo.freq), bj._digits(vfo.offset)))
+    for (banda, unidade), sub in zip(BANDAS_RADIO, sub_radios(radio)):
+        for n in range(1, 16):
+            linhas.append(linha_radio(banda, unidade, sub.get_memory(n)))
     return linhas
 
 
@@ -255,6 +290,18 @@ def confere():
         visto = bool(v) if isinstance(v, settings.RadioSettingValueBoolean) else (
             int(v) if isinstance(v, settings.RadioSettingValueInteger) else str(v).strip())
         igual(nome, visto, quer)
+    # as memórias do rádio de AM, FM e SSB (o nome passa pelo setor 0xC000 inteiro, que o primeiro bloco apaga)
+    fm, am, hf = sub_radios(radio)
+    m = fm.get_memory(2)
+    igual('rádio FM 2', (m.empty, m.freq, m.name), (False, 98500000, 'NOVA FM'))
+    igual('rádio FM 1 intacta', (fm.get_memory(1).freq, fm.get_memory(1).name), (101100000, 'RADIO X'))
+    igual('rádio AM 2 apagada', am.get_memory(2).empty, True)
+    igual('rádio AM 1 intacta', (am.get_memory(1).freq, am.get_memory(1).name), (1530000, 'AM 1530'))
+    m = hf.get_memory(1)
+    extra = {el.get_name(): el.value for el in m.extra}
+    igual('rádio SSB 1', (m.freq, m.name, str(extra['bandwidth']), int(extra['beatfreq'])),
+          (7100000, 'QSO 7100', '2.2K', 200))
+    igual('rádio SSB 3 intacta', hf.get_memory(3).name, 'DX 20M')
     # as velocidades do cabo no app são as do driver: a do UV (115200) copiada sem o firmware v157 deixou o app sem
     # falar com o rádio (18/11)
     with open(os.path.join(os.path.dirname(AQUI), 'Transporte.pas'), encoding='utf-8-sig') as f:

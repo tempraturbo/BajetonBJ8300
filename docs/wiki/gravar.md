@@ -61,7 +61,7 @@ barra de andamento parada) e o firmware sendo gravado (uns 2 minutos).
 o Tempra Link já lê e grava o rádio.
 
 Com o rádio já no TEMPRA, a página **Firmware** faz o mesmo: **Baixar e gravar** a versão nova, ou **Escolher...** um
-`.anc` do PC. [O manual](tempra-link.md#10-gravar-o-firmware) mostra a página inteira.
+`.anc` do PC. [O manual](tempra-link.md#11-gravar-o-firmware) mostra a página inteira.
 
 ## 🔧 Opção 2: pelo BinTalk, o gravador de fábrica
 

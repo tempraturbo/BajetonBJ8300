@@ -57,6 +57,19 @@ type
     Bancos: Word;      // o bit k: o canal está no banco k + 1
   end;
 
+  // as memórias do rádio de AM, FM e SSB (15 de cada; o LSB, o USB e o CW usam as do SSB)
+  TBandaRadio = (brFM, brAM, brSSB);
+
+  TMemoriaRadio = record
+    Banda: TBandaRadio;
+    Numero: Integer;   // 1 a 15
+    Existe: Boolean;   // a frequência na faixa da banda, como o rádio confere (0x01E3D2B0)
+    Freq: Cardinal;    // FM em 10 kHz; AM e SSB em kHz
+    Nome: string;
+    Largura: Byte;     // SSB: o índice de LARGURAS_SSB
+    Bfo: SmallInt;     // SSB, em Hz
+  end;
+
   TArea = record
     Endereco, Tamanho: Cardinal;
   end;
@@ -85,6 +98,16 @@ const
   AREA_VFOS = 1;
   AREA_AJUSTES = 2;
   AREA_DTMF = 3;
+  AREA_RADIO = 4;         // o rádio de AM, FM e SSB: o cabo traz da RAM os 153 B dele (0xB000, 0xB040 e 0xB080)
+  AREA_NOMES_RADIO = 5;   // os nomes das memórias do rádio, no chip (0xC010, 0xC110 e 0xC210)
+  RADIO_UTIL = 153;
+  SETOR = $1000;
+  MEMORIAS_RADIO = 15;
+  BANDAS_RADIO: array[TBandaRadio] of string = ('FM', 'AM', 'SSB');
+  LARGURAS_SSB: array[0..5] of string = ('0.5K', '1.0K', '1.2K', '2.2K', '3.0K', '4.0K');
+  LARGURA_SSB_PADRAO = 4;   // a do VFO do rádio (0x01E3DB62)
+  BFO_MIN = -32760;         // o que o set do BFO aceita (0x01E44ED6)
+  BFO_MAX = 27240;
   AREA_CALIBRACAO = 7;  // só leitura: vai no backup e nunca é gravada
   AREA_CABECALHO = 8;
   AREA_BANCO1 = 9;
@@ -135,11 +158,17 @@ type
     function Desfaz: Boolean;
     function PodeDesfazer: Boolean;
     function Mudou: Boolean;
+    function Atual(Area: Integer): TBytes;  // a área como ela vai para o rádio
     // os canais
     function Canal(N: Integer): TCanal;
     procedure PoeCanal(const C: TCanal);
     procedure ApagaCanal(N: Integer);
     function Salvos: Integer;
+    // as memórias do rádio de AM, FM e SSB
+    function MemoriaRadio(Banda: TBandaRadio; N: Integer): TMemoriaRadio;
+    procedure PoeMemoriaRadio(const M: TMemoriaRadio);
+    procedure ApagaMemoriaRadio(Banda: TBandaRadio; N: Integer);
+    function MemoriasRadio: Integer;
     // os bancos
     function BancoNome(K: Integer): string;   // '' = o de fábrica, BANK nn
     procedure PoeBancoNome(K: Integer; const Nome: string);
@@ -186,6 +215,11 @@ function NomeValido(const S: string): string;
 function TextoFrequencia(const S: string; out F: Cardinal): Boolean;
 function TextoScramble(V: Byte): string;
 function TextoEncrypt(V: Byte): string;
+function FrequenciaRadioValida(Banda: TBandaRadio; F: Cardinal): Boolean;
+function FrequenciaRadioTexto(Banda: TBandaRadio; F: Cardinal): string;
+function TextoFrequenciaRadio(Banda: TBandaRadio; const S: string; out F: Cardinal): Boolean;
+function FaixasRadioTexto(Banda: TBandaRadio): string;
+function LargurasSsb: TArray<string>;
 // O texto como o rádio o aceita no campo (o _clean_text do driver), ou EConvertError.
 function TextoDoCampo(const Nome, S: string; Maximo: Integer): string;
 // As notas como o rádio as toca: de 1 a 32, cada uma de 0 (pausa) ou 300 a 3000 Hz e de 10 a 1000 ms, até 3 s.
@@ -475,6 +509,69 @@ begin
     Result := 'ENCRY' + IntToStr(V);
 end;
 
+// as faixas que o rádio aceita numa memória, as mesmas que ele confere na partida (0x01E3D2B0): FM de 64 a 108 MHz; AM
+// de 153 a 279, de 520 a 1710 e de 2300 a 30000 kHz; SSB de 150 a 30000 kHz
+function FrequenciaRadioValida(Banda: TBandaRadio; F: Cardinal): Boolean;
+begin
+  case Banda of
+    brFM: Result := (F >= 6400) and (F <= 10800);
+    brAM: Result := (F >= 153) and (F <= 279) or (F >= 520) and (F <= 1710) or (F >= 2300) and (F <= 30000);
+  else
+    Result := (F >= 150) and (F <= 30000);
+  end;
+end;
+
+// "101.10 MHz", "1530 kHz"
+function FrequenciaRadioTexto(Banda: TBandaRadio; F: Cardinal): string;
+begin
+  if Banda = brFM then
+    Result := Format('%d.%.2d MHz', [F div 100, F mod 100])
+  else
+    Result := Format('%d kHz', [F]);
+end;
+
+// "101.1", "101,10 MHz" -> 10110 no FM; "1530", "1530 kHz" ou "7.1 MHz" -> kHz no AM e no SSB
+function TextoFrequenciaRadio(Banda: TBandaRadio; const S: string; out F: Cardinal): Boolean;
+var
+  T: string;
+  V: Double;
+  Mega: Boolean;
+begin
+  T := LowerCase(Trim(S)).Replace(',', '.');
+  Mega := T.EndsWith('mhz');
+  if Mega or T.EndsWith('khz') then
+    T := Trim(Copy(T, 1, Length(T) - 3));
+  Result := TryStrToFloat(T, V, TFormatSettings.Invariant) and (V > 0);
+  if not Result then
+    Exit;
+  if Banda = brFM then
+    F := Round(V * 100)
+  else if Mega or T.Contains('.') then
+    F := Round(V * 1000)
+  else
+    F := Round(V);
+  Result := FrequenciaRadioValida(Banda, F);
+end;
+
+function FaixasRadioTexto(Banda: TBandaRadio): string;
+begin
+  case Banda of
+    brFM: Result := '64.00 - 108.00 MHz';
+    brAM: Result := '153 - 279, 520 - 1710, 2300 - 30000 kHz';
+  else
+    Result := '150 - 30000 kHz';
+  end;
+end;
+
+function LargurasSsb: TArray<string>;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(LARGURAS_SSB));
+  for I := 0 to High(LARGURAS_SSB) do
+    Result[I] := LARGURAS_SSB[I];
+end;
+
 function TextoDoCampo(const Nome, S: string; Maximo: Integer): string;
 const
   INDICATIVO = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -727,6 +824,11 @@ begin
   Result := not Vazia and (Mudancas <> nil);
 end;
 
+function TMemoriaBJ8300.Atual(Area: Integer): TBytes;
+begin
+  Result := Copy(FAtual[Area]);
+end;
+
 { Os canais }
 
 function TMemoriaBJ8300.Mapa(K: Integer): TBytes;
@@ -850,6 +952,103 @@ begin
   if not Vazia then
     for N := 1 to CANAIS do
       if Canal(N).Existe then
+        Inc(Result);
+end;
+
+{ As memórias do rádio de AM, FM e SSB: as frequências no bloco do rádio (FM em +2, AM em +36, 2 B cada; SSB em +74,
+  5 B: a frequência, a largura e o BFO) e os nomes no chip (0xC010, 0xC110 e 0xC210, 16 B cada, 12 letras com FF no
+  fim, como o driver grava). Apagar é o que o driver faz: a frequência 0 (no SSB, os 5 B) e o nome em FF. }
+
+function PosicaoRadio(Banda: TBandaRadio; N: Integer): Integer;
+begin
+  case Banda of
+    brFM: Result := 2 + 2 * (N - 1);
+    brAM: Result := 36 + 2 * (N - 1);
+  else
+    Result := 74 + 5 * (N - 1);
+  end;
+end;
+
+function PosicaoNomeRadio(Banda: TBandaRadio; N: Integer): Integer;
+begin
+  Result := $10 + $100 * Ord(Banda) + 16 * (N - 1);
+end;
+
+function TMemoriaBJ8300.MemoriaRadio(Banda: TBandaRadio; N: Integer): TMemoriaRadio;
+var
+  B: TBytes;
+  P, I: Integer;
+begin
+  Result := Default(TMemoriaRadio);
+  Result.Banda := Banda;
+  Result.Numero := N;
+  if Vazia then
+    Exit;
+  B := FAtual[AREA_RADIO];
+  P := PosicaoRadio(Banda, N);
+  Result.Freq := B[P] or B[P + 1] shl 8;
+  Result.Existe := FrequenciaRadioValida(Banda, Result.Freq);
+  if not Result.Existe then
+    Exit;
+  if Banda = brSSB then
+  begin
+    Result.Largura := B[P + 2];
+    if Result.Largura > High(LARGURAS_SSB) then
+      Result.Largura := LARGURA_SSB_PADRAO;      // como o rádio a corrige na entrada (confere_radio)
+    Result.Bfo := SmallInt(B[P + 3] or B[P + 4] shl 8);
+    if (Result.Bfo < BFO_MIN) or (Result.Bfo > BFO_MAX) then
+      Result.Bfo := 0;
+  end;
+  B := FAtual[AREA_NOMES_RADIO];
+  P := PosicaoNomeRadio(Banda, N);
+  I := 0;
+  while (I < 12) and (B[P + I] <> $FF) and (B[P + I] <> 0) do
+  begin
+    Result.Nome := Result.Nome + Char(B[P + I]);
+    Inc(I);
+  end;
+  Result.Nome := TrimRight(Result.Nome);
+end;
+
+procedure TMemoriaBJ8300.PoeMemoriaRadio(const M: TMemoriaRadio);
+var
+  P, I: Integer;
+begin
+  P := PosicaoRadio(M.Banda, M.Numero);
+  FAtual[AREA_RADIO][P] := Byte(M.Freq);
+  FAtual[AREA_RADIO][P + 1] := Byte(M.Freq shr 8);
+  if M.Banda = brSSB then
+  begin
+    FAtual[AREA_RADIO][P + 2] := M.Largura;
+    FAtual[AREA_RADIO][P + 3] := Byte(M.Bfo);
+    FAtual[AREA_RADIO][P + 4] := Byte(Word(M.Bfo) shr 8);
+  end;
+  P := PosicaoNomeRadio(M.Banda, M.Numero);
+  for I := 0 to 11 do
+    if I < Length(M.Nome) then
+      FAtual[AREA_NOMES_RADIO][P + I] := Byte(M.Nome[I + 1])
+    else
+      FAtual[AREA_NOMES_RADIO][P + I] := $FF;
+end;
+
+procedure TMemoriaBJ8300.ApagaMemoriaRadio(Banda: TBandaRadio; N: Integer);
+var
+  P: Integer;
+begin
+  P := PosicaoRadio(Banda, N);
+  FillChar(FAtual[AREA_RADIO][P], IfThen(Banda = brSSB, 5, 2), 0);
+  FillChar(FAtual[AREA_NOMES_RADIO][PosicaoNomeRadio(Banda, N)], 12, $FF);
+end;
+
+function TMemoriaBJ8300.MemoriasRadio: Integer;
+var
+  B: TBandaRadio;
+  N: Integer;
+begin
+  Result := 0;
+  for B := Low(TBandaRadio) to High(TBandaRadio) do
+    for N := 1 to MEMORIAS_RADIO do
+      if MemoriaRadio(B, N).Existe then
         Inc(Result);
 end;
 
@@ -1061,13 +1260,17 @@ begin
       PoeBancoAtivo(K, False);
 end;
 
-// Os blocos de fábrica que mudaram, de 64 em 64 bytes, e as áreas estendidas que mudaram, inteiras; na ordem da
-// gravação, a mesma do driver: as de fábrica e depois as do TEMPRA.
+{ O que mudou, na ordem da gravação, a mesma do driver: as áreas de fábrica e depois as do TEMPRA. Uma área estendida
+  vai inteira. Nas de fábrica, o rádio só apaga o setor de 4 KB no bloco que começa nele (0x01E43A68) e grava os outros
+  por cima, o que na flash só zera bits: um setor que mudou vai inteiro, do começo, como o driver grava. O bloco do
+  rádio de AM, FM e SSB vem da RAM e não da flash: o 0xB000 e o 0xB040 vão se mudaram, e o 0xB080, que só tem 25 B e
+  manda o rádio guardar o bloco, vai depois deles sempre que algo mudou; o resto da área é o log cru e não se grava. }
 function TMemoriaBJ8300.Mudancas: TArray<TGravar>;
 var
   A: Integer;
   D: Cardinal;
   G: TGravar;
+  Algum: Boolean;
 begin
   Result := nil;
   for A := 0 to High(AREAS) do
@@ -1082,19 +1285,49 @@ begin
       if not CompareMem(@FOriginal[A][0], @FAtual[A][0], AREAS[A].Tamanho) then
         Result := Result + [G];
     end
-    else
+    else if A = AREA_RADIO then
     begin
       G.Tamanho := BLOCO;
+      Algum := False;
+      D := 0;
+      while D < 2 * BLOCO do
+      begin
+        if not CompareMem(@FOriginal[A][D], @FAtual[A][D], BLOCO) then
+        begin
+          G.Desloc := D;
+          Result := Result + [G];
+          Algum := True;
+        end;
+        Inc(D, BLOCO);
+      end;
+      if Algum or not CompareMem(@FOriginal[A][2 * BLOCO], @FAtual[A][2 * BLOCO], RADIO_UTIL - 2 * BLOCO) then
+      begin
+        G.Desloc := 2 * BLOCO;
+        Result := Result + [G];
+      end;
+    end
+    else
+    begin
       D := 0;
       while D < AREAS[A].Tamanho do
       begin
         G.Desloc := D;
-        if not CompareMem(@FOriginal[A][D], @FAtual[A][D], BLOCO) then
+        G.Tamanho := Min(SETOR, AREAS[A].Tamanho - D);
+        if not CompareMem(@FOriginal[A][D], @FAtual[A][D], G.Tamanho) then
           Result := Result + [G];
-        Inc(D, BLOCO);
+        Inc(D, SETOR);
       end;
     end;
   end;
+end;
+
+// Quanto de um pedaço gravado se confere: do 0xB080, só os 25 B que o rádio usa (a leitura traz a sobra do buffer).
+function Util(const G: TGravar): Cardinal;
+begin
+  if (G.Area = AREA_RADIO) and (G.Desloc = 2 * BLOCO) then
+    Result := RADIO_UTIL - 2 * BLOCO
+  else
+    Result := G.Tamanho;
 end;
 
 // gravou banco: o rádio só monta o filtro dos bancos na partida
@@ -1137,9 +1370,11 @@ begin
     Novo := Copy(FAtual[G.Area], G.Desloc, G.Tamanho);
     Velho := Copy(FOriginal[G.Area], G.Desloc, G.Tamanho);
     NoRadio := C.Le(AREAS[G.Area].Endereco + G.Desloc, G.Tamanho);
-    if CompareMem(@NoRadio[0], @Novo[0], G.Tamanho) then
+    // o 0xB080 é que manda o rádio guardar: vai sempre que um bloco do rádio vai
+    if CompareMem(@NoRadio[0], @Novo[0], Util(G)) and
+       not ((G.Area = AREA_RADIO) and (Gravar <> nil) and (Gravar[High(Gravar)].Area = AREA_RADIO)) then
       Continue;
-    if not CompareMem(@NoRadio[0], @Velho[0], G.Tamanho) and not Restaurar then
+    if not CompareMem(@NoRadio[0], @Velho[0], Util(G)) and not Restaurar then
       Conflito := Conflito + Format(' %.6X', [AREAS[G.Area].Endereco + G.Desloc])
     else
       Gravar := Gravar + [G];

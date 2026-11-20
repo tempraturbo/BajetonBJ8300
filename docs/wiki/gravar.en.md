@@ -60,7 +60,7 @@ spinning wheel, and says what is happening: the radio answering in UPDATE mode, 
 Done: Tempra Link now reads and writes the radio.
 
 With the radio already on TEMPRA, the **Firmware** page does the same: **Download and flash** the new version, or
-**Browse...** for an `.anc` on the PC. [The manual](tempra-link.en.md#10-flashing-the-firmware) shows the whole page.
+**Browse...** for an `.anc` on the PC. [The manual](tempra-link.en.md#11-flashing-the-firmware) shows the whole page.
 
 ## 🔧 Option 2: with BinTalk, the factory flasher
 

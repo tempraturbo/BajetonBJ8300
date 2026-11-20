@@ -28,6 +28,7 @@ type
   end;
 
   PCanal = ^TCanal;
+  PMemoriaRadio = ^TMemoriaRadio;
 
   TJanela = class(TForm)
     procedure FormCreate(Sender: TObject);
@@ -94,6 +95,11 @@ type
     function PaginaCanal(N: Integer): TArray<TLinha>;
     function PaginaBancos: TArray<TLinha>;
     function PaginaBancosDoCanal(N: Integer): TArray<TLinha>;
+    function PaginaRadio: TArray<TLinha>;
+    function PaginaMemoriaRadio(B: TBandaRadio; N: Integer): TArray<TLinha>;
+    function AcaoMemoriaRadio(B: TBandaRadio; N: Integer): TProc;
+    function AcaoNovaMemoriaRadio(B: TBandaRadio): TProc;
+    procedure MudaMemoriaRadio(B: TBandaRadio; N: Integer; const Mudanca: TProc<PMemoriaRadio>);
     function PaginaAjustes: TArray<TLinha>;
     function PaginaPasta(P: TPasta): TArray<TLinha>;
     function PaginaMais: TArray<TLinha>;
@@ -1037,6 +1043,11 @@ begin
                    begin
                      Empilha('Bancos', PaginaBancos);
                    end),
+             Linha('Rádio AM/FM/SSB', Format('%d de %d memórias salvas', [M.MemoriasRadio, 3 * MEMORIAS_RADIO]), '',
+                   procedure
+                   begin
+                     Empilha('Rádio AM/FM/SSB', PaginaRadio);
+                   end),
              Secao(Format('%d canais salvos', [M.Salvos]))];
   for N := 1 to CANAIS do
   begin
@@ -1287,6 +1298,186 @@ begin
           begin
             Desempilha;
             Muda(procedure begin FNucleo.Memoria.ApagaCanal(N); end);
+          end);
+      end)];
+  Result[High(Result)].Cor := COR_VERMELHO;
+end;
+
+{ O rádio de AM, FM e SSB: as 15 memórias de cada modo (o LSB, o USB e o CW usam as do SSB), como os canais: uma
+  nova nasce pela frequência no primeiro número livre, e cada uma abre a página dela. }
+
+function TJanela.PaginaRadio: TArray<TLinha>;
+var
+  M: TMemoriaBJ8300;
+  B: TBandaRadio;
+  N: Integer;
+  R: TMemoriaRadio;
+  D: string;
+begin
+  M := FNucleo.Memoria;
+  if M.Vazia then
+    Exit(PaginaVazia);
+  Result := nil;
+  for B := Low(TBandaRadio) to High(TBandaRadio) do
+  begin
+    Result := Result + [Secao(Format('%s · %s', [BANDAS_RADIO[B], FaixasRadioTexto(B)])),
+                        Linha(Format('Nova memória de %s', [BANDAS_RADIO[B]]), 'no primeiro número livre', '+',
+                              AcaoNovaMemoriaRadio(B))];
+    for N := 1 to MEMORIAS_RADIO do
+    begin
+      R := M.MemoriaRadio(B, N);
+      if not R.Existe then
+        Continue;
+      if B = brSSB then
+        D := Format('largura %s · BFO %d Hz', [LARGURAS_SSB[R.Largura], R.Bfo])
+      else
+        D := '';
+      Result := Result + [Linha(Format('%s %.2d   %s', [BANDAS_RADIO[B], N, R.Nome]), D,
+                                FrequenciaRadioTexto(B, R.Freq), AcaoMemoriaRadio(B, N))];
+    end;
+  end;
+end;
+
+function TJanela.AcaoMemoriaRadio(B: TBandaRadio; N: Integer): TProc;
+begin
+  Result :=
+    procedure
+    begin
+      Empilha(Format('%s %.2d', [BANDAS_RADIO[B], N]),
+        function: TArray<TLinha>
+        begin
+          Result := PaginaMemoriaRadio(B, N);
+        end);
+    end;
+end;
+
+function TJanela.AcaoNovaMemoriaRadio(B: TBandaRadio): TProc;
+begin
+  Result :=
+    procedure
+    var
+      N: Integer;
+    begin
+      N := 1;
+      while (N <= MEMORIAS_RADIO) and FNucleo.Memoria.MemoriaRadio(B, N).Existe do
+        Inc(N);
+      if N > MEMORIAS_RADIO then
+      begin
+        Mostra(Format('As %d memórias de %s estão ocupadas.', [MEMORIAS_RADIO, BANDAS_RADIO[B]]));
+        Exit;
+      end;
+      Pergunta(Format('%s %.2d: a frequência (%s)', [BANDAS_RADIO[B], N, FaixasRadioTexto(B)]), '',
+        procedure(V: string)
+        var
+          F: Cardinal;
+        begin
+          if not TextoFrequenciaRadio(B, V, F) then
+          begin
+            Mostra(Format('A frequência do %s vai de %s.', [BANDAS_RADIO[B], FaixasRadioTexto(B)]));
+            Exit;
+          end;
+          Muda(
+            procedure
+            var
+              R: TMemoriaRadio;
+            begin
+              R := Default(TMemoriaRadio);
+              R.Banda := B;
+              R.Numero := N;
+              R.Existe := True;
+              R.Freq := F;
+              R.Largura := LARGURA_SSB_PADRAO;
+              FNucleo.Memoria.PoeMemoriaRadio(R);
+            end);
+          AcaoMemoriaRadio(B, N)();
+        end);
+    end;
+end;
+
+procedure TJanela.MudaMemoriaRadio(B: TBandaRadio; N: Integer; const Mudanca: TProc<PMemoriaRadio>);
+begin
+  Muda(
+    procedure
+    var
+      R: TMemoriaRadio;
+    begin
+      R := FNucleo.Memoria.MemoriaRadio(B, N);
+      Mudanca(@R);
+      FNucleo.Memoria.PoeMemoriaRadio(R);
+    end);
+end;
+
+function TJanela.PaginaMemoriaRadio(B: TBandaRadio; N: Integer): TArray<TLinha>;
+var
+  R: TMemoriaRadio;
+begin
+  R := FNucleo.Memoria.MemoriaRadio(B, N);
+  if not R.Existe then
+  begin
+    Result := [Secao('Memória apagada')];
+    Exit;
+  end;
+  Result := [
+    Linha('Nome', '', IfThen(R.Nome = '', '—', R.Nome),
+      procedure
+      begin
+        Pergunta('Nome da memória (até 12)', FNucleo.Memoria.MemoriaRadio(B, N).Nome,
+          procedure(V: string)
+          begin
+            MudaMemoriaRadio(B, N, procedure(P: PMemoriaRadio) begin P.Nome := NomeValido(UpperCase(V)); end);
+          end);
+      end),
+    Linha('Frequência', FaixasRadioTexto(B), FrequenciaRadioTexto(B, R.Freq),
+      procedure
+      begin
+        Pergunta('Frequência (' + FaixasRadioTexto(B) + ')',
+                 FrequenciaRadioTexto(B, FNucleo.Memoria.MemoriaRadio(B, N).Freq),
+          procedure(V: string)
+          var
+            F: Cardinal;
+          begin
+            if not TextoFrequenciaRadio(B, V, F) then
+              Mostra(Format('A frequência do %s vai de %s.', [BANDAS_RADIO[B], FaixasRadioTexto(B)]))
+            else
+              MudaMemoriaRadio(B, N, procedure(P: PMemoriaRadio) begin P.Freq := F; end);
+          end);
+      end)];
+  if B = brSSB then
+    Result := Result + [
+      Linha('Largura', '', LARGURAS_SSB[R.Largura],
+        procedure
+        begin
+          Escolhe('Largura', LargurasSsb, FNucleo.Memoria.MemoriaRadio(B, N).Largura,
+            procedure(V: Integer)
+            begin
+              MudaMemoriaRadio(B, N, procedure(P: PMemoriaRadio) begin P.Largura := V; end);
+            end);
+        end),
+      Linha('BFO', Format('de %d a %d Hz', [BFO_MIN, BFO_MAX]), Format('%d Hz', [R.Bfo]),
+        procedure
+        begin
+          Pergunta(Format('BFO em Hz (de %d a %d)', [BFO_MIN, BFO_MAX]),
+                   IntToStr(FNucleo.Memoria.MemoriaRadio(B, N).Bfo),
+            procedure(V: string)
+            var
+              X: Integer;
+            begin
+              if not TryStrToInt(Trim(V).Replace('+', ''), X) or (X < BFO_MIN) or (X > BFO_MAX) then
+                Mostra(Format('O BFO vai de %d a %d Hz.', [BFO_MIN, BFO_MAX]))
+              else
+                MudaMemoriaRadio(B, N, procedure(P: PMemoriaRadio) begin P.Bfo := X; end);
+            end);
+        end)];
+  Result := Result + [
+    Secao(''),
+    Linha('Apagar a memória', '', '',
+      procedure
+      begin
+        Confirma(Format('Apagar a memória %s %.2d?', [BANDAS_RADIO[B], N]),
+          procedure
+          begin
+            Desempilha;
+            Muda(procedure begin FNucleo.Memoria.ApagaMemoriaRadio(B, N); end);
           end);
       end)];
   Result[High(Result)].Cor := COR_VERMELHO;
