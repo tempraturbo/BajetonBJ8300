@@ -1,14 +1,16 @@
 # Tempra Link for the BJ-8300: the manual
 
 <p align="center">
-  <a href="tempra-link.md"><img src="imagens/botao-portugues.svg" alt="Versão em português" height="56"></a>
+  <a href="tempra-link.md"><img src="../imagens/botao-portugues.svg" alt="Versão em português" height="56"></a>
 </p>
+
+[📖 Wiki](README.en.md) · [🏠 Home page](../../README.en.md)
 
 **Tempra Link** is the Windows program for the Bajeton BJ-8300 TEMPRA firmware. Over the programming cable, it reads,
 edits and writes the radio's channels, banks and settings, keeps backups, works as a **remote control**, with the radio's
 screen live on the PC, and **flashes the firmware itself**. It is a single `.exe`, with nothing to install.
 
-<p align="center"><img src="imagens/tempralink-remoto-en.png" alt="The remote control, with the radio's screen on the PC" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-remoto-en.png" alt="The remote control, with the radio's screen on the PC" width="900"></p>
 
 ## Contents
 
@@ -26,6 +28,7 @@ screen live on the PC, and **flashes the firmware itself**. It is a single `.exe
 12. [Firmware versions](#12-firmware-versions)
 13. [Bluetooth (experimental)](#13-bluetooth-experimental)
 14. [Common problems](#14-common-problems)
+15. [The phone app (Android)](#15-the-phone-app-android)
 
 ## 1. Before you start
 
@@ -33,8 +36,8 @@ screen live on the PC, and **flashes the firmware itself**. It is a single `.exe
   a test build). With the factory firmware or an older TEMPRA, it reads and writes nothing, but it flashes the right
   firmware: see [Flashing the firmware](#10-flashing-the-firmware).
 - **The cable** is the radio's USB programming cable, with the CH340 chip, the same one the factory CPS and CHIRP use. If
-  Windows does not recognize it, install the driver from the release's `CH340-driver.zip` (step 2 of the
-  [README](../README.en.md#-how-to-flash-the-firmware-step-by-step)).
+  Windows does not recognize it, install the driver from the release's `CH340-driver.zip` (see the
+  [flashing page](gravar.en.md#-the-cable-and-the-driver)).
 - **Download** `TempraLink-BJ8300_v1.0.exe` from the
   [V4.0T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.0T) and put it in a folder of your
   own. It installs nothing: the backups go to the user's folder ([Backup and log](#11-backup-and-log)).
@@ -70,7 +73,7 @@ screen live on the PC, and **flashes the firmware itself**. It is a single `.exe
 
 ## 4. Channels
 
-<p align="center"><img src="imagens/tempralink-canais-en.png" alt="The Channels page" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-canais-en.png" alt="The Channels page" width="900"></p>
 
 - **The 960 channels** in a grid, like a spreadsheet: the name (up to 12 letters), RX and TX, the tones, power,
   bandwidth, modulation, busy lock, scan, scramble, encrypt, DTMF group, PTT-ID and the banks of each one.
@@ -86,7 +89,7 @@ screen live on the PC, and **flashes the firmware itself**. It is a single `.exe
 
 ## 5. Banks
 
-<p align="center"><img src="imagens/tempralink-bancos-en.png" alt="The Banks page" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-bancos-en.png" alt="The Banks page" width="900"></p>
 
 - The 16 banks: the **name** (up to 12 letters), **Active** (YES or NO) and how many **channels** each one has.
 - With active banks, the radio only shows their channels, in up and down and in the scan; with none, it shows all.
@@ -96,7 +99,7 @@ screen live on the PC, and **flashes the firmware itself**. It is a single `.exe
 
 ## 6. Settings
 
-<p align="center"><img src="imagens/tempralink-ajustes-en.png" alt="The Settings page, in the SCAN folder" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-ajustes-en.png" alt="The Settings page, in the SCAN folder" width="900"></p>
 
 - **The radio's menu folders,** with the same names and the same values. The search box at the top looks for the item in
   all of them.
@@ -108,7 +111,7 @@ screen live on the PC, and **flashes the firmware itself**. It is a single `.exe
 
 ## 7. ROGER CUSTOM
 
-<p align="center"><img src="imagens/tempralink-roger-en.png" alt="The ROGER CUSTOM editor, in the TX folder" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-roger-en.png" alt="The ROGER CUSTOM editor, in the TX folder" width="900"></p>
 
 ROGER CUSTOM plays, at the end of each transmission, a melody of up to **32 notes** and **3 s**, each note from **300 to
 3000 Hz** (or a rest) and from **10 to 1000 ms**. It is composed in the **TX** folder of the settings and goes to the
@@ -126,7 +129,7 @@ radio with the rest, on **Write to radio**.
 
 ## 8. Boot logo
 
-<p align="center"><img src="imagens/tempralink-logo-en.png" alt="The Boot logo page, with the logo read from the radio" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-logo-en.png" alt="The Boot logo page, with the logo read from the radio" width="900"></p>
 
 - **Read from radio** brings the image the radio shows when it turns on (160 × 138), and **Save as PNG...** keeps it.
 - **Choose image...** opens an image from the PC. The 160 × 138 ones go as they are, and the others are fitted: filling
@@ -136,7 +139,7 @@ radio with the rest, on **Write to radio**.
 
 ## 9. Remote control
 
-<p align="center"><img src="imagens/tempralink-remoto-en.png" alt="The remote control connected over the cable" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-remoto-en.png" alt="The remote control connected over the cable" width="900"></p>
 
 With the radio on normally, **Connect** starts the remote control, and the radio keeps working as always.
 
@@ -156,7 +159,7 @@ With the radio on normally, **Connect** starts the remote control, and the radio
 
 ## 10. Flashing the firmware
 
-<p align="center"><img src="imagens/tempralink-firmware-en.png" alt="The Firmware page" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-firmware-en.png" alt="The Firmware page" width="900"></p>
 
 The **Firmware** page flashes the `.anc` over the cable, with the radio in **UPDATE** mode, with the same protocol as the
 factory flasher (BinTalk). First, the whole file is checked: the size, the KDH layer, the CRCs of the header, of the table
@@ -183,7 +186,7 @@ the same way. Channels, settings and calibration are on a separate chip, which f
 7. **Turn the radio off and on.** **SYSTEM > VERSION** shows `Firmware: V4.0T`. The **Check the radio and GitHub**
    button, with the radio on normally, shows the version too.
 
-<p align="center"><img src="imagens/tempralink-gravando-en.png" alt="Flashing in progress: the bottom bar in red" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-gravando-en.png" alt="Flashing in progress: the bottom bar in red" width="900"></p>
 
 **Cancel** only works before the radio answers: after that, stopping would leave it without firmware, and flashing goes
 on to the end.
@@ -220,7 +223,7 @@ does the same later.
 - **The Log page** keeps everything that happened since the program opened, with the time: it is what helps to understand
   a problem.
 
-<p align="center"><img src="imagens/tempralink-registro-en.png" alt="The Log page" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-registro-en.png" alt="The Log page" width="900"></p>
 
 ## 12. Firmware versions
 
@@ -256,6 +259,15 @@ worked with the phone app; reading and writing over it have not been tested yet.
 - **GitHub does not answer** (no internet, or a firewall blocking the program): the rest works. For the firmware, use an
   `.anc` downloaded from the releases page.
 
+## 15. The phone app (Android)
+
+Tempra Link on the phone, over the radio's Bluetooth: the remote control with the radio's screen, the channels and the
+banks, the settings (with ROGER CUSTOM), reading and writing, backups and a receive alert, plus a demo with no radio. It
+remembers the radios used before, with a nickname for each, and connects to them without the full search; with a
+firmware it does not work with, it only warns and opens the releases page, because the phone does not flash firmware.
+Version 1.0 has no published APK yet: it builds with `tempralink/celular/compilar.ps1` (Delphi). On the radio, only the
+remote control was tested.
+
 ---
 
-Tempra Link's code, tests and inner workings are in [tempralink/](../tempralink/LEIAME.md).
+Tempra Link's code, tests and inner workings are in [tempralink/](../../tempralink/LEIAME.md).

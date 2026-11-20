@@ -1,14 +1,16 @@
 # Tempra Link do BJ-8300: o manual
 
 <p align="center">
-  <a href="tempra-link.en.md"><img src="imagens/botao-english.svg" alt="English version" height="56"></a>
+  <a href="tempra-link.en.md"><img src="../imagens/botao-english.svg" alt="English version" height="56"></a>
 </p>
+
+[📖 Wiki](README.md) · [🏠 Página inicial](../../README.md)
 
 O **Tempra Link** é o programa para Windows do firmware TEMPRA do Bajeton BJ-8300. Pelo cabo de programação, ele lê,
 edita e grava os canais, os bancos e os ajustes do rádio, guarda backups, faz de **controle remoto**, com a tela do rádio
 ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar nada.
 
-<p align="center"><img src="imagens/tempralink-remoto.png" alt="O controle remoto, com a tela do rádio no PC" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-remoto.png" alt="O controle remoto, com a tela do rádio no PC" width="900"></p>
 
 ## Sumário
 
@@ -26,6 +28,7 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
 12. [As versões do firmware](#12-as-versões-do-firmware)
 13. [Bluetooth (experimental)](#13-bluetooth-experimental)
 14. [Problemas comuns](#14-problemas-comuns)
+15. [O app do celular (Android)](#15-o-app-do-celular-android)
 
 ## 1. Antes de começar
 
@@ -33,8 +36,8 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
   teste). Com o firmware de fábrica ou com um TEMPRA de antes, ele não lê nem grava nada, mas grava o firmware certo:
   veja [Gravar o firmware](#10-gravar-o-firmware).
 - **O cabo** é o de programação USB do rádio, com o chip CH340, o mesmo do CPS de fábrica e do CHIRP. Se o Windows não o
-  reconhece, instale o driver do `CH340-driver.zip` do release (o passo 2 do
-  [README](../README.md#-como-gravar-o-firmware-passo-a-passo)).
+  reconhece, instale o driver do `CH340-driver.zip` do release (veja na
+  [página de gravar](gravar.md#-o-cabo-e-o-driver)).
 - **Baixe** o `TempraLink-BJ8300_v1.0.exe` da
   [página do release V4.0T](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.0T) e ponha numa pasta sua.
   Ele não instala nada: os backups ficam na pasta do usuário ([Backup e registro](#11-backup-e-registro)).
@@ -70,7 +73,7 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
 
 ## 4. Canais
 
-<p align="center"><img src="imagens/tempralink-canais.png" alt="A página Canais" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-canais.png" alt="A página Canais" width="900"></p>
 
 - **Os 960 canais** numa grade, como numa planilha: o nome (até 12 letras), o RX e o TX, os tons, a potência, a
   largura, a modulação, o BCL, a varredura, o scramble, o encrypt, o grupo DTMF, o PTT-ID e os bancos de cada um.
@@ -85,7 +88,7 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
 
 ## 5. Bancos
 
-<p align="center"><img src="imagens/tempralink-bancos.png" alt="A página Bancos" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-bancos.png" alt="A página Bancos" width="900"></p>
 
 - Os 16 bancos: o **nome** (até 12 letras), o **Ativo** (SIM ou NÃO) e quantos **canais** cada um tem.
 - Com bancos ativos, o rádio mostra só os canais deles, no sobe e desce e na busca; sem nenhum, mostra todos.
@@ -95,7 +98,7 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
 
 ## 6. Ajustes
 
-<p align="center"><img src="imagens/tempralink-ajustes.png" alt="A página Ajustes, na pasta SCAN" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-ajustes.png" alt="A página Ajustes, na pasta SCAN" width="900"></p>
 
 - **As pastas do menu do rádio,** com os mesmos nomes e os mesmos valores. A busca, no alto, procura o item em todas.
 - **Além do menu:** as frequências dos VFOs A, B e C (na pasta CHANNEL), o OFFSET deles (REPEATER), os 15 códigos DTMF
@@ -106,7 +109,7 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
 
 ## 7. ROGER CUSTOM
 
-<p align="center"><img src="imagens/tempralink-roger.png" alt="O editor do ROGER CUSTOM, na pasta TX" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-roger.png" alt="O editor do ROGER CUSTOM, na pasta TX" width="900"></p>
 
 O ROGER CUSTOM toca, no fim de cada transmissão, uma melodia de até **32 notas** e **3 s**, cada nota de **300 a
 3000 Hz** (ou uma pausa) e de **10 a 1000 ms**. Ela se compõe na pasta **TX** dos ajustes e vai para o rádio com o resto,
@@ -124,7 +127,7 @@ no **Gravar no rádio**.
 
 ## 8. Logo de abertura
 
-<p align="center"><img src="imagens/tempralink-logo.png" alt="A página Logo de abertura, com o logo lido do rádio" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-logo.png" alt="A página Logo de abertura, com o logo lido do rádio" width="900"></p>
 
 - **Ler do rádio** traz a imagem que o rádio mostra ao ligar (160 × 138), e **Salvar como PNG...** a guarda.
 - **Escolher imagem...** abre uma imagem do PC. As de 160 × 138 vão como estão, e as outras se ajustam: preenchendo a tela
@@ -134,7 +137,7 @@ no **Gravar no rádio**.
 
 ## 9. Controle remoto
 
-<p align="center"><img src="imagens/tempralink-remoto.png" alt="O controle remoto ligado pelo cabo" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-remoto.png" alt="O controle remoto ligado pelo cabo" width="900"></p>
 
 Com o rádio ligado normalmente, **Conectar** liga o controle remoto, e o rádio continua funcionando como sempre.
 
@@ -154,7 +157,7 @@ Com o rádio ligado normalmente, **Conectar** liga o controle remoto, e o rádio
 
 ## 10. Gravar o firmware
 
-<p align="center"><img src="imagens/tempralink-firmware.png" alt="A página Firmware" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-firmware.png" alt="A página Firmware" width="900"></p>
 
 A página **Firmware** grava o `.anc` pelo cabo, com o rádio no modo **UPDATE**, pelo mesmo protocolo do gravador de
 fábrica (o BinTalk). Antes, o arquivo se confere inteiro: o tamanho, a camada KDH, os CRCs do cabeçalho, da tabela e de
@@ -180,7 +183,7 @@ igual. Os canais, os ajustes e a calibração ficam num chip à parte, que a gra
 7. **Desligue e ligue o rádio.** Em **SYSTEM > VERSION** aparece `Firmware: V4.0T`. O botão **Verificar o rádio e o
    GitHub**, com o rádio ligado normalmente, mostra a versão também.
 
-<p align="center"><img src="imagens/tempralink-gravando.png" alt="A gravação em andamento: a barra de baixo em vermelho" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-gravando.png" alt="A gravação em andamento: a barra de baixo em vermelho" width="900"></p>
 
 O **Cancelar** só vale antes de o rádio responder: depois, parar o deixaria sem firmware, e a gravação segue até o fim.
 
@@ -215,7 +218,7 @@ baixa, confere pelo SHA-256, põe a nova no lugar desta e a abre. O botão **Atu
 - **A página Registro** guarda tudo o que aconteceu desde que o programa abriu, com a hora: é o que ajuda a entender um
   problema.
 
-<p align="center"><img src="imagens/tempralink-registro.png" alt="A página Registro" width="900"></p>
+<p align="center"><img src="../imagens/tempralink-registro.png" alt="A página Registro" width="900"></p>
 
 ## 12. As versões do firmware
 
@@ -251,6 +254,14 @@ leitura e a gravação por ele ainda não foram testadas.
 - **O GitHub não responde** (sem internet, ou um firewall que barra o programa): o resto funciona. Para o firmware, use um
   `.anc` baixado da página de releases.
 
+## 15. O app do celular (Android)
+
+O Tempra Link no celular, pelo Bluetooth do rádio: o controle remoto com a tela do rádio, os canais e os bancos, os
+ajustes (com o ROGER CUSTOM), ler e gravar, os backups e um aviso de recepção, e uma demonstração sem rádio. Ele lembra
+os rádios já usados, com um apelido para cada, e conecta neles sem a procura inteira; com um firmware com que não
+trabalha, só avisa e abre a página de releases, porque o celular não grava firmware. A versão 1.0 ainda não tem APK
+publicado: compila pelo `tempralink/celular/compilar.ps1` (Delphi). No rádio, só o controle remoto foi testado.
+
 ---
 
-O código do Tempra Link, os testes e o funcionamento por dentro estão em [tempralink/](../tempralink/LEIAME.md).
+O código do Tempra Link, os testes e o funcionamento por dentro estão em [tempralink/](../../tempralink/LEIAME.md).

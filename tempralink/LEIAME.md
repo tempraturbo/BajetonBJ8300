@@ -3,7 +3,7 @@
 O Tempra Link do BJ-8300 para Windows, sem instalar nada: lê, edita, guarda e grava pelo cabo de programação os
 canais, os bancos, os ajustes do menu, os textos do APRS e do Morse, o DTMF e o logo de abertura de um BJ-8300 com o
 firmware TEMPRA de uma versão que ele conhece (abaixo, A compatibilidade), e tenta o mesmo pelo Bluetooth (experimental). É um `.exe` só, sem DLL, de 32
-bits. Como usar: [o manual, com as telas](../docs/tempra-link.md).
+bits. Como usar: [o manual, com as telas](../docs/wiki/tempra-link.md).
 
 É o irmão do Tempra Link do Baofeng UV-17L (no repositório dele), com a mesma janela, e separado de propósito: um
 não fala com o outro rádio, e um não abre o backup do outro. O controle remoto, que o firmware ganhou na V4.0T,

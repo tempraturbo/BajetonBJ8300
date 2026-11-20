@@ -40,9 +40,11 @@ driver do CHIRP continuam trabalhando com ela.
 - **App do celular 1.0** (versionCode 2): a versão no projeto e na tela Sobre. O APK ainda não sai no release.
 - **Driver do CHIRP:** o módulo passa a `bj8300_v4.0TEMPRA.py` (modelo `BJ8300_v4.0TEMPRA`), com o `BJ8300_v3.7TEMPRA`
   no `MODEL_COMPAT`, e os `FIRMWARES` vão da V3.8T à V4.0T.
-- **A documentação:** o manual do Tempra Link, com as telas, em português e em inglês ([tempra-link.md](tempra-link.md));
-  o README com a V4.0T, o Tempra Link e a gravação por ele; e duas telas novas da prévia, o ROGER CUSTOM e o THRESHOLD.
-  As fotos do manual saíram de uma cópia do programa ligada ao rádio simulado dos testes, numa porta COM3 de mentira, e
+- **A documentação:** o README ficou curto e direto, a pedido do dono: a doação no alto, as telas do rádio e do Tempra
+  Link, os dois caminhos para sair do firmware de fábrica (o Tempra Link, automático, e o BinTalk) e um bloco que leva
+  à documentação completa, que foi para a **wiki** em [docs/wiki](wiki/README.md): as funções do rádio, a gravação, o
+  CHIRP, as versões, o desenvolvimento e o manual do Tempra Link, com as telas, em português e em inglês. Duas telas
+  novas da prévia, o ROGER CUSTOM e o THRESHOLD. As fotos do manual saíram de uma cópia do programa ligada ao rádio simulado dos testes, numa porta COM3 de mentira, e
   a um GitHub local com o release como ele vai sair: são as telas do próprio programa, sem rádio de verdade.
 
 Testado no PC: o build ("tudo certo", a pilha igual à de fábrica e a imagem do mesmo tamanho), os testes do firmware, os

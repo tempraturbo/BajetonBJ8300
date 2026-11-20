@@ -42,9 +42,11 @@ CHIRP driver still work with it.
   yet.
 - **CHIRP driver:** the module becomes `bj8300_v4.0TEMPRA.py` (model `BJ8300_v4.0TEMPRA`), with `BJ8300_v3.7TEMPRA` in
   `MODEL_COMPAT`, and `FIRMWARES` goes from V3.8T to V4.0T.
-- **The documentation:** Tempra Link's manual, with the screens, in Portuguese and English
-  ([tempra-link.en.md](tempra-link.en.md)); the README with V4.0T, Tempra Link and flashing with it; and two new preview
-  screens, ROGER CUSTOM and THRESHOLD. The manual's pictures came from a copy of the program connected to the tests'
+- **The documentation:** the README became short and to the point, at the owner's request: the donation at the top,
+  the radio's and Tempra Link's screens, both ways to leave the stock firmware (Tempra Link, automatic, and BinTalk) and
+  a block leading to the full documentation, which moved to the **wiki** in [docs/wiki](wiki/README.en.md): the radio's
+  features, flashing, CHIRP, the releases, development and Tempra Link's manual, with the screens, in Portuguese and
+  English. Two new preview screens, ROGER CUSTOM and THRESHOLD. The manual's pictures came from a copy of the program connected to the tests'
   simulated radio, on a fake COM3 port, and to a local GitHub with the release as it will go out: they are the program's
   own screens, with no real radio.
 
