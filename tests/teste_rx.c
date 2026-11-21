@@ -398,8 +398,8 @@ static u8 *le_arquivo(const char *nome, unsigned *n)
     return p;
 }
 
-/* As memorias do radio nas listas (v174): o NAME, o DELETE e o SAVE do menu do radio sao os itens 1 a 3, com as
- * rotinas das listas de canais. Memorias de teste, contando de 0: no FM a 0 (88.10, NOTICIAS), a 1 (105.70) e a 4
+/* As memorias do radio nas listas (v174): o NAME, o DELETE e o SAVE da CH MEMORY do menu do radio (v176: a pasta
+ * dela, itens 0 a 2), com as rotinas das listas de canais. Memorias de teste, contando de 0: no FM a 0 (88.10, NOTICIAS), a 1 (105.70) e a 4
  * (99.90); no AM a 2 (1010 kHz). "N <banda> <memoria>" mostra os 16 B do nome no setor 0xC000 (FF como "."). */
 static void nome_radio(unsigned b, unsigned n)
 {
@@ -443,11 +443,11 @@ static int radio_teste(void)
     RADIO_RECONTA();
     ram_pc[0x12A1B] = 0;                            /* o FM, na memoria 2 */
     ram_pc[0x129F8] = 1;
-    MENU_TABELA = RADIO_FM_AM;
+    MENU_TABELA = RADIO_MEMORIAS;
     marcas_teste = MARCA_LISTA;
 
     /* o NAME abre na memoria em uso; o nome, ou a frequencia */
-    abre_lista(1);
+    abre_lista(0);
     lista_seta(1);
     tela_lista();
     /* o OK abre o editor com o nome e a memoria no titulo; o nome novo, sem os espacos do fim */
@@ -458,7 +458,7 @@ static int radio_teste(void)
     digita_nome("MUSICA  ");
     chname_grava();
     nome_radio(0, 1);
-    abre_lista(1);
+    abre_lista(0);
     /* so espacos apagam o nome */
     chname_grava();
     lista_editor_abre();
@@ -469,7 +469,7 @@ static int radio_teste(void)
 
     /* o DELETE pergunta; o EXIT da pergunta volta; o OK zera a frequencia, apaga o nome e segue no mais perto */
     memcpy(flash_nomes + 0x20, "MUSICA", 6);
-    abre_lista(2);
+    abre_lista(1);
     delete_grava();
     printf("P %u %u\n", MENU_TIPO, RADIO_USADA(1));
     printf("Q %u %u\n", lista_cancela(), MENU_TIPO);
@@ -481,7 +481,7 @@ static int radio_teste(void)
 
     /* o SAVE so nas livres e so com o numero; grava a frequencia de agora e abre o editor do nome */
     poe_radio(0x129D8, 10230);
-    abre_lista(3);
+    abre_lista(2);
     save_grava();
     printf("A %u %u %s\n", lista_editor_abre(), MENU_TIPO, TITULO_MENU);
     printf("C %u %u %s\n", lista_cancela(), MENU_TIPO, TITULO_MENU);
@@ -492,7 +492,7 @@ static int radio_teste(void)
     save_grava();
     freq_radio(0, 1);
     nome_radio(0, 1);
-    abre_lista(1);
+    abre_lista(0);
     /* sem nome no editor, a memoria fica sem nome (nao "CH") */
     VALOR = 2;
     MENU_TIPO = TIPO_LISTA;
@@ -500,12 +500,12 @@ static int radio_teste(void)
     digita_nome("");
     save_grava();
     nome_radio(0, 2);
-    abre_lista(2);
+    abre_lista(1);
 
     /* o AM usa os seus 15 e os seus nomes (0xC110) */
     ram_pc[0x12A1B] = 1;
     ram_pc[0x12A1A] = 2;
-    abre_lista(1);
+    abre_lista(0);
     VALOR = 2;
     chname_grava();
     lista_editor_abre();
@@ -517,21 +517,21 @@ static int radio_teste(void)
 
     /* o LSB, o USB e o CW usam as do SSB: a frequencia, a largura e o BFO; sem nenhuma, o aviso */
     ram_pc[0x12A1B] = 3;
-    MENU_TABELA = RADIO_SSB;
-    MENU_NUMERO = 1;
+    MENU_TABELA = RADIO_MEMORIAS;
+    MENU_NUMERO = 0;
     printf("V %u\n", lista_aviso());
     poe_radio(0x12A1D, 7100);
     ram_pc[0x12A1F] = 4;
     poe_radio(0x12A20, (unsigned)(-150 & 0xFFFF));
-    abre_lista(3);
+    abre_lista(2);
     save_grava();
     lista_editor_abre();
     digita_nome("QSO 40M");
     save_grava();
     freq_radio(2, 0);
     nome_radio(2, 0);
+    abre_lista(0);
     abre_lista(1);
-    abre_lista(2);
     delete_grava();
     delete_grava();
     printf("D %u %u\n", VALOR, MENU_TIPO);
@@ -540,11 +540,11 @@ static int radio_teste(void)
 
     /* as 15 do FM usadas: o SAVE avisa que esta cheia */
     ram_pc[0x12A1B] = 0;
-    MENU_TABELA = RADIO_FM_AM;
+    MENU_TABELA = RADIO_MEMORIAS;
     for (k = 0; k < 15; k++)
         poe_radio(0x129DA + 2 * k, 8800 + k * 10);
     RADIO_RECONTA();
-    MENU_NUMERO = 3;
+    MENU_NUMERO = 2;
     printf("H %u\n", lista_aviso());
     printf("X %.7s %.5s %.8s\n", (char *)flash_nomes, (char *)flash_nomes + 0x300, (char *)flash_nomes + 0x10);
     return 0;

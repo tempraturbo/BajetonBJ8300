@@ -501,8 +501,12 @@ to the first 0 or `0xFF` (CHIRP fills the name with `0xFF`), no longer with the 
 | setting being edited (0 = the frequency) | `[0x14CD4]` | `0x01E4934A` |
 | zeros in front of what is typed | `b[0x14A36]` | `0x01E490A0` |
 
+The name card shows, on a memory, its number in a label (`M003`) and the name, or `NO NAME`; off the memories
+(`b[0x129F9]` other than 1), since v177, the `VFO` label and `FREQUENCY MODE` (up to v176, `NO STATION NAME`, with no
+label).
+
 The modulation change goes through the radio's own menu: the stock tables `0x01E61168` (FM and AM) and
-`0x01E6137C` (SSB) (since v174 ours, `radio_fm_am` and `radio_ssb`, with NAME, DELETE and SAVE;
+`0x01E6137C` (SSB) (since v176 ours at the same addresses, with each band's settings, and the two folders and CH MEMORY apart;
 [section 44](reverse-engineering.md#44-the-am-fm-and-ssb-radio-memories-like-the-channels-v173-and-v174)), and the
 Modulation (MODE) item's set is `0x01E3DE52`. It redraws the stock single-VFO
 screen and writes "Radio Initialization / Please Wait..." before starting the chip (`0x01E3DDBA`);
@@ -623,9 +627,9 @@ The geometry (`pasta_cena`, in `telas.c`):
 | the frame | x 3..157, y 18..126, with the amber border |
 | the title bar | y 19..36: the folder, the group's number and name (in the radio, `RADIO` and the band). While choosing the group it is lit (dark amber) with `OK ▸` on the right; while choosing the item it goes dark |
 | the body | 6 lines of 12 px from y 40: the number in amber at x 9 and the name at x 20. The item under the cursor sits on a dark amber card (x 5..148), with the OK arrow at x 141 |
-| the value "L" | right below the item under the cursor, in green: the stroke at x 13 and the value from x 21; the cursor card covers it too. Only while choosing the item, and not on action items or the radio's memory item |
+| the value "L" | right below the item under the cursor, in green: the stroke at x 13 and the value from x 21; the cursor card covers it too. Only while choosing the item, and not on action items or the radio's DELETE and SAVE (NAME shows the memory in use, v176) |
 | scrolling | only with more lines than the window: the arrows (5 × 3 triangles) at x 150..155, the top one at y 39 and the bottom one at y 105, each only when there is something to scroll; between them the 1 px line at x 152 and the 3 px position bar (x 151..154), its height proportional to what is in view |
-| the dots | one per group, 3 × 3 px every 7, centred at y 119..122, the group's one lit; the radio has none |
+| the dots | one per group, 3 × 3 px every 7, centred at y 119..122, the group's one lit; in the radio, the two of the folders (v176) |
 
 The list scrolls so the cursor and the value line stay in view; while choosing the group (no cursor)
 it shows the first items (v57: in v56 the computation used the 255 of "no cursor", and CHANNEL, the
@@ -651,7 +655,8 @@ their digit reaches. VERSION open has no cursor.
 the medium (`texto_menu`), like NOISE REDUCTION.
 
 **In the preview**, scenes 40 to 42 are choosing the group (41 is CHANNEL), 43 to 48 a group's items
-(the "L" with a value and with a name, scrolling down and up, an action item and VERSION open) and 49
-to 52 the radio menu (USB with scrolling, the memory, AM and an open item). 47b and 51b have the
+(the "L" with a value and with a name, scrolling down and up, an action item and VERSION open), 49a and
+49b the radio's two folders and 49 to 52 their items (the USB settings, CH MEMORY with NAME in the "L", the AM
+ones and an open item). 47b and 51b have the
 cursor on the 3rd item (v58), and 26b is the voltage with 0 held (v52). Since v58 the preview draws
 the menu in the firmware's own bands.

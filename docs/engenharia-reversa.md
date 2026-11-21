@@ -407,7 +407,7 @@ com a frequência dele) e quando a varredura para num sinal — não a cada pont
 | 21 | **seta de baixo**: limite − 2, até o mínimo |
 | 23 | alterna FM e AM (`[0x6ED4]`, registradores `0x31`/`0x42`/`0x2A`/`0x2B`) |
 | 24 (#) | quantidade de pontos seguinte (`[0x6EC4]` + 1 mod 4); desde a v20, com 640 e 320 |
-| 20, 22 | nada, só o bipe |
+| 20, 22 | a seta segurada (a de cima e a de baixo): até a v174 nada, só o bipe; desde a v175, a seta, sem o bipe |
 
 19 e 21 são as setas também no modo principal: lá elas levam ao `AVANCA` (19) e ao `RETROCEDE`
 (21) do menu. Toda saída do tratador passa pelo bipe `0x01E38B4C` com 0 (teclas sem função), 1
@@ -461,6 +461,23 @@ mortos direto (a prova de que estão mortos é ninguém de fábrica apontar para
 limite em `0x6ED5`, sem alinhamento, como o firmware os grava, e segue para o `PARA_DW`; só usa r0 e r1, que o
 `PARA_DW` já suja. O padrão sai da configuração inicial, `app.bin + 0x6AC0C + 0x6EC0` (o trecho que a partida copia
 para a RAM): pontos 1 (80), passo 4 (25 kHz), FM, limite −60, mínimo −130 e máximo −20.
+
+**A seta segurada (v175).** Segurando a seta no espectro, o BJ bipava várias vezes por segundo e a linha ficava parada;
+no UV-17L ela anda. A máquina de teclas ([O EXIT segurado, de verdade](#o-exit-segurado-de-verdade-v72)) conta as voltas
+da tecla apertada em `b[0x14680]`: com 100 (1 s) manda o código longo e marca a tecla, para o solto não mandar o toque
+curto; com 150 põe a contagem em 140, e a cada vez que ela chega a 150 (de 1,5 s em diante, a cada 100 ms) manda a
+repetição, que só as setas têm (`0x01E463C2`): o código cru 3, a de cima, vira o 20, e o 4, a de baixo, o 22. O longo
+delas é o 255, que não faz nada. Na tela principal o 20 e o 22 vão às rotinas das setas com 1 (`0x01E4B11C` e
+`0x01E4B17C`), que bipam uma vez, na primeira repetição (marcada em `b[0x14734]`, que o solto zera); no espectro o `tbh`
+os levava ao caso que só bipa (`0x01E4C49E`, o bipe 0). Desde a v175 o gancho das teclas os trata como a seta, como no
+UV-17L: a linha anda 2 a cada repetição, como nos casos das setas (`0x01E4C532` e `0x01E4C586`, refeitos no
+`linha_segurada`, no `.mortos37` (desde a v176, no `.mortos32`): o limite, entre o mínimo e o máximo, e a altura da linha em `h[0x1464C]` pela rotina
+de fábrica `0x01E4A9F2`), e, parada num achado, a de baixo retoma a busca, como o toque. Volta como a tecla 255 no caso
+20, que pula o bipe: nenhuma repetição bipa, como no espectro do UV-17L, que não tem bipe de tecla. Do fundo ao topo
+(−130 a −20) são 55 repetições, uns 5,5 s, depois de 1,5 s segurando (no UV a repetição começa em 1,1 s). Para caber, as
+tabelas do passo e do RX GAIN (`passo_de`, `filtro_de`, `passo_seguinte` e `agc_degraus`, 54 B) passaram do `.vozes`
+para o `.mortos38` (desde a v176, o `.mortos32`), e o `.vozes` ficou com 1054 de 1066 B. O `conferir.py` (4f) tira os dois endereços das instruções de
+fábrica: o da linha (`0x6ED5`, `0x01E4B974` + 21) e o da altura (`0x1464C`, o r8 de `0x01E4B94A`).
 
 **Passo de 10 kHz, 320 e 640 pontos, velocidade e pico (v20).**
 
@@ -1270,7 +1287,7 @@ voltando ao item, porque devolve o número dele de `b[0x14BFA]` (`0x01E4D510`).
 tabelas de fábrica, `0x01E61168` (FM e AM) ou `0x01E6137C` (SSB e CW, 532 B adiante, `0x01E49026`), e
 a conta da banda vem de `0x01E3DE36` (FM 2, AM 5, SSB e CW 6). O item de memória tem `0x20` nas
 flags: o título é montado por função (`0x01E3D20E`, o prefixo da banda e `MEMCH`), e a tela B o monta
-igual. Os números contam de 1, como no principal; o OK e o EXIT ficam os de fábrica.
+igual. Os números contam de 1, como no principal; o OK e o EXIT ficam os de fábrica. Desde a v176 ele tem duas pastas, como o principal ([seção 44](#44-as-memórias-do-rádio-de-am-fm-e-ssb-como-os-canais-v173-e-v174)).
 
 **A pilha.** A janela de pasta é desenhada pelo envio do título, no fundo do motor de menus. Com os
 dois textos da janela em 28 B cada, a interface ia a 744 B (v56), 4 acima da de fábrica; eles ficaram
@@ -3455,8 +3472,9 @@ Sem teste no rádio: falta ver a v170 responder, e um firmware de antes (a v169)
 
 Até a v172 o menu do rádio tinha o item de memória de fábrica (`FMMEMCH`, `AMMEMCH`, `SSBMEMCH`): escolhia um número de
 1 a 15 e o OK gravava ali a frequência de agora. Não apagava, não dava nome (só pelo computador) e mostrava os nomes de
-fábrica (`Modulation`, `Work Band`, `Frequency Step`). Desde a v174 o menu do rádio tem o **NAME**, o **DELETE** e o
-**SAVE** do CH MEMORY, nos itens 2 a 4, com as mesmas telas, teclas e avisos, e os outros itens com nome curto:
+fábrica (`Modulation`, `Work Band`, `Frequency Step`). Na v174 e na v175 o menu do rádio teve o **NAME**, o **DELETE**
+e o **SAVE** do CH MEMORY, nos itens 2 a 4, com as mesmas telas, teclas e avisos, e os outros itens com nome curto
+(desde a v176, em duas pastas, como está mais abaixo):
 
 | Banda | Itens |
 |---|---|
@@ -3508,8 +3526,8 @@ do SAVE abre o editor, com `FM 02`, `AM 03` ou `SSB 01` no título.
 **Gravar.** O SAVE é o set do MEMCH de fábrica (a frequência de agora e, no SSB, a largura e o BFO, na memória do
 `VALOR`, e a recontagem), a gravação do bloco do rádio no registro do `0xB000` (`0x01E438A6`, sem argumentos) e o nome.
 O DELETE é o que o driver do CHIRP faz: a frequência 0 (no SSB, os 5 B), a recontagem, a gravação do bloco e o nome em
-`FF`. Sem nome no editor, a memória fica sem nome (a tela do rádio mostra `NO STATION NAME`), e não `CH 101` como no
-canal. A gravação do bloco usa 324 B de pilha: o `save_grava` chega a 640 B no ponto da chamada, e o pior set do menu
+`FF`. Sem nome no editor, a memória fica sem nome (a tela do rádio mostra `NO NAME` ao lado do número), e não `CH 101`
+como no canal. A gravação do bloco usa 324 B de pilha: o `save_grava` chega a 640 B no ponto da chamada, e o pior set do menu
 continua o `morse_rx_grava`, com 728 de 740.
 
 **Os nomes** ficam onde o driver do CHIRP e o Tempra Link os gravam: no setor `0xC000`, em `0xC010` (FM), `0xC110` (AM)
@@ -3527,6 +3545,67 @@ SAVE têm a marca de abrir o editor depois do OK, o DELETE a de apagar vários, 
 `.mortos35` 264 de 264, `.mortos36` 60 de 170, `.mortos37` e `.mortos38` vazios (140 e 168), `.caminhos` 2906 de 2944,
 `.reserva` 1498 de 1512, e o fim da imagem 3258 B, como antes. Para caber, o `em_canal`, o `na_lista`, o
 `delete_grava`, o `lista_inicio` e o `resumo_texto` saíram do `.caminhos` para os corpos livres.
+
+**As duas pastas (v176).** No rádio, o dono achou o menu misturado e pediu as duas páginas do menu principal: os ajustes
+da banda numa pasta e a CH MEMORY noutra. Desde a v176 a entrada do menu do rádio abre na escolha da pasta, como o
+principal abre na dos grupos: a `RADIO FM` (ou `AM`, `LSB`, `USB`, `CW`, a banda de agora), com a barra acesa, o `OK ▸`
+e os itens dela no corpo, e a `CH MEMORY`. `▲▼` trocam de pasta, os dois pontos embaixo mostram qual, o OK entra e o
+EXIT volta às pastas e, delas, ao rádio.
+
+| Pasta | Itens |
+|---|---|
+| RADIO FM | MODE |
+| RADIO AM | MODE, BAND, STEP, LNA |
+| RADIO LSB, USB e CW | MODE, STEP, BW, LNA, BFO |
+| CH MEMORY | NAME, DELETE, SAVE |
+
+- **As tabelas.** As dos ajustes (`radio_ajustes` e `radio_ajustes_ssb`, os itens de fábrica com o nome curto) moram no
+  lugar exato das de fábrica (`0x01E61168` e `0x01E6137C`; o `.mortos37` e o `.mortos38` só com elas, o que o
+  `montar.py` confere), porque o firmware as procura ali em quatro pontos: o set do MODE (`0x01E3DF26`: `r4 + 4345` e
+  `r4 + 4877`, com `r4 = 0x01E6006F`), o OK (`0x01E49A3C` e `+532`), o EXIT (`0x01E4D552`: `r6 + 5640` e `+6172`) e o
+  tempo de saída do menu (`0x01E46B34`, as mesmas). As duas pastas (`radio_pastas`, itens de lista sem get nem set, como
+  os grupos do principal) e a CH MEMORY (`radio_memorias`) ficam no `.mortos31`, em `0x01E449C0` e `0x01E449F8`, os
+  endereços pelos quais a prévia e o Tempra Link as reconhecem (o `conferir.py`, 4p, compara).
+- **A entrada** (`0x01E49000`) só tem trocados a tabela (`0x01E49026`, as pastas), o `+532` do SSB (`0x01E4902C`, `+0`)
+  e a contagem (a chamada de `0x01E3DE36` em `0x01E49054` vira `r0 = 2`). A contagem por banda, que agora só o set do
+  MODE usa, passa a 1, 4 e 5, sem o MEMCH.
+- **O que a v174 e a v175 deixavam errado** (mapeado no desmontado, não visto no rádio): o set do MODE regrava a tabela
+  e a contagem do menu aberto com a tabela de fábrica da banda nova (`0x01E3DF38`). Nelas a de fábrica já não era a do
+  menu, e o item de memória dela apontava para rotinas que viraram código nosso (o `.mortos36`); na v175 a própria
+  tabela virou código e dados. E a saída do menu só volta ao rádio com uma das duas tabelas de fábrica aberta
+  (`0x01E4D556`, `0x01E46B38`); com as nossas, seguia o caminho da saída do menu principal (`0x01E4D566`). Na v176 os
+  ajustes estão nos endereços de fábrica; nas pastas, o EXIT põe a tabela dos ajustes antes de sair (`b_menu_sai`), e um
+  desvio novo faz o mesmo no tempo de saída, nas pastas e na CH MEMORY (`desvio_menu_tempo`, em `0x01E46B2C`, cujo
+  gancho devolve sempre 0).
+- **Os ganchos** são os do menu principal: o OK nas pastas abre a pasta (`gancho_menu_ok`, com `radio_pasta`), o EXIT
+  dentro de uma volta às pastas, e o EXIT editando um item fecha só o item (`b_menu_um`: a pasta dos ajustes do FM tem
+  um item só, e com um item o firmware fecharia o menu inteiro).
+- **O NAME** mostra no "L" a memória em uso (`01 - NOTICIAS`), como o CH NAME; o DELETE e o SAVE, não.
+
+**O DELETE que não apagava (v176).** No rádio a memória apagada seguia na lista, sem nome e com `0` (a frequência
+zerada). A recontagem de fábrica (`0x01E3D2B0`) só liga os bits das memórias válidas (`0x01E3D2EE`, `0x01E3D36C` e
+`0x01E3D3DE`) e nunca os desliga, porque na partida a RAM vem zerada. O `radio_apaga` agora zera o mapa da banda (FM
+`0x14CAA`, AM `0x14CAF`, SSB `0x14CB5`, 2 B, o que `0x01E3D1A0` lê) antes de recontar. A imitação do `teste_rx.h`
+refazia o mapa inteiro, e por isso o teste não pegou: agora ela só liga bits, como a de fábrica, e sem a correção o
+teste falha no DELETE, no SAVE seguinte e no SSB.
+
+**Navegar pelas memórias** já existe de fábrica, e é o mesmo gesto do VFO/MR da tela principal, o MENU segurado (o
+código 31, `0x01E4CE56`): na tela do rádio o MENU segurado (`0x01E4C8CA`) troca entre a frequência e as memórias da
+banda (`b[0x129F9]`), se houver alguma salva, e as setas andam só pelas salvas (`0x01E49184`). Mapeado no desmontado,
+não testado no rádio.
+
+**A etiqueta VFO (v177).** Fora das memórias, o cartão do nome mostrava `NO STATION NAME` sem etiqueta, e no rádio o
+dono achou que parecia uma estação sem nome. Desde a v177 ele mostra a etiqueta `VFO` no lugar do número da memória e
+`FREQUENCY MODE` ao lado (no `radio_cena`, do `telas.c`, pelo `b[0x129F9]`), como o VFO da tela principal; numa
+memória, o número (`M003`) e o nome, ou `NO NAME`. A tela B ficou do mesmo tamanho (38858 B), e o desenho do controle
+remoto do Tempra Link, que é o mesmo código, foi recompilado (`tela_pc.py`).
+
+**O espaço na v176.** `.mortos31` 328 de 360 B, `.mortos32` 302 de 316, `.mortos33` 202 de 216, `.mortos34` 206 de 208,
+`.mortos35` 256 de 264, `.mortos36` 146 de 170, `.mortos37` 112 de 140, `.mortos38` 140 de 168, o `.livre` com 26 B
+livres e o fim da imagem 3258 B. Para caber, a `radio_pasta` foi para o `.mortos35`, o `radio_apaga` para o `.mortos36`,
+e a `cabem` e a `menu_pasta` (da tela, só o nosso código as chama) para o `.mortos32` e o `.mortos34`; a
+`linha_segurada` e as tabelas do espectro e do RX GAIN (v175) saíram do `.mortos37` e do `.mortos38` para o `.mortos32`.
+Os ganchos que os desvios chamam ficam no `.livre` (`conferir.py`, 2b).
 
 **O Tempra Link e o CHIRP** não mudam: o bloco do rádio e os nomes são os mesmos, e o `0xDB000` fica fora do que eles
 leem.

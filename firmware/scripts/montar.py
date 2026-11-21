@@ -344,7 +344,8 @@ def le_simbolos(caminho):
     with open(caminho) as f:
         for linha in f:
             partes = linha.split()
-            if len(partes) == 3 and partes[1] in 'Tt':
+            # R: as secoes so de dados, que o llvm-nm nao marca T (v176: os ajustes do menu do radio, o mortos37 e o 38)
+            if len(partes) == 3 and partes[1] in 'TtR':
                 tabela[partes[2]] = int(partes[0], 16)
     faltando = [n for n in PRECISA if n not in tabela]
     if faltando:
@@ -779,7 +780,12 @@ MENU_DESVIOS += ((0x01E4D48A, bytes.fromhex('40e0b703'), 'desvio_exit_apaga', 'b
 # so rodava a cada 100 ms. O goto cobre os 4 primeiros bytes; os 2 que sobram nao rodam (a volta e 0x01E46C24).
 MENU_DESVIOS += ((0x01E46C1E, bytes.fromhex('9016d8ee6000'), 'desvio_busca_fase9', 'b_busca_fase9', 0x01E46AC0,
                   'busca: a fase 9 do laco do sinal roda a tarefa da busca nos modos 3 e 11'),)
-MENU_SIMBOLOS = ('desvio_busca_fase9', 'b_busca_fase9',
+# v176: o menu fechando pelo tempo (0x01E46B14..): "r0 = 349" (0x01E46B2C) le a tabela, que 0x01E46B34 e 0x01E46B3C
+# comparam com as duas do radio de fabrica, para voltar ao radio; nas pastas e na CH MEMORY do radio o gancho a troca pela
+# dos ajustes, que mora la, e devolve sempre 0 (o desvio refaz a instrucao e segue em 0x01E46B30).
+MENU_DESVIOS += ((0x01E46B2C, bytes.fromhex('40e05d01'), 'desvio_menu_tempo', 'b_menu_tempo', 0x01E46B30,
+                  'menu do radio: fechando pelo tempo, volta ao radio'),)
+MENU_SIMBOLOS = ('desvio_busca_fase9', 'b_busca_fase9', 'desvio_menu_tempo', 'b_menu_tempo',
                  'menu_abre', 'gancho_menu_ok', 'gancho_menu_redesenha', 'gancho_menu_digito', 'desvio_menu_sai', 'b_menu_sai',
                  'desvio_menu_marca', 'b_menu_marca', 'desvio_menu_um', 'b_menu_um', 'desvio_exit_apaga',
                  'b_exit_apaga', 'desvio_exit_lista', 'b_exit_lista', 'nome_tamanho')
@@ -1343,31 +1349,42 @@ def monta_menu(app, codigo, tela):
     return bytes(tabela), bytes(textos)
 
 
-# v174: o menu do radio como o CH MEMORY (docs/engenharia-reversa.md, secao 44). As tabelas novas (tela.c radio_fm_am e radio_ssb, no .mortos31 e no .mortos32)
-# saem dos itens das de fabrica (FM e AM em 0x01E61168, SSB em 0x01E6137C, 28 B cada): MODE, NAME, DELETE e SAVE no
-# comeco das duas (o FM mostra 4, o AM 7, o SSB 8), o resto com o nome curto. NAME, DELETE e SAVE sao listas no molde do
-# MEMCH de fabrica (o item 1 das duas, tipo 4), com as rotinas das listas do CH MEMORY (mensagem.c, que olha a tabela
-# aberta para tirar as memorias da banda no lugar dos canais). O titulo por funcao do MEMCH (flag 0x20) sai.
-RADIO_FABRICA = {'radio_fm_am': 0x01E61168, 'radio_ssb': 0x01E6137C}
+# v174 e v176: o menu do radio (docs/engenharia-reversa.md, secao 44). Desde a v176 em duas pastas, como o principal: a
+# entrada (0x01E49000) poe a tabela delas (tela.c radio_pastas, no .mortos31); a primeira abre os ajustes da banda e a
+# segunda a CH MEMORY do radio (radio_memorias, no .mortos31: NAME, DELETE e SAVE, listas no molde do MEMCH de fabrica, o
+# item 1, tipo 4, com as rotinas das listas do CH MEMORY, mensagem.c). Os ajustes (radio_ajustes e radio_ajustes_ssb, os
+# itens de fabrica com o nome curto) moram no lugar exato das tabelas de fabrica (0x01E61168 e 0x01E6137C, o .mortos37 e
+# o .mortos38 so com eles): o set do MODE (0x01E3DF26: r4 + 4345 e r4 + 4877), o OK (0x01E49A3C e + 532), o EXIT
+# (0x01E4D552: r6 + 5640 e + 6172) e o tempo de saida do menu (0x01E46B34) as procuram ali e ficam como de fabrica. Na
+# v174 e na v175 as tabelas eram outras: o set do MODE levava o menu a tabela de fabrica, que ja era codigo nosso.
+RADIO_FABRICA = {'radio_ajustes': 0x01E61168, 'radio_ajustes_ssb': 0x01E6137C, 'radio_memorias': 0x01E61168}
 RADIO_MEMCH = 1
 RADIO_LISTAS = {'NAME': ('chname_grava', 'titulo_nome'), 'DELETE': ('delete_grava', 'titulo_apaga'),
                 'SAVE': ('save_grava', 'titulo_salva')}
 RADIO_TABELAS = (
-    ('radio_fm_am', ((0, 'radio_nome_mode'), 'NAME', 'DELETE', 'SAVE', (2, 'radio_nome_band'), (3, 'radio_nome_step'),
-                     (4, 'radio_nome_lna'))),
-    ('radio_ssb', ((0, 'radio_nome_mode'), 'NAME', 'DELETE', 'SAVE', (2, 'radio_nome_step'), (3, 'radio_nome_bw'),
-                   (4, 'radio_nome_lna'), (5, 'radio_nome_bfo'))),
+    ('radio_ajustes', ((0, 'radio_nome_mode'), (2, 'radio_nome_band'), (3, 'radio_nome_step'), (4, 'radio_nome_lna'))),
+    ('radio_ajustes_ssb', ((0, 'radio_nome_mode'), (2, 'radio_nome_step'), (3, 'radio_nome_bw'), (4, 'radio_nome_lna'),
+                           (5, 'radio_nome_bfo'))),
+    ('radio_memorias', ('NAME', 'DELETE', 'SAVE')),
 )
-# o motor acha a tabela pela banda: "rX = tabela FM/AM" e "+532" para a do SSB, na entrada (0x01E49026, 0x01E4902C) e no
-# OK (0x01E49A3C, 0x01E49A46); o +532 vira a distancia entre as nossas (imediato de 12 bits: o byte 2 e o nibble baixo
-# do 3). A contagem por banda (0x01E3DE36: "r2 = 5" no AM, "r2 = 2" no FM, "r0 = 6" no SSB) vira 7, 4 e 8.
-RADIO_TABELA_EM = ((0x01E49026, bytes.fromhex('c1ff6811e601')), (0x01E49A3C, bytes.fromhex('c3ff6811e601')))
-RADIO_SSB_EM = ((0x01E4902C, bytes.fromhex('00f11412')), (0x01E49A46, bytes.fromhex('03e11432')))
-RADIO_CONTA = ((0x01E3DE40, bytes.fromhex('4225'), bytes.fromhex('4227'), 'AM: 5 -> 7'),
-               (0x01E3DE46, bytes.fromhex('4222'), bytes.fromhex('4224'), 'FM: 2 -> 4'),
-               (0x01E3DE48, bytes.fromhex('4026'), bytes.fromhex('4028'), 'SSB: 6 -> 8'))
-RADIO_SIMBOLOS = ('radio_fm_am', 'radio_ssb', 'radio_nome_mode', 'radio_nome_band', 'radio_nome_step', 'radio_nome_bw',
-                  'radio_nome_lna', 'radio_nome_bfo')
+# as duas pastas, itens de lista sem get nem set como os grupos do principal (monta_menu): o nome, de onde as opcoes
+# comecam em radio_opcoes e quantas (o MODE na dos ajustes; o NAME, o DELETE e o SAVE na CH MEMORY)
+RADIO_PASTAS = (('radio_nome_radio', 0, 1), ('radio_nome_memoria', 1, 3))
+# A entrada acha a tabela pela banda: "r1 = a de FM e AM" (0x01E49026) e "r0 = r1 + 532" para a de SSB (0x01E4902C), que
+# viram as pastas e "+ 0" (imediato de 12 bits: o byte 2 e o nibble baixo do 3); a contagem dela (a chamada de 0x01E3DE36
+# em 0x01E49054) vira "r0 = 2". A contagem por banda, que o set do MODE usa para os ajustes ("r2 = 5" no AM em
+# 0x01E3DE40, "r2 = 2" no FM em 0x01E3DE46, "r0 = 6" no SSB em 0x01E3DE48), vira 4, 1 e 5: sem o MEMCH.
+RADIO_TABELA_EM = ((0x01E49026, bytes.fromhex('c1ff6811e601')),)
+# o OK (0x01E49A3C) segue com o endereco de fabrica: e o dos ajustes de FM e AM (o +532, os de SSB)
+RADIO_AJUSTES_EM = (0x01E49A3C,)
+RADIO_SSB_EM = ((0x01E4902C, bytes.fromhex('00f11412')),)
+RADIO_CONTA_EM = (0x01E49054, bytes.fromhex('bfeaefa6'), bytes.fromhex('40e00200'))
+RADIO_CONTA = ((0x01E3DE40, bytes.fromhex('4225'), bytes.fromhex('4224'), 'AM: 5 -> 4'),
+               (0x01E3DE46, bytes.fromhex('4222'), bytes.fromhex('4221'), 'FM: 2 -> 1'),
+               (0x01E3DE48, bytes.fromhex('4026'), bytes.fromhex('4025'), 'SSB: 6 -> 5'))
+RADIO_SIMBOLOS = ('radio_pastas', 'radio_memorias', 'radio_ajustes', 'radio_ajustes_ssb', 'radio_opcoes',
+                  'radio_nome_radio', 'radio_nome_memoria', 'radio_nome_mode', 'radio_nome_band', 'radio_nome_step',
+                  'radio_nome_bw', 'radio_nome_lna', 'radio_nome_bfo')
 
 
 def monta_radio(app, simbolo, itens):
@@ -1392,11 +1409,29 @@ def monta_radio(app, simbolo, itens):
     return bytes(saida)
 
 
+def monta_pastas():
+    """As duas pastas do menu do radio (v176), como os grupos do principal: sem get nem set, com as opcoes no maximo."""
+    saida = bytearray()
+    for nome, de, quantas in RADIO_PASTAS:
+        item = bytearray(TAM_ITEM)
+        struct.pack_into('<H', item, 1, quantas)
+        for campo, valor in (('nome', S[nome]), ('nome_cn', S[nome]), ('exibe', S['radio_opcoes'] + 4 * de),
+                             ('opcoes_cn', S['radio_opcoes'] + 4 * de)):
+            struct.pack_into('<I', item, CAMPO[campo], valor)
+        saida += item
+    return bytes(saida)
+
+
 def mortos_com_radio(app, mortos):
-    """As secoes mortas com as tabelas do radio nos vetores (que saem do compilador com 0xFF e zeros)."""
+    """As secoes mortas com as tabelas do radio nos vetores (que saem do compilador com 0xFF e zeros); os ajustes tem de
+    ficar no lugar das tabelas de fabrica."""
+    for simbolo in ('radio_ajustes', 'radio_ajustes_ssb'):
+        if S[simbolo] != RADIO_FABRICA[simbolo]:
+            raise SystemExit(f'{simbolo} em {S[simbolo]:#x}, e nao no lugar da tabela de fabrica '
+                             f'({RADIO_FABRICA[simbolo]:#x})')
     mortos = list(mortos)
-    for simbolo, itens in RADIO_TABELAS:
-        dados = monta_radio(app, simbolo, itens)
+    tabelas = [(s_, monta_radio(app, s_, i_)) for s_, i_ in RADIO_TABELAS] + [('radio_pastas', monta_pastas())]
+    for simbolo, dados in tabelas:
         k = next(i for i, (de, ate) in enumerate(MORTOS) if de <= S[simbolo] < ate)
         o = S[simbolo] - MORTOS[k][0]
         b = bytearray(mortos[k])
@@ -1408,27 +1443,25 @@ def mortos_com_radio(app, mortos):
 
 
 def remenda_radio(app):
-    """Os enderecos das tabelas do radio, a distancia entre elas e a contagem por banda, no motor de fabrica."""
-    d = S['radio_ssb'] - S['radio_fm_am']
-    if not 0 < d < 2048:
-        raise SystemExit(f'as tabelas do radio a {d} B uma da outra: o imediato de 12 bits nao alcanca')
+    """A entrada do menu do radio nas duas pastas (a tabela, o + 0 do SSB e a contagem 2) e a contagem dos ajustes."""
     for sitio, antes in RADIO_TABELA_EM:
         o = sitio - BASE_APP
         if bytes(app[o:o + 6]) != antes:
             raise SystemExit(f'{sitio:#x} nao e o endereco da tabela do radio: {bytes(app[o:o + 6]).hex()}')
-        app[o + 2:o + 6] = struct.pack('<I', S['radio_fm_am'])
+        app[o + 2:o + 6] = struct.pack('<I', S['radio_pastas'])
     for sitio, antes in RADIO_SSB_EM:
         o = sitio - BASE_APP
         if bytes(app[o:o + 4]) != antes:
             raise SystemExit(f'{sitio:#x} nao e o +532 da tabela do SSB: {bytes(app[o:o + 4]).hex()}')
-        app[o + 2] = d & 0xFF
-        app[o + 3] = app[o + 3] & 0xF0 | d >> 8
-    for sitio, antes, depois, _ in RADIO_CONTA:
+        app[o + 2] = 0
+        app[o + 3] &= 0xF0
+    for sitio, antes, depois, _ in ((*RADIO_CONTA_EM, 'a contagem das pastas'),) + RADIO_CONTA:
         o = sitio - BASE_APP
-        if bytes(app[o:o + 2]) != antes:
-            raise SystemExit(f'{sitio:#x} nao e a contagem do menu do radio: {bytes(app[o:o + 2]).hex()}')
-        app[o:o + 2] = depois
-    print(f'  menu do radio: tabelas em {S["radio_fm_am"]:#x} e {S["radio_ssb"]:#x} (+{d}), contagem 4/7/8')
+        if bytes(app[o:o + len(antes)]) != antes:
+            raise SystemExit(f'{sitio:#x} nao e a contagem do menu do radio: {bytes(app[o:o + len(antes)]).hex()}')
+        app[o:o + len(antes)] = depois
+    print(f'  menu do radio: as pastas em {S["radio_pastas"]:#x}, a CH MEMORY em {S["radio_memorias"]:#x}, os ajustes '
+          f'em {S["radio_ajustes"]:#x} e {S["radio_ajustes_ssb"]:#x}; contagem 2 na entrada, 1/4/5 nos ajustes')
 
 
 def livre_com_menu(tela, tabela, textos):
@@ -1515,9 +1548,10 @@ def main():
     escritas += [(s, len(a), f'caminhos: {d}') for s, a, _, d in CAMINHOS_REMENDOS]
     escritas += [(TABELA_RAPIDA_SAVE + CAMPO[c], 4, f'menu rapido do SAVE: {c}') for c, _ in RAPIDA_SAVE_CAMPOS]
     escritas += [(t_ + CAMPO[c], 4, f'menu rapido: o nome claro ({s_})') for t_, s_ in RAPIDA_NOMES for c in ('nome', 'nome_cn')]
-    escritas += [(s_, 6, 'menu do radio: a tabela') for s_, _ in RADIO_TABELA_EM]
-    escritas += [(s_, 4, 'menu do radio: a distancia ate a do SSB') for s_, _ in RADIO_SSB_EM]
-    escritas += [(s_, 2, f'menu do radio: a contagem ({d_})') for s_, _, _, d_ in RADIO_CONTA]
+    escritas += [(s_, 6, 'menu do radio: a tabela das pastas') for s_, _ in RADIO_TABELA_EM]
+    escritas += [(s_, 4, 'menu do radio: o + 0 do SSB') for s_, _ in RADIO_SSB_EM]
+    escritas += [(RADIO_CONTA_EM[0], 4, 'menu do radio: a contagem das pastas')]
+    escritas += [(s_, 2, f'menu do radio: a contagem dos ajustes ({d_})') for s_, _, _, d_ in RADIO_CONTA]
     escritas += [(PONTEIRO_EM, len(PONTEIRO_ANTES), 'ponteiro da tabela de menus, para a faixa livre'),
                  (CONTAGEM_EM, len(CONTAGEM_ANTES), 'quantidade de itens do menu')]
     if SETAS_INVERTIDAS:

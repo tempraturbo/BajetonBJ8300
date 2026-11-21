@@ -89,26 +89,41 @@ unsigned previa_menu_itens(unsigned g)
     return g < CONTA_DE(menu_previa_itens) ? menu_previa_itens[g] : 0;
 }
 
-/* O menu do radio (v56; v174: as tabelas nossas, com o NAME, o DELETE e o SAVE do CH MEMORY depois do MODE), como o
- * motor as mostra (flags so com o tipo, que e o que a tela le delas). */
-static const char *const previa_radio_fm_am[7] = {"MODE", "NAME", "DELETE", "SAVE", "BAND", "STEP", "LNA"};
-static const char *const previa_radio_ssb[8] = {"MODE", "NAME", "DELETE", "SAVE", "STEP", "BW", "LNA", "BFO"};
-static const unsigned char previa_radio_tipos[8] = {0, 4, 4, 4, 0, 0, 0, 13};
+/* O menu do radio (v56; v176: as duas pastas, a CH MEMORY com o NAME, o DELETE e o SAVE, e os ajustes de cada banda), como
+ * o motor as mostra (flags so com o tipo, que e o que a tela le delas). */
+static const char *const previa_radio_pastas[2] = {"RADIO", "CH MEMORY"};
+static const char *const previa_radio_memorias[3] = {"NAME", "DELETE", "SAVE"};
+static const char *const previa_radio_fm_am[4] = {"MODE", "BAND", "STEP", "LNA"};
+static const char *const previa_radio_ssb[5] = {"MODE", "STEP", "BW", "LNA", "BFO"};
 
 const char *previa_item_nome(u32 t, unsigned i)
 {
     u32 k = (t - MENU_BASE) / TAM_ITEM + i;
 
-    if (t == RADIO_FM_AM)
+    if (t == RADIO_TAB_PASTAS)
+        return i < CONTA_DE(previa_radio_pastas) ? previa_radio_pastas[i] : "";
+    if (t == RADIO_TAB_MEMORIAS)
+        return i < CONTA_DE(previa_radio_memorias) ? previa_radio_memorias[i] : "";
+    if (t == RADIO_TAB_AJUSTES)
         return i < CONTA_DE(previa_radio_fm_am) ? previa_radio_fm_am[i] : "";
-    if (t == RADIO_SSB)
+    if (t == RADIO_TAB_AJUSTES_SSB)
         return i < CONTA_DE(previa_radio_ssb) ? previa_radio_ssb[i] : "";
     return t >= MENU_BASE && k < CONTA_DE(menu_previa_nomes) ? menu_previa_nomes[k] : "";
 }
 
 unsigned previa_item_flags(u32 t, unsigned i)
 {
-    return (t == RADIO_FM_AM || t == RADIO_SSB) && i < CONTA_DE(previa_radio_tipos) ? previa_radio_tipos[i] : 0;
+    if (t == RADIO_TAB_MEMORIAS)
+        return i < 3 ? 4 : 0;                /* as listas */
+    return t == RADIO_TAB_AJUSTES_SSB && i == 4 ? 13 : 0;   /* o BFO */
+}
+
+/* A contagem dos ajustes da banda (0x01E3DE36, com a da v176): FM 1, AM 4, SSB e CW 5. */
+unsigned CONTA_RADIO(void)
+{
+    unsigned b = memoria[0x12A1B];
+
+    return b > 1 ? 5 : b ? 4 : 1;
 }
 
 unsigned previa_menu_marcas(unsigned p)

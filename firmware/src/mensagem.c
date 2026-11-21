@@ -2110,17 +2110,16 @@ void banco_nomeia(unsigned n);
 unsigned le_nome(unsigned n, char *destino);
 
 /* ---------- as memorias do radio de AM, FM e SSB nas mesmas listas (v174) ----------
- * O menu do radio tem o NAME, o DELETE e o SAVE nos itens 1 a 3, na ordem do CH MEMORY (o tipo da lista e o item - 1),
- * com as mesmas rotinas: so a origem muda, as 15 memorias da banda (o LSB, o USB e o CW usam as do SSB) no lugar dos
- * 960 canais. Usada e a da frequencia na faixa da banda, pelo mapa de bits que a recontagem de fabrica monta
+ * A pasta CH MEMORY do menu do radio (v176; na v174 e na v175, os itens 1 a 3 do menu) tem o NAME, o DELETE e o SAVE,
+ * na ordem do CH MEMORY, com as mesmas rotinas: so a origem muda, as 15 memorias da banda (o LSB, o USB e o CW usam as
+ * do SSB) no lugar dos 960 canais. Usada e a da frequencia na faixa da banda, pelo mapa de bits que a recontagem de fabrica monta
  * (0x01E3D2B0, na partida e depois de cada gravacao) e que 0x01E3D1A0 le. Gravar e o set do MEMCH de fabrica (a
  * frequencia, e no SSB a largura e o BFO, no VALOR, e a recontagem) e a gravacao do bloco do radio no registro do
  * 0xB000 (0x01E438A6); apagar e o que o driver do CHIRP faz (a frequencia 0, e no SSB os 5 B). Os nomes ficam no setor
  * 0xC000 (0xC010, 0xC110 e 0xC210, 16 B cada, 12 letras e FF no fim, como o driver os grava). */
-#ifndef RADIO_FM_AM                             /* as tabelas do menu do radio (tela.c; o teste da os enderecos) */
-extern const unsigned char radio_fm_am[], radio_ssb[];
-#define RADIO_FM_AM    ((u32)radio_fm_am)
-#define RADIO_SSB      ((u32)radio_ssb)
+#ifndef RADIO_MEMORIAS                          /* a CH MEMORY do menu do radio (tela.c, v176; o teste da o endereco) */
+extern const unsigned char radio_memorias[];
+#define RADIO_MEMORIAS ((u32)radio_memorias)
 #endif
 #define NO_RADIO       no_radio()
 #define MEMORIAS_RADIO 15u
@@ -2136,7 +2135,7 @@ FIRMWARE(RADIO_SALVA, 0x01E438A6);    void RADIO_SALVA(void);
 /* A lista e do menu do radio? (Uma chamada, e nao a comparacao em cada uso: o .caminhos esta cheio.) */
 NOS_MORTOS(33) __attribute__((noinline)) static unsigned no_radio(void)
 {
-    return MENU_TABELA == RADIO_FM_AM || MENU_TABELA == RADIO_SSB;
+    return MENU_TABELA == RADIO_MEMORIAS;
 }
 
 /* O banco de memorias da banda: 0 FM, 1 AM, 2 SSB. */
@@ -2205,14 +2204,19 @@ NOS_MORTOS(35) __attribute__((noinline)) static void radio_salva(const char *nom
     radio_nome_grava(VALOR, nome);
 }
 
-/* O DELETE: a memoria n zerada, a recontagem (o mapa de bits e a memoria atual da banda), o bloco no chip e o nome. */
-NOS_MORTOS(35) __attribute__((noinline)) static void radio_apaga(unsigned n)
+/* O DELETE: a memoria n zerada, a recontagem (o mapa de bits e a memoria atual da banda), o bloco no chip e o nome. A
+ * recontagem de fabrica so liga os bits das memorias validas (0x01E3D2EE, 0x01E3D36C e 0x01E3D3DE) e nunca os desliga,
+ * porque na partida a RAM vem zerada: o mapa da banda (FM 0x14CAA, AM 0x14CAF, SSB 0x14CB5, 2 B; o que 0x01E3D1A0 le)
+ * e zerado antes, e ela o refaz. Ate a v175 a memoria apagada seguia na lista, sem nome e com a frequencia 0. */
+NOS_MORTOS(36) __attribute__((noinline)) static void radio_apaga(unsigned n)
 {
-    u32 a = radio_posicao(n);
-    unsigned k;
+    unsigned b = radio_banco(), k;
+    u32 a = radio_posicao(n), mapa = 0x00014CAAu + 5 * b + (b >> 1);
 
-    for (k = radio_banco() == 2 ? 5 : 2; k--;)
+    for (k = b == 2 ? 5 : 2; k--;)
         RAM(u8, a + k) = 0;
+    RAM(u8, mapa) = 0;
+    RAM(u8, mapa + 1) = 0;
     RADIO_RECONTA();
     RADIO_SALVA();
     radio_nome_grava(n, 0);
@@ -2255,10 +2259,9 @@ NOS_MORTOS(33) __attribute__((noinline)) static unsigned radio_atual(void)
     return RAM(u8, b == 0 ? 0x000129F8u : b == 1 ? 0x00012A1Au : 0x00012A6Du);
 }
 
+/* Na CH MEMORY do radio (v176) os itens ja estao na ordem do CH MEMORY (NAME, DELETE e SAVE): o numero e o item. */
 NOS_CAMINHOS unsigned lista_item(void)
 {
-    if (NO_RADIO)
-        return MENU_NUMERO - 1u;
     if (MENU_TABELA == TABELA_RAPIDA)
         return ITEM_SAVE;
     if (!(marcas_do_item() & MARCA_BANKS))
@@ -2532,7 +2535,7 @@ NOS_CAMINHOS static void nome_do_editor(char *s, unsigned n)
         else if (s[k] != ' ')
             vazio = 0;
     }
-    if (vazio && !NO_RADIO) {               /* a memoria do radio sem nome fica sem: a tela mostra NO STATION NAME */
+    if (vazio && !NO_RADIO) {               /* a memoria do radio sem nome fica sem: a tela mostra NO NAME */
         s[0] = 'C';
         s[1] = 'H';
         s[2] = ' ';

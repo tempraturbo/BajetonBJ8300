@@ -531,13 +531,14 @@ int main(int argc, char **argv)
         grava("11b-menu-txabc-com-a-c");
         previa_vista = 0;
 
-        /* v174: as memorias do radio nas listas do CH MEMORY. O SAVE (item 3) so com as livres, no SSB */
+        /* v174: as memorias do radio nas listas do CH MEMORY (v176: na pasta CH MEMORY do radio). O SAVE (o 3o item) so
+         * com as livres, no SSB */
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "SAVE");
-        poe32(0x14BF4, RADIO_SSB);
-        memoria[0x14BF8] = 8;
-        memoria[0x14BFA] = 3;
+        poe32(0x14BF4, RADIO_TAB_MEMORIAS);
+        memoria[0x14BF8] = 3;
+        memoria[0x14BFA] = 2;
         memoria[0x14BF9] = 1;
         memoria[0x14C00] = 4;
         memoria[0x12A1B] = 3;
@@ -547,13 +548,13 @@ int main(int argc, char **argv)
         memoria[0x14C10] = 1;
         telas_b(1, 0);
         grava("29-menu-radio-save");
-        /* o DELETE (item 2) no FM, a pergunta e o aviso da banda sem memoria */
+        /* o DELETE (o 2o item) no FM, a pergunta e o aviso da banda sem memoria */
         BASE_TELAS();
         memoria[0x1533D] = 1;
         strcpy((char *)&memoria[0x15494], "DELETE");
-        poe32(0x14BF4, RADIO_FM_AM);
-        memoria[0x14BF8] = 4;
-        memoria[0x14BFA] = 2;
+        poe32(0x14BF4, RADIO_TAB_MEMORIAS);
+        memoria[0x14BF8] = 3;
+        memoria[0x14BFA] = 1;
         memoria[0x14BF9] = 1;
         memoria[0x14C00] = 4;
         memoria[0x12A1B] = 0;
@@ -572,9 +573,9 @@ int main(int argc, char **argv)
         grava("29d-menu-radio-sem-memoria");
         memoria[0x14BFC] = 0;
         memoria[0x14BFD] = 0;
-        /* o NAME (item 1): a lista e o editor, com a memoria no titulo */
+        /* o NAME (o 1o item): a lista e o editor, com a memoria no titulo */
         strcpy((char *)&memoria[0x15494], "NAME");
-        memoria[0x14BFA] = 1;
+        memoria[0x14BFA] = 0;
         memoria[0x14C00] = 4;
         telas_b(1, 0);
         grava("29e-menu-radio-name");
@@ -835,35 +836,53 @@ int main(int argc, char **argv)
         telas_b(1, 0);
         grava("47b-menu-item-terceiro");
 
-        /* v56: o menu do radio na janela de pasta - uma pasta so, "RADIO" e a banda no titulo, sem os
-         * pontos dos grupos; no USB os 6 itens com o valor rolam */
+        /* v56: o menu do radio na janela de pasta, com "RADIO" e a banda no titulo. v176: em duas pastas, como o
+         * principal; escolhendo a pasta, a barra acesa com o OK, os itens dela e os dois pontos: a dos ajustes no FM (so o
+         * MODE) e a CH MEMORY */
         BASE_TELAS();
         memoria[0x1533D] = 1;
+        memoria[0x12A1B] = 0;
+        poe32(0x14BF4, RADIO_TAB_PASTAS);
+        memoria[0x14BF8] = 2;
+        memoria[0x14BFA] = 0;
+        telas_b(1, 0);
+        grava("49a-menu-radio-pastas");
+        memoria[0x14BFA] = 1;
+        telas_b(1, 0);
+        grava("49b-menu-radio-pastas-memoria");
+        /* dentro da pasta dos ajustes, no USB os 5, o BW com o valor */
         memoria[0x12A1B] = 3;
-        poe32(0x14BF4, RADIO_SSB);
-        memoria[0x14BF8] = 8;
-        memoria[0x14BFA] = 5;                /* v174: o BW e o 6o item do SSB */
+        poe32(0x14BF4, RADIO_TAB_AJUSTES_SSB);
+        memoria[0x14BF8] = 5;
+        memoria[0x14BFA] = 2;
         LINHA(0, 1, "1.2K");
         LINHA(1, 2, "2.2K");
         LINHA(2, 1, "3.0K");
         telas_b(1, 0);
         grava("49-menu-radio-usb");
-        memoria[0x14BFA] = 1;                /* v174: o NAME, com a seta da lista (como no CH MEMORY) */
+        /* dentro da CH MEMORY: o NAME, com a seta da lista e a memoria em uso no "L" (como o CH NAME) */
+        poe32(0x14BF4, RADIO_TAB_MEMORIAS);
+        memoria[0x14BF8] = 3;
+        memoria[0x14BFA] = 0;
+        LINHA(0, 0, "01 - NOTICIAS");
+        LINHA(1, 0, "02 - MUSICA");
+        LINHA(2, 0, "05 - 99.90");
         telas_b(1, 0);
         grava("50-menu-radio-memoria");
+        /* os 4 ajustes do AM */
         memoria[0x12A1B] = 1;
-        poe32(0x14BF4, RADIO_FM_AM);
-        memoria[0x14BF8] = 7;
+        poe32(0x14BF4, RADIO_TAB_AJUSTES);
+        memoria[0x14BF8] = 4;
         memoria[0x14BFA] = 0;
         LINHA(0, 1, "FM");
         LINHA(1, 2, "AM");
         LINHA(2, 1, "LSB");
         telas_b(1, 0);
         grava("51-menu-radio-am");
-        memoria[0x14BFA] = 4;                /* v58: o BAND (v174: o 5o item do AM) */
-        LINHA(0, 1, "LW");
-        LINHA(1, 2, "MW");
-        LINHA(2, 1, "SW");
+        memoria[0x14BFA] = 2;                /* v58: o 3o item (v176: o STEP do AM) */
+        LINHA(0, 1, "1K");
+        LINHA(1, 2, "5K");
+        LINHA(2, 1, "10K");
         telas_b(1, 0);
         grava("51b-menu-radio-terceiro");
         memoria[0x14BFA] = 0;

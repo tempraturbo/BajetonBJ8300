@@ -5,6 +5,55 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## v177 — Nov 20 — the VFO label on the radio screen
+
+Testing v176, the owner found that the radio screen's `NO STATION NAME`, off the memories, looked like a station with no
+name. Of two previews, they picked the `VFO` label in place of the memory number with `FREQUENCY MODE` beside it: the
+same card as a memory's (`M003` and the name), like the VFO on the main screen ([section 44](reverse-engineering.md#44-the-am-fm-and-ssb-radio-memories-like-the-channels-v173-and-v174)). Screen B kept
+its size.
+
+- `BJ8300_BANK.anc` of v177 with the V4.1T name (outside `firmware/releases/`): sha256 `39e9ee97b7497e32665e023e04591563f580b1f9b45f20e461153e1346dc2ace`.
+
+Tested on the PC: the build ("tudo certo", the stack the same as stock and the image the same size), the firmware tests
+and the remote drawing's (100 screens equal to the preview, pixel by pixel).
+
+## v176 — Nov 20 — the radio menu in two folders and a DELETE that deletes (not tested on the radio)
+
+Testing v175, the owner found the radio menu jumbled and saw DELETE clear only the name. Now
+([section 44](reverse-engineering.md#44-the-am-fm-and-ssb-radio-memories-like-the-channels-v173-and-v174)):
+
+- **Two folders**, as in the main menu: `RADIO FM` (or the current band) with the settings (MODE and, depending on the
+  band, BAND, STEP, BW, LNA and BFO) and `CH MEMORY` with NAME, DELETE and SAVE. ▲▼ switch folders, OK enters and EXIT
+  goes back.
+- **DELETE deletes the memory.** Up to v175 it stayed in the list, unnamed and with frequency 0: the stock recount never
+  clears a memory's bit.
+- **NAME shows the name of the memory in use** right below it, without opening, like CH NAME.
+- **Changing MODE with the menu open.** From the code, in v174 and v175 it took the menu to a table that no longer
+  existed, and EXIT from the radio menu took the main menu exit path; the settings tables are back at the stock
+  addresses, where the firmware looks for them.
+- **Browsing the memories** already existed: on the radio screen, MENU held switches between the frequency and the
+  memories, like VFO/MR on the main screen, and the arrows step through the saved ones (mapped, not tested).
+- v176 `BJ8300_BANK.anc` (outside `firmware/releases/`): sha256 `53b96fefd5136bf6945903dcf80fd1f239dccc3c4cbb53cfc9d36faf13d30614`
+
+Tested on the PC: the build ("tudo certo", the stack equal to the stock one and the image of the same size), the
+firmware tests (`teste_rx` now emulates the recount as it really is: without the fix, DELETE and the following SAVE
+fail), the tables read back from the image and the entry disassembled. On the radio, not yet.
+
+## v175 — Nov 20 — the held arrow in the spectrum (not tested on the radio)
+
+Holding an arrow in the spectrum, the radio beeped several times a second and the threshold line stayed put: it only
+moved with short presses. On the UV-17L it moves. Now the held arrow counts as the arrow pressed ten times a second,
+from 1.5 s on: the line goes up or down 2 each time, without a beep, and, stopped on a signal, the down arrow carries
+on with the sweep, like a press ([section 11](reverse-engineering.md#11-spectrum)). From the bottom to the top, about
+5.5 s.
+
+- The short press is as before, with the beep.
+- To fit, four tables (the spectrum step ones and the RX GAIN one) moved within the image, with no change in use.
+- v175 `BJ8300_BANK.anc` (outside `firmware/releases/`): sha256 `126af61ad415c5d5c07f2132bac7d96a1a7ab1dab01b234ee96241e25f78a7a4`
+
+Tested on the PC: the build ("tudo certo", the image of the same size) and the firmware tests, and the generated code
+checked against the stock arrow cases. On the radio, not yet.
+
 ## v173 and v174 — Nov 20 — the AM, FM and SSB radio memories like the channels (not tested on the radio)
 
 The radio menu was confusing: the memory item (`FMMEMCH`, `AMMEMCH`, `SSBMEMCH`) stored, but did not delete or name

@@ -472,8 +472,12 @@ for nome_app, binario in (('de fabrica', app_velho), ('novo', app)):
                 excecoes_c += 1
             elif onde == montar.TABELA_SONS_BASE and v == montar.SONS:   # v144: a leitura da tabela, so das entradas vivas
                 excecoes_c += 1
-            # v174: o motor de fabrica acha a tabela do radio, que mora no codigo morto do desenho do radio
-            elif binario is app and onde in {s_ + 2 for s_, _ in montar.RADIO_TABELA_EM} and v == montar.S['radio_fm_am']:
+            # v174: a entrada do menu do radio acha a tabela dele, que mora no codigo morto do desenho do radio (v176: a
+            # das duas pastas)
+            elif binario is app and onde in {s_ + 2 for s_, _ in montar.RADIO_TABELA_EM} and v == montar.S['radio_pastas']:
+                excecoes_c += 1
+            # v176: o OK de fabrica segue apontando para a tabela de FM e AM, onde agora moram os ajustes do menu do radio
+            elif onde in {s_ + 2 for s_ in montar.RADIO_AJUSTES_EM} and v == montar.S['radio_ajustes']:
                 excecoes_c += 1
             elif binario is app_velho and star.get(onde) == bytes(binario[o:o + 4]):
                 excecoes_c += 1
@@ -730,7 +734,8 @@ if not ok:
 # 5. nada escrito fora dos trechos previstos - e nada em area protegida
 previsto = [(montar.PONTEIRO_EM, montar.PONTEIRO_EM + len(montar.PONTEIRO_ANTES) - 1, 'ponteiro da tabela'),
             *[(s_, s_ + 5, 'menu do radio: a tabela') for s_, _ in montar.RADIO_TABELA_EM],
-            *[(s_, s_ + 3, 'menu do radio: a distancia ate a do SSB') for s_, _ in montar.RADIO_SSB_EM],
+            *[(s_, s_ + 3, 'menu do radio: o + 0 do SSB') for s_, _ in montar.RADIO_SSB_EM],
+            (montar.RADIO_CONTA_EM[0], montar.RADIO_CONTA_EM[0] + 3, 'menu do radio: a contagem das pastas'),
             *[(s_, s_ + 1, 'menu do radio: a contagem') for s_, _, _, _ in montar.RADIO_CONTA],
             (montar.CONTAGEM_EM, montar.CONTAGEM_EM + len(montar.CONTAGEM_ANTES) - 1, 'contagem')]
 previsto += [(e, e + len(v), f'texto {v}') for e, v, _ in montar.TEXTOS]
@@ -797,7 +802,8 @@ if montar.ESPECTRO_TECLAS:
                                   ('ESP_CENTRO', 0x01E4AA68, 8), ('ESP_FIM', 0x01E4AA68, 12),
                                   ('ESP_INICIO', 0x01E4AA68, 16), ('ALTURAS', 0x01E4AD8E, 3739),
                                   ('CFG_PONTOS', 0x01E4A9C2, 4), ('CFG_PASSO', 0x01E4A99C, 8),
-                                  ('CFG_FILTRO', 0x01E4A99C, 16), ('ESP_PEDACO', 0x01E4B422, 23)):
+                                  ('CFG_FILTRO', 0x01E4A99C, 16), ('ESP_PEDACO', 0x01E4B422, 23),
+                                  ('CFG_LINHA', 0x01E4B974, 21), ('ESP_LINHA', 0x01E4B94A, 0)):
         no_c, no_firmware = define(nome), imediato(instrucao) + soma
         ok = no_c == no_firmware
         print(f'4f. {nome} = {no_c:#x}, o firmware usa {no_firmware:#x} ({instrucao:#x} + {soma}): '
@@ -1183,8 +1189,9 @@ radio_ram = [
     ('DIGITA_MODO', imediato(0x01E49094) + imediato16(0x01E4909C)),
     ('EDITOR_MODO', imediato(0x01E48728) + imediato16(0x01E48724)),
     # v56: a tabela do menu do radio de FM e AM, que a entrada dele carrega (0x01E49026); a de SSB e CW
-    # e ela + 532 (0x01E4902C), e a saida as compara (0x01E4D552, 0x01E4D55C: r6 + 5640 e r6 + 6172)
-    ('RADIO_FM_AM', imediato(0x01E49026)),
+    # e ela + 532 (0x01E4902C), e a saida as compara (0x01E4D552, 0x01E4D55C: r6 + 5640 e r6 + 6172). Desde a v176 os
+    # ajustes da banda moram nelas (radio_ajustes, radio_ajustes_ssb, que o montar.py confere)
+    ('RADIO_TAB_AJUSTES', imediato(0x01E49026)),
     # v42: a dupla escuta, que o set do TDR e o WATCH mantem em 0 no SINGLE: o get do item TDR
     ('TDR', imediato(0x01E39570) + imediato16(0x01E3956C)),
     # v40, a conferencia dos ajustes do radio
@@ -1195,6 +1202,10 @@ radio_ram = [
     ('RADIO_LNA_SSB', imediato(0x01E3DCC8) + deslocamento(0x01E3DCCE)),
     # "r3 = r1 + 68" (0x01E3DB42) e "r3 = h[r3+4]" (0x01E3DB4E): o BFO do VFO e o LNA do AM + 4
     ('RADIO_BFO_VFO', imediato(0x01E3DA1E) + deslocamento(0x01E3DA6A) + 4),
+    # v176: as duas pastas e a CH MEMORY do menu do radio, onde o firmware montado as poe: a previa (e o Tempra Link, que
+    # desenha a tela com ela e recebe do radio o ponteiro da tabela aberta) as reconhece por esses enderecos
+    ('RADIO_TAB_PASTAS', montar.S['radio_pastas']),
+    ('RADIO_TAB_MEMORIAS', montar.S['radio_memorias']),
 ]
 errados = [f'{n} {define(n):#x} (o firmware le {a:#x})' for n, a in radio_ram if define(n) != a]
 print(f'4p. {len(radio_ram)} enderecos de RAM do radio refeitos dos bytes de fabrica: '

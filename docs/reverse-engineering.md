@@ -408,7 +408,7 @@ frequency) and when the sweep stops on a signal — not on every point.
 | 21 | **down arrow**: threshold − 2, down to the minimum |
 | 23 | toggles FM and AM (`[0x6ED4]`, registers `0x31`/`0x42`/`0x2A`/`0x2B`) |
 | 24 (#) | next number of points (`[0x6EC4]` + 1 mod 4); since v20, with 640 and 320 |
-| 20, 22 | nothing, just the beep |
+| 20, 22 | the held arrow (up and down): up to v174 nothing, just the beep; since v175, the arrow, without the beep |
 
 19 and 21 are the arrows in the main mode too: there they lead to the menu's `AVANCA` (19) and
 `RETROCEDE` (21). Every exit of the handler goes through the beep `0x01E38B4C` with 0 (keys with no
@@ -465,6 +465,23 @@ nothing stock points at them). The body writes the threshold's four bytes at `0x
 writes them, and goes on to `PARA_DW`; it only uses r0 and r1, which `PARA_DW` already clobbers. The default comes from
 the initial settings, `app.bin + 0x6AC0C + 0x6EC0` (the stretch the start-up copies to RAM): points 1 (80), step 4
 (25 kHz), FM, threshold −60, minimum −130 and maximum −20.
+
+**The held arrow (v175).** Holding an arrow in the spectrum, the BJ beeped several times a second and the line stayed
+put; on the UV-17L it moves. The key machine ([Holding EXIT, for real](#holding-exit-for-real-v72)) counts the turns of
+the pressed key in `b[0x14680]`: at 100 (1 s) it sends the long code and marks the key, so the release does not send the
+short press; at 150 it sets the count to 140, and every time it reaches 150 (from 1.5 s on, every 100 ms) it sends the
+repeat, which only the arrows have (`0x01E463C2`): raw code 3, the up arrow, becomes 20, and 4, the down arrow, 22.
+Their long code is 255, which does nothing. On the main screen 20 and 22 go to the arrow routines with 1 (`0x01E4B11C`
+and `0x01E4B17C`), which beep once, on the first repeat (marked in `b[0x14734]`, which the release clears); in the
+spectrum the `tbh` sent them to the case that only beeps (`0x01E4C49E`, beep 0). Since v175 the key hook treats them as
+the arrow, as on the UV-17L: the line moves 2 on each repeat, as in the arrow cases (`0x01E4C532` and `0x01E4C586`,
+redone in `linha_segurada`, in `.mortos37` (since v176, in `.mortos32`): the threshold, between the minimum and the maximum, and the line's height in
+`h[0x1464C]` through the stock routine `0x01E4A9F2`), and, stopped on a find, the down arrow resumes the sweep, like a
+press. It returns key 255 in case 20, which skips the beep: no repeat beeps, as in the UV-17L spectrum, which has no key
+beep. From the bottom to the top (−130 to −20) is 55 repeats, about 5.5 s, after holding for 1.5 s (on the UV the repeat
+starts at 1.1 s). To fit, the step and RX GAIN tables (`passo_de`, `filtro_de`, `passo_seguinte` and `agc_degraus`, 54
+B) moved from `.vozes` to `.mortos38` (since v176, `.mortos32`), leaving `.vozes` at 1054 of 1066 B. `conferir.py` (4f) takes both addresses from
+the stock instructions: the line's (`0x6ED5`, `0x01E4B974` + 21) and the height's (`0x1464C`, the r8 of `0x01E4B94A`).
 
 **10 kHz step, 320 and 640 points, speed and peak (v20).**
 
@@ -1293,7 +1310,7 @@ the hook zeroes the value before the engine, and EXIT still goes back to the ite
 stock tables, `0x01E61168` (FM and AM) or `0x01E6137C` (SSB and CW, 532 B further, `0x01E49026`), and
 the band's count comes from `0x01E3DE36` (FM 2, AM 5, SSB and CW 6). The memory item has `0x20` in
 its flags: the title is built by a function (`0x01E3D20E`, the band prefix plus `MEMCH`), and screen
-B builds it the same way. Digits count from 1, as in the main menu; OK and EXIT stay stock.
+B builds it the same way. Digits count from 1, as in the main menu; OK and EXIT stay stock. Since v176 it has two folders, like the main menu ([section 44](#44-the-am-fm-and-ssb-radio-memories-like-the-channels-v173-and-v174)).
 
 **The stack.** The folder window is drawn by the title send, at the bottom of the menu engine. With
 the window's two texts at 28 B each, the interface reached 744 B (v56), 4 above stock; they became 12
@@ -3522,8 +3539,9 @@ with nothing changing.
 
 Up to v172 the radio menu had the stock memory item (`FMMEMCH`, `AMMEMCH`, `SSBMEMCH`): it picked a number from 1 to 15
 and OK stored the current frequency there. It did not delete, did not name (only from the computer) and showed the stock
-names (`Modulation`, `Work Band`, `Frequency Step`). Since v174 the radio menu has the **NAME**, **DELETE** and **SAVE**
-of CH MEMORY, in items 2 to 4, with the same screens, keys and warnings, and the other items with short names:
+names (`Modulation`, `Work Band`, `Frequency Step`). In v174 and v175 the radio menu had the **NAME**, **DELETE** and
+**SAVE** of CH MEMORY, in items 2 to 4, with the same screens, keys and warnings, and the other items with short names
+(since v176, in two folders, as described further down):
 
 | Band | Items |
 |---|---|
@@ -3576,8 +3594,8 @@ SAVE warns `MEMORY FULL`. OK on NAME and SAVE opens the editor, with `FM 02`, `A
 **Storing.** SAVE is the stock MEMCH set (the current frequency and, in SSB, the width and the BFO, into memory
 `VALOR`, and the recount), the radio block store into the `0xB000` log (`0x01E438A6`, no arguments) and the name.
 DELETE is what the CHIRP driver does: frequency 0 (in SSB, the 5 B), the recount, the block store and the name as `FF`.
-With no name in the editor, the memory stays unnamed (the radio screen shows `NO STATION NAME`), not `CH 101` as for a
-channel. The block store uses 324 B of stack: `save_grava` reaches 640 B at the call site, and the worst menu set is
+With no name in the editor, the memory stays unnamed (the radio screen shows `NO NAME` next to the number), not
+`CH 101` as for a channel. The block store uses 324 B of stack: `save_grava` reaches 640 B at the call site, and the worst menu set is
 still `morse_rx_grava`, at 728 of 740.
 
 **The names** live where the CHIRP driver and Tempra Link write them: in sector `0xC000`, at `0xC010` (FM), `0xC110`
@@ -3595,6 +3613,67 @@ title by function (flag `0x20`) is gone.
 208, `.mortos35` 264 of 264, `.mortos36` 60 of 170, `.mortos37` and `.mortos38` empty (140 and 168), `.caminhos` 2906
 of 2944, `.reserva` 1498 of 1512, and the end of the image 3258 B, as before. To fit, `em_canal`, `na_lista`,
 `delete_grava`, `lista_inicio` and `resumo_texto` moved out of `.caminhos` into the freed bodies.
+
+**The two folders (v176).** On the radio, the owner found the menu jumbled and asked for the two pages of the main menu:
+the band settings in one folder and CH MEMORY in another. Since v176 the radio menu entry opens on choosing the folder,
+as the main one opens on choosing the group: `RADIO FM` (or `AM`, `LSB`, `USB`, `CW`, the current band), with the bar
+lit, `OK ▸` and its items in the body, and `CH MEMORY`. `▲▼` switch folders, the two dots at the bottom show which, OK
+enters and EXIT goes back to the folders and, from them, to the radio.
+
+| Folder | Items |
+|---|---|
+| RADIO FM | MODE |
+| RADIO AM | MODE, BAND, STEP, LNA |
+| RADIO LSB, USB and CW | MODE, STEP, BW, LNA, BFO |
+| CH MEMORY | NAME, DELETE, SAVE |
+
+- **The tables.** The settings ones (`radio_ajustes` and `radio_ajustes_ssb`, the stock items with the short name) live
+  exactly where the stock ones were (`0x01E61168` and `0x01E6137C`; `.mortos37` and `.mortos38` hold only them, which
+  `montar.py` checks), because the firmware looks for them there in four places: the MODE set (`0x01E3DF26`: `r4 + 4345`
+  and `r4 + 4877`, with `r4 = 0x01E6006F`), OK (`0x01E49A3C` and `+532`), EXIT (`0x01E4D552`: `r6 + 5640` and `+6172`)
+  and the menu exit timer (`0x01E46B34`, the same ones). The two folders (`radio_pastas`, list items with no get or set,
+  like the main menu groups) and CH MEMORY (`radio_memorias`) are in `.mortos31`, at `0x01E449C0` and `0x01E449F8`, the
+  addresses by which the preview and Tempra Link recognise them (`conferir.py`, 4p, compares).
+- **The entry** (`0x01E49000`) only has the table (`0x01E49026`, the folders), the SSB `+532` (`0x01E4902C`, `+0`) and
+  the count (the call to `0x01E3DE36` at `0x01E49054` becomes `r0 = 2`) changed. The per-band count, which now only the
+  MODE set uses, becomes 1, 4 and 5, without MEMCH.
+- **What v174 and v175 got wrong** (mapped in the disassembly, not seen on the radio): the MODE set rewrites the open
+  menu's table and count with the stock table of the new band (`0x01E3DF38`). In them the stock table was no longer the
+  menu's, and its memory item pointed to routines that had become our code (`.mortos36`); in v175 the table itself had
+  become code and data. And the menu exit only goes back to the radio with one of the two stock tables open
+  (`0x01E4D556`, `0x01E46B38`); with ours, it took the main menu exit path (`0x01E4D566`). In v176 the settings are at
+  the stock addresses; in the folders, EXIT sets the settings table before leaving (`b_menu_sai`), and a new detour does
+  the same on the exit timer, in the folders and in CH MEMORY (`desvio_menu_tempo`, at `0x01E46B2C`, whose hook always
+  returns 0).
+- **The hooks** are the main menu's: OK in the folders opens the folder (`gancho_menu_ok`, with `radio_pasta`), EXIT
+  inside one goes back to the folders, and EXIT while editing an item closes only the item (`b_menu_um`: the FM settings
+  folder has a single item, and with one item the firmware would close the whole menu).
+- **NAME** shows the memory in use in the "L" (`01 - NEWS`), like CH NAME; DELETE and SAVE do not.
+
+**The DELETE that did not delete (v176).** On the radio the deleted memory stayed in the list, unnamed and showing `0`
+(the zeroed frequency). The stock recount (`0x01E3D2B0`) only sets the bits of valid memories (`0x01E3D2EE`,
+`0x01E3D36C` and `0x01E3D3DE`) and never clears them, because at power-up the RAM starts zeroed. `radio_apaga` now
+zeroes the band's bitmap (FM `0x14CAA`, AM `0x14CAF`, SSB `0x14CB5`, 2 B, what `0x01E3D1A0` reads) before recounting.
+The `teste_rx.h` emulation rebuilt the whole bitmap, which is why the test missed it: it now only sets bits, like the
+stock one, and without the fix the test fails on DELETE, on the following SAVE and on SSB.
+
+**Browsing the memories** already exists in the stock firmware, and it is the same gesture as VFO/MR on the main screen,
+MENU held (code 31, `0x01E4CE56`): on the radio screen MENU held (`0x01E4C8CA`) switches between the frequency and the
+band's memories (`b[0x129F9]`), if any is saved, and the arrows step only through the saved ones (`0x01E49184`). Mapped
+in the disassembly, not tested on the radio.
+
+**The VFO label (v177).** Off the memories, the name card showed `NO STATION NAME` with no label, and on the radio the
+owner found it looked like a station with no name. Since v177 it shows the `VFO` label in place of the memory number
+and `FREQUENCY MODE` beside it (in `radio_cena`, in `telas.c`, by `b[0x129F9]`), like the VFO on the main screen; on a
+memory, the number (`M003`) and the name, or `NO NAME`. Screen B kept its size (38858 B), and Tempra Link's remote
+control drawing, which is the same code, was rebuilt (`tela_pc.py`).
+
+**The space in v176.** `.mortos31` 328 of 360 B, `.mortos32` 302 of 316, `.mortos33` 202 of 216, `.mortos34` 206 of 208,
+`.mortos35` 256 of 264, `.mortos36` 146 of 170, `.mortos37` 112 of 140, `.mortos38` 140 of 168, `.livre` with 26 B free
+and the end of the image 3258 B. To fit, `radio_pasta` went to `.mortos35`, `radio_apaga` to `.mortos36`, and `cabem`
+and `menu_pasta` (screen code that only our code calls) to `.mortos32` and `.mortos34`; `linha_segurada` and the
+spectrum and RX GAIN tables (v175) moved from `.mortos37` and `.mortos38` to `.mortos32`. The hooks that the detours
+call stay in `.livre` (`conferir.py`, 2b).
 
 **Tempra Link and CHIRP** do not change: the radio block and the names are the same, and `0xDB000` is outside what they
 read.

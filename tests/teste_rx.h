@@ -258,14 +258,16 @@ static void GERADOR(unsigned x) { (void)x; }
 #define VALOR_TESTE (*(volatile u16 *)(ram_pc + 0x14BFC))
 static int existe_no_registro(const u8 *p) { return p[0] != 0xFF && p[3] != 0; }
 static void DELCH_FABRICA(void) { memset(flash_canais + (VALOR_TESTE << 5), 0xFF, 32); }
-/* O menu do radio (v174): os enderecos das tabelas e as rotinas de fabrica das memorias, como as mapeamos: a
- * recontagem (0x01E3D2B0) monta o mapa de bits das usadas, as de frequencia na faixa da banda, e 0x01E3D1A0 le o bit da
- * banda atual; o set do MEMCH (0x01E3D462) poe a frequencia de agora (no SSB os 5 B do VFO de HF: a frequencia, a
- * largura e o BFO) na memoria do VALOR e reconta; a gravacao do bloco (0x01E438A6) so se conta. O bloco fica em
- * 0x129D8: o FM em +2, o AM em +36 (2 B cada) e o SSB em +74 (5 B); os VFOs em +0, +34 e +69. */
-#define RADIO_FM_AM 0x01E449C0u
-#define RADIO_SSB   0x01E44B2Cu
-static unsigned radio_mapa[3], radio_salvas;
+/* O menu do radio (v174): o endereco da tabela da CH MEMORY (v176) e as rotinas de fabrica das memorias, como as
+ * mapeamos: a recontagem (0x01E3D2B0) liga, no mapa de bits de cada banda na RAM (FM 0x14CAA, AM 0x14CAF, SSB 0x14CB5,
+ * 2 B), o bit das usadas, as de frequencia na faixa da banda, e nunca desliga nenhum (a partida comeca com a RAM
+ * zerada); 0x01E3D1A0 le o bit da banda atual; o set do MEMCH (0x01E3D462) poe a frequencia de agora (no SSB os 5 B do
+ * VFO de HF: a frequencia, a largura e o BFO) na memoria do VALOR e reconta; a gravacao do bloco (0x01E438A6) so se
+ * conta. O bloco fica em 0x129D8: o FM em +2, o AM em +36 (2 B cada) e o SSB em +74 (5 B); os VFOs em +0, +34 e +69.
+ * Ate a v175 a imitacao refazia o mapa inteiro, e o DELETE que deixava a memoria apagada na lista passava aqui. */
+#define RADIO_MEMORIAS 0x01E449F8u
+static const unsigned radio_mapa_em[3] = {0x14CAA, 0x14CAF, 0x14CB5};
+static unsigned radio_salvas;
 static unsigned radio_banco_teste(void) { return ram_pc[0x12A1B] > 2 ? 2 : ram_pc[0x12A1B]; }
 static unsigned radio_valida(unsigned b, unsigned f)
 {
@@ -281,11 +283,11 @@ static void RADIO_RECONTA(void)
     unsigned b, n;
 
     for (b = 0; b < 3; b++)
-        for (radio_mapa[b] = n = 0; n < 15; n++)
+        for (n = 0; n < 15; n++)
             if (radio_valida(b, ram_pc[em[b] + passo[b] * n] | ram_pc[em[b] + passo[b] * n + 1] << 8))
-                radio_mapa[b] |= 1u << n;
+                ram_pc[radio_mapa_em[b] + (n >> 3)] |= (u8)(1u << (n & 7));
 }
-static unsigned RADIO_USADA(unsigned n) { return radio_mapa[radio_banco_teste()] >> n & 1; }
+static unsigned RADIO_USADA(unsigned n) { return ram_pc[radio_mapa_em[radio_banco_teste()] + (n >> 3)] >> (n & 7) & 1; }
 static void RADIO_MEMCH(void)
 {
     unsigned b = radio_banco_teste(), n = VALOR_TESTE;

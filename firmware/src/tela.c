@@ -1166,13 +1166,26 @@ void gancho_limite(unsigned x0, unsigned x1, unsigned y0, unsigned y1)
  * montar so escreve neles se achar exatamente isso. */
 const unsigned char menu_tabela[97 * 28] __attribute__((aligned(4))) = {0xFF};   /* v144: sem o MESSAGE e o SEND do Morse; v112: sem o MESSAGE e o SEND do APRS; v113: o RX GAIN; v167: o THRESHOLD */
 const unsigned char menu_textos[544] __attribute__((aligned(4))) = {0xFF};   /* o que o menu usa (v144) */
-/* v174: as tabelas do menu do radio, que o montar.py preenche dos itens de fabrica (RADIO_TABELAS): FM e AM numa (o FM
- * mostra os 4 primeiros, o AM os 7), SSB na outra. Ficam no codigo morto do desenho do radio (v173). */
-__attribute__((section(".mortos31.tela.rodata"), aligned(4))) const unsigned char radio_fm_am[7 * 28] = {0xFF};
-__attribute__((section(".mortos32.tela.rodata"), aligned(4))) const unsigned char radio_ssb[8 * 28] = {0xFF};
+/* v176: o menu do radio em duas pastas, como o principal: a dos ajustes da banda e a CH MEMORY. O montar.py preenche as
+ * tabelas dos itens de fabrica (RADIO_TABELAS): as duas pastas, que a entrada do menu do radio poe (0x01E49026); a CH
+ * MEMORY (NAME, DELETE e SAVE, listas no molde do MEMCH); e os ajustes de FM e AM (o FM mostra so o MODE, o AM os 4) e os
+ * de SSB e CW, estes no lugar exato das tabelas de fabrica (0x01E61168 e 0x01E6137C, o mortos37 e o mortos38 so com
+ * eles), onde o set do MODE (0x01E3DF26), o OK (0x01E49A3C), o EXIT (0x01E4D552) e o tempo de saida do menu (0x01E46B34)
+ * os procuram. As duas primeiras ficam no codigo morto do desenho do radio (v173). */
+__attribute__((section(".mortos31.tela.rodata"), aligned(4))) const unsigned char radio_pastas[2 * 28] = {0xFF};
+__attribute__((section(".mortos31.tela.rodata"), aligned(4))) const unsigned char radio_memorias[3 * 28] = {0xFF};
+__attribute__((section(".mortos37.tela.rodata"), aligned(4))) const unsigned char radio_ajustes[4 * 28] = {0xFF};
+__attribute__((section(".mortos38.tela.rodata"), aligned(4))) const unsigned char radio_ajustes_ssb[5 * 28] = {0xFF};
 /* os nomes curtos dos itens de fabrica do menu do radio (eram Modulation, Work Band, Frequency Step, Bandwidth) */
 __attribute__((section(".mortos33.tela.rodata"))) const char radio_nome_mode[] = "MODE", radio_nome_band[] = "BAND",
     radio_nome_step[] = "STEP", radio_nome_bw[] = "BW", radio_nome_lna[] = "LNA", radio_nome_bfo[] = "BFO";
+/* os nomes das duas pastas e as opcoes delas: o motor monta as linhas com elas, que a tela B nao mostra nesse nivel (o
+ * MODE na dos ajustes; o NAME, o DELETE e o SAVE na CH MEMORY) */
+extern const char titulo_nome[], titulo_apaga[], titulo_salva[];
+__attribute__((section(".mortos31.tela.rodata"))) const char radio_nome_radio[] = "RADIO",
+    radio_nome_memoria[] = "CH MEMORY";
+__attribute__((section(".mortos31.tela.rodata"))) const char *const radio_opcoes[4] = {radio_nome_mode, titulo_nome,
+                                                                                       titulo_apaga, titulo_salva};
 
 /* ---------- os grupos do menu (v53): a entrada, o OK, o EXIT e o numero digitado ----------
  * O mapa do motor de menus esta no telas.c, junto do desenho. O que muda o nivel faz o mesmo que as
@@ -1212,7 +1225,7 @@ u32 menu_abre(void)
 {
     unsigned n = menu_nivel();
 
-    if (n != 0 && n < RADIO)
+    if (n != 0 && n < RADIO_PASTAS)
         MENU_NUMERO = n - 1;
     return MENU_BASE;
 }
@@ -1267,7 +1280,7 @@ de_novo:
             return MOTOR_MENU();
         }
     }
-    if (n >= RADIO || MENU_TIPO != 8) {   /* o radio e os menus rapidos: o OK de fabrica */
+    if (n >= RADIO || MENU_TIPO != 8) {   /* os itens do radio e os menus rapidos: o OK de fabrica */
         if (marcas_do_item() & MARCA_DIRETO)
             MENU_EDITANDO = 1;            /* v151: o MESSAGES entra num clique, como no UV-17L: o set nao usa o que a abertura faz */
         return OK_MENU();
@@ -1286,27 +1299,52 @@ de_novo:
 
 u32 gancho_menu_ok(void)
 {
-    unsigned g = MENU_NUMERO, n = menu_nivel();
+    unsigned g = MENU_NUMERO, n = menu_nivel(), k;
+    u32 t;
 
-    if (n == 0) {
+    if (n == 0 || n == RADIO_PASTAS) {   /* v176: as duas do radio abrem como as do principal */
         TEMPO_MENU();
-        menu_vai(MENU_BASE + menu_inicio(g) * TAM_ITEM, MENU_ITENS(g), 0);
+        if (n)
+            t = radio_pasta(g, &k);
+        else {
+            t = MENU_BASE + menu_inicio(g) * TAM_ITEM;
+            k = MENU_ITENS(g);
+        }
+        menu_vai(t, k, 0);
         return MOTOR_MENU();
     }
     return menu_ok_item();
 }
 
+/* v176: o menu do radio fecha de volta ao radio (0x01E4D556, 0x01E46B38) so com uma das tabelas de fabrica aberta, os
+ * ajustes de FM e AM ou os de SSB, que moram la: nas pastas e na CH MEMORY ele cairia na saida do menu principal
+ * (0x01E4D566, 0x01E46B44). No tempo de saida do menu (0x01E46B2C, "r0 = 349", antes da comparacao; desvio_menu_tempo)
+ * e no EXIT das pastas, a tabela vira a dos ajustes. Devolve sempre 0: o desvio refaz a instrucao e segue. */
+u32 b_menu_tempo(void)
+{
+    unsigned n = menu_nivel();
+
+    if (n == RADIO_PASTAS || n == RADIO_MEM)
+        MENU_TABELA = RADIO_TAB_AJUSTES;
+    return 0;
+}
+
 /* No caminho do EXIT fora da edicao (0x01E4D54A, que fecharia o menu; desvio_menu_sai): dentro de um
- * grupo, volta aos grupos, nele. Devolve 1 quando voltou - o desvio segue para o bipe do EXIT
- * (0x01E4D59A) - ou 0, e o menu fecha como antes (o do radio volta ao radio, 0x01E4D556). */
+ * grupo, volta aos grupos, nele (v176: no radio, as duas pastas). Devolve 1 quando voltou - o desvio segue para o bipe
+ * do EXIT (0x01E4D59A) - ou 0, e o menu fecha como antes (o do radio volta ao radio, 0x01E4D556). */
 u32 b_menu_sai(void)
 {
     unsigned n = menu_nivel();
 
-    if (n == 0 || n >= RADIO)
+    if (n == RADIO_PASTAS)
+        return b_menu_tempo();
+    if (n == 0 || n == FORA)
         return 0;
     TEMPO_MENU();
-    menu_vai(MENU_BASE, MENU_GRUPOS, n - 1);
+    if (n >= RADIO)
+        menu_vai(RADIO_TAB_PASTAS, 2, n == RADIO_MEM);
+    else
+        menu_vai(MENU_BASE, MENU_GRUPOS, n - 1);
     MOTOR_MENU();
     return 1;
 }
@@ -1319,7 +1357,8 @@ u32 b_menu_um(void)
 {
     unsigned n = menu_nivel();
 
-    return (n != 0 && n < RADIO) || na_lista_aberta();   /* v140: a lista segue aberta, no menu rapido tambem */
+    /* v140: a lista segue aberta, no menu rapido tambem; v176: nos itens do radio tambem (os ajustes do FM sao so o MODE) */
+    return (n != 0 && n != RADIO_PASTAS && n != FORA) || na_lista_aberta();
 }
 
 /* No EXIT num item de texto (tipo 7), antes de apagar a letra atras do cursor (0x01E4D48A, desvio_exit_apaga): o
@@ -2132,6 +2171,9 @@ DESVIO(desvio_editor_quadro, b_editor_quadro, 0x01E48660, "0x7e, 0x04, 0x29, 0x1
 /* O EXIT fora da edicao, no meio da interface: "r0 = 349" (0x01E4D54A) comeca a saida do menu; voltar
  * aos grupos segue para o bipe do EXIT (0x01E4D59A), onde a saida de fabrica tambem termina. */
 DESVIO_MEIO(desvio_menu_sai, b_menu_sai, 0x01E4D54E, 0x01E4D59A, "0x40, 0xe0, 0x5d, 0x01");
+/* v176: o menu fechando pelo tempo: "r0 = 349" (0x01E46B2C) le a tabela para compara-la com as do radio de fabrica. O
+ * gancho devolve sempre 0, e o "feito" e a propria volta. */
+DESVIO_MEIO(desvio_menu_tempo, b_menu_tempo, 0x01E46B30, 0x01E46B30, "0x40, 0xe0, 0x5d, 0x01");
 /* O OK editando, depois do set: "r0 = 3303" (0x01E49A86) comeca o fechamento da edicao; nos itens de
  * marcar varios segue para o redesenho e a volta (0x01E49C7C). */
 DESVIO_MEIO(desvio_menu_marca, b_menu_marca, 0x01E49A8A, 0x01E49C7C, "0x40, 0xe0, 0xe7, 0x0c");

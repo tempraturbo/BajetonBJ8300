@@ -111,14 +111,18 @@ static unsigned copia_ram(char *s, u32 a, unsigned n)
  *
  * O menu do radio (v56) e o mesmo motor, no modo de menu, com uma de duas tabelas de fabrica (a
  * entrada, 0x01E49000: FM e AM numa, SSB e CW na outra, 532 B adiante) e quantos itens a banda tem
- * (0x01E3DE36: FM 2, AM 5, SSB e CW 6). Ele fica numa pasta so, sem grupos. */
+ * (0x01E3DE36: FM 2, AM 5, SSB e CW 6). Desde a v176 ele tem duas pastas, como o principal: a entrada poe a
+ * tabela delas (radio_pastas, 2 itens), a primeira abre os ajustes da banda (as tabelas nos enderecos de fabrica, com
+ * a contagem 1, 4 e 5) e a segunda a CH MEMORY do radio (NAME, DELETE e SAVE). */
 #define MENU_TABELA       RAM(u32, 0x00014BF4)
 #define MENU_CONTA        RAM(u8, 0x00014BF8)
 #define MENU_ITEM         RAM(u16, 0x00014BFC)   /* o item de novo, fora da edicao (as setas, 0x01E49F78) */
 #define MENU_DIGITADO     RAM(u16, 0x00014BFE)   /* o numero digitado (0x01E4A2CE) */
 #define MENU_TEMPO_DIGITO RAM(u8, 0x00014C0C)    /* 15 a cada digito, e o tique o desce (0x01E4A326) */
 #define TAM_ITEM          28
-#define RADIO             0xFE                   /* menu_nivel(): o menu do radio (v56) */
+#define RADIO_PASTAS      0xFC                   /* menu_nivel(): as duas pastas do menu do radio (v176) */
+#define RADIO             0xFD                   /* menu_nivel(): os ajustes da banda, no menu do radio (v56) */
+#define RADIO_MEM         0xFE                   /* menu_nivel(): a CH MEMORY do radio (v176) */
 #define FORA              0xFF                   /* menu_nivel(): uma tabela que nao e a nossa (os rapidos) */
 #define MARCA_SEM_VALOR   1                      /* as marcas de cada item (v55, montar.py MENU_MARCAS) */
 #define MARCA_DIRETO      128                    /* v151: o OK ja executa */
@@ -130,14 +134,20 @@ static unsigned copia_ram(char *s, u32 a, unsigned n)
 #define MARCA_CANAL       64                     /* v141: so vale no canal, e no VFO abre com o aviso */
 #define MARCAS_AVISO      (MARCA_LISTA | MARCA_VFO | MARCA_CANAL)
 #ifdef PREVIA
-#define RADIO_FM_AM       0x01E61168u            /* as tabelas de fabrica do menu do radio (0x01E49026) */
-#define RADIO_SSB         (RADIO_FM_AM + 532)
+#define RADIO_TAB_AJUSTES 0x01E61168u            /* as tabelas de fabrica do menu do radio (0x01E49026) */
+#define RADIO_TAB_AJUSTES_SSB (RADIO_TAB_AJUSTES + 532)
+#define RADIO_TAB_PASTAS  0x01E449C0u            /* onde o firmware as poe (o conferir.py, 4p): o Tempra Link as */
+#define RADIO_TAB_MEMORIAS 0x01E449F8u           /* reconhece pelo ponteiro da tabela que o radio manda */
 #else
-/* v174: as nossas (tela.c), que o montar.py preenche: MODE, NAME, DELETE, SAVE e o resto de cada banda */
-extern const unsigned char radio_fm_am[], radio_ssb[];
-#define RADIO_FM_AM       ((u32)radio_fm_am)
-#define RADIO_SSB         ((u32)radio_ssb)
+/* v176: as nossas (tela.c), que o montar.py preenche: as duas pastas, a CH MEMORY e os ajustes de cada banda, estes
+ * nos enderecos das de fabrica */
+extern const unsigned char radio_pastas[], radio_memorias[], radio_ajustes[], radio_ajustes_ssb[];
+#define RADIO_TAB_AJUSTES ((u32)radio_ajustes)
+#define RADIO_TAB_AJUSTES_SSB ((u32)radio_ajustes_ssb)
+#define RADIO_TAB_PASTAS  ((u32)radio_pastas)
+#define RADIO_TAB_MEMORIAS ((u32)radio_memorias)
 #endif
+FIRMWARE(CONTA_RADIO, 0x01E3DE36); unsigned CONTA_RADIO(void);   /* os itens dos ajustes da banda: 1, 4 e 5 (v176) */
 
 #ifdef PREVIA
 unsigned previa_menu_grupos(void);
@@ -186,8 +196,8 @@ static unsigned menu_inicio(unsigned g)
     return p;
 }
 
-/* 0 nos grupos, g + 1 dentro do grupo g, RADIO no menu do radio, FORA em outra tabela (os menus
- * rapidos, que ficam como os de fabrica). */
+/* 0 nos grupos, g + 1 dentro do grupo g; no menu do radio, RADIO_PASTAS, RADIO (os ajustes) ou RADIO_MEM; FORA em
+ * outra tabela (os menus rapidos, que ficam como os de fabrica). */
 static unsigned menu_nivel(void)
 {
     u32 t = MENU_TABELA;
@@ -195,8 +205,12 @@ static unsigned menu_nivel(void)
 
     if (t == MENU_BASE)
         return 0;
-    if (t == RADIO_FM_AM || t == RADIO_SSB)
+    if (t == RADIO_TAB_PASTAS)
+        return RADIO_PASTAS;
+    if (t == RADIO_TAB_AJUSTES || t == RADIO_TAB_AJUSTES_SSB)
         return RADIO;
+    if (t == RADIO_TAB_MEMORIAS)
+        return RADIO_MEM;
     for (g = 0; g < n; g++) {
         if (t == MENU_BASE + p * TAM_ITEM)
             return g + 1;
@@ -215,9 +229,9 @@ unsigned marcas_do_item(void)
 
     if (MENU_TABELA == TABELA_RAPIDA)
         return MARCA_LISTA | MARCA_NOMEIA;
-    if (n == RADIO)                    /* v174: NAME, DELETE e SAVE (itens 1 a 3), as marcas dos do CH MEMORY */
-        return MENU_NUMERO - 1u < 3 ? MARCA_LISTA | (MENU_NUMERO == 2 ? MARCA_VARIOS : MARCA_NOMEIA) : 0;
-    return n == 0 || n >= RADIO ? 0 : MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO);
+    if (n == RADIO_MEM)                /* v174: NAME, DELETE e SAVE, as marcas dos do CH MEMORY */
+        return MARCA_LISTA | (MENU_NUMERO == 1 ? MARCA_VARIOS : MARCA_NOMEIA);
+    return n == 0 || n >= RADIO_PASTAS ? 0 : MENU_MARCAS((MENU_TABELA - MENU_BASE) / TAM_ITEM + MENU_NUMERO);
 }
 
 /* Uma lista aberta, ou o aviso no lugar de um item que so vale num modo: as setas e o EXIT sao os das listas. */
@@ -230,7 +244,8 @@ static unsigned na_lista_aberta(void)
 
 /* A janela de pasta (v55): escolhendo o grupo, e escolhendo o item dentro dele ou no menu do radio -
  * tudo menos o item aberto (editando) e as tabelas que nao sao as nossas. */
-static unsigned menu_pasta(void)
+/* v176: no codigo morto do desenho do radio, que so o nosso codigo chama (o .livre acabou) */
+__attribute__((section(".mortos34.tela.text"), noinline)) static unsigned menu_pasta(void)
 {
     unsigned n = menu_nivel();
 
@@ -294,7 +309,7 @@ static void texto_menu(unsigned x, unsigned y, const char *s, unsigned largura_m
 }
 
 /* Quantas letras do comeco de s cabem nos 140 px do cartao, no tamanho e. */
-static unsigned cabem(const char *s, unsigned e)
+__attribute__((section(".mortos32.tela.text"), noinline)) static unsigned cabem(const char *s, unsigned e)
 {
     unsigned k = 0, l = 0;
 
@@ -390,7 +405,7 @@ SEPARADA static void menu_cena(const struct menu_b *m)
                 numero(s, m->numero, 2);
             else {
                 x = texto(4, TOPO_MENU + 5, ICONE_PASTA, 1, COR_TEXTO_AMBAR) + 2;
-                numero(m->nivel == RADIO ? s : junta(numero(s, m->nivel, 1), "-"), m->numero + 1, 1);
+                numero(m->nivel >= RADIO ? s : junta(numero(s, m->nivel, 1), "-"), m->numero + 1, 1);
             }
             x = etiqueta(x, TOPO_MENU + 3, s, COR_CHIP_RX, COR_TEXTO_RX, 0);
             copia_ram(s, MENU_TITULO, 26);
@@ -496,6 +511,18 @@ static unsigned radio_banda(void)
     return b > 4 ? 0 : b;
 }
 
+/* v176: a tabela da pasta g do menu do radio e quantos itens ela tem: 0, os ajustes da banda (a tabela de FM e AM ou a
+ * de SSB, como a entrada de fabrica escolhe, 0x01E49032); 1, a CH MEMORY. */
+__attribute__((section(".mortos35.tela.text"), noinline)) static u32 radio_pasta(unsigned g, unsigned *n)
+{
+    if (g) {
+        *n = 3;
+        return RADIO_TAB_MEMORIAS;
+    }
+    *n = CONTA_RADIO();
+    return RADIO_BANDA <= 1 ? RADIO_TAB_AJUSTES : RADIO_TAB_AJUSTES_SSB;
+}
+
 #define JANELA_Y      (ALTURA_ESTADO + 2)
 #define JANELA_CORPO  (JANELA_Y + 19)
 #define JANELA_FIM    126
@@ -505,16 +532,27 @@ static unsigned radio_banda(void)
 
 SEPARADA static void pasta_cena(const struct menu_b *m)
 {
-    unsigned radio = m->nivel == RADIO, escolhendo = m->nivel != 0, cursor = escolhendo ? m->numero : FORA;
-    unsigned g = radio ? 0 : escolhendo ? m->nivel - 1u : m->numero, total = radio ? 0 : MENU_GRUPOS;
-    u32 t = escolhendo ? MENU_TABELA : MENU_BASE + menu_inicio(g) * TAM_ITEM;
-    unsigned n = escolhendo ? MENU_CONTA : MENU_ITENS(g), valor = 0, linhas, inicio = 0, k, i, x, y;
-    char s[12], v[VALOR_MAX + 1];           /* s: numeros, "RADIO " e a banda, o nome da memoria do radio */
+    unsigned radio = m->nivel >= RADIO_PASTAS, escolhendo = m->nivel != 0 && m->nivel != RADIO_PASTAS;
+    unsigned cursor = escolhendo ? m->numero : FORA, total = radio ? 2 : MENU_GRUPOS;
+    unsigned g = radio && escolhendo ? m->nivel == RADIO_MEM : escolhendo ? m->nivel - 1u : m->numero;
+    unsigned n, valor = 0, linhas, inicio = 0, k, i, x, y;
+    char s[12], v[VALOR_MAX + 1];           /* s: numeros, "RADIO " e a banda */
     const char *modo = 0;                   /* v141: no "L" do que so vale num modo, qual */
+    u32 t;
 
-    if (escolhendo && (radio ? (ITEM_FLAGS(t, cursor) & 0x0F) != 4
+    if (escolhendo) {
+        t = MENU_TABELA;
+        n = MENU_CONTA;
+    } else if (radio)
+        t = radio_pasta(g, &n);             /* v176: as duas pastas do radio, como os grupos */
+    else {
+        t = MENU_BASE + menu_inicio(g) * TAM_ITEM;
+        n = MENU_ITENS(g);
+    }
+    /* sem "L": as acoes (na CH MEMORY do radio, o DELETE e o SAVE; o NAME mostra a memoria em uso, como o CH NAME) */
+    if (escolhendo && (radio ? m->nivel == RADIO || cursor == 0
                              : !(MENU_MARCAS((t - MENU_BASE) / TAM_ITEM + cursor) & MARCA_SEM_VALOR)))
-        valor = valor_do_cursor(v) != 0;   /* sem "L": as acoes (no radio, a memoria) */
+        valor = valor_do_cursor(v) != 0;
     if (valor && !radio) {
         k = MENU_MARCAS((t - MENU_BASE) / TAM_ITEM + cursor);
         modo = k & MARCA_VFO && em_canal() ? "VFO" : k & MARCA_CANAL && !em_canal() ? "CHANNEL" : 0;
@@ -527,9 +565,9 @@ SEPARADA static void pasta_cena(const struct menu_b *m)
     pinta(4, JANELA_Y + 1, 156, JANELA_CORPO - 1, escolhendo ? COR_ESTADO : COR_CHIP_AMBAR);
     pinta(4, JANELA_CORPO, 156, JANELA_FIM - 1, COR_ESTADO);
     texto(8, JANELA_Y + 3, ICONE_PASTA, 2, COR_TEXTO_AMBAR);
-    if (radio) {
+    if (radio) {                            /* "RADIO" e a banda, ou "CH MEMORY" */
         junta(junta(s, "RADIO "), bandas_radio[radio_banda()]);
-        texto_menu(27, JANELA_Y + 4, s, 100, COR_CINZA);
+        texto_menu(27, JANELA_Y + 4, g ? item_nome(RADIO_TAB_PASTAS, 1, s) : s, 100, escolhendo ? COR_CINZA : COR_BRANCO);
     } else {
         numero(s, g + 1, 1);
         x = texto(27, JANELA_Y + 5, s, MEDIA, COR_TEXTO_AMBAR) + 5;
@@ -761,20 +799,20 @@ SEPARADA static void radio_cena(unsigned item, unsigned mostra)
         }
     }
     /* o nome da memoria num cartao, com o numero dela numa etiqueta: em 2x, no medio ou em 1x, o
-     * maior que couber */
+     * maior que couber. Fora das memorias (v177), a etiqueta VFO e "FREQUENCY MODE", como o VFO da tela
+     * principal; ate a v176, "NO STATION NAME" sem etiqueta, que parecia uma estacao sem nome */
     if (NA_JANELA(68, 88)) {
-        unsigned x0 = 4, c = COR_CINZA, e;
+        unsigned x0, c = COR_CINZA, e;
 
         pinta(3, 68, 157, 86, COR_VERDE);
         pinta(4, 69, 156, 85, COR_CARTAO);
         radio_texto(s, R_MEMORIA);
-        if (s[0])
-            x0 = etiqueta(8, 72, s, COR_CHIP_RX, COR_TEXTO_RX, 0);
+        x0 = etiqueta(8, 72, s[0] ? s : "VFO", COR_CHIP_RX, COR_TEXTO_RX, 0);
         radio_texto(s, R_NOME);
         if (s[0])
             c = COR_BRANCO;
         else
-            junta(s, x0 > 4 ? "NO NAME" : "NO STATION NAME");
+            junta(s, RADIO_MEMORIAS == 1 ? "NO NAME" : "FREQUENCY MODE");
         l = 156 - x0 - 4;
         e = largura(s, 2) <= l ? 2 : largura(s, MEDIA) <= l ? MEDIA : 1;
         texto(x0 + (156 - x0 - largura(s, e)) / 2, e == 2 ? 71 : e == MEDIA ? 73 : 74, s, e, c);

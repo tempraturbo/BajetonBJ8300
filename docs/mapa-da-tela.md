@@ -497,8 +497,12 @@ primeiro 0 ou `0xFF` (o CHIRP completa o nome com `0xFF`), e não mais com o str
 | ajuste em edição (0 = a frequência) | `[0x14CD4]` | `0x01E4934A` |
 | zeros na frente do que se digita | `b[0x14A36]` | `0x01E490A0` |
 
+O cartão do nome mostra, numa memória, o número dela numa etiqueta (`M003`) e o nome, ou `NO NAME`; fora das
+memórias (`b[0x129F9]` diferente de 1), desde a v177, a etiqueta `VFO` e `FREQUENCY MODE` (até a v176,
+`NO STATION NAME`, sem etiqueta).
+
 A troca de modulação passa pelo menu do próprio rádio: as tabelas `0x01E61168` (FM e AM) e
-`0x01E6137C` (SSB) de fábrica (desde a v174 as nossas, `radio_fm_am` e `radio_ssb`, com o NAME, o DELETE e o SAVE;
+`0x01E6137C` (SSB) de fábrica (desde a v176 as nossas nos mesmos endereços, com os ajustes de cada banda, e as duas pastas e a CH MEMORY à parte;
 [seção 44](engenharia-reversa.md#44-as-memórias-do-rádio-de-am-fm-e-ssb-como-os-canais-v173-e-v174)), e o set do item
 Modulation (o MODE) é `0x01E3DE52`. Ele redesenha a tela de um VFO de
 fábrica e escreve "Radio Initialization / Please Wait..." antes de iniciar o chip
@@ -618,9 +622,9 @@ A geometria (`pasta_cena`, no `telas.c`):
 | a moldura | x 3..157, y 18..126, com a borda âmbar |
 | a barra de título | y 19..36: a pasta, o número e o nome do grupo (no rádio, `RADIO` e a banda). Escolhendo o grupo, ela fica acesa (âmbar escuro) com o `OK ▸` à direita; escolhendo o item, apaga |
 | o corpo | 6 linhas de 12 px a partir de y 40: o número em âmbar em x 9 e o nome em x 20. O item do cursor fica num cartão âmbar escuro (x 5..148), com a seta do OK em x 141 |
-| o "L" do valor | logo abaixo do item do cursor, em verde: o traço em x 13 e o valor a partir de x 21; o cartão do cursor o cobre também. Só escolhendo o item, e não nos de ação nem no item de memória do rádio |
+| o "L" do valor | logo abaixo do item do cursor, em verde: o traço em x 13 e o valor a partir de x 21; o cartão do cursor o cobre também. Só escolhendo o item, e não nos de ação nem no DELETE e no SAVE do rádio (o NAME mostra a memória em uso, v176) |
 | a rolagem | só com mais linhas que a janela: as setas (triângulos de 5 × 3) em x 150..155, a de cima em y 39 e a de baixo em y 105, cada uma só quando há o que rolar; entre elas o risco de 1 px em x 152 e a barra da posição de 3 px (x 151..154), com a altura proporcional ao que se vê |
-| os pontos | um por grupo, de 3 × 3 px a cada 7, centralizados em y 119..122, o do grupo aceso; no rádio não há |
+| os pontos | um por grupo, de 3 × 3 px a cada 7, centralizados em y 119..122, o do grupo aceso; no rádio, os dois das pastas (v176) |
 
 A lista rola para o cursor e a linha do valor ficarem à vista; escolhendo o grupo (sem cursor) ela
 mostra os primeiros itens (v57: na v56 a conta usava o 255 do "sem cursor", e o CHANNEL, o único
@@ -646,6 +650,6 @@ VERSION aberto não tem cursor.
 
 **Na prévia**, as cenas 40 a 42 são a escolha do grupo (a 41 é o CHANNEL), as 43 a 48 os itens de um
 grupo (o "L" com um valor e com um nome, a rolagem para baixo e para cima, um item de ação e o VERSION
-aberto) e as 49 a 52 o menu do rádio (o USB com a rolagem, a memória, o AM e um item aberto). A 47b e a
+aberto), a 49a e a 49b as duas pastas do rádio e as 49 a 52 os itens delas (os ajustes do USB, a CH MEMORY com o NAME no "L", os do AM e um item aberto). A 47b e a
 51b têm o cursor no 3º item (v58), e a 26b é a tensão com o 0 segurado (v52). Desde a v58 a prévia
 desenha o menu nas mesmas faixas do firmware.

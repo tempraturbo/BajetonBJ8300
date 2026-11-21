@@ -5,6 +5,54 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## v177 — 20/11 — a etiqueta VFO na tela do rádio
+
+Testando a v176, o dono achou que o `NO STATION NAME` da tela do rádio, fora das memórias, parecia uma estação sem
+nome. Das duas prévias, ele escolheu a etiqueta `VFO` no lugar do número da memória e `FREQUENCY MODE` ao lado: o mesmo
+cartão da memória (`M003` e o nome), como o VFO da tela principal ([seção 44](engenharia-reversa.md#44-as-memórias-do-rádio-de-am-fm-e-ssb-como-os-canais-v173-e-v174)). A tela B ficou do mesmo
+tamanho.
+
+- `BJ8300_BANK.anc` da v177 com o nome da V4.1T (fora de `firmware/releases/`): sha256 `39e9ee97b7497e32665e023e04591563f580b1f9b45f20e461153e1346dc2ace`.
+
+Testado no PC: o build ("tudo certo", a pilha igual à de fábrica e a imagem do mesmo tamanho), os testes do firmware e
+o do desenho do remoto (100 telas iguais à prévia, pixel por pixel).
+
+## v176 — 20/11 — o menu do rádio em duas pastas e o DELETE que apaga (sem teste no rádio)
+
+Testando a v175, o dono achou o menu do rádio misturado e viu o DELETE apagar só o nome. Agora
+([seção 44](engenharia-reversa.md#44-as-memórias-do-rádio-de-am-fm-e-ssb-como-os-canais-v173-e-v174)):
+
+- **Duas pastas**, como no menu principal: a `RADIO FM` (ou a banda de agora) com os ajustes (MODE e, conforme a banda,
+  BAND, STEP, BW, LNA e BFO) e a `CH MEMORY` com o NAME, o DELETE e o SAVE. ▲▼ trocam a pasta, o OK entra e o EXIT
+  volta.
+- **O DELETE apaga a memória.** Até a v175 ela seguia na lista, sem nome e com a frequência 0: a recontagem de fábrica
+  nunca desliga o bit de uma memória.
+- **O NAME mostra o nome da memória em uso** logo abaixo dele, sem abrir, como o CH NAME.
+- **A troca de MODE com o menu aberto.** Pelo código, na v174 e na v175 ela levava o menu a uma tabela que já não
+  existia, e o EXIT do menu do rádio seguia o caminho da saída do menu principal; as tabelas dos ajustes voltaram aos
+  endereços de fábrica, onde o firmware as procura.
+- **Navegar pelas memórias** já existia: na tela do rádio, o MENU segurado troca entre a frequência e as memórias, como o
+  VFO/MR da tela principal, e as setas andam pelas salvas (mapeado, não testado).
+- `BJ8300_BANK.anc` da v176 (fora de `firmware/releases/`): sha256 `53b96fefd5136bf6945903dcf80fd1f239dccc3c4cbb53cfc9d36faf13d30614`
+
+Testado no PC: o build ("tudo certo", a pilha igual à de fábrica e a imagem do mesmo tamanho), os testes do firmware (o
+`teste_rx` agora imita a recontagem como ela é: sem a correção, falham o DELETE e o SAVE seguinte), as tabelas lidas
+de volta da imagem e a entrada desmontada. No rádio, ainda não.
+
+## v175 — 20/11 — a seta segurada no espectro (sem teste no rádio)
+
+Segurando a seta no espectro, o rádio bipava várias vezes por segundo e a linha do limite ficava parada: só andava com
+toques curtos. No UV-17L ela anda. Agora a seta segurada vale como a seta tocada dez vezes por segundo, de 1,5 s em
+diante: a linha sobe ou desce 2 a cada vez, sem bipe, e, parada num sinal, a de baixo segue a busca, como o toque
+([seção 11](engenharia-reversa.md#11-espectro)). Do fundo ao topo, uns 5,5 s.
+
+- O toque curto continua como era, com o bipe.
+- Para caber, quatro tabelas (as do passo do espectro e a do RX GAIN) mudaram de lugar na imagem, sem mudar nada no uso.
+- `BJ8300_BANK.anc` da v175 (fora de `firmware/releases/`): sha256 `126af61ad415c5d5c07f2132bac7d96a1a7ab1dab01b234ee96241e25f78a7a4`
+
+Testado no PC: o build ("tudo certo", a imagem do mesmo tamanho) e os testes do firmware, e o código gerado conferido
+contra os casos das setas de fábrica. No rádio, ainda não.
+
 ## v173 e v174 — 20/11 — as memórias do rádio de AM, FM e SSB como os canais (sem teste no rádio)
 
 O menu do rádio era confuso: o item de memória (`FMMEMCH`, `AMMEMCH`, `SSBMEMCH`) salvava, mas não apagava nem dava

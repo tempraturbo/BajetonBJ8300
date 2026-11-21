@@ -109,6 +109,7 @@ FIRMWARE(ESPECTRO, 0x01E4AEAC);        void ESPECTRO(unsigned);          /* um p
 FIRMWARE(ALTURA, 0x01E4ACA0);          unsigned ALTURA(unsigned);        /* leitura crua -> 0..64 */
 FIRMWARE(FILTRO, 0x01E4A980);          void FILTRO(unsigned);            /* filtro do chip (reg 0x43) */
 FIRMWARE(JANELA_ESPECTRO, 0x01E4AA3C); void JANELA_ESPECTRO(u32);        /* centra: inicio, fim, passo, limite */
+FIRMWARE(LINHA_ALTURA, 0x01E4A9F2);    unsigned LINHA_ALTURA(int);       /* limite -> 0..64, entre o minimo e o maximo */
 FIRMWARE(MOSTRA_FREQ, 0x01E45D96);     void MOSTRA_FREQ(u32);            /* a frequencia grande do topo */
 FIRMWARE(ROTULOS_FREQ, 0x01E4AB2A);    void ROTULOS_FREQ(u32, u32);      /* as do comeco e do fim, embaixo */
 /* Roger: as duas rotinas que o laco do BEEP de fabrica usa (0x01E44644 e 0x01E4464A). */
@@ -200,6 +201,11 @@ void luz_aplica(void);                    /* o nivel do BRIGHTNESS na hora (v61,
 #define CFG_PONTOS     (*(volatile u32 *)0x00006EC4)         /* 28356: 0..3 = 160 >> n; nossos 4 = 640, 5 = 320 */
 #define CFG_PASSO      (*(volatile u32 *)0x00006EC8)         /* 28360: 0..4 os de fabrica; nosso 5 = 10 kHz */
 #define CFG_FILTRO     (*(volatile u32 *)0x00006ED0)         /* 28368: filtro do passo, para o FILTRO() */
+/* A linha do limite: limite, minimo e maximo, tres s32 sem alinhamento na unidade do medidor, que o firmware le e
+ * grava byte a byte (0x01E4C532), e a altura dela no grafico (o r8 do tratador de teclas, 0x01E4B94A). */
+#define CFG_LINHA      ((volatile u8 *)0x00006ED5)           /* 28373 */
+#define ESP_LINHA      (*(volatile u16 *)0x0001464C)         /* 83532: altura da linha, 0..64 */
+struct __attribute__((packed)) linha { int limite, minimo, maximo; };
 /* Roger (84867, offset 0x17 do bloco de ajustes, 0x9017 no cabo, 2 bits no CHIRP): 0 OFF, 1 BEEP,
  * 2 TONE1200 e, nosso, 3 = BEEP 2. A tabela do BEEP de fabrica: (f1, f2) do segundo tom e (f1, f2)
  * do primeiro, que o laco de 0x01E44638 le de tras para frente. */
@@ -609,8 +615,9 @@ void gancho_scan(void)
  * os seus 2 ou 4 sub-pontos no passo de verdade e fica com o maior. Qual sub-ponto esta sintonizado
  * sai da propria frequencia, entao nao precisa de memoria nova.
  *
- * Desde a v33 o codigo e as tabelas do espectro moram no espaco que era das vozes (ver bancos.ld),
- * e a area do fim da imagem fica para o resto. Nada daqui roda sem o modo de tela 20: todo caminho
+ * Desde a v33 o codigo do espectro mora no espaco que era das vozes (ver bancos.ld), e a area do fim
+ * da imagem fica para o resto; as tabelas dele, desde a v175, no mortos32, que so o nosso codigo le
+ * (o .vozes nao tinha espaco para a seta segurada). Nada daqui roda sem o modo de tela 20: todo caminho
  * do firmware ate estes ganchos passa pelo caso 20 do tratador de modos, pela entrada do espectro
  * (que grava o 20) ou pelo "se o modo nao for 20, pula" do laco principal, e nada do .text chama
  * para ca (secao 15 de docs/engenharia-reversa.md; o conferir.py confere as chamadas, 2b e 4g). */
@@ -623,9 +630,9 @@ void b_esp_coluna(unsigned x, unsigned topo, unsigned atual);
 
 #define PASSOS    6
 #define LARGURAS  6
-DADO_NAS_VOZES static const u16 passo_de[PASSOS] = {625, 833, 1250, 2000, 2500, 1000};   /* em 10 Hz */
-DADO_NAS_VOZES static const u8 filtro_de[PASSOS] = {2, 1, 1, 0, 0, 1};    /* os de fabrica (0x01E60460) + 10k = 8.33/12.5 */
-DADO_NAS_VOZES static const u8 passo_seguinte[PASSOS] = {1, 5, 3, 4, 0, 2};   /* 6.25 8.33 10 12.5 20 25 */
+DADO_NOS_MORTOS(32) static const u16 passo_de[PASSOS] = {625, 833, 1250, 2000, 2500, 1000};   /* em 10 Hz */
+DADO_NOS_MORTOS(32) static const u8 filtro_de[PASSOS] = {2, 1, 1, 0, 0, 1};    /* os de fabrica (0x01E60460) + 10k = 8.33/12.5 */
+DADO_NOS_MORTOS(32) static const u8 passo_seguinte[PASSOS] = {1, 5, 3, 4, 0, 2};   /* 6.25 8.33 10 12.5 20 25 */
 
 NAS_VOZES static unsigned cfg_pontos(void)
 {
@@ -798,6 +805,23 @@ NAS_VOZES static void reconfigura(void)
     ESPECTRO(0);
 }
 
+/* ---------- a seta segurada no espectro (v175) ----------
+ * O que os casos das setas fazem (0x01E4C532 e 0x01E4C586: o limite 2 acima ate o maximo ou 2 abaixo ate o minimo, e
+ * a altura da linha), sem o bipe que vem depois deles. Fica no codigo morto do desenho do radio (mortos32), que so o
+ * nosso codigo chama; ela so chama o firmware, nunca o .vozes. */
+NOS_MORTOS(32) __attribute__((noinline)) static void linha_segurada(unsigned tecla)
+{
+    struct linha *l = (struct linha *)CFG_LINHA;
+    int s = tecla == TECLA_CIMA ? 1 : -1;            /* com o sinal, descer ate o minimo e subir espelhado */
+    int v = s * l->limite, fim = s * (s > 0 ? l->maximo : l->minimo);
+
+    if (v >= fim)
+        return;
+    v = s * (v + 2 < fim ? v + 2 : fim);
+    l->limite = v;
+    ESP_LINHA = LINHA_ALTURA(v);
+}
+
 /* ---------- gancho das teclas do espectro ----------
  * Entra no lugar do "r1 = r0 - 16" com que o tratador de teclas do espectro (0x01E4BFBE) escolhe o
  * caso do tbh: recebe a tecla em r0 e devolve r0 = a tecla e r1 = o caso, num u64 (o clang poe a
@@ -808,19 +832,29 @@ NAS_VOZES static void reconfigura(void)
  *    v171 a de cima fazia o mesmo, e com a linha no fundo a busca parava em todo ponto: a seta so
  *    retomava, a busca parava de novo no ponto seguinte, e a linha nao subia mais (v172). A de cima e
  *    a de fabrica em todo estado: sobe o limite 2, e a busca retoma sozinha quando o sinal fica abaixo;
+ *  - a seta segurada (v175): a maquina de teclas (0x01E46280) manda, desde 1,5 s e a cada 100 ms, o 20
+ *    pela de cima e o 22 pela de baixo, que o tbh levava ao caso que so bipa. Elas valem como a seta,
+ *    como no UV-17L: a linha anda, e parada num achado a de baixo retoma. Sem bipe (tecla 255 no caso
+ *    20), como no espectro do UV-17L; a tela principal bipa uma vez, na primeira repeticao (0x01E4B140,
+ *    marcada em b[0x14734], que o solto zera), e nenhuma depois;
  *  - OK e # trocam passo e pontos pela nossa ordem, com os valores novos, e fazem o que o firmware
  *    faz em seguida; voltam como tecla 255 no caso 20, que pula o bipe - como as duas de fabrica.
  */
 NAS_VOZES unsigned long long gancho_tecla_espectro(unsigned tecla)
 {
-    unsigned caso = tecla - 16;
+    unsigned segurada = (tecla | 2) == TECLA_BAIXO + 1, caso;    /* 20 ou 22 */
 
+    tecla -= segurada;
+    caso = tecla - 16;
     if (tecla == TECLA_BAIXO && ESPECTRO_ESTADO == 2) {
         ESPECTRO_ESTADO = 0;
         AUDIO_DO_CHIP(0);
         PEDE_AMPLI(6);
         AMPLI(0);
         gancho_avanca();
+        caso = 20 - 16;
+    } else if (segurada) {
+        linha_segurada(tecla);
         caso = 20 - 16;
     } else if (tecla == TECLA_OK || tecla == TECLA_CERQUILHA) {
         if (tecla == TECLA_OK)
@@ -831,6 +865,8 @@ NAS_VOZES unsigned long long gancho_tecla_espectro(unsigned tecla)
         tecla = 255;
         caso = 20 - 16;
     }
+    if (segurada)
+        tecla = 255;
     return (unsigned long long)caso << 32 | tecla;
 }
 
@@ -1771,7 +1807,7 @@ __attribute__((noinline)) static void eq_grava(unsigned k)
 #define GANHO_MIN      0xA4
 DADO_NA_LIVRE const char titulo_rx_ganho[] = "RX GAIN";
 DADO_NA_LIVRE const char *const rx_ganho_opcoes[3] = {"MIN", "DEFAULT", "MAX"};
-DADO_NAS_VOZES static const u16 agc_degraus[3][5] = {   /* no .vozes desde a v128, pelo espaco */
+DADO_NOS_MORTOS(32) static const u16 agc_degraus[3][5] = {   /* no .vozes da v128 a v174, no mortos32 desde a v175 */
     {0x0108, 0x0109, 0x0169, 0x016B, 0x0008},   /* MIN: -79, -73, -58, -46 e -82 dB */
     {0x0318, 0x033A, 0x03DB, 0x03DF, 0x0210},   /* o 0x10 a 0x14 da partida: -57, -40, -17, -2 e -71 dB */
     {0x037A, 0x03FB, 0x03FD, 0x03FF, 0x0298}};  /* MAX: -30, -15, -6, 0 e -50 dB */
