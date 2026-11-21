@@ -19,6 +19,7 @@ com o nome da versão: `firmware/releases/BJ8300_BANK_v4.2T.anc`, sha256 `4489d0
 - **A documentação:** o README e a wiki passam à V4.2T, e a página das funções do rádio ganha o rádio de AM, FM e SSB: o
   modo frequência e o modo memória, a troca pelo MENU segurado, as duas pastas do menu e o SAVE, o DELETE e o NAME. No
   passo a passo da gravação, o README e a wiki dizem agora para aguardar o fim dela (uns 3 minutos, em média).
+  As fotos do manual do Tempra Link, que mostram a versão do firmware, passaram à V4.2T logo depois do lançamento.
 
 Testado no PC: o build ("tudo certo", a pilha igual à de fábrica e a imagem do mesmo tamanho), os testes do firmware, os
 do driver do CHIRP, os do desenho do remoto (100 telas iguais à prévia, pixel por pixel) e os do Tempra Link. Publicada

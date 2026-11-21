@@ -19,6 +19,7 @@ with the version name: `firmware/releases/BJ8300_BANK_v4.2T.anc`, sha256 `4489d0
 - **The documentation:** the README and the wiki move to V4.2T, and the radio features page gets the AM, FM and SSB
   radio: frequency mode and memory mode, switching with MENU held, the menu's two folders and SAVE, DELETE and NAME. In
   the flashing steps, the README and the wiki now say to wait for it to finish (about 3 minutes on average).
+  Tempra Link's manual pictures, which show the firmware version, moved to V4.2T right after the release.
 
 Tested on the PC: the build ("tudo certo", the stack the same as stock and the image the same size), the firmware tests,
 the CHIRP driver's, the remote drawing's (100 screens equal to the preview, pixel by pixel) and Tempra Link's. Released
