@@ -8,13 +8,13 @@
 
 ## 📁 Menu novo: tudo em pastas
 
-O menu de fábrica é uma fila de mais de 50 itens. Desde a V2.7T eles ficam em pastas por assunto (**17 na V4.1T**),
+O menu de fábrica é uma fila de mais de 50 itens. Desde a V2.7T eles ficam em pastas por assunto (**17 na V4.2T**),
 em ordem alfabética, numa janela que mostra o que tem dentro de cada uma antes de abrir.
 
 | | | |
 |:---:|:---:|:---:|
 | <img src="../imagens/tela-menu-pastas.png" alt="As pastas do menu" width="260"> | <img src="../imagens/tela-menu-itens.png" alt="Os itens de uma pasta, com o valor e a rolagem" width="260"> | <img src="../imagens/tela-menu-radio.png" alt="O menu do rádio na mesma janela" width="260"> |
-| **As pastas:** ▲▼ escolhem, os itens dela aparecem embaixo, e os pontinhos mostram qual das 17 está escolhida | **Dentro da pasta:** o item do cursor num cartão e o valor dele embaixo, em verde; quando a lista não cabe, as setas e a barra mostram que tem mais | **O menu do rádio** (FM, AM e SSB) na mesma janela, com os itens da modulação de agora |
+| **As pastas:** ▲▼ escolhem, os itens dela aparecem embaixo, e os pontinhos mostram qual das 17 está escolhida | **Dentro da pasta:** o item do cursor num cartão e o valor dele embaixo, em verde; quando a lista não cabe, as setas e a barra mostram que tem mais | **O menu do rádio** (FM, AM e SSB) na mesma janela, em duas pastas: os ajustes da banda e a CH MEMORY ([veja abaixo](#-o-rádio-de-am-fm-e-ssb-na-v42t)) |
 
 - **OK** abre a pasta e, nela, **OK** já abre o item para mudar o valor, sem um segundo OK. Gravando
   ou cancelando, volta para a pasta, no mesmo item. **EXIT** volta para as pastas, e de novo sai do
@@ -117,6 +117,40 @@ lista vazia.
 - **Os modos.** Em canal, o TX SHIFT e o OFFSET abrem com `VFO ONLY`, e na pasta, embaixo do item, aparece `VFO` ou `CHANNEL`.
 - **O 3 segurado** abre o mesmo SAVE, e o número digitado vai ao canal mais perto da lista.
 
+### 📻 O rádio de AM, FM e SSB na V4.2T
+
+O rádio de AM, FM e SSB (LSB, USB e CW) tem dois modos, como o VFO e os canais do rádio amador: o **modo frequência**,
+que sintoniza qualquer frequência, e o **modo memória**, que anda só pelas estações salvas. São 15 memórias por banda,
+cada uma com nome: as do FM, as do AM e as do SSB, que o LSB, o USB e o CW dividem.
+
+| | |
+|:---:|:---:|
+| <img src="../imagens/tela-radio.png" alt="O rádio no modo frequência" width="360"> | <img src="../imagens/tela-radio-memoria.png" alt="O rádio numa memória" width="360"> |
+| **Modo frequência:** a etiqueta `VFO` e `FREQUENCY MODE` no cartão embaixo da frequência | **Modo memória:** o número da memória (`M003`) numa etiqueta e o nome dela; sem nome, `NO NAME` |
+| <img src="../imagens/tela-menu-radio.png" alt="A pasta dos ajustes do rádio" width="360"> | <img src="../imagens/tela-menu-radio-memoria.png" alt="A pasta CH MEMORY do rádio" width="360"> |
+| **O menu em duas pastas:** a dos ajustes, com o nome da banda de agora (`RADIO FM`, `AM`, `LSB`, `USB` ou `CW`), e a `CH MEMORY`; os dois pontos embaixo mostram qual está escolhida | **CH MEMORY:** NAME, DELETE e SAVE. Com o cursor no NAME, o nome da memória em uso aparece embaixo, sem abrir |
+
+- **Trocar de modo:** na tela do rádio, segure o **MENU**, o mesmo gesto do VFO/MR da tela principal. Ele só passa ao
+  modo memória se a banda tiver alguma salva. No modo memória, ▲▼ andam só pelas salvas, e o MENU segurado de novo
+  volta à frequência.
+- **O menu:** o MENU, num toque curto, abre as duas pastas. ▲▼ escolhem, o OK entra, e o EXIT volta às pastas e, delas,
+  ao rádio.
+
+| Pasta | Itens |
+|---|---|
+| RADIO FM | MODE |
+| RADIO AM | MODE, BAND, STEP, LNA |
+| RADIO LSB, USB e CW | MODE, STEP, BW, LNA, BFO |
+| CH MEMORY | NAME, DELETE, SAVE |
+
+- **SAVE:** a lista mostra só as memórias livres da banda. O OK numa delas abre o editor do nome, e o OK do editor
+  guarda ali a frequência de agora (no SSB, também a largura e o BFO) com o nome; sem nome, ela fica com `NO NAME`.
+  Cancelar não grava, e com as 15 usadas aparece `MEMORY FULL`.
+- **DELETE:** a lista mostra as salvas, e o rádio pergunta antes de apagar; a memória apagada volta a ficar livre.
+- **NAME:** troca o nome de uma memória salva, no mesmo editor dos canais (até 12 letras).
+- **Sem memória salva na banda,** o NAME e o DELETE mostram `NO SAVED MEMORIES`.
+- **No PC,** o Tempra Link e o driver do CHIRP leem e gravam as memórias e os nomes.
+
 ## 🔺 TRIPLE: o BJ-8300 escutando três frequências
 
 O firmware de fábrica só tem dois lados, A e B, e a dupla escuta (TDR) vigia os dois. Desde a V2.6T, ele tem um
@@ -152,18 +186,18 @@ firmware do BJ-8300 fazia isso.
 | <img src="../imagens/tela-inicio.png" alt="Tela principal no tema novo" width="360"> | <img src="../imagens/tela-espectro.png" alt="Espectro no tema novo" width="360"> |
 | **Tela principal:** os dois lados, com o A em evidência recebendo em S6 na barra S; na barra de cima só o que está ligado (RX, dupla escuta, redução de ruído, porta de ruído, Bluetooth) | **Espectro:** a frequência que roda, o pico da passada em verde com o dBm, as barras com a coluna medida em branco e a linha do limite em âmbar |
 | <img src="../imagens/tela-radio.png" alt="Rádio FM/AM/SSB no tema novo" width="360"> | <img src="../imagens/tela-menu.png" alt="Menu no tema novo" width="360"> |
-| **Rádio** em LSB, mudando o BFO: medidor S, a banda, a frequência grande e os ajustes em cartões | **Item aberto (BANKS → ACTIVE):** o lado em evidência resumido em cima, a pasta e o número `3-1`, e os bancos ligados em âmbar |
+| **Rádio** em LSB, mudando o BFO: medidor S, a banda, a frequência grande, a etiqueta `VFO` do modo frequência e os ajustes em cartões | **Item aberto (BANKS → ACTIVE):** o lado em evidência resumido em cima, a pasta e o número `3-1`, e os bancos ligados em âmbar |
 
 As imagens saem da prévia no PC ([firmware/previa/](../../firmware/previa/)), que roda o mesmo código de
 desenho que vai para o rádio.
 
-## ✨ O que mudou da V0.12 de fábrica para a V4.1T
+## ✨ O que mudou da V0.12 de fábrica para a V4.2T
 
 ### 🆕 Recursos novos
 
 | Recurso | &#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;Tela&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199; |
 |---|:---:|
-| 📁 **Menu em pastas**<ul><li>Os itens do menu ficam em **17 pastas** por assunto, em ordem alfabética, numa janela âmbar.</li><li>A janela mostra os itens de cada pasta e, dentro dela, o valor do item do cursor, com rolagem quando a lista não cabe.</li><li>**OK** no item já abre a edição, e gravar ou cancelar volta para a pasta.</li><li>O menu do rádio (FM/AM/SSB) usa a mesma janela ([veja acima](#-menu-novo-tudo-em-pastas)).</li></ul> | <img src="../imagens/tela-menu-pastas.png" alt="Menu em pastas" width="300"> |
+| 📁 **Menu em pastas**<ul><li>Os itens do menu ficam em **17 pastas** por assunto, em ordem alfabética, numa janela âmbar.</li><li>A janela mostra os itens de cada pasta e, dentro dela, o valor do item do cursor, com rolagem quando a lista não cabe.</li><li>**OK** no item já abre a edição, e gravar ou cancelar volta para a pasta.</li><li>O menu do rádio (FM/AM/SSB) usa a mesma janela, em duas pastas ([veja acima](#-o-rádio-de-am-fm-e-ssb-na-v42t)).</li></ul> | <img src="../imagens/tela-menu-pastas.png" alt="Menu em pastas" width="300"> |
 | 📨 **APRS**<ul><li>Pasta nova **APRS (SMS)**: CALLSIGN, SSID, PATH (WIDE1-1, WIDE1-1,WIDE2-1 ou nenhum), TO, DECODE e a tela **MESSAGES**, onde as mensagens chegam e de onde saem ([veja acima](#-a-tela-messages-do-aprs-na-v32t)).</li><li>**Envio:** o **#** abre a caixa da mensagem (até 37 caracteres), com a última, e o OK a manda ao TO (vazio, um status) em AX.25. O **# segurado** abre a caixa do TO. Depois do envio, a tela volta sozinha.</li><li>Sem **CALLSIGN** gravado, o **#** pede o indicativo antes, e nada vai ao ar sem pacote.</li><li>O AFSK de 1200 bps é gerado no rádio e posto na entrada do microfone, como um TNC de placa de som: o APRSdroid e os TNCs leem.</li><li>**FILTER:** a tela abre com FM, o filtro largo, sem scramble nem compressor, os graves em −3 dB, os agudos em +4 dB e o SAVE desligado. A tecla 0 o desliga para comparar, e tudo volta ao do menu ao sair.</li><li>**Recepção:** a mensagem, a posição, o tempo, os objetos e o Mic-E decodificados (ou como vieram, com o DECODE em OFF), o ack do que chega para o seu indicativo, o histórico e a conta dos syncs (P).</li><li>A recepção usa o modem do chip de rádio, que só acerta o pacote que chega sem erro: pega menos que um TNC.</li></ul> | <img src="../imagens/tela-aprs-caixa-mensagem.png" alt="A tela MESSAGES com a caixa da mensagem" width="300"> |
 | 📻 **Morse**<ul><li>Pasta nova **MORSE**: **MESSAGES**, SPEED (5 a 40 wpm) e TONE (400 a 1200 Hz).</li><li>Sai em FM pelo gerador de tom, como o roger; o PTT ou qualquer tecla param no meio.</li><li>O editor de texto das mensagens vai a 37 caracteres, em duas linhas quando não cabe numa.</li></ul> | <img src="../imagens/tela-morse.png" alt="MORSE SPEED" width="300"> |
 | 📻 **Tela MESSAGES do Morse**<ul><li>O **MESSAGES** lê o Morse que chega, palavra por palavra, e guarda as mensagens, como o do APRS ([veja acima](#-a-tela-messages-do-morse-na-v37t)).</li><li>O **#** abre a caixa da mensagem, com o último texto, e a primeira tecla troca tudo, como na caixa do APRS.</li><li>O envio leva 0,5 s de portadora muda, para o squelch de quem recebe abrir, e o KA no começo e o AR no fim. Enquanto vai ao ar, a tela mostra só **SENDING**, no Morse e no APRS.</li><li>As duas telas MESSAGES são caladas, com ou sem sinal; com o SQUELCH em OFF, ouve-se tudo.</li><li>No ar, lê até 15 wpm, e o melhor tom é 700 Hz.</li></ul> | <img src="../imagens/tela-morse-messages.png" alt="MORSE MESSAGES" width="300"> |
@@ -189,6 +223,7 @@ desenho que vai para o rádio.
 | ⌨️ **Editor de texto**<ul><li>No NAME dos BANKS, no CH NAME, na mensagem do Morse e nas caixas do APRS.</li><li>O **EXIT segurado** (0,6 s) sai sem gravar.</li><li>A **tecla 0** começa no espaço e traz `- / = + @ ( ) * #`, que nenhuma tecla alcançava, para o SSID e as mensagens.</li><li>As mensagens vão a 37 caracteres, em duas linhas.</li></ul> | <img src="../imagens/tela-editor.png" alt="Editor de mensagem" width="300"> |
 | 🖥️ **Tela nova em todo o rádio**<ul><li>Todas as telas foram redesenhadas ([veja acima](#-a-cara-nova)).</li><li>A principal: o lado em evidência num cartão com a frequência grande e a barra S, etiquetas coloridas de potência, modulação e tons, e a barra de cima só com o que está ligado.</li><li>Os menus e o editor de nome, o rádio FM/AM/SSB, o scan QT, o DTMF, o espectro e a tensão na partida.</li></ul> | <img src="../imagens/tela-inicio.png" alt="Tela principal" width="300"> |
 | 💾 **CH MEMORY**<ul><li>A pasta de salvar e nomear canais: **SAVE**, **DELETE** e **CH NAME**, com listas só do que serve ([veja acima](#-o-ch-memory-e-os-banks-na-v36t)).</li><li>O **DELETE** pergunta antes de apagar, e cancelar não salva.</li><li>No lugar de lista vazia, um aviso.</li></ul> | <img src="../imagens/tela-ch-memory-lista.png" alt="A lista do DELETE" width="300"> |
+| 📻 **Memórias do rádio de AM, FM e SSB**<ul><li>15 por banda, com nome, como os canais: **SAVE**, **DELETE** e **NAME** na pasta **CH MEMORY** do menu do rádio ([veja acima](#-o-rádio-de-am-fm-e-ssb-na-v42t)).</li><li>O menu do rádio em duas pastas: os ajustes da banda e a CH MEMORY.</li><li>Na tela, a etiqueta `VFO` com `FREQUENCY MODE` no modo frequência, e o número e o nome no modo memória. O **MENU segurado** troca um pelo outro.</li></ul> | <img src="../imagens/tela-radio-memoria.png" alt="Uma memória do rádio" width="300"> |
 | ⚠️ **Avisos de modo**<ul><li>O TX SHIFT e o OFFSET em canal abrem com `VFO ONLY`.</li><li>O SCAN ADD e o CH NAME em VFO mostram `SAVE CHANNEL FIRST`, e o OK leva ao SAVE.</li><li>De fábrica, um dava só o bipe de erro e o outro não fazia nada.</li></ul> | <img src="../imagens/tela-aviso-vfo.png" alt="O aviso VFO ONLY" width="300"> |
 | 🗂️ **16 bancos de canais**<ul><li>Cada banco tem **nome de 12 caracteres**, e um canal pode estar em **quantos bancos quiser**.</li><li>Dá para ligar **vários bancos ao mesmo tempo**: o sobe/desce e a busca passam a ver só os canais dos bancos ligados.</li><li>Sem nenhum ligado, o rádio funciona como de fábrica.</li><li>Pasta nova **BANKS**, com `ACTIVE`, `CHANNELS` e `NAME` ([como usar](#usando-os-bancos-no-rádio)).</li></ul> | <img src="../imagens/tela-menu.png" alt="BANKS, o ACTIVE" width="300"> |
 | 🔐 **Scramble com 8 frequências**<ul><li>O `SCRAMBLE` passa de OFF/ON para **OFF e de 2700 a 3400 Hz, de 100 em 100**, em ordem crescente.</li><li>O **3400 Hz** é o ON de fábrica (fala com outros BJ-8300).</li><li>Os **modos 1, 2 e 3 do Baofeng UV-17L** caem, cada um, numa dessas frequências. Testado com os três modos.</li></ul> | <img src="../imagens/tela-scramble.png" alt="SCRAMBLE" width="300"> |
@@ -199,7 +234,7 @@ desenho que vai para o rádio.
 | 💻 **Tempra Link**<ul><li>O programa para Windows deste firmware, sem instalar nada.</li><li>Lê, edita e grava os 960 canais, os 16 bancos, as memórias do rádio de AM, FM e SSB, os ajustes do menu, os textos, o DTMF e o ROGER CUSTOM, e guarda um backup a cada leitura.</li><li>Grava o firmware pelo cabo, conferindo o arquivo antes, e baixa sozinho do GitHub a versão certa.</li><li>[O manual, com as telas](tempra-link.md).</li></ul> | <img src="../imagens/tempralink-canais.png" alt="O Tempra Link" width="300"> |
 | <a id="espectro"></a>📊 **Espectro**<ul><li>**320 e 640 pontos** além dos 160 de fábrica, e **passo de 10 kHz**.</li><li>**Pico seguro**: a barra sobe na hora e desce aos poucos.</li><li>A coluna medida em branco, a frequência que roda no alto e a do pico de cada passada em verde, com o dBm.</li><li>A luz não apaga enquanto ele está na tela.</li></ul> | <img src="../imagens/tela-espectro.png" alt="Espectro" width="300"> |
 | 🔌 **Driver do CHIRP próprio**<ul><li>Lê e grava os bancos (aba **Banks**), os nomes, o roger e o scramble novos, o WATCH, o VFO C, a pasta MIC, o CRYSTAL FINE, o BRIGHTNESS, o LIGHT PWM, o MODEM GAIN, a pasta AUDIO, o EQ, a pasta **APRS (SMS)**, a pasta **Morse**, o DECODE, o PF3 LONG, o THRESHOLD e o ROGER CUSTOM (as notas, só o Tempra Link grava).</li><li>Tudo numa sessão só pelo cabo; fica na lista do **Bajeton**.</li><li>Recusa gravar num rádio com o firmware de fábrica ou com um TEMPRA de outra versão ([como usar](chirp.md#-como-usar-o-chirp-com-este-firmware)).</li></ul> | |
-| 🧰 **Comando estendido no cabo**<ul><li>Leitura do chip de dados inteiro (endereço de 24 bits).</li><li>Gravação só nas áreas do firmware novo: os bancos, o WATCH, o VFO C, o Morse, o APRS e o ROGER CUSTOM.</li><li>A leitura de `0x3F0000` responde a versão do firmware (`TEMPRA V4.1T`).</li><li>A serial a 460800 bauds.</li><li>É o que o Tempra Link e o driver do CHIRP usam.</li></ul> | |
+| 🧰 **Comando estendido no cabo**<ul><li>Leitura do chip de dados inteiro (endereço de 24 bits).</li><li>Gravação só nas áreas do firmware novo: os bancos, o WATCH, o VFO C, o Morse, o APRS e o ROGER CUSTOM.</li><li>A leitura de `0x3F0000` responde a versão do firmware (`TEMPRA V4.2T`).</li><li>A serial a 460800 bauds.</li><li>É o que o Tempra Link e o driver do CHIRP usam.</li></ul> | |
 
 ### 🖥️ A tela nova, tela por tela
 
@@ -221,7 +256,7 @@ etiquetas coloridas e uma fonte própria:
 | **Morse MESSAGES** | A mesma tela do APRS, sem o FILTER e o P: o texto chega no cartão, palavra por palavra, e o rodapé mostra a velocidade lida (WPM). O `#` abre a caixa **SEND** por cima |
 | **SENDING** | Só a palavra em vermelho, no meio da tela, enquanto o Morse ou o APRS vão ao ar |
 | **Bancos** (ACTIVE e CHANNELS, na pasta BANKS) | Os bancos ligados, e os canais do banco aberto, em **âmbar**, com o nome do banco no título |
-| **Rádio FM/AM/SSB** | Medidor S de 9 degraus, a banda numa etiqueta, a **frequência grande** com a unidade, o nome da estação num cartão (sem nome, `NO STATION NAME` no lugar do `Unknow`), e **STEP, BW, LNA e BFO em quatro cartões**, o que está sendo mudado em âmbar. O `SEEK...` e a espera da partida (`RADIO STARTING...`) também no tema novo, e o menu dele na janela de pastas |
+| **Rádio FM/AM/SSB** | Medidor S de 9 degraus, a banda numa etiqueta, a **frequência grande** com a unidade, um cartão com o número e o nome da memória (sem nome, `NO NAME`, no lugar do `Unknow`) ou, no modo frequência, a etiqueta `VFO` e `FREQUENCY MODE`, e **STEP, BW, LNA e BFO em quatro cartões**, o que está sendo mudado em âmbar. O `SEEK...` e a espera da partida (`RADIO STARTING...`) também no tema novo, e o menu dele em duas pastas, na janela do menu |
 | **Espectro** | A frequência que roda em tamanho grande, pontos e passo em etiquetas, o **pico da passada em verde** com o dBm, o gráfico num painel com grade, a coluna medida em branco, a **linha do limite tracejada em âmbar** e as pontas da janela embaixo |
 | **Scan QT** (EXIT segurado) | O título, o que ele procura (CTCSS / DCS) e o estado, RUNNING num cartão verde ou STOP em âmbar |
 | **Tensão** | Na partida (com a mensagem de partida em tensão) e segurando o `0` na tela inicial, a tensão aparece num cartão, em volts |
@@ -235,14 +270,14 @@ etiquetas coloridas e uma fonte própria:
 | 🟩 **Lado em evidência destacado** | O lado ativo fica num cartão de borda verde, com a frequência grande e a barra S; o outro fica compacto |
 | 📻 **Rádio FM/AM/SSB** | A troca de modulação ficou ~2,5 s mais rápida, e os ajustes salvos (passo, largura, LNA, BFO e as memórias) são conferidos ao entrar e a cada troca: valor fora dos limites dos menus volta ao padrão |
 | ↕️ **Setas do menu invertidas** | A seta de cima passa a subir na lista, em vez de avançar o valor |
-| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TRIPLE WATCH`, porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX SIDE`. O menu `VERSION` mostra `Firmware: V4.1T` |
+| 🔤 **Textos em inglês revisados** | 25 cadeias corrigidas e padronizadas (ex.: `VOICEPRI` → `ENCRYPT`), o `TDR` virou `TRIPLE WATCH`, porque com o TRIPLE a escuta é tripla, e o `TX-A/B` virou `TX SIDE`. O menu `VERSION` mostra `Firmware: V4.2T` |
 | 🏷️ **Nomes claros no menu** | Os nomes curtos de fábrica viraram nomes que dizem o que o item faz, iguais aos do Baofeng UV-17L: `SQL` é `SQUELCH`, `STE` é `TAIL CUT`, `BCL` é `BUSY LOCK`, `TXP` é `TX POWER`, `W/N` é `BANDWIDTH`, `TOT` é `TX TIMEOUT` e `MDF-A` é `SHOW A`, entre outros. A [tabela das pastas](#-menu-novo-tudo-em-pastas) traz todos, e a [seção 35](../engenharia-reversa.md#35-os-nomes-do-menu-desde-a-v141) lista o nome antigo de cada um |
 | 📶 **Bluetooth no TX** | O de fábrica desliga o Bluetooth a cada PTT, e o celular perdia o controle remoto. Com uma ligação aberta, ele agora fica ligado; sem ligação, é como de fábrica |
 | 🔌 **Cabo mais rápido** | A serial do cabo passa de 57600 a 460800 bauds. O Tempra Link e o driver do CHIRP descem sozinhos às velocidades de antes, para reconhecer os firmwares antigos |
 
 ### 🐞 Correções
 
-| Problema da V0.12 | Na V4.1T |
+| Problema da V0.12 | Na V4.2T |
 |---|---|
 | Os ajustes do menu só iam para o chip ao fechar o menu: desligado com ele aberto, o que mudou se perdia | Cada OK grava na hora |
 | O medidor de sinal tinha 5 degraus e já enchia num sinal fraco (entre −117 e −96 dBm) | A barra S, do chiado (S1) a S9+60 |
@@ -250,7 +285,7 @@ etiquetas coloridas e uma fonte própria:
 | Durante o scan, a barra de sinal ficava congelada no último canal achado, e o número do canal descasava do nome | A tela acompanha cada canal da varredura |
 | Na partida com a tensão, e segurando o `0`, o texto `   Voltage` tinha a tensão escrita por cima, e o "ge" sumia | `VOLTAGE` inteiro, com a tensão num cartão |
 | Nome de canal gravado pelo CHIRP abria no editor com `?` no fim e `12/12`: o editor contava os bytes de preenchimento | O editor conta só as letras, como a tela já mostrava |
-| No rádio, estação sem nome aparecia como `Unknow` | `NO STATION NAME` |
+| No rádio, estação sem nome aparecia como `Unknow` | `NO NAME` na memória sem nome, e `VFO` com `FREQUENCY MODE` no modo frequência |
 | O MO (PF3 segurada), com portadora no outro lado da escuta, abria aquele lado, e o medidor piscava cheio | Abre sempre o lado em evidência, e a barra S começa vazia e lê o sinal |
 
 ### ➖ Removido

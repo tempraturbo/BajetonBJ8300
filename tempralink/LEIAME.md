@@ -6,7 +6,7 @@ firmware TEMPRA de uma versão que ele conhece (abaixo, A compatibilidade), e te
 bits. Como usar: [o manual, com as telas](../docs/wiki/tempra-link.md).
 
 É o irmão do Tempra Link do Baofeng UV-17L (no repositório dele), com a mesma janela, e separado de propósito: um
-não fala com o outro rádio, e um não abre o backup do outro. O controle remoto, que o firmware ganhou na V4.1T,
+não fala com o outro rádio, e um não abre o backup do outro. O controle remoto, que o firmware ganhou na V4.2T,
 e a gravação do firmware têm páginas próprias (abaixo).
 
 ## A memória pelo cabo
@@ -109,7 +109,7 @@ ou responde, sobe a versão dele, e a faixa do programa junto.
 
 Ao abrir, o `Atualizacao.pas` lê a lista de releases do GitHub (sem login; rascunho e pré-release de fora) e acha
 o firmware mais novo da faixa, o mais novo de todos e o Tempra Link mais novo, pela versão no nome do arquivo
-(`BJ8300_BANK_v4.1T.anc`, `TempraLink-BJ8300_v1.0.exe`). Com um programa mais novo que o `VERSAO_TEMPRA_LINK`,
+(`BJ8300_BANK_v4.2T.anc`, `TempraLink-BJ8300_v1.0.exe`). Com um programa mais novo que o `VERSAO_TEMPRA_LINK`,
 a janela pergunta se atualiza: o novo se baixa, confere pelo tamanho e pelo SHA-256 do GitHub, entra no lugar do
 que está aberto (este vira `.antigo`, que o novo apaga ao abrir) e abre. Para isso, cada release leva o `.exe`
 com a versão no nome.

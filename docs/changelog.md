@@ -5,6 +5,26 @@
 Dates are 2026. Every version was flashed and tested on the radio; whatever broke is recorded with
 its cause, because that is what stops it happening twice.
 
+## V4.2T — Nov 20 — the AM, FM and SSB radio memories, the held arrow in the spectrum and the VFO label
+
+v177 becomes **V4.2T**, at the owner's request, in place of V4.1T, which never went out: the release gets the AM, FM and
+SSB radio memories (v173 to v176), the held arrow in the spectrum (v175) and the VFO label (v177). The firmware is v177
+with the version name: `firmware/releases/BJ8300_BANK_v4.2T.anc`, sha256 `4489d0e85f7c49dbf463aefdd11897924856c552ca30cb6377d23c720e13f5c1`.
+
+- **Tempra Link and the phone app:** `FAIXA` goes from V3.8T to V4.2T, and the remote control's screen drawing
+  (`tempralink/tela`, from `tela_pc.py`) was rebuilt with the new screen: the radio menu folders and the `VFO` label.
+  Both stay at version 1.0, which never went out.
+- **CHIRP driver:** the module becomes `bj8300_v4.2TEMPRA.py` (model `BJ8300_v4.2TEMPRA`), with V4.1T's in
+  `MODEL_COMPAT`, and `FIRMWARES` goes from V3.8T to V4.2T.
+- **The documentation:** the README and the wiki move to V4.2T, and the radio features page gets the AM, FM and SSB
+  radio: frequency mode and memory mode, switching with MENU held, the menu's two folders and SAVE, DELETE and NAME. In
+  the flashing steps, the README and the wiki now say to wait for it to finish (about 3 minutes on average).
+
+Tested on the PC: the build ("tudo certo", the stack the same as stock and the image the same size), the firmware tests,
+the CHIRP driver's, the remote drawing's (100 screens equal to the preview, pixel by pixel) and Tempra Link's. Released
+in the [V4.2T GitHub release](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.2T), with Tempra Link, the
+CHIRP module, the flasher and the cable driver.
+
 ## v177 — Nov 20 — the VFO label on the radio screen
 
 Testing v176, the owner found that the radio screen's `NO STATION NAME`, off the memories, looked like a station with no
@@ -12,7 +32,8 @@ name. Of two previews, they picked the `VFO` label in place of the memory number
 same card as a memory's (`M003` and the name), like the VFO on the main screen ([section 44](reverse-engineering.md#44-the-am-fm-and-ssb-radio-memories-like-the-channels-v173-and-v174)). Screen B kept
 its size.
 
-- `BJ8300_BANK.anc` of v177 with the V4.1T name (outside `firmware/releases/`): sha256 `39e9ee97b7497e32665e023e04591563f580b1f9b45f20e461153e1346dc2ace`.
+- `BJ8300_BANK.anc` of v177 with the V4.1T name (outside `firmware/releases/`): sha256 `39e9ee97b7497e32665e023e04591563f580b1f9b45f20e461153e1346dc2ace`; with the V4.2T name,
+  it is the release's, above.
 
 Tested on the PC: the build ("tudo certo", the stack the same as stock and the image the same size), the firmware tests
 and the remote drawing's (100 screens equal to the preview, pixel by pixel).
@@ -97,7 +118,7 @@ section 13). On the radio, not yet.
   come from the `0xC000` sector. Deleting does what the CHIRP driver does: frequency 0 (in SSB, the 5 B) and the name
   in `FF`. The tests check reading and writing through the driver.
 
-## V4.1T — Nov 20 — V4.0T with the spectrum line fixed (prepared; the release goes out after the radio test)
+## V4.1T — Nov 20 — V4.0T with the spectrum line fixed (never released: became V4.2T)
 
 v172 becomes **V4.1T**, at the owner's request, in place of V4.0T, which never went out: between preparing it and the
 release, a user found the spectrum line bug, and the fix (v172, below) goes into the release. The firmware is v172 with

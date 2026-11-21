@@ -9,9 +9,9 @@
 ## 📻 How to use CHIRP with this firmware
 
 > [!CAUTION]
-> **With V4.1T, use only the `bj8300_v4.1TEMPRA.py` module from this release.** It replaces the
+> **With V4.2T, use only the `bj8300_v4.2TEMPRA.py` module from this release.** It replaces the
 > earlier ones (from `bj8300_v1.0TEMPRA.py` to `bj8300_v3.7TEMPRA.py`). The model in CHIRP is now
-> **Bajeton → `BJ8300_v4.1TEMPRA`** (up to V2.8T it was under Baojie), and a `.img` image saved with an
+> **Bajeton → `BJ8300_v4.2TEMPRA`** (up to V2.8T it was under Baojie), and a `.img` image saved with an
 > older module opens in it as usual. The earlier releases have their own module in each release.
 >
 > - **Do not use CHIRP's stock models** that serve the stock BJ-8300 (**Bajeton BJ7800** and
@@ -22,8 +22,8 @@
 > - **Do not use older versions of this module**: they do not know the new options, and a channel
 >   with a new scramble frequency shows up as invalid.
 > - The other way round holds too: the module **refuses** to write to a radio with the stock
->   firmware. And, like Tempra Link, it reads the firmware version and only works with V4.1T: on a radio with V3.7T
->   or an earlier one, use the module from its release, or flash V4.1T.
+>   firmware. And, like Tempra Link, it reads the firmware version and only works with V4.2T: on a radio with V3.7T
+>   or an earlier one, use the module from its release, or flash V4.2T.
 
 **1. Install the latest CHIRP.** Download **CHIRP-next** from
 [chirpmyradio.com](https://chirpmyradio.com/projects/chirp/wiki/Download). The module uses the
@@ -36,7 +36,7 @@ CHIRP**. The mode stays on from then on.
 
 **3. Load the module (every time you open CHIRP).** Menu **File** → **Load Module...** (it only
 shows up in developer mode). CHIRP warns that loading a module is dangerous: click **Yes** and pick
-`bj8300_v4.1TEMPRA.py`. The window turns **red** and the title shows `CHIRP **Module Loaded**`:
+`bj8300_v4.2TEMPRA.py`. The window turns **red** and the title shows `CHIRP **Module Loaded**`:
 that is the sign the module is loaded. Closing CHIRP unloads it, so next time it has to be loaded
 again.
 
@@ -47,13 +47,13 @@ again.
 |---|---|
 | **Port** | the cable's COM port |
 | **Vendor** | **Bajeton** |
-| **Model** | **BJ8300_v4.1TEMPRA** (not BJ7800, the stock model) |
+| **Model** | **BJ8300_v4.2TEMPRA** (not BJ7800, the stock model) |
 
 CHIRP shows the *"Experimental driver"* notice, with the module's instructions: click **Yes**, then
 **OK** to read.
 
 > [!NOTE]
-> If `BJ8300_v4.1TEMPRA` is not listed under **Bajeton**, the module is not loaded: go back to step 3.
+> If `BJ8300_v4.2TEMPRA` is not listed under **Bajeton**, the module is not loaded: go back to step 3.
 
 **5. Edit.** On the right you get the list of the radio's parts:
 
@@ -61,7 +61,7 @@ CHIRP shows the *"Experimental driver"* notice, with the module's instructions: 
   properties are here.
 - **Banks (VHF/UHF):** one column per bank; tick which banks each channel is in. To rename a
   bank, **double-click its column header**.
-- **Settings:** the radio settings, with the 6-option roger and, in **BJ8300_v4.1TEMPRA Specific**,
+- **Settings:** the radio settings, with the 6-option roger and, in **BJ8300_v4.2TEMPRA Specific**,
   right after Noise reduction, **Expander**, **Noise gate**, **De-emphasis**, **EQ bass (RX)** and **EQ treble
   (RX)**, **Mic Gain** (with DEFAULT, in the radio's order), **Compressor**, **Mic AGC**, **EQ bass (TX)** and **EQ treble (TX)**,
   **Crystal fine** (in Hz, at 435.5 MHz), **Brightness**, **Light PWM** and **Modem gain**, plus **PF3 Key (Long Press)**, right after PF3, and
@@ -96,7 +96,7 @@ Keep a copy of the first download (**File** → **Save**) before changing anythi
 
 ## How the CHIRP driver works
 
-The file is [chirp/bj8300_v4.1TEMPRA.py](../../chirp/bj8300_v4.1TEMPRA.py). The name is deliberate: it
+The file is [chirp/bj8300_v4.2TEMPRA.py](../../chirp/bj8300_v4.2TEMPRA.py). The name is deliberate: it
 only works with **this** firmware, so nobody with a stock BJ-8300 uses it by mistake. It derives
 from CHIRP's `radtel_rt900.py`, which already handles this radio as part of the RT-920/BJ7800
 family, and adds:

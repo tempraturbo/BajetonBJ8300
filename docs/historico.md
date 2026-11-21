@@ -5,6 +5,26 @@
 Datas de 2026. Cada versão foi gravada e testada no rádio; o que quebrou está registrado com a
 causa, porque é isso que evita repetir.
 
+## V4.2T — 20/11 — as memórias do rádio de AM, FM e SSB, a seta segurada no espectro e a etiqueta VFO
+
+A v177 vira a **V4.2T**, a pedido do dono, no lugar da V4.1T, que não chegou a sair: entram no release as memórias do
+rádio de AM, FM e SSB (v173 a v176), a seta segurada no espectro (v175) e a etiqueta VFO (v177). O firmware é o da v177
+com o nome da versão: `firmware/releases/BJ8300_BANK_v4.2T.anc`, sha256 `4489d0e85f7c49dbf463aefdd11897924856c552ca30cb6377d23c720e13f5c1`.
+
+- **Tempra Link e app do celular:** a `FAIXA` vai da V3.8T à V4.2T, e o desenho da tela do controle remoto
+  (`tempralink/tela`, do `tela_pc.py`) foi recompilado com a tela nova: as pastas do menu do rádio e a etiqueta `VFO`.
+  Os dois seguem na versão 1.0, que não chegou a sair.
+- **Driver do CHIRP:** o módulo passa a `bj8300_v4.2TEMPRA.py` (modelo `BJ8300_v4.2TEMPRA`), com o da V4.1T no
+  `MODEL_COMPAT`, e os `FIRMWARES` vão da V3.8T à V4.2T.
+- **A documentação:** o README e a wiki passam à V4.2T, e a página das funções do rádio ganha o rádio de AM, FM e SSB: o
+  modo frequência e o modo memória, a troca pelo MENU segurado, as duas pastas do menu e o SAVE, o DELETE e o NAME. No
+  passo a passo da gravação, o README e a wiki dizem agora para aguardar o fim dela (uns 3 minutos, em média).
+
+Testado no PC: o build ("tudo certo", a pilha igual à de fábrica e a imagem do mesmo tamanho), os testes do firmware, os
+do driver do CHIRP, os do desenho do remoto (100 telas iguais à prévia, pixel por pixel) e os do Tempra Link. Publicada
+no [release V4.2T do GitHub](https://github.com/tempraturbo/BajetonBJ8300/releases/tag/v4.2T), com o Tempra Link, o
+módulo do CHIRP, o gravador e o driver do cabo.
+
 ## v177 — 20/11 — a etiqueta VFO na tela do rádio
 
 Testando a v176, o dono achou que o `NO STATION NAME` da tela do rádio, fora das memórias, parecia uma estação sem
@@ -12,7 +32,8 @@ nome. Das duas prévias, ele escolheu a etiqueta `VFO` no lugar do número da me
 cartão da memória (`M003` e o nome), como o VFO da tela principal ([seção 44](engenharia-reversa.md#44-as-memórias-do-rádio-de-am-fm-e-ssb-como-os-canais-v173-e-v174)). A tela B ficou do mesmo
 tamanho.
 
-- `BJ8300_BANK.anc` da v177 com o nome da V4.1T (fora de `firmware/releases/`): sha256 `39e9ee97b7497e32665e023e04591563f580b1f9b45f20e461153e1346dc2ace`.
+- `BJ8300_BANK.anc` da v177 com o nome da V4.1T (fora de `firmware/releases/`): sha256 `39e9ee97b7497e32665e023e04591563f580b1f9b45f20e461153e1346dc2ace`; com o nome da V4.2T,
+  é o da release, acima.
 
 Testado no PC: o build ("tudo certo", a pilha igual à de fábrica e a imagem do mesmo tamanho), os testes do firmware e
 o do desenho do remoto (100 telas iguais à prévia, pixel por pixel).
@@ -93,7 +114,7 @@ ainda não.
   rádio guardar o bloco, então vai por último), e os nomes vêm do setor `0xC000`. Apagar é o que o driver do CHIRP
   faz: a frequência 0 (no SSB, os 5 B) e o nome em `FF`. Os testes conferem a leitura e a gravação pelo driver.
 
-## V4.1T — 20/11 — a V4.0T com a linha do espectro corrigida (preparada; o release sai depois do teste no rádio)
+## V4.1T — 20/11 — a V4.0T com a linha do espectro corrigida (nunca lançada: virou a V4.2T)
 
 A v172 vira a **V4.1T**, a pedido do dono, no lugar da V4.0T, que não chegou a sair: entre a preparação dela e o
 lançamento, um usuário achou o defeito da linha do espectro, e a correção (a v172, abaixo) entra no release. O firmware

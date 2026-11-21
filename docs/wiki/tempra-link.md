@@ -33,14 +33,14 @@ ao vivo no PC, e **grava o próprio firmware**. É um `.exe` só, sem instalar n
 
 ## 1. Antes de começar
 
-- **O firmware do rádio.** O Tempra Link 1.0 trabalha com o firmware TEMPRA **V4.1T** (e com a V3.8T, que só existiu em
+- **O firmware do rádio.** O Tempra Link 1.0 trabalha com o firmware TEMPRA **V4.2T** (e com a V3.8T, que só existiu em
   teste). Com o firmware de fábrica ou com um TEMPRA de antes, ele não lê nem grava nada, mas grava o firmware certo:
   veja [Gravar o firmware](#11-gravar-o-firmware).
 - **O cabo** é o de programação USB do rádio, com o chip CH340, o mesmo do CPS de fábrica e do CHIRP. Se o Windows não o
   reconhece, instale o driver do `CH340-driver.zip` do release (veja na
   [página de gravar](gravar.md#-o-cabo-e-o-driver)).
 - **Baixe** o `TempraLink-BJ8300_v1.0.exe` da
-  [página do release V4.1T](https://github.com/tempraturbo/BajetonBJ8300/releases/latest) e ponha numa pasta sua.
+  [página do release V4.2T](https://github.com/tempraturbo/BajetonBJ8300/releases/latest) e ponha numa pasta sua.
   Ele não instala nada: os backups ficam na pasta do usuário ([Backup e registro](#12-backup-e-registro)).
 - **Na primeira vez,** o Windows pode avisar que o programa é de um editor desconhecido (o SmartScreen), porque o `.exe`
   não é assinado: **Mais informações** → **Executar assim mesmo**.
@@ -146,7 +146,7 @@ no **Gravar no rádio**.
 - **Ler do rádio** traz a imagem que o rádio mostra ao ligar (160 × 138), e **Salvar como PNG...** a guarda.
 - **Escolher imagem...** abre uma imagem do PC. As de 160 × 138 vão como estão, e as outras se ajustam: preenchendo a tela
   (corta as sobras) ou inteiras (com faixas pretas).
-- **Gravar no rádio** ainda não serve: o firmware TEMPRA, a V4.1T inclusive, não grava o logo pelo cabo. O Tempra Link
+- **Gravar no rádio** ainda não serve: o firmware TEMPRA, a V4.2T inclusive, não grava o logo pelo cabo. O Tempra Link
   confere lendo de volta e avisa.
 
 ## 10. Controle remoto
@@ -181,7 +181,7 @@ igual. Os canais, os ajustes e a calibração ficam num chip à parte, que a gra
 ### Passo a passo
 
 1. **Leia o rádio antes** (página Canais), para ter o backup dos canais e dos ajustes.
-2. **O arquivo.** O mais fácil é o botão **Baixar e gravar a V4.1T**: ele baixa do GitHub o firmware mais novo com que
+2. **O arquivo.** O mais fácil é o botão **Baixar e gravar a V4.2T**: ele baixa do GitHub o firmware mais novo com que
    este Tempra Link trabalha, confere pelo tamanho e pelo SHA-256 e segue para a gravação. Ou **Escolher...** um `.anc`
    do PC; um `BJ8300_BANK_v*.anc` na pasta do programa já abre sozinho.
 3. **A porta** é a do cabo, no alto: o firmware não se grava pelo Bluetooth.
@@ -194,7 +194,7 @@ igual. Os canais, os ajustes e a calibração ficam num chip à parte, que a gra
      parada;
    - *Gravando o firmware no rádio*: uns 2 minutos;
    - *O rádio terminou a gravação.*
-7. **Desligue e ligue o rádio.** Em **SYSTEM > VERSION** aparece `Firmware: V4.1T`. O botão **Verificar o rádio e o
+7. **Desligue e ligue o rádio.** Em **SYSTEM > VERSION** aparece `Firmware: V4.2T`. O botão **Verificar o rádio e o
    GitHub**, com o rádio ligado normalmente, mostra a versão também.
 
 <p align="center"><img src="../imagens/tempralink-gravando.png" alt="A gravação em andamento: a barra de baixo em vermelho" width="900"></p>
@@ -242,10 +242,10 @@ oferece o certo:
 
 | No rádio | O que o Tempra Link 1.0 faz |
 |---|---|
-| TEMPRA V4.1T (ou V3.8T) | tudo |
-| TEMPRA de antes, até a V3.7T (não diz a versão) | não lê nem grava; oferece baixar e gravar a V4.1T |
-| o firmware de fábrica (V0.12) | não lê nem grava; oferece baixar e gravar a V4.1T |
-| TEMPRA mais novo que a V4.1T | não lê nem grava; oferece o Tempra Link mais novo |
+| TEMPRA V4.2T (ou V3.8T) | tudo |
+| TEMPRA de antes, até a V3.7T (não diz a versão) | não lê nem grava; oferece baixar e gravar a V4.2T |
+| o firmware de fábrica (V0.12) | não lê nem grava; oferece baixar e gravar a V4.2T |
+| TEMPRA mais novo que a V4.2T | não lê nem grava; oferece o Tempra Link mais novo |
 
 O driver do CHIRP faz o mesmo: cada release traz o módulo da versão dele.
 
@@ -261,7 +261,7 @@ leitura e a gravação por ele ainda não foram testadas.
 - **A porta não aparece:** ligue o cabo e clique em **Atualizar**. Se ainda não aparece, instale o driver do CH340.
 - **"O rádio não respondeu"** ao ler ou no controle remoto: o rádio tem de estar ligado normalmente, fora do UPDATE, com
   o plugue do cabo bem encaixado. Feche o CHIRP, o CPS e o BinTalk.
-- **"Este rádio está com o firmware ..., antigo para este Tempra Link"**, ou com o de fábrica: grave a V4.1T pela página
+- **"Este rádio está com o firmware ..., antigo para este Tempra Link"**, ou com o de fábrica: grave a V4.2T pela página
   Firmware ([As versões do firmware](#13-as-versões-do-firmware)).
 - **"O rádio mudou desde a leitura (...). Nada foi gravado"**: o rádio foi mexido depois da leitura. Leia de novo e refaça as
   mudanças (ou salve um backup antes de ler, e grave a partir dele).

@@ -6,7 +6,7 @@
 
 [🏠 Página inicial](../../README.md)
 
-A documentação completa do firmware TEMPRA V4.1T e do Tempra Link. Para começar rápido, a
+A documentação completa do firmware TEMPRA V4.2T e do Tempra Link. Para começar rápido, a
 [página inicial](../../README.md) tem o resumo e os dois caminhos para gravar.
 
 | | |

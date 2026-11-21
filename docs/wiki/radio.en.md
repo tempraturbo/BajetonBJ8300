@@ -8,13 +8,13 @@
 
 ## 📁 A new menu: everything in folders
 
-The stock menu is a queue of more than 50 items. Since V2.7T they sit in folders by topic (**17 in V4.1T**), in
+The stock menu is a queue of more than 50 items. Since V2.7T they sit in folders by topic (**17 in V4.2T**), in
 alphabetical order, in a window that shows what is inside each one before you open it.
 
 | | | |
 |:---:|:---:|:---:|
 | <img src="../imagens/tela-menu-pastas.png" alt="The menu folders" width="260"> | <img src="../imagens/tela-menu-itens.png" alt="A folder's items, with the value and scrolling" width="260"> | <img src="../imagens/tela-menu-radio.png" alt="The radio menu in the same window" width="260"> |
-| **The folders:** ▲▼ pick one, its items show below, and the dots show which of the 17 is picked | **Inside a folder:** the item under the cursor in a card and its value below, in green; when the list does not fit, the arrows and the bar show there is more | **The radio menu** (FM, AM and SSB) in the same window, with the items of the current modulation |
+| **The folders:** ▲▼ pick one, its items show below, and the dots show which of the 17 is picked | **Inside a folder:** the item under the cursor in a card and its value below, in green; when the list does not fit, the arrows and the bar show there is more | **The radio menu** (FM, AM and SSB) in the same window, in two folders: the band's settings and CH MEMORY ([see below](#-the-am-fm-and-ssb-radio-in-v42t)) |
 
 - **OK** opens the folder and, inside it, **OK** opens the item straight away to change its value,
   with no second OK. Saving or cancelling takes you back to the folder, on the same item. **EXIT**
@@ -121,6 +121,40 @@ warnings instead of an empty list.
   shows.
 - **Holding 3** opens the same SAVE, and a typed number goes to the nearest channel in the list.
 
+### 📻 The AM, FM and SSB radio in V4.2T
+
+The AM, FM and SSB radio (LSB, USB and CW) has two modes, like the VFO and the channels of the ham radio: **frequency
+mode**, which tunes any frequency, and **memory mode**, which steps only through the saved stations. There are 15
+memories per band, each with a name: FM's, AM's and SSB's, which LSB, USB and CW share.
+
+| | |
+|:---:|:---:|
+| <img src="../imagens/tela-radio.png" alt="The radio in frequency mode" width="360"> | <img src="../imagens/tela-radio-memoria.png" alt="The radio on a memory" width="360"> |
+| **Frequency mode:** the `VFO` label and `FREQUENCY MODE` in the card below the frequency | **Memory mode:** the memory's number (`M003`) in a label and its name; with no name, `NO NAME` |
+| <img src="../imagens/tela-menu-radio.png" alt="The radio settings folder" width="360"> | <img src="../imagens/tela-menu-radio-memoria.png" alt="The radio's CH MEMORY folder" width="360"> |
+| **The menu in two folders:** the settings one, named after the current band (`RADIO FM`, `AM`, `LSB`, `USB` or `CW`), and `CH MEMORY`; the two dots at the bottom show which one is picked | **CH MEMORY:** NAME, DELETE and SAVE. With the cursor on NAME, the name of the memory in use shows below it, without opening it |
+
+- **Switching modes:** on the radio screen, hold **MENU**, the same gesture as VFO/MR on the main screen. It only goes to
+  memory mode if the band has one saved. In memory mode, ▲▼ step only through the saved ones, and holding MENU again
+  goes back to the frequency.
+- **The menu:** MENU, with a short press, opens the two folders. ▲▼ pick one, OK goes in, and EXIT goes back to the
+  folders and, from them, to the radio.
+
+| Folder | Items |
+|---|---|
+| RADIO FM | MODE |
+| RADIO AM | MODE, BAND, STEP, LNA |
+| RADIO LSB, USB and CW | MODE, STEP, BW, LNA, BFO |
+| CH MEMORY | NAME, DELETE, SAVE |
+
+- **SAVE:** the list shows only the band's free memories. OK on one opens the name editor, and the editor's OK stores
+  the current frequency there (on SSB, also the bandwidth and the BFO) with the name; with no name, it shows `NO NAME`.
+  Cancelling does not save, and with all 15 used `MEMORY FULL` shows.
+- **DELETE:** the list shows the saved ones, and the radio asks before deleting; the deleted memory is free again.
+- **NAME:** changes a saved memory's name, in the same editor as the channels (up to 12 letters).
+- **With no memory saved on the band,** NAME and DELETE show `NO SAVED MEMORIES`.
+- **On the PC,** Tempra Link and the CHIRP driver read and write the memories and the names.
+
 ## 🔺 TRIPLE: the BJ-8300 listening to three frequencies
 
 The stock firmware has only two sides, A and B, and dual watch (TDR) watches both. Since V2.6T it has a
@@ -156,18 +190,18 @@ this before.
 | <img src="../imagens/tela-inicio.png" alt="Main screen in the new theme" width="360"> | <img src="../imagens/tela-espectro.png" alt="Spectrum in the new theme" width="360"> |
 | **Main screen:** both sides, with A highlighted and receiving at S6 on the S-meter; the top bar shows only what is on (RX, dual watch, noise reduction, noise gate, Bluetooth) | **Spectrum:** the running frequency, the sweep peak in green with the dBm, the bars with the measured column in white and the threshold line in amber |
 | <img src="../imagens/tela-radio.png" alt="FM/AM/SSB radio in the new theme" width="360"> | <img src="../imagens/tela-menu.png" alt="Menu in the new theme" width="360"> |
-| **Radio** on LSB, changing the BFO: S meter, band, the big frequency and the settings in cards | **An open item (BANKS → ACTIVE):** the highlighted side summed up at the top, the folder and the number `3-1`, and the banks that are on in amber |
+| **Radio** on LSB, changing the BFO: S meter, band, the big frequency, the frequency mode's `VFO` label and the settings in cards | **An open item (BANKS → ACTIVE):** the highlighted side summed up at the top, the folder and the number `3-1`, and the banks that are on in amber |
 
 The images come from the PC preview ([firmware/previa/](../../firmware/previa/)), which runs the same
 drawing code that goes into the radio.
 
-## ✨ What changed from the stock V0.12 to V4.1T
+## ✨ What changed from the stock V0.12 to V4.2T
 
 ### 🆕 New features
 
 | Feature | &#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;Screen&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199;&#8199; |
 |---|:---:|
-| 📁 **A menu in folders**<ul><li>The menu items sit in **17 folders** by topic, in alphabetical order, in an amber window.</li><li>The window shows each folder's items and, inside it, the value of the item under the cursor, scrolling when the list does not fit.</li><li>**OK** on an item opens it for editing straight away, and saving or cancelling goes back to the folder.</li><li>The radio menu (FM/AM/SSB) uses the same window ([see above](#-a-new-menu-everything-in-folders)).</li></ul> | <img src="../imagens/tela-menu-pastas.png" alt="Folder menu" width="300"> |
+| 📁 **A menu in folders**<ul><li>The menu items sit in **17 folders** by topic, in alphabetical order, in an amber window.</li><li>The window shows each folder's items and, inside it, the value of the item under the cursor, scrolling when the list does not fit.</li><li>**OK** on an item opens it for editing straight away, and saving or cancelling goes back to the folder.</li><li>The radio menu (FM/AM/SSB) uses the same window, in two folders ([see above](#-the-am-fm-and-ssb-radio-in-v42t)).</li></ul> | <img src="../imagens/tela-menu-pastas.png" alt="Folder menu" width="300"> |
 | 📨 **APRS**<ul><li>New **APRS (SMS)** folder: CALLSIGN, SSID, PATH (WIDE1-1, WIDE1-1,WIDE2-1 or none), TO, DECODE and the **MESSAGES** screen, where messages come in and go out from ([see above](#-the-aprs-messages-screen-in-v32t)).</li><li>**Sending:** **#** opens the message box (up to 37 characters), with the last one, and OK sends it to TO (empty, a status) in AX.25. **Holding #** opens the TO box. After sending, the screen comes back by itself.</li><li>With no **CALLSIGN** saved, **#** asks for the callsign first, and nothing goes on air without a packet.</li><li>The 1200 bps AFSK is generated in the radio and fed into the microphone input, like a sound-card TNC: APRSdroid and TNCs read it.</li><li>**FILTER:** the screen opens with FM, the wide filter, no scramble or compressor, bass at −3 dB, treble at +4 dB and SAVE off. Key 0 turns it off to compare, and everything goes back to the menu's settings on leaving.</li><li>**Receiving:** the message, position, weather, objects and Mic-E decoded (or as they came, with DECODE OFF), the ack of what arrives for your callsign, a history and the count of syncs (P).</li><li>Receiving uses the radio chip's modem, which only gets a packet that arrives without errors: it catches fewer than a TNC.</li></ul> | <img src="../imagens/tela-aprs-caixa-mensagem.png" alt="The MESSAGES screen with the message box" width="300"> |
 | 📻 **Morse**<ul><li>New **MORSE** folder: **MESSAGES**, SPEED (5 to 40 wpm) and TONE (400 to 1200 Hz).</li><li>It goes out in FM through the tone generator, like the roger; PTT or any key stops it.</li><li>The message text editor goes up to 37 characters, on two lines when one is not enough.</li></ul> | <img src="../imagens/tela-morse.png" alt="MORSE SPEED" width="300"> |
 | 📻 **Morse MESSAGES screen**<ul><li>**MESSAGES** reads incoming Morse, word by word, and keeps the messages, like the APRS one ([see above](#-the-morse-messages-screen-in-v37t)).</li><li>**#** opens the message box, with the last text, and the first key replaces it all, as in the APRS box.</li><li>Sending takes 0.5 s of silent carrier, so the receiver's squelch opens, with KA at the start and AR at the end. While it is on the air, the screen shows only **SENDING**, for Morse and APRS.</li><li>Both MESSAGES screens stay silent, with or without a signal; with SQUELCH OFF, you hear everything.</li><li>On the air it reads up to 15 wpm, and the best tone is 700 Hz.</li></ul> | <img src="../imagens/tela-morse-messages.png" alt="MORSE MESSAGES" width="300"> |
@@ -193,6 +227,7 @@ drawing code that goes into the radio.
 | ⌨️ **Text editor**<ul><li>In BANKS NAME, CH NAME, the Morse message and the APRS boxes.</li><li>**Holding EXIT** (0.6 s) leaves without saving.</li><li>**Key 0** starts at the space and brings `- / = + @ ( ) * #`, which no key reached, for the SSID and the messages.</li><li>Messages go up to 37 characters, on two lines.</li></ul> | <img src="../imagens/tela-editor.png" alt="Message editor" width="300"> |
 | 🖥️ **A new screen across the radio**<ul><li>Every screen was redrawn ([see above](#-the-new-look)).</li><li>The main one: the side in focus in a card with the big frequency and the S-meter, coloured power, modulation and tone labels, and a top bar with only what is on.</li><li>The menus and the name editor, the FM/AM/SSB radio, QT scan, DTMF, the spectrum and the voltage at power-up.</li></ul> | <img src="../imagens/tela-inicio.png" alt="Main screen" width="300"> |
 | 💾 **CH MEMORY**<ul><li>The folder for saving and naming channels: **SAVE**, **DELETE** and **CH NAME**, with lists of only what applies ([see above](#-ch-memory-and-banks-in-v36t)).</li><li>**DELETE** asks before deleting, and cancelling does not save.</li><li>A warning instead of an empty list.</li></ul> | <img src="../imagens/tela-ch-memory-lista.png" alt="The DELETE list" width="300"> |
+| 📻 **AM, FM and SSB radio memories**<ul><li>15 per band, with names, like the channels: **SAVE**, **DELETE** and **NAME** in the radio menu's **CH MEMORY** folder ([see above](#-the-am-fm-and-ssb-radio-in-v42t)).</li><li>The radio menu in two folders: the band's settings and CH MEMORY.</li><li>On the screen, the `VFO` label with `FREQUENCY MODE` in frequency mode, and the number and the name in memory mode. **MENU held** switches between them.</li></ul> | <img src="../imagens/tela-radio-memoria.png" alt="A radio memory" width="300"> |
 | ⚠️ **Mode warnings**<ul><li>TX SHIFT and OFFSET on a channel open with `VFO ONLY`.</li><li>SCAN ADD and CH NAME on a VFO show `SAVE CHANNEL FIRST`, and OK leads to SAVE.</li><li>On stock, one gave only the error beep and the other did nothing.</li></ul> | <img src="../imagens/tela-aviso-vfo.png" alt="The VFO ONLY warning" width="300"> |
 | 🗂️ **16 channel banks**<ul><li>Each bank has a **12-character name**, and a channel can be in **as many banks as you like**.</li><li>You can turn **several banks on at once**: up/down and scanning then see only the channels of the banks that are on.</li><li>With none on, the radio works as stock.</li><li>New **BANKS** folder, with `ACTIVE`, `CHANNELS` and `NAME` ([how to use](#using-banks-on-the-radio)).</li></ul> | <img src="../imagens/tela-menu.png" alt="BANKS, the ACTIVE item" width="300"> |
 | 🔐 **Scramble with 8 frequencies**<ul><li>`SCRAMBLE` goes from OFF/ON to **OFF and 2700 to 3400 Hz, in 100 Hz steps**, in ascending order.</li><li>**3400 Hz** is the stock ON (talks to other BJ-8300s).</li><li>The **Baofeng UV-17L's modes 1, 2 and 3** each land on one of these frequencies. Tested with all three modes.</li></ul> | <img src="../imagens/tela-scramble.png" alt="SCRAMBLE" width="300"> |
@@ -203,7 +238,7 @@ drawing code that goes into the radio.
 | 💻 **Tempra Link**<ul><li>This firmware's Windows program, with nothing to install.</li><li>It reads, edits and writes the 960 channels, the 16 banks, the AM/FM/SSB radio memories, the menu settings, the texts, DTMF and ROGER CUSTOM, and keeps a backup of every reading.</li><li>It flashes the firmware over the cable, checking the file first, and downloads the right version from GitHub by itself.</li><li>[The manual, with the screens](tempra-link.en.md).</li></ul> | <img src="../imagens/tempralink-canais-en.png" alt="Tempra Link" width="300"> |
 | <a id="spectrum"></a>📊 **Spectrum**<ul><li>**320 and 640 points** on top of the stock 160, and a **10 kHz step**.</li><li>**Peak hold**: the bar goes up at once and comes down slowly.</li><li>The measured column in white, the running frequency at the top and each sweep's peak frequency in green, with the dBm.</li><li>The light stays on while it is on screen.</li></ul> | <img src="../imagens/tela-espectro.png" alt="Spectrum" width="300"> |
 | 🔌 **Dedicated CHIRP driver**<ul><li>Reads and writes the banks (**Banks** tab), the names, the new roger and scramble, WATCH, VFO C, the MIC folder, CRYSTAL FINE, BRIGHTNESS, LIGHT PWM, MODEM GAIN, the AUDIO folder, the EQ, the **APRS (SMS)** folder, the **Morse** folder, DECODE, PF3 LONG, THRESHOLD and ROGER CUSTOM (the notes, only Tempra Link writes).</li><li>All in a single cable session; it is listed under **Bajeton**.</li><li>It refuses to write to a radio running the stock firmware or a TEMPRA of another version ([how to use](chirp.en.md#-how-to-use-chirp-with-this-firmware)).</li></ul> | |
-| 🧰 **Extended cable command**<ul><li>Reads the whole data chip (24-bit address).</li><li>Writes only to the new firmware's areas: the banks, WATCH, VFO C, Morse, APRS and ROGER CUSTOM.</li><li>Reading `0x3F0000` answers the firmware version (`TEMPRA V4.1T`).</li><li>The serial port at 460800 baud.</li><li>It is what Tempra Link and the CHIRP driver use.</li></ul> | |
+| 🧰 **Extended cable command**<ul><li>Reads the whole data chip (24-bit address).</li><li>Writes only to the new firmware's areas: the banks, WATCH, VFO C, Morse, APRS and ROGER CUSTOM.</li><li>Reading `0x3F0000` answers the firmware version (`TEMPRA V4.2T`).</li><li>The serial port at 460800 baud.</li><li>It is what Tempra Link and the CHIRP driver use.</li></ul> | |
 
 ### 🖥️ The new screen, screen by screen
 
@@ -225,7 +260,7 @@ a font of its own:
 | **Morse MESSAGES** | The same screen as APRS, without FILTER and P: the text arrives in the card, word by word, and the foot shows the speed read (WPM). `#` opens the **SEND** box over it |
 | **SENDING** | Only the word in red, in the middle of the screen, while Morse or APRS is on the air |
 | **Banks** (ACTIVE and CHANNELS, in the BANKS folder) | The banks that are on, and the open bank's channels, in **amber**, with the bank's name in the title |
-| **FM/AM/SSB radio** | A 9-step S meter, the band in a label, the **big frequency** with its unit, the station name in a card (with no name, `NO STATION NAME` instead of `Unknow`), and **STEP, BW, LNA and BFO in four cards**, the one being changed in amber. `SEEK...` and the start-up wait (`RADIO STARTING...`) are in the new theme too, and its menu is in the folder window |
+| **FM/AM/SSB radio** | A 9-step S meter, the band in a label, the **big frequency** with its unit, a card with the memory's number and name (with no name, `NO NAME`, instead of `Unknow`) or, in frequency mode, the `VFO` label and `FREQUENCY MODE`, and **STEP, BW, LNA and BFO in four cards**, the one being changed in amber. `SEEK...` and the start-up wait (`RADIO STARTING...`) are in the new theme too, and its menu is in two folders, in the menu window |
 | **Spectrum** | The running frequency in large type, points and step in labels, the **sweep peak in green** with the dBm, the graph in a gridded panel, the measured column in white, the **dashed amber threshold line** and the window's edges below |
 | **QT scan** (EXIT held) | The title, what it looks for (CTCSS / DCS) and the state, RUNNING in a green card or STOP in amber |
 | **Voltage** | At power-up (with the power-on message set to voltage) and holding `0` on the main screen, the voltage shows in a card, in volts |
@@ -239,14 +274,14 @@ a font of its own:
 | 🟩 **The side in focus stands out** | The active side sits in a green-bordered card, with the big frequency and the S-meter; the other one is compact |
 | 📻 **FM/AM/SSB radio** | Switching modulation became ~2.5 s faster, and the saved settings (step, bandwidth, LNA, BFO and the memories) are checked on entry and on each switch: a value outside the menu limits goes back to the default |
 | ↕️ **Menu arrows swapped** | The up arrow now moves up the list, instead of stepping the value |
-| 🔤 **English texts revised** | 25 strings fixed and made consistent (e.g. `VOICEPRI` → `ENCRYPT`), `TDR` became `TRIPLE WATCH`, because with TRIPLE the watch is triple, and `TX-A/B` became `TX SIDE`. The `VERSION` menu shows `Firmware: V4.1T` |
+| 🔤 **English texts revised** | 25 strings fixed and made consistent (e.g. `VOICEPRI` → `ENCRYPT`), `TDR` became `TRIPLE WATCH`, because with TRIPLE the watch is triple, and `TX-A/B` became `TX SIDE`. The `VERSION` menu shows `Firmware: V4.2T` |
 | 🏷️ **Clear menu names** | The short stock names became names that say what the item does, the same as the Baofeng UV-17L's: `SQL` is `SQUELCH`, `STE` is `TAIL CUT`, `BCL` is `BUSY LOCK`, `TXP` is `TX POWER`, `W/N` is `BANDWIDTH`, `TOT` is `TX TIMEOUT` and `MDF-A` is `SHOW A`, among others. The [folder table](#-a-new-menu-everything-in-folders) has them all, and [section 35](../reverse-engineering.md#35-the-menu-names-since-v141) lists each old name |
 | 📶 **Bluetooth during TX** | The stock firmware turns Bluetooth off on every PTT, and the phone lost the remote control. With a link open, it now stays on; with no link, it is as stock |
 | 🔌 **Faster cable** | The cable serial goes from 57600 to 460800 baud. Tempra Link and the CHIRP driver drop to the earlier speeds by themselves, to recognize the older firmwares |
 
 ### 🐞 Fixes
 
-| V0.12 problem | In V4.1T |
+| V0.12 problem | In V4.2T |
 |---|---|
 | Menu settings only reached the chip when the menu closed: switched off with it open, whatever had changed was lost | Every OK saves right away |
 | The signal meter had 5 steps and was already full on a weak signal (between −117 and −96 dBm) | The S-meter, from the hiss (S1) to S9+60 |
@@ -254,7 +289,7 @@ a font of its own:
 | During a scan, the signal bar froze on the last channel found, and the channel number did not match the name | The screen follows each channel of the scan |
 | At power-up with the voltage, and holding `0`, the text `   Voltage` had the voltage written over it, and the "ge" was lost | The whole of `VOLTAGE`, with the voltage in a card |
 | A channel name saved by CHIRP opened in the editor with `?` at the end and `12/12`: the editor counted the padding bytes | The editor counts only the letters, as the screen already showed |
-| On the radio, a station with no name showed as `Unknow` | `NO STATION NAME` |
+| On the radio, a station with no name showed as `Unknow` | `NO NAME` on an unnamed memory, and `VFO` with `FREQUENCY MODE` in frequency mode |
 | MO (PF3 held), with a carrier on the other watch side, opened that side, and the meter flashed full | It always opens the side in focus, and the S-meter starts empty and reads the signal |
 
 ### ➖ Removed

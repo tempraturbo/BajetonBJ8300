@@ -26,7 +26,7 @@ Both ways use the radio's **USB programming cable**, the CH340 one (the same the
 PC.
 
 Plug the cable into the PC and open **Device Manager**. If **Ports (COM & LPT)** shows `USB-SERIAL CH340 (COMx)`, you
-are set: note the COM number. If it does not, download `CH340-driver.zip` from the [V4.1T release](https://github.com/tempraturbo/BajetonBJ8300/releases/latest), right-click
+are set: note the COM number. If it does not, download `CH340-driver.zip` from the [V4.2T release](https://github.com/tempraturbo/BajetonBJ8300/releases/latest), right-click
 its `ch341ser.inf` → **Install** (or, in a PowerShell **run as administrator**,
 `pnputil /add-driver ch341ser.inf /install`) and unplug and replug the cable. Before flashing, close CHIRP, the CPS and
 any other program that uses the port.
@@ -37,26 +37,27 @@ It takes you from the stock firmware to TEMPRA, and later it updates it: Tempra 
 downloads the right version from GitHub and checks it before flashing (by size, by GitHub's SHA-256 and by the `.anc`'s
 own CRCs and BJ-8300 hardware tag).
 
-**1. Download and open** `TempraLink-BJ8300_v1.0.exe`, from the [V4.1T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/latest). It installs nothing. The
+**1. Download and open** `TempraLink-BJ8300_v1.0.exe`, from the [V4.2T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/latest). It installs nothing. The
 first time, Windows may warn that it comes from an unknown publisher, because the `.exe` is not signed: **More info** →
 **Run anyway**.
 
 **2. Turn the radio on normally**, with the cable plugged into it and into the PC, choose the cable port at the top and
 click **Read from radio**. With the stock firmware (or an older TEMPRA), Tempra Link says so and asks whether to
-download V4.1T from GitHub and flash it: answer **Yes**.
+download V4.2T from GitHub and flash it: answer **Yes**.
 
-<p align="center"><img src="../imagens/tempralink-fabrica-en.png" alt="With the stock firmware, Tempra Link offers V4.1T" width="800"></p>
+<p align="center"><img src="../imagens/tempralink-fabrica-en.png" alt="With the stock firmware, Tempra Link offers V4.2T" width="800"></p>
 
 **3. Put the radio in UPDATE mode** when Tempra Link asks: turn the radio off and turn it on holding **PTT2 + the
 shortcut key**, until `UPDATE` shows on the screen. Then click **Yes**.
 
-**4. Wait about 3 minutes, without turning the radio off or pulling the cable.** The bottom bar turns red, with a
-spinning wheel, and says what is happening: the radio answering in UPDATE mode, the flashing program going to it (about
-30 s, with the progress bar standing still) and the firmware being flashed (about 2 minutes).
+**4. Wait for the flashing to finish, which takes about 3 minutes on average, without turning the radio off or
+pulling the cable.** The bottom bar turns red, with a spinning wheel, and says what is happening: the radio answering in
+UPDATE mode, the flashing program going to it (about 30 s, with the progress bar standing still) and the firmware being
+flashed (about 2 minutes). At the end, it shows *The radio finished flashing.*
 
 <p align="center"><img src="../imagens/tempralink-gravando-en.png" alt="Flashing in progress: the bottom bar in red" width="800"></p>
 
-**5. Turn the radio off and on.** The menu opens on the folders, and `SYSTEM` → `VERSION` shows `Firmware: V4.1T`.
+**5. Turn the radio off and on.** The menu opens on the folders, and `SYSTEM` → `VERSION` shows `Firmware: V4.2T`.
 Done: Tempra Link now reads and writes the radio.
 
 With the radio already on TEMPRA, the **Firmware** page does the same: **Download and flash** the new version, or
@@ -68,14 +69,14 @@ The maker's flasher (BinTe ANC Bootloader). The files are in the release and als
 [firmware/releases/](../../firmware/releases/), [tools/anc-bootloader/](../../tools/anc-bootloader/) and
 [tools/ch340-driver/](../../tools/ch340-driver/).
 
-**1. Download the files.** From the [V4.1T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/latest), download `BJ8300_BANK_v4.1T.anc` and
+**1. Download the files.** From the [V4.2T release page](https://github.com/tempraturbo/BajetonBJ8300/releases/latest), download `BJ8300_BANK_v4.2T.anc` and
 `BinTalk-V1.1.zip`, and unzip it.
 
 **2. Open the flasher.** Run `BinTe ANC Bootloader.exe` (its window is called **BinTalk V1.1**).
 
 <p align="center"><img src="../imagens/gravador.png" alt="The BinTalk V1.1 flasher window" width="300"></p>
 
-- In the top field, click **`...`** and pick `BJ8300_BANK_v4.1T.anc`.
+- In the top field, click **`...`** and pick `BJ8300_BANK_v4.2T.anc`.
 - **Port:** the cable's COM port (from Device Manager).
 - **Baudrate:** **115200** (the default).
 
@@ -86,7 +87,7 @@ holding PTT2 + the shortcut key**, until `UPDATE` shows on the screen.
 `Jump To Loader` → `Progress 100%` → `Finish`. Do not unplug anything halfway.
 
 **5. Check.** Turn the radio off and on. The menu opens on the folders, and `SYSTEM` → `VERSION` should show
-`Firmware: V4.1T`.
+`Firmware: V4.2T`.
 
 ## ↩️ Back to stock
 

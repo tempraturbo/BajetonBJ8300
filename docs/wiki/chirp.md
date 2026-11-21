@@ -9,9 +9,9 @@
 ## 📻 Como usar o CHIRP com este firmware
 
 > [!CAUTION]
-> **Com a V4.1T, use só o módulo `bj8300_v4.1TEMPRA.py` deste release.** Ele substitui os
+> **Com a V4.2T, use só o módulo `bj8300_v4.2TEMPRA.py` deste release.** Ele substitui os
 > anteriores (de `bj8300_v1.0TEMPRA.py` a `bj8300_v3.7TEMPRA.py`). O modelo no CHIRP passou a ser
-> **Bajeton → `BJ8300_v4.1TEMPRA`** (até a V2.8T ele ficava em Baojie), e uma imagem `.img` salva com
+> **Bajeton → `BJ8300_v4.2TEMPRA`** (até a V2.8T ele ficava em Baojie), e uma imagem `.img` salva com
 > um módulo antigo abre nele normalmente. As versões anteriores têm o módulo delas no release de cada
 > uma.
 >
@@ -23,8 +23,8 @@
 > - **Não use versões antigas deste módulo**: elas não conhecem as opções novas, e um canal com
 >   uma frequência de scramble nova aparece como inválido.
 > - Ao contrário também vale: o módulo **recusa** gravar num rádio com o firmware de fábrica. E, como o Tempra
->   Link, ele lê a versão do firmware e só trabalha com a V4.1T: num rádio com a V3.7T ou uma de antes, use o
->   módulo do release dela, ou grave a V4.1T.
+>   Link, ele lê a versão do firmware e só trabalha com a V4.2T: num rádio com a V3.7T ou uma de antes, use o
+>   módulo do release dela, ou grave a V4.2T.
 
 **1. Instale o CHIRP mais recente.** Baixe o **CHIRP-next** em
 [chirpmyradio.com](https://chirpmyradio.com/projects/chirp/wiki/Download). O módulo usa o driver
@@ -37,7 +37,7 @@ CHIRP**. O modo fica ligado nas próximas vezes.
 
 **3. Carregue o módulo (toda vez que abrir o CHIRP).** Menu **File** → **Load Module...** (só
 aparece com o modo desenvolvedor). O CHIRP avisa que carregar módulo é perigoso: clique **Yes** e
-escolha o `bj8300_v4.1TEMPRA.py`. A janela fica **vermelha** e o título mostra
+escolha o `bj8300_v4.2TEMPRA.py`. A janela fica **vermelha** e o título mostra
 `CHIRP **Module Loaded**`: é o sinal de que o módulo está carregado. Ao fechar o CHIRP, ele é
 descarregado, e na próxima vez é preciso carregar de novo.
 
@@ -48,13 +48,13 @@ descarregado, e na próxima vez é preciso carregar de novo.
 |---|---|
 | **Port** | a COM do cabo |
 | **Vendor** | **Bajeton** |
-| **Model** | **BJ8300_v4.1TEMPRA** (não o BJ7800, que é o modelo de fábrica) |
+| **Model** | **BJ8300_v4.2TEMPRA** (não o BJ7800, que é o modelo de fábrica) |
 
 O CHIRP mostra o aviso *"Experimental driver"*, com as instruções do módulo: clique **Yes** e
 depois **OK** para ler.
 
 > [!NOTE]
-> Se o `BJ8300_v4.1TEMPRA` não aparece em **Bajeton**, o módulo não está carregado: volte ao passo 3.
+> Se o `BJ8300_v4.2TEMPRA` não aparece em **Bajeton**, o módulo não está carregado: volte ao passo 3.
 
 **5. Edite.** No lado direito aparece a lista das partes do rádio:
 
@@ -62,7 +62,7 @@ depois **OK** para ler.
   estão aqui.
 - **Banks (VHF/UHF):** uma coluna por banco; marque em quais bancos cada canal está. Para
   renomear um banco, **dê duplo clique no cabeçalho da coluna** dele.
-- **Settings:** os ajustes do rádio, com o roger de 6 opções e, no **BJ8300_v4.1TEMPRA Specific**,
+- **Settings:** os ajustes do rádio, com o roger de 6 opções e, no **BJ8300_v4.2TEMPRA Specific**,
   logo depois do Noise reduction, o **Expander**, a **Noise gate**, a **De-emphasis**, o **EQ bass (RX)** e o
   **EQ treble (RX)**, o **Mic Gain** (com o DEFAULT, na ordem do rádio), o **Compressor**, o **Mic AGC**, o **EQ bass (TX)** e o
   **EQ treble (TX)**, o **Crystal fine** (em Hz, em 435,5 MHz), o **Brightness**, o **Light PWM** e o
@@ -98,7 +98,7 @@ Guarde uma cópia do primeiro download (**File** → **Save**) antes de mudar qu
 
 ## Como o driver do CHIRP funciona
 
-O arquivo é [chirp/bj8300_v4.1TEMPRA.py](../../chirp/bj8300_v4.1TEMPRA.py). O nome é proposital: só
+O arquivo é [chirp/bj8300_v4.2TEMPRA.py](../../chirp/bj8300_v4.2TEMPRA.py). O nome é proposital: só
 funciona com **este** firmware, e assim ninguém com um BJ-8300 de fábrica o usa por engano. Ele
 deriva do `radtel_rt900.py` do CHIRP, que já trata este rádio como família RT-920/BJ7800, e
 acrescenta:

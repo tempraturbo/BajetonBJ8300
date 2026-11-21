@@ -6,7 +6,7 @@
 
 [🏠 Home page](../../README.en.md)
 
-The full documentation of the TEMPRA V4.1T firmware and of Tempra Link. For a quick start, the
+The full documentation of the TEMPRA V4.2T firmware and of Tempra Link. For a quick start, the
 [home page](../../README.en.md) has the summary and both ways to flash.
 
 | | |
